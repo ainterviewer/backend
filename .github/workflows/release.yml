@@ -14,7 +14,6 @@ jobs:
 
     env:
       UV_CACHE_DIR: /tmp/.uv-cache
-      UV_NO_SOURCES: true
 
     steps:
       - uses: actions/checkout@v6
