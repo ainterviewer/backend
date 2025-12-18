@@ -1,0 +1,69 @@
+{
+  "framing": "This interview guide aims to explore the perceptions and understandings of individuals regarding artificial intelligence, specifically deep fakes, and their impact on political deliberation. This semi-structured format provides flexibility to probe deeper into respondents' thoughts and experiences while maintaining focus on the central topics.",
+  "introduction": "Thank you for agreeing to participate in this interview. Today, we'll be discussing your thoughts and feelings about artificial intelligence and deep fakes, and how you believe they are influencing political deliberation. Your insights are valuable, and there are no right or wrong answers. Please feel free to express your honest opinions and experiences.",
+  "question_sections": [
+    {
+      "description": "Understanding of AI and Deep Fakes",
+      "questions": [
+        {
+          "main_question": "How would you describe artificial intelligence, and what are your thoughts on deep fakes?",
+          "subquestions": [
+            "Can you give an example of how you've encountered AI in your daily life?",
+            "What are the key differences you see between AI-generated content and human-created content?",
+            "How did you first learn about deep fakes, and what was your initial reaction?",
+            "In what ways do you think deep fakes could be beneficial or harmful?"
+          ],
+          "max_probes_n": 5
+        }
+      ]
+    },
+    {
+      "description": "Impact on Political Deliberation",
+      "questions": [
+        {
+          "main_question": "In what ways do you believe artificial intelligence and deep fakes are affecting political deliberation?",
+          "subquestions": [
+            "Can you share a specific instance where AI or deep fakes influenced political discussions or decisions?",
+            "How do deep fakes challenge our ability to distinguish between authentic and manipulated information?",
+            "Do you think current laws and regulations are sufficient to address the challenges posed by deep fakes in politics?",
+            "What role do you think social media platforms should play in combating the spread of deep fakes?",
+            "How do you feel about the potential use of AI in creating propaganda or fake news?"
+          ],
+          "max_probes_n": 5
+        }
+      ]
+    },
+    {
+      "description": "Perceptions of Threat and Opportunities",
+      "questions": [
+        {
+          "main_question": "How do you perceive the threat of AI and deep fakes to democracy and the electoral process?",
+          "subquestions": [
+            "Do you believe AI has the potential to enhance the democratic process? If yes, how so?",
+            "What concerns do you have regarding AI's impact on the credibility of elections?",
+            "How do you suggest individuals and societies protect themselves against misinformation caused by deep fakes?",
+            "In what ways could deep fakes be regulated without infringing on freedom of expression?",
+            "Do you have confidence in the ability of AI detection tools to counteract deep fakes?"
+          ],
+          "max_probes_n": 5
+        }
+      ]
+    },
+    {
+      "description": "Future Outlook and Mitigation Strategies",
+      "questions": [
+        {
+          "main_question": "Where do you see the future of AI and deep fakes heading in relation to political communication?",
+          "subquestions": [
+            "Are you optimistic or pessimistic about the integration of AI in political affairs, and why?",
+            "What kind of policies or educational strategies would you recommend to help mitigate the negative impacts of AI and deep fakes on politics?",
+            "How should international cooperation be approached to tackle the cross-border issues caused by deep fakes?",
+            "What can ordinary citizens do to promote a more truthful and transparent political discourse in the age of AI?",
+            "Can you envision a positive scenario where AI and deep fakes contribute constructively to political deliberation? What does that look like?"
+          ],
+          "max_probes_n": 5
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,307 @@
+{
+  "consent": {
+    "title": "Samtykke",
+    "text": "Interviewet vil blive gennemført af et automatiseret AI-system, der vil stille dig spørgsmål baseret på en interviewguide samt stille opfølgende spørgsmål baseret på dine svar. Interviewet vil tage cirka 20-30 minutter, men det afhænger også af, hvor lange dine svar er. Du er velkommen til at bruge så lang tid, som du har lyst til.\n\nDu skal være mindst 18 år gammel for at deltage. Dataen fra interviewene vil blive behandlet fortroligt pseudonymiseret og analyseret af Ró Holm Magnadóttir med det formål at inddrage dine svar i et bachelorprojekt om Øresundskollegiet og færøske studerende, der skrives som led i bacheloruddannelsen i Antropologi på Københavns Universitet og i samarbejde med Center for Social Data Science (SODAS).\n\nFor spørgsmål om dine rettigheder som forskningsdeltager ved Københavns Universitet kan du læse mere på <a href=\"https://informationssikkerhed.ku.dk/persondatabeskyttelse/privatlivspolitik/\" target=\"_blank\">KUs hjemmeside</a> eller kontakte <a href=\"mailto:dpo@adm.ku.dk\">dpo@adm.ku.dk</a>."
+  },
+  "welcome": {
+    "title": "Tak for dit samtykke!",
+    "text": "Vi sætter stor pris på, at du vil deltage i interviewet, og håber at du også vil finde det interessant.",
+    "email": "rohm@sodas.ku.dk"
+  },
+  "framing": "This interview aims to explore Faroese students' relationship with the student dorm Øresundskollegiet in Copenhagen, Denmark. Øresundskollegiet has a large population of Faroese university students and has been home to Faroese students for many decades. This interview aims to understand how Faroese university students perceive Øresundskollegiet and their own positioning in the context of the Faroe Islands and Denmark, as well as how they envision their own present and future. The interview should keep the following research question in mind: How is temporal and spatial belonging experienced by young Faroese students, while living at Øresundskollegiet in Copenhagen? People from the Faroe Islands are referred to as *færinge* in Danish.",
+  "introduction": "Velkommen til AInterviewer. Vi er interesserede i at lære mere om, hvordan du oplever at bo på Øresundskollegiet, og hvordan du som færing, der bor udenfor Færøerne, forholder dig til Færøerne og Danmark.",
+  "question_sections": [
+    {
+      "description": "These questions should explore the respondent's expectations, experiences and motivations for moving to and living in Copenhagen. The image of Copenhagen should be used actively in the probes.",
+      "questions": [
+        {
+          "description": "Establishes why the respondent moved to Copenhagen in the first place.",
+          "main_question": "Til at begynde med, kan du beskrive hvorfor du valgte at flytte til København og Øresundskollegiet i sin tid?",
+          "probes": [
+            "Hvornår vidste du, at du gerne ville flytte til Danmark?",
+            "Kan du beskrive første gang, du var på Øresundskollegiet",
+            "Kan du beskrive, hvilke forventninger du havde til at flytte ind på Øresundskollegiet?"
+          ],
+          "max_probes_n": 1,
+          "max_probes_time": null,
+          "language": "DA",
+          "user_image": false,
+          "condition": null,
+          "exclude_from_history": false,
+          "probing_context": null,
+          "create_segue": false,
+          "check_if_answered": false,
+          "check_if_exhausted": false,
+          "can_answer": true,
+          "can_skip": true,
+          "shuffle": false
+        },
+        {
+          "description": "This question and the associated probes should explore the respondent's expectations for what living in Copenhagen would be like. Additionally, the respondent's experiences of living in Copenhagen and their motivations for moving to Copenhagen should be explored. The respondent has been shown an image of Copenhagen, and you should the description actively in the probes with the aim to elicit thick descriptions of the respondent's expectations, experiences and motivations.",
+          "main_question": "Nu vil jeg bede dig om at se på billedet og tænke tilbage på tiden før, du flyttede til København. Kan du beskrive, hvordan du forestillede dig, at det ville være at bo i København?",
+          "probes": [
+            "Hvorfor, tror du, at du havde disse forestillinger om hvordan det ville være at bo i København?",
+            "Kan du beskrive, hvordan dine forestillinger og forventninger fra før du boede i København, sammenligner med dine oplevelser af at bo i København?",
+            "Kan du beskrive, hvornår du vidste at du gerne ville bo i København?",
+            "Kan du beskrive, hvad det var med København, der gjorde at du gerne ville bo der?"
+          ],
+          "max_probes_n": 2,
+          "max_probes_time": null,
+          "language": "DA",
+          "variables": null,
+          "survey_item": null,
+          "references": null,
+          "image": {
+            "primer": "Her kommer et billede af København. Brug venligst et øjeblik, hvor du bare kigger på billedet, før du svarer på det efterfølgende spørgsmål.",
+            "name": "cph.jpg",
+            "description": "Billedet viser en panoramisk, højt-vinklet udsigt over København, Danmark. Det er et travlt bylandskab med en blanding af arkitektoniske stilarter og mange karakteristiske bygninger.\n\nHer er nogle nøgletræk:\n\nFremtrædende vartegn: To bygninger skiller sig straks ud på grund af deres spir:\n\nVor Frelsers Kirke: Den med den udvendige spiraltrappe, der snor sig op ad tårnet.\nGrundtvigs Kirke: En karakteristisk murstenskirke med en unik, ekspressionistisk stil.\nKanaler og vandveje: Vandveje snor sig gennem byen og tilføjer visuel interesse og en følelse af sted. Der er broer, der forbinder forskellige områder.\nBygningsstilarter: En række forskellige bygningers farver og stilarter er synlige – for det meste en blanding af historiske bygninger med røde tegltage og moderne bygninger.\nRøde tage: Størstedelen af bygningerne har røde tegltage, hvilket er meget karakteristisk for københavnsk arkitektur.\nGrønne områder: Små lommer og rækker af træer og beplantning er blandet ind mellem bygningerne og giver noget kontrast.\nBylandskabets tæthed: Det er et tæt bymiljø med bygninger placeret relativt tæt sammen, men det formår stadig at føles åbent på grund af vandvejene.\nHimmel: En klar, blå himmel med nogle få spredte skyer.\n\nOverordnet set portrætterer billedet København som en levende, historisk og malerisk by. Det ligner et dejligt sted at besøge!",
+            "alt": "A panoramic view of central Copenhagen, including Børsen and Christiansborg."
+          },
+          "user_image": false,
+          "condition": null,
+          "exclude_from_history": false,
+          "probing_context": null,
+          "create_segue": false,
+          "check_if_answered": false,
+          "check_if_exhausted": false,
+          "can_answer": true,
+          "can_skip": true,
+          "shuffle": false,
+          "n_question": 5
+        }
+      ]
+    },
+    {
+      "description": "The following questions should explore the respondent's relationship to Øresundskollegiet. The attached image should be utilised actively in the interview to elicit thick descriptions of the respondent's experiences of living at Øresundskollegiet and how they understand Øresundskollegiet as a space.\n\nFor context, Øresundskollegiet is a student dormitory in Copenhagen. Approximately half of the dorm's population is from the Faroe Islands and as the dorm houses a quite large Faroese community. Most of the Faroese people living at Øresundskollegiet are students, who have migrated to Copenhagen to study.",
+      "questions": [
+        {
+          "description": "These questions should explore how the respondent views Øresundskollegiet and how they experience living at Øresundskollegiet. The respondent has been shown an image which should be used actively in the probes to elicit thick descriptions of how the respondent understands Øresundskollegiet as a space and home.",
+          "main_question": "Brug lidt tid på at kigge på billedet og tænk på et minde eller en oplevelse på Øresundskollegiet. Hvordan vil du beskrive mindet eller oplevelsen?",
+          "probes": [
+            "Kan du beskrive, hvad du associerer med at mødes med dine venner på Øresundskollegiet?",
+            "Kan du beskrive, hvorfor du valgte at bo på Øresundskollegiet?",
+            "Hvordan oplever du at bo på Øresundskollegiet?",
+            "Hvilke følelser associerer du med Øresundskollegiet?",
+            "Forestil dig at du kigger ud af vinduet, hvad forestiller du dig at se?",
+            "Hvordan forestiller du dig, at du vil se tilbage på din tid på Øresundskollegiet?"
+          ],
+          "max_probes_n": 3,
+          "max_probes_time": null,
+          "language": "DA",
+          "variables": null,
+          "survey_item": null,
+          "references": null,
+          "image": {
+            "primer": "Du vil nu blive præsenteret for et billede fra Øresundskollegiet. Brug venligst et øjeblik, hvor du bare kigger på billedet, før du svarer.",
+            "name": "appartment.png",
+            "description": "Billedet viser en hyggelig, varm indendørsscene, sandsynligvis en stue eller et fællesrum, med en gruppe mennesker samlet. Belysningen er blød og dæmpet, hvilket skaber en intim atmosfære. Det ser ud til, at folk nyder en afslappet aften sammen.\n\nDetaljer:\n\nMennesker: Der er mindst seks personer synlige på billedet. De vender mest mod hinanden og ser ud til at være engageret i samtale eller aktivitet.\nOmgivelser: Rummet ser ud til at være et moderne opholdsrum med lyse vægge og trægulv.\nMøbler:\n\tEn stor grøn sofa/sektion er på højre side med puder.\n\tEt bord i midten er omgivet af stole og ser ud til at være dækket med flere tændte stearinlys, drikkevarer og snacks.\n\tEn bærbar computer er også på bordet.\n\tEn reol og det, der ligner lydudstyr, er synlige i baggrunden.\nBelysning: Rummet er oplyst af en kombination af stearinlys på bordet og lamper.\nVindue: Et vindue med flere ruder er synligt bagtil. Det ser ud til at være nat udenfor.\nDekoration: Der er billeder på væggen.\n\nAtmosfære:\n\nBilledet ser ud til at formidle en følelse af varme, nærhed og afslapning. Det ligner, at en gruppe venner eller familiemedlemmer nyder en fredelig aften sammen.",
+            "alt": "An appartment in Øresundeskollegiet, with a group of people gathered together."
+          },
+          "user_image": false,
+          "condition": null,
+          "exclude_from_history": false,
+          "probing_context": null,
+          "create_segue": false,
+          "check_if_answered": false,
+          "check_if_exhausted": false,
+          "can_answer": true,
+          "can_skip": true,
+          "shuffle": false,
+          "n_question": 5
+        }
+      ],
+      "shuffle": false,
+      "shuffle_questions": false
+    },
+    {
+      "description": "These questions should explore the respondent's relationship to the Faroe Islands. The attached images should be utilised actively in the questioning.\n\nFor context, the Faroe Islands are a self-governing archipelago in the North Atlantic. The Faroe Islands are categorised as a self-governing territory within the Kingdom of Denmark, but have their own language, cultural traditions, history and parlament. The Faroe Islands have a long history of, among others, young people migrating to Denmark, before returning.",
+      "questions": [
+        {
+          "description": "These questions should explore how the respondent views the Faroe Islands. The respondent has been shown an image which should be used in the probes to actively to elicit thick descriptions of how the respondent understands and experiences the Faroe Islands as a Faroese person living outside the Faroe Islands.",
+          "main_question": "Når du kigger på billederne, kan du beskrive, hvordan du ser Færøerne?",
+          "probes": [
+            "Hvis du kunne træde ind i billederne, hvad ville du forvente at se, høre, føle og tænke?",
+            "Kan du beskrive, hvordan du oplever din relation til Færøerne siden du flyttede til København?",
+            "Hvad betyder Færøerne for dig?"
+          ],
+          "max_probes_n": 3,
+          "max_probes_time": null,
+          "language": "DA",
+          "variables": null,
+          "survey_item": null,
+          "references": null,
+          "image": {
+            "primer": "Du vil nu blive præsenteret for to billeder af Færøerne. Tag venligst et øjeblik, hvor du bare kigger på billederne, før du svarer.",
+            "name": "faroe.png",
+            "description": "Her er en beskrivelse af, hvad jeg ser på billedet:\n\nOverordnet:\nBilledet er en sammensætning eller muligvis to billeder sat sammen, der viser to forskellige landskaber. Det indeholder lyse, farverige by- og landområder side om side med barske kystudsigter.\n\nØverste sektion:\nBylandskab: Denne del viser en tæt bebygget by med farverige bygninger, hovedsageligt i røde og gule nuancer, langs en bugt eller havn.\nArkitektur: Bygningerne varierer i størrelse og synes at være traditionelle i stilen med saddeltage. Arkitekturen ligger tæt sammen, tilsyneladende bygget langs kysten.\nHavneområde: Der er en havnefront med flere både og yachter fortøjet.\nLandskab: I baggrunden ses bølgende, grønne bakker, der rejser sig fra byen. Himlen er overskyet, hvilket antyder et køligt klima.\n\nNederste sektion:\nKystklipper: Denne del viser dramatiske, takkede kystklipper.\nFuglekoloni: Der er en betydelig fuglekoloni på klipperne, som fremstår som mørke silhuetter langs klipperne. Det ligner for det meste lunder.\nFarvekontrast: Farverne her er jordnære og naturlige, med nuancer af grøn, grå og brun.\nDramatiske klippeformationer: Klipperne ser ud til at være lavet af mørk vulkansk sten.\nHav: Vandet omkring klipperne er mørkt og uroligt, hvilket understreger omgivelsernes barskhed.\n\nOverordnet indtryk:\nScenerne fremkalder en følelse af afsides skønhed og unikke geografiske formationer, sandsynligvis fra en nordlig, måske ø-agtig, beliggenhed. Der skabes en kontrast mellem et levende, farverigt samfund og naturens vildskab. Ud fra bygningerne og fuglekolonien kunne man antage, at dette landskab stammer fra enten Færøerne eller Island.",
+            "alt": "To billeder af Øresundskollegiet. Det første billede viser en gårdhave med borde og bænke, samt en skulptur og farverig kunst. Det andet billede viser en korridor indefra bygningen og trappe ned til en kælder."
+          },
+          "user_image": false,
+          "condition": null,
+          "exclude_from_history": false,
+          "probing_context": null,
+          "create_segue": false,
+          "check_if_answered": false,
+          "check_if_exhausted": false,
+          "can_answer": true,
+          "can_skip": true,
+          "shuffle": false,
+          "n_question": 8
+        },
+        {
+          "description": "These questions should explore the respondent's expectations for the future and their motivations for either moving back or not moving back to the Faroe Islands.",
+          "main_question": "Kan du beskrive, hvor du forestiller dig, at du bor om tyve år? Hvorfor dette sted?",
+          "probes": [
+            "Kan du beskrive, hvornår du vidste at du enten ville flytte tilbage til Færøerne eller ikke?"
+          ],
+          "max_probes_n": 1,
+          "max_probes_time": null,
+          "language": "DA",
+          "variables": null,
+          "survey_item": null,
+          "references": null,
+          "image": null,
+          "user_image": false,
+          "condition": null,
+          "exclude_from_history": false,
+          "probing_context": null,
+          "create_segue": false,
+          "check_if_answered": false,
+          "check_if_exhausted": false,
+          "can_answer": true,
+          "can_skip": true,
+          "shuffle": false,
+          "n_question": 9
+        }
+      ],
+      "shuffle": false,
+      "shuffle_questions": false
+    },
+    {
+      "description": "Background questions that should establish how long the respondent has lived in Copenhagen.",
+      "questions": [
+        {
+          "description": "Intro to background questions.",
+          "main_question": "Her til sidst kommer fire korte baggrundsspørgsmål.",
+          "probes": [],
+          "max_probes_n": null,
+          "max_probes_time": null,
+          "language": "DA",
+          "variables": null,
+          "survey_item": null,
+          "references": null,
+          "image": null,
+          "user_image": false,
+          "condition": null,
+          "exclude_from_history": false,
+          "probing_context": null,
+          "create_segue": false,
+          "check_if_answered": false,
+          "check_if_exhausted": false,
+          "can_answer": false,
+          "can_skip": true,
+          "shuffle": false,
+          "n_question": 0
+        },
+        {
+          "description": "Background question with the aim of establishing how long the respondent has lived in Copenhagen.",
+          "main_question": "Hvor når flyttede du til København?",
+          "probes": [],
+          "max_probes_n": null,
+          "max_probes_time": null,
+          "language": "DA",
+          "variables": null,
+          "survey_item": null,
+          "references": null,
+          "image": null,
+          "user_image": false,
+          "condition": null,
+          "exclude_from_history": false,
+          "probing_context": null,
+          "create_segue": false,
+          "check_if_answered": false,
+          "check_if_exhausted": false,
+          "can_answer": true,
+          "can_skip": true,
+          "shuffle": false,
+          "n_question": 0
+        },
+        {
+          "description": "Background question with the aim of establishing how long the respondent has lived in at Øresundskollegiet.",
+          "main_question": "Hvor når flyttede du ind på Øresundskollegiet?",
+          "probes": [],
+          "max_probes_n": null,
+          "max_probes_time": null,
+          "language": "DA",
+          "variables": null,
+          "survey_item": null,
+          "references": null,
+          "image": null,
+          "user_image": false,
+          "condition": null,
+          "exclude_from_history": false,
+          "probing_context": null,
+          "create_segue": false,
+          "check_if_answered": false,
+          "check_if_exhausted": false,
+          "can_answer": true,
+          "can_skip": true,
+          "shuffle": false,
+          "n_question": 0
+        },
+        {
+          "description": "Age",
+          "main_question": "Hvor gammel er du?",
+          "probes": [],
+          "max_probes_n": null,
+          "max_probes_time": null,
+          "language": "DA",
+          "variables": null,
+          "survey_item": null,
+          "references": null,
+          "image": null,
+          "user_image": false,
+          "condition": null,
+          "exclude_from_history": false,
+          "probing_context": null,
+          "create_segue": false,
+          "check_if_answered": false,
+          "check_if_exhausted": false,
+          "can_answer": true,
+          "can_skip": true,
+          "shuffle": false,
+          "n_question": 0
+        },
+        {
+          "description": "Studie",
+          "main_question": "Hvad studerer du?",
+          "probes": [],
+          "max_probes_n": null,
+          "max_probes_time": null,
+          "language": "DA",
+          "variables": null,
+          "survey_item": null,
+          "references": null,
+          "image": null,
+          "user_image": false,
+          "condition": null,
+          "exclude_from_history": false,
+          "probing_context": null,
+          "create_segue": false,
+          "check_if_answered": false,
+          "check_if_exhausted": false,
+          "can_answer": true,
+          "can_skip": true,
+          "shuffle": false,
+          "n_question": 0
+        }
+      ],
+      "shuffle": false,
+      "shuffle_questions": false
+    }
+  ],
+  "outro": "Mange tak for at gennemføre interviewet. Din deltagelse er af stor værdi.",
+  "timed_message": null,
+  "evaluation_survey": null,
+  "shuffle_sections": false
+}

@@ -1,0 +1,137 @@
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import UUID4, BaseModel, Field, SecretStr, computed_field
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    PyprojectTomlConfigSettingsSource,
+    TomlConfigSettingsSource,
+)
+
+from ainterviewer.settings import BaseSettingsConfigDict
+from ainterviewer.types import DatabaseType, TimeDelta
+
+
+class AppSettings(BaseModel):
+    ainterviewer_port: int = 8666
+    ainterviewer_host: str = "127.0.0.1"
+    jwt_interview_token_expiration: dict[str, float] = Field(
+        default_factory=lambda: TimeDelta(days=3).model_dump()
+    )
+    jwt_auth_token_expiration: dict[str, float] = Field(
+        default_factory=lambda: TimeDelta(days=1).model_dump()
+    )
+    registration_requires_token: bool = True
+
+    @computed_field
+    @property
+    def endpoint(self) -> str:
+        return f"{self.ainterviewer_host}:{self.ainterviewer_port}"
+
+
+class DatabaseSettings(BaseModel):
+    db: DatabaseType = DatabaseType.SQLITE
+    db_path: str = "storage"
+
+    db_url: str = "localhost"
+    db_port: str = "5432"
+    db_name: str = "ainterviewer"
+    default_team_id: UUID4
+
+    @computed_field
+    @property
+    def database_file(self) -> str | None:
+        return "db.sqlite" if self.db == DatabaseType.SQLITE else None
+
+    @computed_field
+    @property
+    def connection_string(self) -> str:
+        if self.db == DatabaseType.SQLITE:
+            connection_string = f"sqlite:///{self.db_path}/{self.database_file}"
+        else:
+            if not self.db_username or not self.db_password:
+                raise ValueError(
+                    "`db_username` and `db_password` must be set for PostgreSQL"
+                )
+            connection_string = f"postgresql://{self.db_username}:{self.db_password.get_secret_value()}@{self.db_url}:{self.db_port}/{self.db_name}"
+
+        return connection_string
+
+
+class EmailSettings(BaseModel):
+    smtp_server: str
+    smtp_port: int = 587
+    smtp_use_ssl: bool = False
+    sender: EmailAccount
+    recipient: EmailAccount
+
+
+class EmailAccount(BaseModel):
+    email: str
+    password: SecretStr
+
+
+class ServiceSettings(BaseSettings):
+    email: EmailSettings
+
+    model_config = BaseSettingsConfigDict(env_prefix="APP_SERVICE__")
+
+
+class VLLMSettings(BaseModel):
+    available_models: list[str] = Field(default_factory=lambda: ["gpt-5-mini"])
+
+
+class AppSecrets(BaseSettings):
+    jwt_secret_key: SecretStr
+    session_secret_key: SecretStr
+    db_username: str | None = None
+    db_password: SecretStr | None = None
+
+    model_config = BaseSettingsConfigDict(env_prefix="APP_SECRET__")
+
+
+class Settings(BaseSettings):
+    debug: bool = False
+    app_env: Literal["production", "staging", "development"] = "development"
+
+    app: AppSettings
+    database: DatabaseSettings
+    services: ServiceSettings
+    vllm: VLLMSettings
+
+    # TODO:
+    # - Should the secrets be a standalone class so they cant be read
+    # through the config.toml file?
+    # - Should all "secrets" be moved to that class?
+    secrets: AppSecrets = AppSecrets()  # ty: ignore[missing-argument]
+
+    model_config = BaseSettingsConfigDict(
+        toml_file="config.toml",
+        pyproject_toml_table_header=("tool", "ainterviewer"),
+    )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (
+            env_settings,
+            dotenv_settings,
+            TomlConfigSettingsSource(settings_cls),
+            PyprojectTomlConfigSettingsSource(settings_cls),
+        )
+
+
+app_settings = Settings()  # ty: ignore[missing-argument]
+
+if __name__ == "__main__":
+    # print(app_settings.secrets)
+    # print(lib_settings.secrets)
+    print(app_settings.services)

@@ -1,0 +1,150 @@
+{
+  "framing": "This interview is about urban culture in Copenhagen.",
+  "introduction": "Welcome to the interview.\n\n",
+  "outro": "This concludes the interview. Thank you for your participation.",
+  "question_sections": [
+    {
+      "description": "This section introduces the AInterviewer framework and collects consent from the participant to proceed with the interview.",
+      "questions": [
+        {
+          "main_question": "We are currently evaluating and developing the system and technology behind the AInterviews. Do you agree to let us use your responses to improve our system and for academic research? You will be able to complete the interview either way.",
+          "survey_item": { "type": "radio", "options": ["yes", "no"] }
+        },
+        {
+          "condition": {
+            "type": "yes/no",
+            "trigger_type": "re",
+            "question_context": { "section": 0, "question": 0 },
+            "trigger_value": "no",
+            "action": "skip_question"
+          },
+          "main_question": "Thank you for your participation. Should you wish to revoke your consent or modify your answers, please contact us at hc@sodas.ku.dk and reference the following code: <x><code>{conversation_id}</code></x>. It is your responsibility to store this unique identifier in a safe manner, as it is the only way to identify and delete your data.",
+          "variables": ["conversation_id"],
+          "can_answer": false,
+          "can_skip": false,
+          "check_if_answered": false,
+          "create_segue": false
+        },
+        {
+          "condition": {
+            "type": "yes/no",
+            "trigger_type": "re",
+            "question_context": { "section": 0, "question": 0 },
+            "trigger_value": "yes",
+            "action": "skip_question"
+          },
+          "main_question": "Thank you for your reply. Your answers will not be used, however you are still free to continue the interview.",
+          "can_answer": false,
+          "can_skip": false,
+          "check_if_answered": false,
+          "create_segue": false
+        }
+      ]
+    },
+    {
+      "description": "Ice breaker questions",
+      "questions": [
+        {
+          "main_question": "Firstly, can you describe your experience of your life in Copenhagen?",
+          "max_probes_n": 0,
+          "check_if_answered": false,
+          "create_segue": false
+        },
+        {
+          "main_question": "What is your favorite public space in Copenhagen, and how would you describe it?",
+          "probes": [
+            "What makes this place special to you?",
+            "What do you enjoy about this location?",
+            "How do you feel when you are there?"
+          ],
+          "max_probes_n": 1,
+          "check_if_answered": false,
+          "create_segue": false
+        }
+      ]
+    },
+    {
+      "description": "This section is concerned about Dronning Louises Bridge, and the experiences people have there.",
+
+      "questions": [
+        {
+          "main_question": "How would you describe the location as you see it?",
+          "max_probes_n": 2,
+          "image": {
+            "name": "dronning_louises_bro.webp",
+            "primer": "Now, let's move on to a picture of a place in Copenhagen.",
+            "description": "The image depicts a scenic urban waterfront scene. A wide concrete walkway stretches along the left side, with several bicycles parked against a low concrete wall. The water is calm and dark, reflecting the clear blue sky above. In the distance, a row of tall buildings lines the shoreline, including a prominent white structure with a black roof and a red building with a brown roof. A crane is visible in the background, suggesting ongoing construction. The sky is a vibrant blue with a few wispy clouds, creating a picturesque backdrop for this cityscape. The scene captures a peaceful moment in an urban setting, blending natural elements with the architectural landscape.",
+            "alt": "An image of Queen Louise's Bridge and one of the Lakes in the background."
+          },
+          "check_if_answered": false,
+          "create_segue": false
+        },
+        {
+          "main_question": "Can you describe a specific memory or experience from this location?",
+          "probes": [
+            "How would you describe your relationship with this location?",
+            "What does this location mean to you?",
+            "What do you associate with this location?",
+            "How do you use this urban space?"
+          ],
+          "max_probes_n": 2,
+          "check_if_answered": false,
+          "create_segue": false
+        }
+      ]
+    },
+    {
+      "description": "This section is concerned about Nørreport, and the experiences people have there.",
+      "questions": [
+        {
+          "main_question": "How would you describe the location as you see it?",
+          "max_probes_n": 2,
+          "image": {
+            "name": "norreport_2.webp",
+            "primer": "Thank you for your answers so far. Now, let's move on to the second picture.",
+            "description": "The image depicts a bustling urban square, likely in a European city. The focal point is a large bicycle parking area filled with numerous bicycles, indicating this is a popular transportation hub for cyclists.\n\nThe square is paved with gray tiles and features two prominent cylindrical structures, possibly artistic installations or functional elements. These structures are adorned with posters, adding visual interest to the space\n\nSurrounding the square are several buildings, including a notable four-story structure with a brown facade and white-framed windows. A yellow and black bus is parked nearby, suggesting public transportation options are available in the area.\n\nThe sky is a clear blue with a few scattered clouds, and the sun is visible in the upper left corner, casting a warm glow over the scene. This creates an inviting atmosphere and suggests it's daytime.\n\nPeople can be seen walking around the square, contributing to the lively urban ambiance. The overall scene captures the essence of a vibrant city center, showcasing a blend of transportation infrastructure, public spaces, and architectural elements.",
+            "alt": "An image of Nørreport Station from above, showing the platforms and the surrounding cityscape."
+          },
+          "check_if_answered": false,
+          "create_segue": false
+        },
+        {
+          "main_question": "Can you describe a specific memory or experience from or around this location?",
+          "probes": [
+            "How would you describe your relationship with this location?",
+            "What does this location mean to you?",
+            "What do you associate with this location?",
+            "How do you use this urban space?"
+          ],
+          "max_probes_n": 2,
+          "check_if_answered": false,
+          "create_segue": false
+        }
+      ]
+    },
+    {
+      "description": "Background survey",
+      "questions": [
+        {
+          "main_question": "Thank you for sharing your experiences. Before we conclude, we have two quick background questions for you.",
+          "can_answer": false,
+          "can_skip": false,
+          "check_if_answered": false,
+          "create_segue": false
+        },
+        {
+          "main_question": "What is your country of origin?",
+          "max_probes_n": 0,
+          "check_if_answered": false,
+          "create_segue": false
+        },
+        {
+          "main_question": "When did you move to Copenhagen?",
+          "max_probes_n": 0,
+          "check_if_answered": false,
+          "create_segue": false
+        }
+      ]
+    }
+  ]
+}

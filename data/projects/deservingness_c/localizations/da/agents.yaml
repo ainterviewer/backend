@@ -1,0 +1,23 @@
+base:
+  model: "gpt-oss-120b"
+  temperature: 1
+probing:
+  few_shot_examples:
+    - Kan du uddybe det?
+    - Hvordan føltes det?
+    - Hvad skete der så?
+    - Kan du give et eksempel?
+    - Hvad tænkte du i øjeblikket?
+    - Hvordan påvirkede det dig?
+    - Hvorfor er det vigtigt for dig?
+    - Hvad betyder det for dig?
+classification:
+  temperature: 0
+history:
+  temperature: 1
+security:
+  temperature: 0.2
+  include: false
+visual:
+  model: "llava"
+  include: false

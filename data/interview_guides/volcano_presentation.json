@@ -1,0 +1,119 @@
+{
+  "framing": "The interview focuses on quality urban living, emphasizing how local conditions are experienced and utilized by residents to support their social life, consumption patterns, and healthy habits in Ørestad. Ørestad is a developing city area in Copenhagen, Denmark, on the island of Amager. The interview is structured around three sub-themes:\nSustainable consumption experiences, habits, and aspirations in the local area: This part examines how residents interact with local businesses, their shopping habits, what they desire in terms of local consumption options and how this is connected to sustainability.\nSocial connection to the local area: This section explores how residents feel connected to their neighborhood and local community.\nThe use, experience, and expectations of the local area's ability to support healthy exercise and dietary habits: This theme investigates how the neighborhood's infrastructure and amenities contribute to residents' health and wellness, including opportunities for physical activity and access to nutritious food options.\nThe question revolves around these themes and we are interested in both their established practices and what they would change in order to improve them and the area in the future.",
+  "introduction": "Welcome to <x>AInterviewer</x>\n\nThe interview will be conducted by an automated AI system that will ask you questions based on an interview guide and follow up questions based on your answers. The interview will take approximately 15-20 minutes.\n\nWe are interested in learning more about how you experience life here in Ørestad, with a particular focus on your consumption habits, social life and your health. Your answers will help us understand how life in the area and other neighborhoods can be improved.",
+  "outro": "Thank you for completing the interview. Your responses are of great value to us, and we appreciate your time and insights.",
+  "alt_outro": "Please feel free to take the interview at a later time if you change your mind, or contact us at hc@soc.ku.dk if you have any concerns regarding the interview.",
+  "evaluation_survey": { "key": "ZQW1GXQ7J23N" },
+  "question_sections": [
+    {
+      "description": "This section focuses on exploring the residents' experiences of quality urban living in Ørestad, Copenhagen. It aims to gather insights on how local conditions are perceived and utilized by residents to support their social life, consumption patterns, and healthy habits.\nThe section includes questions about residents' overall perception of a good life, their connection to nature in Ørestad, motivations for moving to the area, and experiences with sustainability, social life, and healthy living. It also seeks suggestions for improving various aspects of life in Ørestad.\nThis section aims to gather comprehensive insights into both established practices and desired changes to improve the quality of life in Ørestad. The responses will help paint a detailed picture of life in this developing urban area and inform potential improvements for the future.",
+      "questions": [
+        {
+          "description": "This question aims to understand the respondent's overall perception of a good life",
+          "main_question": "To start with, how would you describe what the good life means for you?",
+          "probes": [
+            "Are there any other aspects you would include in your definition?",
+            "Can you give examples of how you try to achieve this in your daily life?"
+          ],
+          "max_probes_n": 1
+        },
+        {
+          "description": "This question aims to understand how the respondent's definition of a good life relates to their experiences in Ørestad",
+          "main_question": "How do you see your life in Ørestad in relation to your description of the good life?",
+          "probes": [
+            "Are there any other ways that Ørestad supports your pursuit of a good life?",
+            "Are there any areas where Ørestad falls short of your expectations?"
+          ],
+          "max_probes_n": 2,
+          "create_segue": false
+        },
+        {
+          "description": "This question aims to understand the respondent's motivations for moving to Ørestad.",
+          "main_question": "Now, can you tell us about or expand on the specific reasons why you moved to Ørestad?",
+          "probes": [
+            "Are there any other reasons?",
+            "Did you have any doubts or concerns before moving here?",
+            "Did you consider any other specific area?"
+          ],
+          "max_probes_n": 1,
+          "create_segue": false
+        },
+        {
+          "description": "Sustainable consumption patterns in Ørestad: This question focuses on residents' consumption behaviors, preferences, and overall lifestyle choices related to sustainability in the context of living in Ørestad. It aims to understand how well current consumption patterns align with Copenhagen's carbon footprint reduction goals, identify areas for improvement, and explore potential strategies to promote more sustainable behavior.",
+          "main_question": "How do you experience the possibilities for living sustainable in Ørestad?",
+          "probes": [
+            "Can you give examples of sustainable choices you make?",
+            "Are there areas where you find it challenging to make sustainable choices?",
+            "Are there any specific products or services you would like to see in Ørestad to support your sustainable lifestyle?",
+            "How do you consider sustainability in your daily consumption choices?",
+            "Do you consider the carbon footprint of your food choices?",
+            "What factors influence your food purchasing decisions?",
+            "How do you typically move around Ørestad and commute to other parts of Copenhagen?",
+            "Why do you choose this mode of transportation?",
+            "How has Ørestad's metro connection influenced your transportation choices?",
+            "What would encourage you to use more sustainable transportation options?",
+            "If you could improve anything in Ørestad in terms of increasing sustainable living, what would it be?"
+          ],
+          "max_probes_n": 2,
+          "create_segue": false
+        },
+        {
+          "description": "Social attachments to the local area: This question explores the respondent's social connections to Ørestad. It aims to understand how the local area helps facilitate social interactions and relationships. The questions should help paint a picture of the community fabric and identify areas for potential improvement in fostering social connections.",
+          "main_question": "How do you experience the possibilities for cultivating social relationships in Ørestad?",
+          "probes": [
+            "Which places in the area do you use to meet friends or family?",
+            "What do you do there?",
+            "What are the most important factors for you when choosing a place to meet friends or family?",
+            "If you could change or improve something in Ørestad to improve the social life, what would it be?"
+          ],
+          "max_probes_n": 2,
+          "create_segue": false
+        },
+        {
+          "description": "Health and the built environment: This section examines how the physical environment of Ørestad supports or hinders healthy lifestyles. It covers topics such as access to fitness facilities, green spaces, and healthy food options. The questions aim to understand how residents utilize these resources, their satisfaction with current offerings, and how seasonal changes affect their health habits. This section also seeks suggestions for improving the built environment to better support healthy living.",
+          "main_question": "How do you experience the possibilities for living a healthy life in Ørestad?",
+          "probes": [
+            "Do you use any of the facilities in the area to excerise or play sports?",
+            "When eating healthy, where do you typically buy your food?",
+            "Are there any difficulties in finding healthy products in the area?",
+            "Do you experience the seasons effecting your health habits in Ørestad? If yes, how?",
+            "If you could change anything in the physical environment of Ørestad to make living a health life easier, what would it be?",
+            "What could be done to improve facilities for healthy living in Ørestad?"
+          ],
+          "max_probes_n": 2,
+          "create_segue": false
+        },
+        {
+          "description": "This question serves as a way to get the respondent to talk about their view on their connection and relation to the nature surrounding Ørestad.",
+          "image": {
+            "primer": "You will now be shown two images from Ørestad. Please take a moment to look at them before answering the question that follows.",
+            "name": "merged_h.webp",
+            "description": "The image consists of two pictures.\nOne depicts an aerial view of <x>Byparken</x> surrounded by the tall residential buildings.\nThe other picture depicts a scene where a group of cows is grazing in a grassy field in front of residential buildings at the southern end of Ørestad.",
+            "alt": "Two images of Ørestad. An aerial picture of Byparken and one of cows gracing in front of appartment complexes"
+          },
+          "main_question": "As a resident of Ørestad, you don't have far to nature and green spaces, both within the neighborhood and in nearby areas. How and how often do you use the nature in and around Ørestad?",
+          "probes": [
+            "How would you improve the areas in their current state if you had the chance?",
+            "What could be done to improve the access to nature in Ørestad?",
+            "What do you think about the contrast between the modern architecture and the green areas in Ørestad?",
+            "Is there anything that you would change in Ørestad in terms of the layout and functionality of the area?",
+            "What is the most important lesson you think Ørestad can teach other urban areas?"
+          ],
+          "max_probes_n": 2,
+          "create_segue": false,
+          "check_if_answered": false
+        }
+      ]
+    },
+    {
+      "description": "Final questions: This section consists of an open-ended question designed to capture the see if there are anything that we missed in the interview.",
+      "questions": [
+        {
+          "description": "This open-ended question allows the respondent to share any additional thoughts or experiences about living in Ørestad",
+          "main_question": "Finally, are there any things here that you, as a local citizen, think are important to mention in terms of improving the lives of the local residents in Ørestad?",
+          "max_probes_n": 0
+        }
+      ]
+    }
+  ]
+}

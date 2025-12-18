@@ -1,0 +1,54 @@
+{% extends "email/base_email.jinja" %}
+{% block content %}
+    <p class="main-text">
+        We're excited to have you on board. Your journey toward smarter, automated interviews starts now.
+    </p>
+    <a href="https://ainterviewer.dk/start" class="cta-button">Get Started</a>
+    <div class="features">
+        <div class="feature-item">
+            <div class="feature-icon"></div>
+            <div>Automated question generation</div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon"></div>
+            <div>Data-rich candidate profiles</div>
+        </div>
+    </div>
+    <ul style="background-color: #f8f9fa;
+               padding: 25px;
+               border-radius: 6px;
+               margin: 25px 0;
+               list-style-type: none;
+               padding-left: 0">
+        <li style="margin-bottom: 15px;">
+            <span style="display: inline-block;
+                         width: 20px;
+                         height: 20px;
+                         background-color: #667eea;
+                         border-radius: 50%;
+                         margin-right: 15px;
+                         vertical-align: middle"></span>
+            <span style="vertical-align: middle;">Feature 1 description</span>
+        </li>
+        <li style="margin-bottom: 15px;">
+            <span style="display: inline-block;
+                         width: 20px;
+                         height: 20px;
+                         background-color: #667eea;
+                         border-radius: 50%;
+                         margin-right: 15px;
+                         vertical-align: middle"></span>
+            <span style="vertical-align: middle;">Feature 2 description</span>
+        </li>
+        <li style="margin-bottom: 15px;">
+            <span style="display: inline-block;
+                         width: 20px;
+                         height: 20px;
+                         background-color: #667eea;
+                         border-radius: 50%;
+                         margin-right: 15px;
+                         vertical-align: middle"></span>
+            <span style="vertical-align: middle;">Feature 3 description</span>
+        </li>
+    </ul>
+{% endblock %}

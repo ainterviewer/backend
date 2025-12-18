@@ -1,0 +1,16 @@
+agents:
+  base:
+    model: "mistral"
+    temperature: 0.7
+    stream: false
+    lan: "en"
+  history:
+    temperature: 1
+  classification:
+    temperature: 0
+  security:
+    temperature: 0.2
+  translation:
+    include: false
+  visual:
+    model: "llava"

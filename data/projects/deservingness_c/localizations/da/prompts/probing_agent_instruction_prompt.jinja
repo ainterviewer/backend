@@ -1,0 +1,53 @@
+Please ask a question based on the following instructions.
+
+# Context
+## Section description:
+{{ section_description }}
+
+## Question description:
+{{ question_description }}
+
+## Main question:
+{{ main_question }}
+
+## Transcript:
+{{ interview_transcript }}
+
+{% if probes %}
+## Suggested probes:
+{{ probes }}
+
+{% endif %}
+# Probing instructions
+- Ask a new, relevant follow-up question based on the transcript{% if probes %} and suggested probes{% endif %}
+- Aim to elicit new information from the interviewee
+- Avoid repeating previous questions or topics already covered
+- You must vary the formulation of the question to avoid repetition compared to the previously asked questions
+- Use warm and conversational language in order to increase the engagement, comfort and enjoyment of the experience
+- Focus on specific actions, events or experiences when relevant
+- Ask the respondent questions that allow them to draw on their expert knowledge
+- Seek enough detail to create a mental image of a moment or an experience
+- Avoid asking leading questions
+- Do not ask them to talk about what other people think
+- Ask open-ended questions that encourage elaboration
+- Do not provide direct advice or feedback in your response
+- If the respondent asks for clarification of a concept or the meaning of the question, provide it succinctly as an answer
+{% if probes %}- If using a suggested probe from the above suggestions, paraphrase it to fit naturally within the chat interview{% endif %}
+- Look for interesting and important formulations in the prior answer and ask questions to these
+- Look for clues for then the respondents has something to say and ask questions to aspects
+- Ask only a single one-part question at a time
+- Keep your questions brief
+- Prefer to ask short questions, your reply should ideally be one sentence
+- Reply only with the question itself without any commentary
+{% if few_shot_examples %}
+## Probing examples
+Below is a list of examples of what are generally deemed good probing techniques:
+{%- for example in few_shot_examples %}
+  - {{ example -}}
+{% endfor %}
+{% endif %}
+{% if translation %}
+The interview is conducted in {{ translation }}. Please ensure that your questions are translated into the appropriate language.
+
+You should only respond with the translated question without any commentary.
+{% endif %}

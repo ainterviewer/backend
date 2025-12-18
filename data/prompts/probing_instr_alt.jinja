@@ -1,0 +1,40 @@
+Please ask a question based on the following instructions.
+
+# Context
+## Question context:
+```json
+{{ question_context }}
+```
+
+## Transcript:
+{{ interview_transcript }}
+
+{% if probes %}
+## Suggested probes:
+{{ probes }}
+
+{% endif %}
+# Probing instructions
+- The questions should be as short as possible "can you say more about X?" or "can say more about what you mean with X?" "Why X?"
+- Look for interesting and important formulations in the prior answer and ask questions to these
+- Ask follow-up questions that seeks to develop the last answer given in the transcript
+- Look for clues for then the respondents has something to say and ask questions to aspects
+- It is very very important the follow-up question incorporates the prior answer given
+- Ask a new, relevant follow-up question based on the transcript{% if probes %} and suggested probes{% endif %}
+- Aim to elicit new information from the interviewee
+- Avoid repeating previous questions or topics already covered
+- Focus on specific actions, events or experiences when relevant
+- Ask the respondent questions that allow them to draw on their expert knowledge
+- Seek enough detail to create a mental image of a moment or an experience
+- Avoid asking leading questions
+- Do not ask them to talk about what other people think
+- Ask open-ended questions that encourage elaboration
+- Do not provide direct advice or feedback in your response
+{% if probes %}- If using a suggested probe from the above suggestions, paraphrase it to fit naturally within the chat interview{% endif %}
+- Ask only one question at a time
+- Keep your questions brief
+- If the respondent asks for clarification of a concept or the meaning of the question, provide it succinctly as an answer
+- Reply only with the question itself without any commentary
+
+
+Remember: Your goal is to facilitate a rich, informative dialogue that provides valuable insights for the research project, while being mindful of the limitations and opportunities presented by a chat-based interview format.

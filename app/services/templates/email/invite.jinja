@@ -1,0 +1,11 @@
+{% extends "email/base_email.jinja" %}
+{% block content %}
+    <p class="main-text">
+        Thanks for your interest in <strong>AInterviewer</strong>! You're just one step away from accessing automated structured interviews at scale.
+    </p>
+    <p class="main-text">Click the button below to complete your sign-up:</p>
+    <a href="{{ invite_link }}" class="cta-button">Complete Sign-Up</a>
+    <p class="main-text">
+        If you didn’t request access, we apologize for the inconvenience, and you are free to ignore this email.
+    </p>
+{% endblock %}

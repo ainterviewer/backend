@@ -1,0 +1,96 @@
+[project]
+name = "ainterviewer-app"
+version = "0.3.14"
+description = "AInterviewer API used to setup and conduct automated interviews at scale."
+readme = "README.md"
+authors = [{ name = "Tobias Gårdhus", email = "tobias_gaardhus@hotmail.com" }]
+requires-python = ">=3.12.0"
+
+
+dependencies = [
+  "adbc-driver-postgresql>=1.6.0",
+  "ainterviewer",
+  "aiobotocore>=2.25.1",
+  "aiosmtplib>=4.0.1",
+  "alembic>=1.16.1",
+  "bcrypt==4.3.0",
+  "css-inline>=0.15.0",
+  "fastapi[standard]>=0.124",
+  "html2text>=2025.4.15",
+  "itsdangerous>=2.2.0",
+  "jinja2>=3.1.6",
+  "jinjax>=0.50",
+  "passlib[bcrypt]>=1.7.4",
+  "polars>=1.30.0",
+  "pyarrow>=20.0.0",
+  "pydantic-extra-types>=2.10.4",
+  "pydantic-settings>=2.7.1",
+  "pydantic>=2.9,<3",
+  "python-jose[cryptography]>=3.5.0",
+  "qrcode[pil]>=8.2",
+  "semver>=3.0.4",
+  "sqlalchemy>=2.0.43",
+  "starlette>=0.46.2",
+  "typer>=0.20.0",
+  "uvicorn[standard]>=0.34.3",
+  "xlsxwriter>=3.2.3",
+]
+
+[project.optional-dependencies]
+analysis = [
+  "adbc-driver-sqlite>=1.6.0",
+  "ipykernel>=6.29.5",
+  "marimo[recommended]>=0.13.2",
+  "matplotlib>=3.10.3",
+  "pandas>=2.2.3",
+  "plotly>=6.3.0",
+  "rich>=14.0.0",
+  "sentence-transformers>=4.1.0",
+  "ua-parser[regex]>=1.0.1",
+  "user-agents>=2.2.0",
+  "watchdog>=6.0.0",
+]
+
+[dependency-groups]
+dev = [
+  "deptry>=0.23.0",
+  "djlint>=1.36.4",
+  "inquirer>=3.4.0",
+  "ipykernel>=6.29.5",
+  "locust>=2.37.7",
+  "locust-plugins[websocket]>=4.7.0",
+  "nbstripout>=0.8.1",
+  "playwright>=1.52.0",
+  "pre-commit>=4.2.0",
+  "psycopg2-binary>=2.9.10",
+  "pytest>=8.4.0",
+  "ruff>=0.11.12",
+]
+
+[tool.uv.sources]
+# ainterviewer = { git = "https://github.com/gaardhus/ainterviewer-lib.git", tag = "v0.3.9" }
+# ainterviewer = { git = "https://github.com/gaardhus/ainterviewer-lib.git", tag = "latest" }
+ainterviewer = { git = "https://github.com/gaardhus/ainterviewer-lib.git" }
+# ainterviewer = { path = "../../../lib", editable = true }
+
+[tool.basedpyright]
+reportExplicitAny = false
+reportUnusedCallResult = false
+
+[tool.locust]
+locustfile = "scripts/locust_file.py"
+host = "http://localhost:8666"
+
+[tool.djlint]
+profile = "jinja"
+indent = 4
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint.isort]
+known-first-party = ["ainterviewer"]
+known-third-party = ["alembic"]
+
+[tool.marimo.runtime]
+watcher_on_save = "autorun"

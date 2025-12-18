@@ -1,0 +1,132 @@
+{
+  "framing": "In this interview, university students’ academic help seeking behavior will be investigated.\nIn the interview, we will be questioning students’ academic help seeking through three cases. First we will ask students to explain a case where they needed and received help with their studies. In the second case, students will explain a situation where they needed but did not ask for help. In the last case, they will reflect on a case where they asked for help but did not get it.\n\nWith these three cases, we aim to investigate social processes and mechanisms surrounding university students’ help seeking and receiving help in the academic context. More specifically, these cases will question why students needed help, who they sought help or support from, the social situation surrounding their need, their relation to the helper(s) and students’ feelings, attitudes and behaviors.\n\nBy asking these three cases, we also want to investigate how university students navigate their social network to access resources and cope with academic challenges. We want to shed light on social context, university students’ experiences and how their social ties and relations impact their academic help seeking and getting help, as well as their attitudes and resilience in the face of academic challenges.\n\nIn the general context, the following questions will be examined: how do university students decide to ask for help, from which resources do they seek help from, what kind of help is needed the most, and students’ attitudes and attributions regarding different sources of help will be examined. It is important to note that the focus is not the outcome of help seeking but rather on students’ experiences, attitudes, and thoughts around seeking support/help. It is important to investigate the outcomes if or when they have an impact on individuals’ perceptions or behavior.",
+  "introduction": "Thank you very much for taking part in our research. In this interview, we will ask you open-ended questions to investigate university students' academic help seeking behavior. It is very common for students to face various academic challenges in their studies such as understanding a concept, solving an exercise, doing a group project and so on.\n\nThere are no right or wrong answers. We are very interested in hearing your experience and perspective. The only constraint is that you must write your answers in one go, not using multiple lines.  Also, your responses will remain confidential and all personally identifiable information will be removed from publications.",
+  "outro": "Thank you very much for sharing your insights and experiences. Your input is a valuable contribution to our research.",
+  "evaluation_survey": { "id": "1656646" },
+  "question_sections": [
+    {
+      "description": "In this group of questions, the aim is to understand the social situation in which university students needed help and were able to get help regarding their studies.\nMore specifically, the following will be investigated: for what reasons students need academic help, how students cognitively identify when help is needed, what social competencies they use to decide who can help best and how to approach. We will investigate what social processes and mechanisms play a role when students ask for help and receive help in an academic context.",
+      "questions": [
+        {
+          "main_question": "Can you think of a situation where you needed academic help and got help with your studies?\n\nPlease provide a yes or no answer",
+          "max_probes_n": 0
+        },
+        {
+          "main_question": "What did you specifically need help with?",
+          "max_probes_n": 0,
+          "condition": {
+            "type": "yes/no",
+            "trigger_type": "re",
+            "question_context": { "section": 0, "question": 0 },
+            "trigger_value": "no",
+            "action": "skip_section"
+          },
+          "create_segue": false
+        },
+        {
+          "main_question": "How did you get help?",
+          "probes": [
+            "Did you personally ask for help? If so, how?",
+            "From whom did you get help? Can you describe the social situation?",
+            "How would you describe your relation to them?",
+            "How do you decide who can help best and how to approach them?"
+          ],
+          "max_probes_n": 5
+        },
+        {
+          "main_question": "Who else did you consider asking for help?",
+          "probes": ["What factors influenced your decision?"],
+          "max_probes_n": 2
+        },
+        {
+          "main_question": "How did you feel after getting the help?",
+          "probes": ["What are your expectations from the helper?"],
+          "max_probes_n": 2
+        },
+        {
+          "main_question": "In general, what are the reasons you seek academic help?",
+          "max_probes_n": 1
+        },
+        {
+          "main_question": "Who do you ask to get help to resolve your academic challenges? How would you describe your relation to them?",
+          "max_probes_n": 1
+        }
+      ]
+    },
+    {
+      "description": "The goal is to understand the social situations where university students needed help but did not ask for help regarding their studies. More specifically, the aim is to understand why students refrain from asking for academic help, their relation to the helper, what factors affect their decision, and how this impacts their help seeking behavior will be investigated. We will investigate what social processes and mechanisms play a role when students refrain from asking for academic help even though they need it.",
+      "questions": [
+        {
+          "main_question": "Can you think of a situation where you needed help with your studies but did not ask for it?\n\nPlease provide a yes or no answer",
+          "max_probes_n": 0
+        },
+        {
+          "main_question": "What did you specifically need help with?",
+          "max_probes_n": 0,
+          "condition": {
+            "type": "yes/no",
+            "trigger_type": "re",
+            "question_context": { "section": 1, "question": 0 },
+            "trigger_value": "no",
+            "action": "skip_section"
+          }
+        },
+        {
+          "main_question": "Although you did not ask for help, did you consider asking anyone for help? And if so, who?",
+          "probes": [
+            "How would you describe your relation to them?",
+            "What were your considerations around asking for help?"
+          ],
+          "max_probes_n": 3
+        },
+        {
+          "main_question": "Why did you not prefer asking for help?",
+          "probes": [
+            "When do you feel the most comfortable to ask for academic help?",
+            "When do you feel the least comfortable to ask for academic help?"
+          ],
+          "max_probes_n": 4
+        },
+        {
+          "main_question": "How did you resolve the issue?",
+          "probes": [
+            "Did you end up getting any help? Can you describe the social situation?",
+            "How do you decide who can help best and how to approach them?",
+            "When do you feel the most comfortable to ask for academic help?",
+            "When do you feel the least comfortable to ask for academic help?",
+            "Why did you not prefer asking for help?"
+          ],
+          "max_probes_n": 5
+        },
+        {
+          "main_question": "How did you feel about this situation?",
+          "probes": [
+            "Under what conditions would you seek help? Can you explain why?",
+            "What changes would you suggest at the university to better meet your academic needs?"
+          ],
+          "max_probes_n": 4
+        },
+        {
+          "main_question": "In general, in which cases or from whom do you refrain from asking academic help? Why so?",
+          "max_probes_n": 1
+        }
+      ]
+    },
+    {
+      "description": "These last questions are to allow the interviewee to express any additional points.",
+      "questions": [
+        {
+          "main_question": "Before we conclude our interview, is there anything you’d like to add or any perspectives you think we might have missed?",
+          "max_probes_n": 1,
+          "condition": {
+            "type": "yes/no",
+            "trigger_type": "re",
+            "question_context": { "section": 2, "question": 0 },
+            "trigger_value": "no",
+            "action": "skip_section"
+          }
+        }
+      ]
+    }
+  ]
+}

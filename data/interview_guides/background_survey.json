@@ -1,0 +1,34 @@
+{
+  "framing": "This interview is about deservingness.",
+  "introduction": "Welcome to the interview. We are interested in your personal experiences and opinions. There are no right or wrong answers. Please answer as honestly as possible.\n\nWe will present you with different scenarios, experiences with and attitudes about giving help. For all the examples, please imagine offering help to someone you don't know beforehand.",
+  "outro": "Thank you for your participation. Please click <a href=\"https://webs.norstatsurveys.com/z/Complete\">this link</a> to finish the interview.",
+  "question_sections": [
+    {
+      "description": "Background survey",
+      "questions": [
+        {
+          "main_question": "How did you find the interview?",
+          "survey_item": {
+            "type": "slider",
+            "options": ["Very bad", "Bad", "Neutral", "Good", "Very good"]
+          }
+        },
+        {
+          "description": "",
+          "main_question": "What is your highest level of education?",
+          "survey_item": {
+            "type": "radio",
+            "options": [
+              "Primary school",
+              "High school",
+              "Vocational education",
+              "Bachelor's degree",
+              "Master's degree",
+              "PhD"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "framing": "",
+  "introduction": "Here are some questions about unpaid volunteering. Unpaid volunteering can be done in many areas. Often it is for voluntary associations and organisations, but it can also take place for a public or private company.\n\nUnpaid volunteering can consist of many different things: You can coach a football team, you can also be a museum guard, a fundraiser, a member of the board of a neighbourhood association, a school board, a volunteer at a shelter and much more. Volunteering should not be confused with the help you give to family and close friends.",
+  "outro": "Thank you for answering our questions, they will help us understand more about unpaid volunteering in Denmark.",
+  "question_sections": [
+    {
+      "description": "",
+      "questions": [
+        {
+          "main_question": "Har du inden for det seneste år arbejdet frivilligt inden for et eller flere af følgende områder?",
+          "language": "da",
+          "survey_item": {
+            "type": "checkbox",
+            "options": [
+              {
+                "label": "Kultur",
+                "tip": "fx museer, lokalhistoriske arkiver, sangkor, teater"
+              },
+              {
+                "label": "Idræt",
+                "tip": "fx sportsklubber, danseforeninger, svømmehaller"
+              },
+
+              {
+                "label": "Fritid i øvrigt ",
+                "tip": "fx hobbyforeninger, slægtsforskning, spejder"
+              },
+              {
+                "label": "Uddannelse, undervisning og forskning ",
+                "tip": "fx skolebestyrelse, voksen- og fritidsundervisning, husholdningsforening, studenterforening"
+              },
+              {
+                "label": "Sundhed og sygdom ",
+                "tip": "fx bloddonor, patientforening, krisehjælp"
+              },
+              {
+                "label": "Det sociale område ",
+                "tip": "fx pensionistforeninger, væresteder, flygtningevenner, daginstitutionsbestyrelser"
+              },
+              {
+                "label": "Miljø ",
+                "tip": "fx naturfredning, dyreværn, selvejende haver"
+              },
+              {
+                "label": "Bolig og lokalsamfund ",
+                "tip": "fx beboerforeninger, antenneforeninger, andelsforeninger, grundejerforeninger"
+              },
+              {
+                "label": "Fagligt arbejde og erhvervs- og brancheorganisationer ",
+                "tip": "fx fagforbund, handelsstandsforening, turistforening"
+              },
+              {
+                "label": "Rådgivning og juridisk bistand ",
+                "tip": "fx forbrugerorganisationer, menneskerettigheder, retshjælp"
+              },
+              {
+                "label": "Politik og partiforeninger ",
+                "tip": "fx vælgerforeninger, græsrodsorganisationer, kvindebevægelse"
+              },
+              {
+                "label": "Internationale aktiviteter ",
+                "tip": "fx humanitære, freds- og solidaritetsorganisationer"
+              },
+              {
+                "label": "Religion og kirke ",
+                "tip": "fx menighedsarbejde, søndagsskole"
+              },
+              "Andre områder end ovenstående"
+            ]
+          },
+          "max_probes_n": 0
+        },
+        {
+          "description": "Ask follow-up questions inviting them to share more details about the specific activities they have engaged in, including their impressions, personal experiences, and the context or environment in which their volunteer work took place.",
+          "main_question": "Kan du give en detaljeret beskrivelse af hvordan dagen forløb sidste gang du var frivillig indenfor {} området fra start til slut?",
+          "references": [{ "question_index": [0, 0] }],
+          "language": "da",
+          "max_probes_n": 3,
+          "create_segue": false,
+          "check_if_answered": false
+        }
+      ]
+    }
+  ]
+}

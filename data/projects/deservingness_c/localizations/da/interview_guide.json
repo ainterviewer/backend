@@ -1,0 +1,143 @@
+{
+  "framing": "The interview is about the role of different deservingness criteria in the respondents assessment of whether the respondent should help someone you don't know. The interview asks respondents to reflect on a set of different criteria: personal responsibility (or control), the need of the person (need), the attitude or gratitude, reciprocity or degree to which they have or will contribute to the collective and background or identity. In the research on deservingness these criteria are known as control, attitude, reciprocity, identity and need.\n\nEach question is focused on a particular criteria and we are interested in knowing more about what people think of this criteria, how they interpret it and what role has played in their perception and understanding of actual situations. To be more specific with what we want to know:\n\n 1) To what extent respondents think that criteria is relevant morally and otherwise?\n 2) How do the respondents interpret the criteria?\n 3) How do the respondents apply the criteria in practice? 4) What role does these criteria play in respondents' actual experiences?\n\nImportantly we can’t always ask the respondents these questions directly but have to ask open ended questions that allow answers to these questions to surface.\nEach respondent might be able to contribute with different aspects of the questions above and it is important to use their responses to determine which aspect they might have someone to say about.",
+  "welcome": {
+    "title": "Velkommen til AInterviewer",
+    "text": "Interviewet vil blive gennemført af et automatiseret AI-system, der vil stille dig spørgsmål baseret på en interviewguide samt stille opfølgende spørgsmål baseret på dine svar.\n\nInterviewet vil tage omkring 15 minutter.",
+    "email": "hc@sodas.ku.dk",
+    "with_id": true
+  },
+  "timed_message": {
+    "time": 1080,
+    "message": "Tiden er nu formelt udløbet, men vi opfordrer dig til at afslutte interviewet, hvis du har tid. Du kan trykke <a href=\"https://s.epinionglobal.com/mrIWeb/mrIWeb.srf?I.Project=P2100211{% if test %}_TEST{% endif %}&i.user2=n&i.user5=complete&id={{ user1 }}\" target=\"_blank\">her</a> for at gå tilbage og afslutte undersøgelsen. Hvis du fortsætter vil du blive præsenteret for linket igen til sidst i interviewet.",
+    "variables": ["test", "user1"]
+  },
+  "introduction": "Hej og velkommen til interviewet!\n\nDet kommer til at handle om hjælpeadfærd, og vi er meget interesserede i at høre om dine personlige oplevelser og holdninger. Derfor vil vi bede dig svare så detaljeret og uddybende på spørgsmålene som muligt.\n\nDer findes ingen rigtige eller forkerte svar - det vigtigste er, at du svarer ærligt.\n\nDu kan kun sende én besked som svar på hvert spørgsmål, du bliver stillet.\n\nDet første spørgsmål modtager du i den næste besked.",
+  "shuffle_sections": false,
+  "question_sections": [
+    {
+      "description": "Opening question to make the person start talking.",
+      "shuffle_questions": false,
+      "questions": [
+        {
+          "description": "This question aims to make the person open up about themselves and start the interview.\nUse this question as a way to make the person comfortable with the interview format.\n\nUse encouraging and acknowledging subordinate clauses (e.g. add utterances that recognize effort, validate emotions, or express optimism)",
+          "main_question": "Hvordan har du oplevet, at danskernes villighed til at hjælpe andre har ændret sig over de seneste 10 år?",
+          "max_probes_n": 2,
+          "max_probes_time": 120,
+          "probes": [
+            "Hvorfor tror du, der ligger bag det?",
+            "Kan du beskrive en situation/et eksempel...?",
+            "Hvordan oplevede du...?",
+            "Hvad mener du med...?"
+          ],
+          "create_segue": false
+        }
+      ]
+    },
+    {
+      "description": "This section introduces the main themes of the interview and explores the respondent’s general attitudes toward what makes a stranger deserving of help. The focus is on the different criteria of deservingness, and the aim is to understand how respondents interpret these criteria, what importance they assign to them, and how they may apply them in real-life situations.\n\nSometimes respondents may answer that these aspects do not matter at all (e.g., by saying \"det betyder ingenting\" or \"ingenting\"). In those cases, it is important to probe in a way that opens up why they feel this way and what underlies their rejection of the criteria. Useful follow-up probes include:\n- \"Kan du fortælle lidt mere om, hvorfor du synes, det slet ikke betyder noget?\"\n- \"Er der virkelig ingen situationer, hvor det kunne gøre en forskel for dig?\"\n\nThese probes allow respondents to expand on their reasoning, even when their initial reaction is that the criteria are irrelevant.",
+      "shuffle_questions": false,
+      "questions": [
+        {
+          "description": "Instruction",
+          "main_question": "Vi går nu videre til næste del af interviewet.\n\nUndervejs i denne del af interviewet vil du blive bedt om at overveje hvad der er vigtigt for dig, når du skal overveje om du vil hjælpe en person, du ikke kender.\n\nDu vil i den forbindelse få præsenteret forskellige faktorer, der kan have betydning for din lyst til at hjælpe vedkommende.\n\nI interviewet vil personer, som du ikke kender, referere til mennesker, du ikke har en personlig relation til - altså personer, du måske møder tilfældigt i hverdagen eller kun kender meget overfladisk.\n\nSvar helst med 1-3 sætninger, og gerne mere hvis du kan.",
+          "max_probes_n": 0,
+          "can_answer": false,
+          "create_segue": false
+        },
+        {
+          "description": "This question explores the role of perceived personal responsibility in decisions about helping strangers. It asks respondents to reflect on this question. The term “role” is intentionally open to allow respondents to answer in different ways. The goal is to ask a follow-up question where the respondent has something to say.\n\n 1) This could be either in their moral evaluation of personal responsibility as relevant criteria for helping others. They might have strong opinions on personal responsibility as a right or wrong way to evaluate the deservingness of others. Here you ask for a follow-up question that seeks more elaboration on what they mean with personal responsibility and why it is important. (why is it generally important or unimportant criteria for you)\n 2) It could be in a significant situation experienced by the respondents where personal responsibility was a salient aspect of their perception. Here you could ask a follow-up question that asks for more detail on their experience. (what role did personal responsibility play in a concrete experience)\n 3) They could also address different conditions/specifications of when someone is or is not perceived to be personally responsible.",
+          "main_question": "Når du tænker på at hjælpe en du ikke kender, hvordan påvirker det din beslutning, hvis du oplever at personens problemer er selvforskyldte?",
+          "language": "da",
+          "probes": [
+            "Hvornår er noget selvforskyldt i dine øjne?",
+            "Hvorfor tror du, at du har det sådan?",
+            "Kan du beskrive en konkret eller forestillede situation, hvor du...?",
+            "Hvordan oplevede du...?",
+            "Hvad mener du med...?"
+          ],
+          "max_probes_n": 4,
+          "max_probes_time": 180,
+          "create_segue": true,
+          "check_if_answered": false,
+          "exclude_from_history": true
+        },
+        {
+          "description": "This question explores the role of perceived need in decisions about helping strangers. It asks respondents to reflect on this question. The term “role” is intentionally open to allow respondents to answer in different ways. The goal is to ask a follow-up question where the respondent has something to say.\n\n 1) This could be either in their moral evaluation of need as relevant criteria for helping others. They might have strong opinions on need as a right or wrong way to evaluate the deservingness of others. Here you ask for a follow-up question that seeks more elaboration on what they mean with personal experience and why it is important.\n 2) It could be in a significant situation experienced by the respondents where personal responsibility was a salient aspect of their perception. Here you could ask a follow-up question that asks for more detail on their experience.",
+          "main_question": "Når du overvejer om du skal hjælpe en du ikke kender, hvordan påvirker det din beslutning, hvis du oplever at personen ikke har et stort behov for hjælp?",
+          "language": "da",
+          "probes": [
+            "Hvad er et \"stort behov for hjælp\" ifølge dig?",
+            "Hvorfor tror du, at du har det sådan?",
+            "Hvornår er størrelsen på behovet afgørende?",
+            "I hvilke situationer kunne du forestille dig at have det anderledes?",
+            "Hvordan oplevede du...?",
+            "Hvad mener du med...?"
+          ],
+          "max_probes_n": 4,
+          "max_probes_time": 180,
+          "create_segue": true,
+          "check_if_answered": false,
+          "exclude_from_history": true
+        },
+        {
+          "description": "This question explores the role of perceived communal contribution of recipients in decisions about helping strangers. It asks respondents to reflect on this question. The term “role” is intentionally open to allow respondents to answer in different ways. The goal is to ask a follow-up question where the respondent has something to say.\n\n 1) This could be either in their moral evaluation of whether communal or societal contribution is a relevant criteria for helping others. They might have strong opinions generally whether communal or societal contribution is a right or wrong way to evaluate the deservingness of others. Here you ask for a follow-up question that seeks more elaboration on what they mean with personal experience and why it is important.\n 2) It could be in a significant situation experienced by the respondents where communal or societal contribution was a salient aspect of their perception. Here you could ask a follow-up question that asks for more detail on their experience.\n 3) It is important to remember, that contributing to the community can be done in numerous ways. Here you could ask them follow-up questions on how they perceive the different ways in how you can contribute to the community or society.",
+          "main_question": "Når du overvejer om du skal hjælpe en du ikke kender, hvordan påvirker det din beslutning, hvis du oplever at personen ikke selv vil hjælpe andre?",
+          "language": "da",
+          "probes": [
+            "Hvordan vurderer du, om en person er hjælpsom af natur?",
+            "Hvorfor synes du det?",
+            "Hvornår er det mere eller mindre vigtigt om de selv virker som en hjælpsom type?",
+            "I hvilke situationer kunne du forestille dig at have det anderledes?",
+            "Hvordan oplevede du...?",
+            "Hvad mener du med...?"
+          ],
+          "max_probes_n": 4,
+          "max_probes_time": 180,
+          "create_segue": true,
+          "check_if_answered": false,
+          "exclude_from_history": true
+        },
+        {
+          "description": "This question explores the role of sharing a common background in decisions about helping strangers. It asks respondents to reflect on this question. The term “role” is intentionally open to allow respondents to answer in different ways. The goal is to ask a follow-up question where the respondent has something to say.\n\n 1) This could be either in their moral evaluation of whether sharing a common background is a relevant criteria for helping others. They might have strong opinions generally whether sharing a common background is a right or wrong way to evaluate the deservingness of others. Here you ask for a follow-up question that seeks more elaboration on what they mean with personal experience and why it is important.\n 2) It could be in a significant situation experienced by the respondents where sharing a common background was a salient aspect of their perception. Here you could ask a follow-up question that asks for more detail on their experience.\n 3) It is important to remember that there are numerous ways in which people can share a common background. Here you could ask them follow-up questions on how they perceive the different ways in how you can share a common background.",
+          "main_question": "Når du overvejer om du skal hjælpe en du ikke kender, hvordan påvirker det din beslutning, hvis du oplever at personen ikke samme baggrund som dig?",
+          "language": "da",
+          "probes": [
+            "Hvornår synes du at man deler baggrund med en anden person?",
+            "Hvorfor synes du det?",
+            "Hvornår er det mere eller mindre vigtigt om de selv virker som en hjælpsom type?",
+            "I hvilke situationer kunne du forestille dig at have det anderledes?",
+            "Hvordan oplevede du...?",
+            "Hvad mener du med...?"
+          ],
+          "max_probes_n": 4,
+          "max_probes_time": 180,
+          "create_segue": true,
+          "check_if_answered": false,
+          "exclude_from_history": true
+        },
+        {
+          "description": "This question explores the role of perceived gratitude and thankfulness of strangers in decisions about helping strangers. It asks respondents to reflect on this question. The term “role” is intentionally open to allow respondents to answer in different ways. The goal is to ask a follow-up question where the respondent has something to say.\n\n 1) This could be either in their moral evaluation of whether showing gratitude for receiving help is a relevant criteria for helping others. They might have strong opinions generally whether attitude is a right or wrong way to evaluate the deservingness of others. Here you ask for a follow-up question that seeks more elaboration on what they mean with personal experience and why it is important.\n 2) It could be in a significant situation experienced by the respondents where attitude was a salient aspect of their perception. Here you could ask a follow-up question that asks for more detail on their experience.",
+          "main_question": "Når du overvejer om du skal hjælpe en du ikke kender, hvordan påvirker det din beslutning, hvis du oplever at personen ikke udviser taknemlighed?",
+          "language": "da",
+          "probes": [
+            "Hvordan mener du at andre udviser taknemmelighed overfor dig?",
+            "Hvorfor synes du det?",
+            "Hvornår er det mere eller mindre vigtigt om vedkommende udviser taknemmelighed?",
+            "I hvilke situationer kunne du forestille dig at have det anderledes?",
+            "Hvordan oplevede du...?",
+            "Hvad mener du med...?"
+          ],
+          "max_probes_n": 4,
+          "max_probes_time": 180,
+          "create_segue": true,
+          "check_if_answered": false,
+          "exclude_from_history": true
+        }
+      ]
+    }
+  ],
+  "outro": {
+    "message": "Tak for din deltagelse. Tryk <a href=\"https://s.epinionglobal.com/mrIWeb/mrIWeb.srf?I.Project=P2100211{% if test %}_TEST{% endif %}&i.user2=n&i.user5=complete&id={{ user1 }}\">her</a> for afslutte undersøgelsen og indløse dine point.",
+    "variables": ["test", "user1"]
+  }
+}

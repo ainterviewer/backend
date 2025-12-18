@@ -1,0 +1,18 @@
+{
+  "framing": "",
+  "introduction": "",
+  "outro": "",
+  "question_sections": [
+    {
+      "description": "",
+      "questions": [
+        {
+          "main_question": "",
+          "description": "",
+          "probes": [""],
+          "max_probes_n": 5
+        }
+      ]
+    }
+  ]
+}
