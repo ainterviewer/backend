@@ -1,3 +1,3 @@
 import importlib.metadata
 
-__version__ = importlib.metadata.version("ainterviewer-app")
+__version__ = importlib.metadata.version("ainterviewer-backend")
