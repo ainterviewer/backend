@@ -59,9 +59,10 @@ app.add_middleware(
     secret_key=app_settings.secrets.session_secret_key.get_secret_value(),
     max_age=6000,
 )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Update with your Svelte app's URL
+    allow_origins=[app_settings.sveltekit_addr],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -112,6 +112,16 @@ class Settings(BaseSettings):
         pyproject_toml_table_header=("tool", "ainterviewer"),
     )
 
+    @property
+    def sveltekit_addr(self) -> str:
+        match self.app_env:
+            case "development":
+                return "localhost:5713"
+            case "staging":
+                return "localhost:4001"
+            case "production":
+                return "localhost:3001"
+
     @classmethod
     def settings_customise_sources(
         cls,

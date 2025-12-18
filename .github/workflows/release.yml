@@ -136,7 +136,7 @@ jobs:
             export PATH="$HOME/.local/bin:$PATH"
 
             # Write the tag to .env for Docker Compose staging
-            echo "IMAGE_TAG=$RELEASE_TAG" > .env
+            # echo "IMAGE_TAG=$RELEASE_TAG" > .env
             echo "Deploying version: $RELEASE_TAG to $TARGET_ENV"
 
             if [ "$TARGET_ENV" = "staging" ]; then
