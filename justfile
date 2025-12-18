@@ -1,29 +1,30 @@
+[private]
+default:
+    @just --list
+
 dev:
     bash -c 'uv run -m fastapi dev app/main.py --port 8666'
 
-[group("Database")]
-setup-db: 
-    python -m app.db --recreate-db
-    python -m app.db --create-users
-
-[group("Backend")]
 generate-openapi:
     python -m app.cli generate-openapi-scheme
 
-[group("Backend")]
+[group("Database")]
+setup-db:
+    python -m app.db --recreate-db
+    python -m app.db --create-users
+
+[group("Database")]
 update-projects:
     python -m app.db --upgrade-projects
 
-[group("Backend")]
+[group("Database")]
 update-users:
     python -m app.db --create-users
 
-[group("Backend")]
 [group("Release & Publish")]
 bump TYPE: && publish
     uv version --bump {{ TYPE }} 
 
-[group("Backend")]
 [group("Release & Publish")]
 publish:
     #!/usr/bin/env bash
