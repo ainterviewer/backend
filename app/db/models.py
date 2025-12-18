@@ -108,8 +108,8 @@ class UserPrivate(UserBase):
 class ProjectLocalizationBase(_BaseModel):
     project_id: UUID4
     language: LanguageCode
-    consent: Consent
-    welcome: Welcome
+    consent: Consent | None
+    welcome: Welcome | None
     interview_guide: InterviewGuide
     prompts: Prompts
     agent_configs: AgentConfigs
