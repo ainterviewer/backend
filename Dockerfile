@@ -2,7 +2,7 @@
 
 # --- base: shared environment and base packages ---
 FROM python:3.12-slim AS base
-LABEL org.opencontainers.image.source="https://github.com/gaardhus/ainterviewer-app"
+LABEL org.opencontainers.image.source="https://github.com/gaardhus/ainterviewer-backend"
 
 ENV UV_LINK_MODE=copy \
   UV_NO_MANAGED_PYTHON=1 \

@@ -78,7 +78,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ainterviewer-app"
+name = "ainterviewer-backend"
 version = "0.0.6"
 source = { virtual = "." }
 dependencies = [

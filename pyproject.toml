@@ -1,5 +1,5 @@
 [project]
-name = "ainterviewer-app"
+name = "ainterviewer-backend"
 version = "0.0.6"
 description = "AInterviewer API used to setup and conduct automated interviews at scale."
 readme = "README.md"
