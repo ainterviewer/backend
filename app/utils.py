@@ -12,8 +12,8 @@ from pydantic import UUID4, BaseModel
 from qrcode.constants import ERROR_CORRECT_H
 from qrcode.image.styledpil import StyledPilImage
 from qrcode.image.styles.colormasks import (
-    SolidFillColorMask,
-    HorizontalGradiantColorMask,
+    SolidFillColorMask,  # noqa: F401
+    HorizontalGradiantColorMask,  # noqa: F401
     RadialGradiantColorMask,
 )
 from qrcode.image.styles.moduledrawers.pil import RoundedModuleDrawer
