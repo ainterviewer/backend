@@ -1,6 +1,6 @@
 [project]
 name = "ainterviewer-backend"
-version = "0.0.8"
+version = "0.0.9"
 description = "AInterviewer API used to setup and conduct automated interviews at scale."
 readme = "README.md"
 authors = [{ name = "Tobias Gårdhus", email = "tobias_gaardhus@hotmail.com" }]
