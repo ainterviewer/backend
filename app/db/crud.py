@@ -54,7 +54,7 @@ class InterviewDataBase(PersistenceProtocol):
         """Creates the db and all the required tables based on the SQLAlchemy models"""
 
         alembic_init_head_migration = list(
-            Path(self._alembic_config.get_template_directory()).glob(
+            Path(APP_DIR.parent / "alembic" / "versions").glob(
                 "*" + ALEMBIC_BASE_RIVISON_ID + "*.py"
             )
         )
@@ -65,10 +65,10 @@ class InterviewDataBase(PersistenceProtocol):
         self.session.execute(text("PRAGMA cache_size=-65536"))
         self.session.execute(text("PRAGMA temp_store=MEMORY"))
 
-        if alembic_init_head_migration:
-            Base.metadata.create_all(self.session.bind)
-            alembic_command.stamp(self._alembic_config, ALEMBIC_BASE_RIVISON_ID)
+        Base.metadata.create_all(self.session.bind)
 
+        if alembic_init_head_migration:
+            alembic_command.stamp(self._alembic_config, ALEMBIC_BASE_RIVISON_ID)
         else:
             alembic_command.revision(
                 self._alembic_config,

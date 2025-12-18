@@ -181,20 +181,25 @@ if __name__ == "__main__":
         print("Models updated")
 
     if args.recreate_db:
-        while (
-            answer := input(
-                "Are you sure you want to delete the database and all data? y/n\n"
-            ).lower()
-        ) not in ["y", "n"]:
-            print("Invalid input")
-        if answer == "y":
-            if app_settings.database.db == DatabaseType.SQLITE:
-                Path(app_settings.database.database_file).unlink(missing_ok=True)
+        DB_FILE = Path(
+            f"{app_settings.database.db_path}/{app_settings.database.database_file}"
+        )
+        if DB_FILE.exists():
+            while (
+                answer := input(
+                    "Are you sure you want to delete the database and all data? y/n\n"
+                ).lower()
+            ) not in ["y", "n"]:
+                print("Invalid input")
+            if answer == "y":
+                if app_settings.database.db == DatabaseType.SQLITE:
+                    DB_FILE.unlink(missing_ok=True)
+            else:
+                print("Abort. Database not deleted.")
+                exit()
 
-            db.create_db_and_tables()
-            print("Database and tables recreated")
-        else:
-            print("Abort. Database not deleted.")
+        db.create_db_and_tables()
+        print("Database and tables recreated")
 
     if args.setup_db:
         for project in Path.cwd().glob("data/projects/*"):
@@ -361,7 +366,7 @@ if __name__ == "__main__":
         n = 0
         for user in users:
             try:
-                db.create_user(UserCreate(**user))
+                db.users.create_user(UserCreate(**user))
                 n += 1
             except IntegrityError:
                 print(f"User {user['email']} already exists")

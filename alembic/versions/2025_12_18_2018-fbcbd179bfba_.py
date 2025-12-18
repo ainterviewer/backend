@@ -1,8 +1,8 @@
-"""add_analysis_tables
+"""empty message
 
-Revision ID: ecfbf550a848
-Revises: 1115871d7f82
-Create Date: 2025-12-16 20:12:57.298917
+Revision ID: fbcbd179bfba
+Revises: 
+Create Date: 2025-12-18 20:18:23.425637
 
 """
 from typing import Sequence, Union
@@ -14,8 +14,8 @@ import app.db.types
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'ecfbf550a848'
-down_revision: Union[str, None] = '1115871d7f82'
+revision: str = 'fbcbd179bfba'
+down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
