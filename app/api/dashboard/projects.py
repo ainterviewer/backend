@@ -30,7 +30,7 @@ from ainterviewer.interview_guides.extra import Consent, Welcome
 from ainterviewer.interview_guides.generate import generate_interview_guide
 from ainterviewer.types import LanguageCode, LanguageDict
 
-from ...db.models import InterviewSummaryPublic, ProjectPublic
+from ...db.models import InterviewSummaryPublic, ProjectPublic, MessagePublic
 from ...db.utils import fix_nested_columns
 from ...dependencies import DBSession, UserToken
 from ...paths import QR_CODES_DIR, VIDEO_DIR
@@ -455,10 +455,21 @@ class ExportMessagesRequest(BaseModel):
     format: Literal["csv", "xlsx"] = "csv"
 
 
-@router.post("/projects/{project_id}/interviews/messages")
+@router.get("/projects/{project_id}/interviews/{interview_id}/messages")
+async def get_messages(
+    project_id: UUID4,
+    interview_id: UUID4,
+    db: DBSession,
+    jwt: UserToken,
+) -> list[MessagePublic]:
+    return db.interviews.get_messages(interview_id, project_id)
+
+
+@router.get("/projects/{project_id}/interviews/{interview_id}/messages")
 async def export_messages(
     export_request: ExportMessagesRequest,
     project_id: UUID4,
+    interview_id: UUID4,
     db: DBSession,
     jwt: UserToken,
 ):
