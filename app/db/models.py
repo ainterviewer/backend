@@ -301,6 +301,9 @@ class MessagePublic(MessageBase):
     id: UUID4
     annotations: list["MessageAnnotationPublic"] = []
 
+    is_test: bool
+    is_synthetic: bool
+
 
 class TaskBase(_BaseModel):
     id: UUID4

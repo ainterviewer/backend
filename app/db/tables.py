@@ -390,6 +390,30 @@ class MessageTable(Base):
         back_populates="message", cascade="all, delete-orphan"
     )
 
+    @hybrid_property
+    def is_synthetic(self) -> bool:
+        return self.interview.is_synthetic if self.interview else False
+
+    @is_synthetic.expression
+    def is_synthetic(cls):
+        return (
+            select(InterviewTable.is_synthetic)
+            .where(InterviewTable.id == cls.interview_id)
+            .scalar_subquery()
+        )
+
+    @hybrid_property
+    def is_test(self) -> bool:
+        return self.interview.is_test if self.interview else False
+
+    @is_test.expression
+    def is_test(cls):
+        return (
+            select(InterviewTable.is_test)
+            .where(InterviewTable.id == cls.interview_id)
+            .scalar_subquery()
+        )
+
 
 ########
 # Task #

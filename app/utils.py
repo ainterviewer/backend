@@ -12,9 +12,9 @@ from pydantic import UUID4, BaseModel
 from qrcode.constants import ERROR_CORRECT_H
 from qrcode.image.styledpil import StyledPilImage
 from qrcode.image.styles.colormasks import (
-    SolidFillColorMask,  # noqa: F401
     HorizontalGradiantColorMask,  # noqa: F401
     RadialGradiantColorMask,
+    SolidFillColorMask,  # noqa: F401
 )
 from qrcode.image.styles.moduledrawers.pil import RoundedModuleDrawer
 from typer import Context, Typer
@@ -92,7 +92,8 @@ def parse_url_query_params(url: str) -> dict[str, list[str]]:
 
 
 def replay_history(
-    interview_history: list[MessagePublic], interview_id: UUID4
+    interview_history: list[MessagePublic],
+    interview_id: UUID4,
 ) -> tuple[list[OutgoingHistoryMessage | OutgoingData | OutgoingMessage], bool]:
     """Replays the messages from the history through the websocket. Returns
     True if the interview should continue or False if it has reached the end
