@@ -11,7 +11,6 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
-from jinja2.exceptions import TemplateNotFound
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import __version__
@@ -79,18 +78,9 @@ async def custom_exception_handler(request: Request, exc: Exception):
     if request.url.path.startswith("/api"):
         raise exc
 
+    # FIXME: This doesnt work with new SvelteKit frontend
     return templates.TemplateResponse(
         "error.html", {"request": request, "error_message": str(exc)}, status_code=500
-    )
-
-
-@app.exception_handler(TemplateNotFound)
-async def jinja_exception_handler(request: Request, exc: Exception):
-    logger.error(f"TemplateNotFound occurred: {str(exc)}")
-    return templates.TemplateResponse(
-        name="404.html",
-        context={"request": request, "error_message": str(exc)},
-        status_code=404,
     )
 
 
@@ -101,15 +91,6 @@ async def http_redirect(request: Request, exc: AuthError):
     if exc.status_code == 401 or exc.status_code == 403:
         return RedirectResponse(url="/login")
     raise exc
-
-
-@app.get("/robots.txt")
-async def robots(request: Request):
-    return templates.TemplateResponse(
-        name="site/robots.txt",
-        context={"request": request},
-        media_type="text/plain",
-    )
 
 
 if __name__ == "__main__":

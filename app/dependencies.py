@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Cookie, Depends, HTTPException
-from fastapi.responses import RedirectResponse
 from fastapi.security import APIKeyCookie
 from fastapi.templating import Jinja2Templates
 from jinjax import Catalog, JinjaX
@@ -13,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from ainterviewer.types import LanguageCode
 
-from .auth import AuthToken, InterviewToken, decode_auth_token
+from .auth import AuthToken, decode_auth_token
 from .db import InterviewDataBase
 from .settings import app_settings
 from .types import Scope
