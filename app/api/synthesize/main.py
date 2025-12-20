@@ -1,7 +1,5 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Response
-from fastapi.responses import RedirectResponse
 from pydantic import UUID4
-from sqlalchemy.exc import NoResultFound
 from uvicorn.config import logger
 
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
@@ -15,10 +13,7 @@ from ...db.models import (
 )
 from ...dependencies import DBSession, UserToken
 from ...types import TestRunStatus
-from .core import (
-    run_synthesis_job_fixed_answers,
-    run_synthesis_job_shuffled_ai,
-)
+from .core import run_synthesis_job_fixed_answers, run_synthesis_job_shuffled_ai
 from .models import (
     SynthesizeRequest,
     SynthesizeResponse,
@@ -26,7 +21,7 @@ from .models import (
     UpdateFixedAnswersRequest,
 )
 
-router = APIRouter(dependencies=[])
+router = APIRouter()
 
 
 @router.get("/projects/{project_id}/tests/{test_id}/background_info")
@@ -35,13 +30,9 @@ async def get_background_info(
     project_id: UUID4,
     test_id: UUID4,
     db: DBSession,
+    jwt: UserToken,
 ) -> BackgroundInfoOptions:
-    try:
-        return db.tests.get_background_info(project_id, test_id)
-    except NoResultFound:
-        response = RedirectResponse("/dashboard/projects/tests", status_code=302)
-        response.delete_cookie("test_id")
-        return response
+    return db.tests.get_background_info(project_id, test_id)
 
 
 @router.post("/projects/{project_id}/tests/{test_id}/background_info")
@@ -50,6 +41,7 @@ async def update_background_info(
     test_id: UUID4,
     request: UpdateBackgroundInfoRequest,
     db: DBSession,
+    jwt: UserToken,
 ):
     return db.tests.update_background_info(test_id, request.background_info)
 
@@ -59,6 +51,7 @@ async def get_fixed_answers(
     project_id: UUID4,
     test_id: UUID4,
     db: DBSession,
+    jwt: UserToken,
 ):
     return db.tests.get_fixed_answers(test_id)
 
@@ -69,6 +62,7 @@ async def update_fixed_answers(
     test_id: UUID4,
     request: UpdateFixedAnswersRequest,
     db: DBSession,
+    jwt: UserToken,
 ):
     return db.tests.update_fixed_answers(test_id, request.answers)
 
@@ -96,6 +90,7 @@ async def create_test_setup(
 async def add_interviewee(
     interviewee: IntervieweeCreate,
     db: DBSession,
+    jwt: UserToken,
 ):
     db.interviews.add_interviewee(interviewee)
 
