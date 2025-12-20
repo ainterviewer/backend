@@ -71,7 +71,7 @@ class ScopeChecker:
     def __call__(
         self,
         token: str | None = Depends(auth_cookie_scheme),
-    ) -> AuthToken | InterviewToken | RedirectResponse:
+    ) -> AuthToken:
         # TODO:
         # Should this also check is the user_id is in the database?
         try:
