@@ -8,8 +8,12 @@ from ...db.models import (
     MessageAnnotationPublic,
 )
 from ...dependencies import DBSession, UserToken
+from ..response_models import ErrorResponse
 
-router = APIRouter()
+router = APIRouter(
+    responses={400: {"description": "Invalid request", "model": ErrorResponse}},
+    tags=["analysis"],
+)
 
 
 @router.get("/projects/{project_id}/analysis/categories")
@@ -21,13 +25,15 @@ async def get_analysis_categories(
     return db.analysis.get_analysis_categories(project_id)
 
 
-@router.post("/projects/{project_id}/analysis/categories")
+@router.post(
+    "/projects/{project_id}/analysis/categories",
+)
 async def create_analysis_category(
     project_id: UUID4,
     category: AnalysisCategoryCreate,
     db: DBSession,
     jwt: UserToken,
-) -> AnalysisCategoryPublic:
+):
     if project_id != category.project_id:
         raise HTTPException(400, detail="project_id mismatch between route and payload")
 

@@ -8,3 +8,7 @@ T = TypeVar("T")
 class PaginatedResponse(BaseModel, Generic[T]):
     total: int
     items: list[T]
+
+
+class ErrorResponse(BaseModel):
+    detail: str
