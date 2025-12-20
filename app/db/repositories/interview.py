@@ -1,3 +1,4 @@
+import datetime
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal, Optional
@@ -97,6 +98,8 @@ class InterviewRepository(BaseRepository):
         sorting_order: Literal["desc", "asc"] = "desc",
         synthetic: bool | None = None,
         test: bool | None = None,
+        created_at: datetime.datetime | None = None,
+        completed: bool | None = None,
     ) -> tuple[Sequence[InterviewPublic], int]:
         _sorting_col = getattr(InterviewTable, sorting_column)
 
@@ -108,6 +111,12 @@ class InterviewRepository(BaseRepository):
 
         if test is not None:
             conditions.append(InterviewTable.is_test == test)
+
+        if created_at is not None:
+            conditions.append(InterviewTable.is_test == created_at)
+
+        if completed is not None:
+            conditions.append(InterviewTable.is_test == completed)
 
         statement = (
             select(table)

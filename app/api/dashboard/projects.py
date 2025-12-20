@@ -1,3 +1,4 @@
+import datetime
 import io
 import json
 from base64 import b64decode
@@ -413,6 +414,8 @@ async def get_interviews(
     paginated_query: Annotated[PaginatedQueryParams, Depends(PaginatedQueryParams)],
     synthetic: Annotated[bool | None, Query()] = None,
     test: Annotated[bool | None, Query()] = None,
+    created_at: Annotated[datetime.datetime | None, Query] = None,
+    completed: Annotated[bool | None, Query] = None,
 ):
     interviews, total = db.interviews.get_interviews(
         project_id,
@@ -423,6 +426,8 @@ async def get_interviews(
         sorting_order=paginated_query.order,
         synthetic=synthetic,
         test=test,
+        created_at=created_at,
+        completed=completed,
     )
     response = [
         InterviewSummaryPublic(**interview.model_dump()) for interview in interviews
