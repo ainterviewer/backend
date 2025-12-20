@@ -24,7 +24,7 @@ from ..models import (
     UpdateFixedAnswersRequest,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["synthesize"])
 
 
 @router.get("/projects/{project_id}/tests/{test_id}/background_info")

@@ -9,7 +9,7 @@ from ...db.models import (
 )
 from ...dependencies import DBSession, UserToken
 
-router = APIRouter()
+router = APIRouter(tags=["projects"])
 
 
 @router.get(

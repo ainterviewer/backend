@@ -3,7 +3,7 @@ from pydantic import UUID4
 
 from ...dependencies import DBSession, UserToken
 
-router = APIRouter()
+router = APIRouter(tags=["collaborators"])
 
 
 @router.get("/dashboard/collaborators")

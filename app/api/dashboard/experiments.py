@@ -10,7 +10,7 @@ from ...db.models import ExperimentCreate
 from ...dependencies import DBSession, UserToken
 from ...paths import QR_CODES_DIR
 
-router = APIRouter()
+router = APIRouter(tags=["experiments"])
 
 
 @router.get("/experiments")

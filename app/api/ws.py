@@ -38,7 +38,7 @@ from ..utils import replay_history
 from ..websockets import WebSocketConnectionManager, WebsocketMessageHandler
 from .models import Broadcast
 
-router = APIRouter(prefix="/ws")
+router = APIRouter(prefix="/ws", tags=["interviews"])
 
 
 class RestartInterview(Exception):

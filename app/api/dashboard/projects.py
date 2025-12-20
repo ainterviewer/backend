@@ -30,7 +30,7 @@ from ainterviewer.interview_guides.extra import Consent, Welcome
 from ainterviewer.interview_guides.generate import generate_interview_guide
 from ainterviewer.types import LanguageCode, LanguageDict
 
-from ...db.models import InterviewSummaryPublic, ProjectPublic, MessagePublic
+from ...db.models import InterviewSummaryPublic, MessagePublic, ProjectPublic
 from ...db.utils import fix_nested_columns
 from ...dependencies import DBSession, UserToken
 from ...paths import QR_CODES_DIR, VIDEO_DIR
@@ -45,7 +45,7 @@ from ..request_models import (
 )
 from ..response_models import PaginatedResponse
 
-router = APIRouter()
+router = APIRouter(tags=["projects"])
 
 
 @router.get("/projects", description="Load projects")
@@ -525,5 +525,6 @@ async def generate_project_qr(
     if not file_path.exists():
         interview_url = str(request.base_url) + f"interview?id={project_id}"
         img_data = generate_qr_img(str(interview_url), file_path)
+        # TODO: Why not just return FileResponse after file has been created?
         return StreamingResponse(io.BytesIO(img_data), media_type="image/png")
     return FileResponse(file_path)

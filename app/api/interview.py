@@ -31,7 +31,7 @@ from ..translations import MODALS
 from ..utils import generate_random_filename
 from .models import MessageFeedback
 
-router = APIRouter()
+router = APIRouter(tags=["interviews"])
 
 
 @router.post("/projects/{project_id}/consent/render")
