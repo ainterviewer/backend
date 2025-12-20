@@ -12,9 +12,12 @@ from ...db.models import (
     TestSetupPublic,
 )
 from ...dependencies import DBSession, UserToken
+from ...synthesize.core import (
+    run_synthesis_job_fixed_answers,
+    run_synthesis_job_shuffled_ai,
+)
 from ...types import TestRunStatus
-from .core import run_synthesis_job_fixed_answers, run_synthesis_job_shuffled_ai
-from .models import (
+from ..models import (
     SynthesizeRequest,
     SynthesizeResponse,
     UpdateBackgroundInfoRequest,

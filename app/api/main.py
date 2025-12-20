@@ -6,7 +6,6 @@ from fastapi.routing import APIRoute
 from . import auth, interview, misc
 from .admin import main as admin
 from .dashboard import main as dashboard
-from .synthesize import main as synthesize
 
 router = APIRouter(
     prefix="/api",
@@ -15,7 +14,6 @@ router = APIRouter(
 router.include_router(dashboard.router)
 router.include_router(interview.router)
 router.include_router(auth.router)
-router.include_router(synthesize.router)
 router.include_router(admin.router)
 router.include_router(misc.router)
 

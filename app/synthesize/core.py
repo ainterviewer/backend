@@ -30,7 +30,7 @@ from ainterviewer.synthesize.interviewees import (
 from ainterviewer.types import LanguageCode, TestType
 from ainterviewer.utils import get_function_signature_as_query_params
 
-from ...settings import app_settings
+from ..settings import app_settings
 
 
 async def fetch_token(
