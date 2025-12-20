@@ -10,6 +10,7 @@ from fastapi import (
     Body,
     Depends,
     Form,
+    Query,
     Request,
     UploadFile,
 )
@@ -410,6 +411,8 @@ async def get_interviews(
     db: DBSession,
     jwt: UserToken,
     paginated_query: Annotated[PaginatedQueryParams, Depends(PaginatedQueryParams)],
+    synthetic: Annotated[bool | None, Query()] = None,
+    test: Annotated[bool | None, Query()] = None,
 ):
     interviews, total = db.interviews.get_interviews(
         project_id,
@@ -418,6 +421,8 @@ async def get_interviews(
         limit=paginated_query.limit,
         sorting_column=paginated_query.column,
         sorting_order=paginated_query.order,
+        synthetic=synthetic,
+        test=test,
     )
     response = [
         InterviewSummaryPublic(**interview.model_dump()) for interview in interviews

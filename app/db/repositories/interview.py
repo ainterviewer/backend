@@ -82,8 +82,8 @@ class InterviewRepository(BaseRepository):
 
         self.session.commit()
 
-    def _get_total_count(self, table, conditions) -> int:
-        statement = select(func.count()).select_from(table).where(conditions)
+    def _get_total_count(self, table, *conditions) -> int:
+        statement = select(func.count()).select_from(table).where(*conditions)
 
         return self.session.execute(statement).scalar_one()
 
@@ -95,14 +95,23 @@ class InterviewRepository(BaseRepository):
         limit: int | None = None,
         sorting_column: str = "created_at",
         sorting_order: Literal["desc", "asc"] = "desc",
+        synthetic: bool | None = None,
+        test: bool | None = None,
     ) -> tuple[Sequence[InterviewPublic], int]:
         _sorting_col = getattr(InterviewTable, sorting_column)
 
         table = InterviewTable
-        conditions = InterviewTable.project_id == project_id
+        conditions = [InterviewTable.project_id == project_id]
+
+        if synthetic is not None:
+            conditions.append(InterviewTable.is_synthetic == synthetic)
+
+        if test is not None:
+            conditions.append(InterviewTable.is_test == test)
+
         statement = (
             select(table)
-            .where(conditions)
+            .where(*conditions)
             .order_by(
                 _sorting_col.desc() if sorting_order == "desc" else _sorting_col.asc()
             )
@@ -110,7 +119,7 @@ class InterviewRepository(BaseRepository):
             .limit(limit)
         )
 
-        total = self._get_total_count(table, conditions)
+        total = self._get_total_count(table, *conditions)
 
         interviews = self.session.execute(statement).scalars().all()
 
