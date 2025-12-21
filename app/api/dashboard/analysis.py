@@ -40,6 +40,16 @@ async def create_analysis_category(
     return db.analysis.create_analysis_category(category)
 
 
+@router.put("/analysis/categories/{category_id}")
+async def update_analysis_category(
+    category_id: UUID4,
+    category: AnalysisCategoryCreate,
+    db: DBSession,
+    jwt: UserToken,
+) -> AnalysisCategoryPublic:
+    return db.analysis.update_analysis_category(category_id, category)
+
+
 @router.delete("/analysis/categories/{category_id}")
 async def delete_analysis_category(
     category_id: UUID4,

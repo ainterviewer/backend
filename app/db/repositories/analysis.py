@@ -38,6 +38,25 @@ class AnalysisRepository(BaseRepository):
         self.session.refresh(new_category)
         return AnalysisCategoryPublic.model_validate(new_category)
 
+    def update_analysis_category(
+        self, category_id: UUID4, category: AnalysisCategoryCreate
+    ) -> AnalysisCategoryPublic:
+        statement = select(AnalysisCategoryTable).where(
+            AnalysisCategoryTable.id == category_id
+        )
+        existing_category = self.session.execute(statement).scalar_one()
+
+        existing_category.name = category.name
+        existing_category.description = category.description
+        existing_category.type = category.type
+        existing_category.color = category.color
+        existing_category.min_value = category.min_value
+        existing_category.max_value = category.max_value
+
+        self.session.commit()
+        self.session.refresh(existing_category)
+        return AnalysisCategoryPublic.model_validate(existing_category)
+
     def delete_analysis_category(self, category_id: UUID4):
         statement = select(AnalysisCategoryTable).where(
             AnalysisCategoryTable.id == category_id
