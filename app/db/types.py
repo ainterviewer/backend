@@ -10,7 +10,7 @@ class ProjectRole(StrEnum):
     VIEWER = "viewer"
 
 
-class AnalysisType(StrEnum):
+class AnnotationType(StrEnum):
     TAG = "tag"
     SCORE = "score"
 

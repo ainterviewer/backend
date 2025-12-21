@@ -31,7 +31,7 @@ from ainterviewer.utils import now
 
 from ..types import ProjectStatus, Scope, TestRunStatus
 from ._extra import PydanticJSONB
-from .types import AccessRequestStatus, AnalysisType, LanguageType, ProjectRole
+from .types import AccessRequestStatus, AnnotationType, LanguageType, ProjectRole
 
 naming_convention = {
     "ix": "ix_%(column_0_label)s",
@@ -527,7 +527,8 @@ class AnalysisCategoryTable(Base):
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
     name: Mapped[str] = mapped_column()
     description: Mapped[str | None] = mapped_column(Text)
-    type: Mapped[AnalysisType] = mapped_column(SQLEnum(AnalysisType))
+    type: Mapped[AnnotationType] = mapped_column(SQLEnum(AnnotationType))
+    color: Mapped[str] = mapped_column()
     min_value: Mapped[int | None] = mapped_column()
     max_value: Mapped[int | None] = mapped_column()
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)

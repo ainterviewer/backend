@@ -33,7 +33,7 @@ from ainterviewer.utils import now
 from ..settings import app_settings
 from ..types import ProjectStatus, Scope, TestRunStatus
 from ._extra import CustomEmailStr
-from .types import AccessRequestStatus, AnalysisType
+from .types import AccessRequestStatus, AnnotationType
 
 
 class _BaseModel(BaseModel):
@@ -400,7 +400,8 @@ class AnalysisCategoryBase(_BaseModel):
     project_id: UUID4
     name: str
     description: Optional[str] = None
-    type: AnalysisType
+    type: AnnotationType
+    color: str
     min_value: Optional[int] = None
     max_value: Optional[int] = None
 

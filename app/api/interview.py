@@ -20,13 +20,7 @@ from pydantic import UUID4
 from ainterviewer.types import Interviewer, LanguageCode
 
 from ..auth import create_interview_token, decode_interview_token
-from ..dependencies import (
-    AdminToken,
-    DBSession,
-    GuestToken,
-    LanguageCookie,
-    templates,
-)
+from ..dependencies import AdminToken, DBSession, GuestToken, LanguageCookie, templates
 from ..translations import MODALS
 from ..utils import generate_random_filename
 from .models import MessageFeedback
@@ -75,7 +69,6 @@ async def set_consent(
 
     project_localization = db.projects.get_project_localization(
         project_id,
-        team_id=None,
         language=language,
     )
 
