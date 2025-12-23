@@ -4,10 +4,11 @@ from typing import final
 from sqlalchemy.types import VARCHAR, TypeDecorator
 
 
-class ProjectRole(StrEnum):
-    ADMIN = "admin"
-    EDITOR = "editor"
+class CollaboratorRole(StrEnum):
     VIEWER = "viewer"
+    ANNOTATOR = "annotator"
+    EDITOR = "editor"
+    ADMIN = "admin"
 
 
 class AnnotationType(StrEnum):

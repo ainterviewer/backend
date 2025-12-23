@@ -16,11 +16,14 @@ from ainterviewer.utils import get_language_dict
 from ...api.request_models import PromptsUpdateRequest
 from ...types import ProjectStatus
 from ..models import (
+    CollaboratorCreate,
+    CollaboratorPublic,
     ProjectFolderPublic,
     ProjectFolderWithProjects,
     ProjectLocalizationPublic,
     ProjectPublic,
     ProjectPublicWithTests,
+    Collaborator,
 )
 from ..tables import (
     CollaboratorTable,
@@ -28,8 +31,9 @@ from ..tables import (
     ProjectFolderTable,
     ProjectLocalizationTable,
     ProjectTable,
+    UserTable,
 )
-from ..types import ProjectRole
+from ..types import CollaboratorRole
 from .base import BaseRepository
 
 
@@ -42,7 +46,7 @@ class ProjectRepository(BaseRepository):
         self,
         title: str,
         user_id: UUID4,
-        collaborators: list[str] | None = None,
+        collaborators: list[Collaborator] | None = None,
     ) -> ProjectFolderPublic:
         folder = ProjectFolderTable(title=title)
         self.session.add(folder)
@@ -51,15 +55,31 @@ class ProjectRepository(BaseRepository):
         collaborator = CollaboratorTable(
             folder_id=folder.id,
             user_id=user_id,
-            project_role=ProjectRole.ADMIN,
+            role=CollaboratorRole.ADMIN,
             added_by_id=user_id,
         )
         self.session.add(collaborator)
+
+        if collaborators:
+            # Find users by email
+            stmt = select(UserTable).where(
+                UserTable.email.in_(
+                    collaborator.email for collaborator in collaborators
+                )
+            )
+            users = self.session.execute(stmt).scalars().all()
+
+            for user, collaborator in zip(users, collaborators):
+                collab = CollaboratorTable(
+                    folder_id=folder.id,
+                    user_id=user.id,
+                    role=collaborator.role,
+                    added_by_id=user_id,
+                )
+                self.session.add(collab)
+
         self.session.commit()
         self.session.refresh(folder)
-
-        # TODO:
-        # Handle collaborators
 
         return ProjectFolderPublic.model_validate(folder)
 
@@ -111,6 +131,61 @@ class ProjectRepository(BaseRepository):
         folder = self.session.execute(statement).scalar_one()
         self.session.delete(folder)
         self.session.commit()
+
+    # ================== Collaborator Methods ==================
+
+    def add_collaborator(
+        self,
+        folder_id: UUID4,
+        email: str,
+        role: CollaboratorRole,
+        added_by_id: UUID4,
+    ) -> CollaboratorPublic:
+        # Find user by email
+        statement = select(UserTable).where(UserTable.email == email)
+        user = self.session.execute(statement).scalar_one_or_none()
+        if not user:
+            raise ValueError(f"User with email {email} not found")
+
+        collab = CollaboratorTable(
+            folder_id=folder_id,
+            user_id=user.id,
+            role=role,
+            added_by_id=added_by_id,
+        )
+        self.session.add(collab)
+        self.session.commit()
+        self.session.refresh(collab)
+        return CollaboratorPublic.model_validate(collab)
+
+    def remove_collaborator(self, folder_id: UUID4, user_id: UUID4):
+        statement = delete(CollaboratorTable).where(
+            CollaboratorTable.folder_id == folder_id,
+            CollaboratorTable.user_id == user_id,
+        )
+        self.session.execute(statement)
+        self.session.commit()
+
+    def update_collaborator_role(
+        self, folder_id: UUID4, user_id: UUID4, role: CollaboratorRole
+    ) -> CollaboratorPublic:
+        statement = select(CollaboratorTable).where(
+            CollaboratorTable.folder_id == folder_id,
+            CollaboratorTable.user_id == user_id,
+        )
+        collab = self.session.execute(statement).scalar_one()
+        collab.role = role
+        self.session.add(collab)
+        self.session.commit()
+        self.session.refresh(collab)
+        return CollaboratorPublic.model_validate(collab)
+
+    def get_collaborators(self, folder_id: UUID4) -> list[CollaboratorPublic]:
+        statement = select(CollaboratorTable).where(
+            CollaboratorTable.folder_id == folder_id
+        )
+        collabs = self.session.execute(statement).scalars().all()
+        return [CollaboratorPublic.model_validate(c) for c in collabs]
 
     # ==================== Project Methods ====================
 
@@ -320,13 +395,13 @@ class ProjectRepository(BaseRepository):
                 project.tests = []
 
         if with_localizations:
-            languages = self.get_available_languages_optimized(project.id)
             project.localizations
-        else:
-            languages = None
 
         public_project = ProjectPublic.model_validate(project)
-        public_project.available_languages = languages
+
+        public_project.available_languages = self.get_available_languages_optimized(
+            project.id
+        )
 
         if with_tests is True:
             if public_project.tests is None:

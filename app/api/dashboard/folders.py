@@ -27,7 +27,9 @@ async def create_folder(
     db: DBSession,
     jwt: UserToken,
 ) -> ProjectFolderPublic:
-    return db.projects.create_folder(project_folder.title, jwt.user_id)
+    return db.projects.create_folder(
+        project_folder.title, jwt.user_id, project_folder.collaborators
+    )
 
 
 @router.delete("/folders", description="Delete folder")

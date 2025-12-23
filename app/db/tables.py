@@ -31,7 +31,7 @@ from ainterviewer.utils import now
 
 from ..types import ProjectStatus, Scope, TestRunStatus
 from ._extra import PydanticJSONB
-from .types import AccessRequestStatus, AnnotationType, LanguageType, ProjectRole
+from .types import AccessRequestStatus, AnnotationType, LanguageType, CollaboratorRole
 
 naming_convention = {
     "ix": "ix_%(column_0_label)s",
@@ -241,7 +241,7 @@ class CollaboratorTable(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("user.id"))
     added_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("user.id"))
     added_at: Mapped[datetime.datetime] = mapped_column(default=now)
-    project_role: Mapped[ProjectRole] = mapped_column(SQLEnum(ProjectRole))
+    role: Mapped[CollaboratorRole] = mapped_column(SQLEnum(CollaboratorRole))
 
     # Relationships
     folder: Mapped["ProjectFolderTable"] = relationship(

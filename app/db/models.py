@@ -33,7 +33,7 @@ from ainterviewer.utils import now
 from ..settings import app_settings
 from ..types import ProjectStatus, Scope, TestRunStatus
 from ._extra import CustomEmailStr
-from .types import AccessRequestStatus, AnnotationType
+from .types import AccessRequestStatus, AnnotationType, CollaboratorRole
 
 
 class _BaseModel(BaseModel):
@@ -105,6 +105,26 @@ class UserPrivate(UserBase):
     password: str
 
 
+class Collaborator(_BaseModel):
+    email: EmailStr
+    role: CollaboratorRole
+
+
+class CollaboratorBase(_BaseModel):
+    role: CollaboratorRole
+
+
+class CollaboratorCreate(CollaboratorBase):
+    email: EmailStr
+    folder_id: UUID4
+
+
+class CollaboratorPublic(CollaboratorBase):
+    id: UUID4
+    user: UserPublic
+    added_at: datetime
+
+
 class ProjectLocalizationBase(_BaseModel):
     project_id: UUID4
     language: LanguageCode
@@ -133,11 +153,16 @@ class ProjectFolderBase(_BaseModel):
 
 
 class ProjectFolderCreate(ProjectFolderBase):
-    pass
+    collaborators: list[Collaborator] = Field(
+        default=[], validation_alias="folder_collaborations"
+    )
 
 
 class ProjectFolderPublic(ProjectFolderBase):
     id: UUID4
+    collaborators: list[CollaboratorPublic] = Field(
+        default=[], validation_alias="folder_collaborations"
+    )
 
 
 class ProjectFolderEdit(ProjectFolderBase):
