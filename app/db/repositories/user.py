@@ -37,6 +37,27 @@ class UserRepository(BaseRepository):
         self.session.refresh(new_user)
         return UserPublic.model_validate(new_user)
 
+    def delete_user(self, id: UUID4):
+        statement = delete(UserTable).where(UserTable.id == id)
+        self.session.execute(statement)
+        self.session.commit()
+
+    def update_user_status(
+        self,
+        id: UUID4,
+        last_login: bool = False,
+        last_active: bool = True,
+    ):
+        statement = select(UserTable).where(UserTable.id == id)
+        user = self.session.execute(statement).scalar_one()
+
+        if last_login:
+            user.last_login = now()
+        if last_active:
+            user.last_active = now()
+
+        self.session.commit()
+
     def get_user_private(
         self,
         email: str | None = None,
@@ -53,6 +74,14 @@ class UserRepository(BaseRepository):
         statement = select(UserTable).where(UserTable.id == user_id)
         user = self.session.execute(statement).scalar_one()
         return UserPublic.model_validate(user)
+
+    def get_users(
+        self,
+    ) -> list[UserPublic]:
+        statement = select(UserTable)
+        users = self.session.execute(statement).scalars().all()
+
+        return [UserPublic.model_validate(user) for user in users]
 
     # ==================== Access Request Methods ====================
 

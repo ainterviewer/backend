@@ -27,6 +27,8 @@ async def login(login_request: LoginData, db: DBSession):
     if not verify_password(login_request.password, user.password):
         raise exception
 
+    db.users.update_user_status(user.id, last_login=True)
+
     token = create_auth_token(
         user_id=user.id,
         scope=user.scope,
