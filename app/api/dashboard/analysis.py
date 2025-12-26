@@ -25,9 +25,7 @@ async def get_analysis_categories(
     return db.analysis.get_analysis_categories(project_id)
 
 
-@router.post(
-    "/projects/{project_id}/analysis/categories",
-)
+@router.post("/projects/{project_id}/analysis/categories")
 async def create_analysis_category(
     project_id: UUID4,
     category: AnalysisCategoryCreate,
