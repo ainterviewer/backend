@@ -6,16 +6,17 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ainterviewer.agents.prompts.models import Prompts
 from ainterviewer.config import AgentConfigs, InterviewConfig
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.interview_guides.extra import Consent, Welcome
-from ainterviewer.prompts.models import Prompts
 from ainterviewer.types import LanguageCode, LanguageDict
 from ainterviewer.utils import get_language_dict
 
 from ...api.request_models import PromptsUpdateRequest
 from ...types import ProjectStatus
 from ..models import (
+    Collaborator,
     CollaboratorCreate,
     CollaboratorPublic,
     ProjectFolderPublic,
@@ -23,7 +24,6 @@ from ..models import (
     ProjectLocalizationPublic,
     ProjectPublic,
     ProjectPublicWithTests,
-    Collaborator,
 )
 from ..tables import (
     CollaboratorTable,

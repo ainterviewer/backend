@@ -3,7 +3,7 @@ from typing import Literal
 from fastapi import Query
 from pydantic import UUID4, BaseModel
 
-from ainterviewer.prompts.models import PromptTemplates
+from ainterviewer.agents.prompts.models import PromptTemplates
 from ainterviewer.types import LanguageCode
 
 from ..types import ProjectStatus

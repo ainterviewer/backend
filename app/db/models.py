@@ -14,10 +14,10 @@ from pydantic import (
     model_validator,
 )
 
+from ainterviewer.agents.prompts.models import Prompts
 from ainterviewer.config import AgentConfigs, InterviewConfig
 from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
 from ainterviewer.interview_guides.extra import Consent, Welcome
-from ainterviewer.prompts.models import Prompts
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions, InterviewSubject
 from ainterviewer.types import (
     Feedback,

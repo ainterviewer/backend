@@ -3,12 +3,12 @@ from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
+from ainterviewer.agents.prompts.models import DEFAULT_PROMPTS
 from ainterviewer.config import read_agent_configs, read_configs, read_interview_config
 from ainterviewer.interview_guides import InterviewGuide
-from ainterviewer.prompts.models import DEFAULT_PROMPTS
 from ainterviewer.types import DatabaseType
 
 from ..settings import app_settings

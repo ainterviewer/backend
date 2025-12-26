@@ -10,10 +10,10 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship
 from sqlalchemy.sql import func
 
+from ainterviewer.agents.prompts.models import DEFAULT_PROMPTS, Prompts
 from ainterviewer.config import AgentConfigs, InterviewConfig
 from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
 from ainterviewer.interview_guides.extra import Consent, Welcome
-from ainterviewer.prompts.models import DEFAULT_PROMPTS, Prompts
 from ainterviewer.synthesize.interviewees import (
     DEFAULT_BACKGROUND_INFO_OPTIONS,
     BackgroundInfoOptions,
@@ -31,7 +31,7 @@ from ainterviewer.utils import now
 
 from ..types import ProjectStatus, Scope, TestRunStatus
 from ._extra import PydanticJSONB
-from .types import AccessRequestStatus, AnnotationType, LanguageType, CollaboratorRole
+from .types import AccessRequestStatus, AnnotationType, CollaboratorRole, LanguageType
 
 naming_convention = {
     "ix": "ix_%(column_0_label)s",
