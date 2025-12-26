@@ -35,12 +35,19 @@ async def login(login_request: LoginData, db: DBSession):
     )
 
     response = JSONResponse({"detail": "Successfully logged in"})
+
+    # TODO:
+    # - rename token -> access_token
+    # - Add refresh token
+    #   - login_request.extended sets an expire time for the refresh cookie
+
     response.set_cookie(
         key="token",
         value=token,
         secure=True,
         httponly=True,
     )
+
     return response
 
 

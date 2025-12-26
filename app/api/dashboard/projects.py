@@ -450,9 +450,17 @@ async def delete_interviews(
     db.interviews.delete_interviews(project_id, delete_request.interview_ids)
 
 
-class ExportMessagesRequest(BaseModel):
-    interview_ids: list[UUID4]
-    format: Literal["csv", "xlsx"] = "csv"
+@router.get("/projects/{project_id}/interviews/{interview_id}/messages")
+async def get_message(
+    project_id: UUID4,
+    interview_id: UUID4,
+    db: DBSession,
+    jwt: UserToken,
+):
+    # TODO: Implement fetching singular messages based on some id, and maybe
+    # before=N and after=N messages from query arg. return
+    # db.interviews.get_message(interview_id, project_id)
+    ...
 
 
 @router.get("/projects/{project_id}/interviews/{interview_id}/messages")
@@ -463,6 +471,11 @@ async def get_messages(
     jwt: UserToken,
 ) -> list[MessagePublic]:
     return db.interviews.get_messages(interview_id, project_id)
+
+
+class ExportMessagesRequest(BaseModel):
+    interview_ids: list[UUID4]
+    format: Literal["csv", "xlsx"] = "csv"
 
 
 @router.get("/projects/{project_id}/interviews/{interview_id}/messages")
