@@ -25,7 +25,7 @@ async def get_access_requests(
 
 
 @router.post("/access-requests/process")
-async def proccess_access_requests(
+async def process_access_requests(
     db: DBSession,
     jwt: AdminToken,
     requests: AccessRequestsProcessRequest,
