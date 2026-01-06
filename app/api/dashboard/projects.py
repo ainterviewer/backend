@@ -450,10 +450,11 @@ async def delete_interviews(
     db.interviews.delete_interviews(project_id, delete_request.interview_ids)
 
 
-@router.get("/projects/{project_id}/interviews/{interview_id}/messages")
+@router.get("/projects/{project_id}/interviews/{interview_id}/messages/{message_id}")
 async def get_message(
     project_id: UUID4,
     interview_id: UUID4,
+    message_id: UUID4,
     db: DBSession,
     jwt: UserToken,
 ):
@@ -464,7 +465,8 @@ async def get_message(
 
 
 @router.get("/projects/{project_id}/interviews/{interview_id}/messages")
-async def get_messages(
+async def get_interview_messages(
+    request: Request,
     project_id: UUID4,
     interview_id: UUID4,
     db: DBSession,
@@ -478,11 +480,10 @@ class ExportMessagesRequest(BaseModel):
     format: Literal["csv", "xlsx"] = "csv"
 
 
-@router.get("/projects/{project_id}/interviews/{interview_id}/messages")
+@router.post("/projects/{project_id}/interviews/messages/export")
 async def export_messages(
     export_request: ExportMessagesRequest,
     project_id: UUID4,
-    interview_id: UUID4,
     db: DBSession,
     jwt: UserToken,
 ):
