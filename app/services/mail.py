@@ -9,7 +9,7 @@ from aiosmtplib import SMTPResponse
 from html2text import html2text
 from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescape
 
-from ainterviewer.settings import settings
+from ..settings import app_settings
 
 email_templates = Environment(
     loader=PackageLoader("app.services"),
@@ -49,10 +49,10 @@ async def send_email(
 
     return await aiosmtplib.send(
         message,
-        hostname=settings.services.email.smtp_server,
-        port=settings.services.email.smtp_port,
-        username=settings.services.email.sender.email,
-        password=settings.services.email.sender.password.get_secret_value(),
+        hostname=app_settings.services.email.smtp_server,
+        port=app_settings.services.email.smtp_port,
+        username=app_settings.services.email.sender.email,
+        password=app_settings.services.email.sender.password.get_secret_value(),
     )
 
 
@@ -66,7 +66,7 @@ def _create_email_message(
         recipients = ", ".join(recipients)
 
     message = MIMEMultipart("alternative")
-    message["From"] = settings.services.email.sender.email
+    message["From"] = app_settings.services.email.sender.email
     message["To"] = recipients
     message["Subject"] = subject
     message["Date"] = formatdate(localtime=True)

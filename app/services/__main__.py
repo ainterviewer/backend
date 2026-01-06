@@ -5,8 +5,7 @@ from tempfile import NamedTemporaryFile
 import css_inline
 from typer import Typer
 
-from ainterviewer.settings import settings
-
+from ..settings import app_settings
 from .mail import email_templates, send_email
 
 cli = Typer()
@@ -29,7 +28,7 @@ def show_test_email():
 @cli.command()
 def send_test_email():
     # Initialize the email sender with settings
-    print("Email sender initialized with settings:", settings.services.email)
+    print("Email sender initialized with settings:", app_settings.services.email)
 
     # Send a simple email
     result = asyncio.run(
