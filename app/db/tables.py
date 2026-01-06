@@ -74,6 +74,11 @@ class AccessRequestTable(Base):
     processed_by: Mapped[Optional["UserTable"]] = relationship(
         back_populates="processed_requests"
     )
+    invitation: Mapped[Optional["InvitationTable"]] = relationship(
+        back_populates="access_request",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
 
 
 class InvitationTable(Base):
@@ -86,8 +91,14 @@ class InvitationTable(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     expires_at: Mapped[datetime.datetime] = mapped_column()
     redeemed_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
+    access_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("access_requests.id")
+    )
 
     # Relationships
+    access_request: Mapped[Optional["AccessRequestTable"]] = relationship(
+        back_populates="invitation"
+    )
 
 
 ########

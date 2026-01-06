@@ -126,8 +126,9 @@ class UserRepository(BaseRepository):
                     "Access Approved",
                     body=invite.invitation_link,
                 )
-            except Exception:
+            except Exception as e:
                 self.delete_invitation(invite.id)
+                raise e
 
         elif action == "deny":
             access_request.status = AccessRequestStatus.DENIED
