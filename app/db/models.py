@@ -1,4 +1,5 @@
 from __future__ import annotations
+from uuid import UUID
 
 from datetime import datetime
 from pathlib import Path
@@ -12,7 +13,9 @@ from pydantic import (
     Field,
     computed_field,
     model_validator,
+    field_validator,
 )
+from pydantic.json_schema import SkipJsonSchema
 
 from ainterviewer.agents.prompts.models import Prompts
 from ainterviewer.config import AgentConfigs, InterviewConfig
@@ -92,9 +95,23 @@ class UserCreate(UserBase):
     created_at: datetime = Field(default_factory=now)
     last_active: datetime = Field(default_factory=now)
     last_login: datetime = Field(default_factory=now)
-    invite_token: Optional[UUID4 | Literal["test"]] = None
+    invite_token: Optional[UUID4 | SkipJsonSchema[Literal["test"]]] = None
     research_consent: bool = False
     password: str
+
+    @field_validator("invite_token", mode="before")
+    def validate_invite_token(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+
+        if v == "test":
+            return v
+
+        try:
+            UUID(v)
+            return v
+        except ValueError:
+            raise ValueError("Invalid invite token")
 
 
 class UserPublic(UserBase):
