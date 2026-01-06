@@ -12,7 +12,10 @@ from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescap
 from ..settings import app_settings
 
 email_templates = Environment(
-    loader=PackageLoader("app.services"),
+    loader=PackageLoader(
+        package_name="app.services",
+        package_path="templates/email",
+    ),
     autoescape=select_autoescape(),
     undefined=StrictUndefined,
 )

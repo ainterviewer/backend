@@ -13,7 +13,7 @@ cli = Typer()
 
 @cli.command()
 def show_test_email():
-    html_content = email_templates.get_template("email/dummy.jinja").render(
+    html_content = email_templates.get_template("dummy.jinja").render(
         recipient_name="Tobias Gårdshus",
         invite_link="https://ainterviewer.dk/invite/12345",
     )
@@ -39,7 +39,7 @@ def send_test_email():
                 # "tpg@sodas.ku.dk",
             ],
             subject="Hello from AInterviewer",
-            html_content=email_templates.get_template("email/dummy.jinja").render(
+            html_content=email_templates.get_template("dummy.jinja").render(
                 recipient_name="Tobias Gårdshus",
                 invite_link="https://ainterviewer.dk/invite/12345",
             ),
