@@ -519,11 +519,139 @@
                     {
                         "name": "project_id",
                         "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/CollaboratorPublic"
+                                    },
+                                    "title": "Response Get Collaborators"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "collaborators"
+                ],
+                "summary": "Add Collaborator",
+                "operationId": "add_collaborator",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CollaboratorCreate"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CollaboratorPublic"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "collaborators"
+                ],
+                "summary": "Remove Collaborator",
+                "operationId": "remove_collaborator",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "folder_id",
+                        "in": "query",
                         "required": true,
                         "schema": {
                             "type": "string",
                             "format": "uuid4",
-                            "title": "Project Id"
+                            "title": "Folder Id"
+                        }
+                    },
+                    {
+                        "name": "user_id",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid4",
+                            "title": "User Id"
                         }
                     }
                 ],
@@ -533,6 +661,70 @@
                         "content": {
                             "application/json": {
                                 "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "tags": [
+                    "collaborators"
+                ],
+                "summary": "Update Collaborator Role",
+                "operationId": "update_collaborator_role",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid4",
+                            "title": "Folder Id"
+                        }
+                    },
+                    {
+                        "name": "user_id",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid4",
+                            "title": "User Id"
+                        }
+                    },
+                    {
+                        "name": "role",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/components/schemas/CollaboratorRole"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CollaboratorPublic"
+                                }
                             }
                         }
                     },
@@ -2840,6 +3032,62 @@
                 }
             }
         },
+        "/api/projects{project_id}/tests/{test_id}": {
+            "delete": {
+                "tags": [
+                    "synthesize"
+                ],
+                "summary": "Delete Test Setup",
+                "operationId": "delete_test_setup",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid4",
+                            "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "test_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid4",
+                            "title": "Test Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/interviewee": {
             "post": {
                 "tags": [
@@ -3584,8 +3832,8 @@
                 "tags": [
                     "admin"
                 ],
-                "summary": "Proccess Access Requests",
-                "operationId": "proccess_access_requests",
+                "summary": "Process Access Requests",
+                "operationId": "process_access_requests",
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -3623,8 +3871,96 @@
                 ]
             }
         },
+        "/api/admin/admin/access-requests/delete": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Delete Access Requests",
+                "operationId": "delete_access_requests",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AccessRequestsDeleteRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ]
+            }
+        },
         "/api/admin/aws/ec2/{full_path}": {
             "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -3799,14 +4135,37 @@
                         }
                     }
                 }
+            }
+        },
+        "/api/admin/users": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Get Users",
+                "operationId": "get_users",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
             },
             "delete": {
                 "tags": [
                     "admin"
                 ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
+                "summary": "Delete User",
+                "operationId": "delete_user",
                 "security": [
                     {
                         "APIKeyCookie": []
@@ -3814,12 +4173,13 @@
                 ],
                 "parameters": [
                     {
-                        "name": "full_path",
-                        "in": "path",
+                        "name": "user_id",
+                        "in": "query",
                         "required": true,
                         "schema": {
                             "type": "string",
-                            "title": "Full Path"
+                            "format": "uuid4",
+                            "title": "User Id"
                         }
                     }
                 ],
@@ -4083,6 +4443,23 @@
                 ],
                 "title": "AccessRequestCreate"
             },
+            "AccessRequestsDeleteRequest": {
+                "properties": {
+                    "ids": {
+                        "items": {
+                            "type": "string",
+                            "format": "uuid4"
+                        },
+                        "type": "array",
+                        "title": "Ids"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "ids"
+                ],
+                "title": "AccessRequestsDeleteRequest"
+            },
             "AccessRequestsProcessRequest": {
                 "properties": {
                     "ids": {
@@ -4114,7 +4491,7 @@
                     "model": {
                         "type": "string",
                         "title": "Model",
-                        "default": "gemma3-27b"
+                        "default": "openrouter/openai/gpt-oss-120b"
                     },
                     "temperature": {
                         "type": "number",
@@ -4680,6 +5057,86 @@
                     "message"
                 ],
                 "title": "Broadcast"
+            },
+            "Collaborator": {
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "Email"
+                    },
+                    "role": {
+                        "$ref": "#/components/schemas/CollaboratorRole"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "email",
+                    "role"
+                ],
+                "title": "Collaborator"
+            },
+            "CollaboratorCreate": {
+                "properties": {
+                    "role": {
+                        "$ref": "#/components/schemas/CollaboratorRole"
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "Email"
+                    },
+                    "folder_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Folder Id"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "role",
+                    "email",
+                    "folder_id"
+                ],
+                "title": "CollaboratorCreate"
+            },
+            "CollaboratorPublic": {
+                "properties": {
+                    "role": {
+                        "$ref": "#/components/schemas/CollaboratorRole"
+                    },
+                    "id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Id"
+                    },
+                    "user": {
+                        "$ref": "#/components/schemas/UserPublic"
+                    },
+                    "added_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Added At"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "role",
+                    "id",
+                    "user",
+                    "added_at"
+                ],
+                "title": "CollaboratorPublic"
+            },
+            "CollaboratorRole": {
+                "type": "string",
+                "enum": [
+                    "viewer",
+                    "annotator",
+                    "editor",
+                    "admin"
+                ],
+                "title": "CollaboratorRole"
             },
             "CommunicationTrait": {
                 "properties": {
@@ -5310,6 +5767,11 @@
                     "password": {
                         "type": "string",
                         "title": "Password"
+                    },
+                    "extended": {
+                        "type": "boolean",
+                        "title": "Extended",
+                        "default": false
                     }
                 },
                 "type": "object",
@@ -5650,7 +6112,7 @@
                     "model": {
                         "type": "string",
                         "title": "Model",
-                        "default": "gemma3-27b"
+                        "default": "openrouter/openai/gpt-oss-120b"
                     },
                     "temperature": {
                         "type": "number",
@@ -5692,6 +6154,14 @@
                     "title": {
                         "type": "string",
                         "title": "Title"
+                    },
+                    "folder_collaborations": {
+                        "items": {
+                            "$ref": "#/components/schemas/Collaborator"
+                        },
+                        "type": "array",
+                        "title": "Folder Collaborations",
+                        "default": []
                     }
                 },
                 "type": "object",
@@ -5743,6 +6213,14 @@
                         "type": "string",
                         "format": "uuid4",
                         "title": "Id"
+                    },
+                    "collaborators": {
+                        "items": {
+                            "$ref": "#/components/schemas/CollaboratorPublic"
+                        },
+                        "type": "array",
+                        "title": "Collaborators",
+                        "default": []
                     }
                 },
                 "type": "object",
@@ -5762,6 +6240,14 @@
                         "type": "string",
                         "format": "uuid4",
                         "title": "Id"
+                    },
+                    "collaborators": {
+                        "items": {
+                            "$ref": "#/components/schemas/CollaboratorPublic"
+                        },
+                        "type": "array",
+                        "title": "Collaborators",
+                        "default": []
                     },
                     "projects": {
                         "items": {
@@ -6454,7 +6940,7 @@
                     "model": {
                         "type": "string",
                         "title": "Model",
-                        "default": "gemma3-27b"
+                        "default": "openrouter/openai/gpt-oss-120b"
                     },
                     "temperature": {
                         "type": "number",
@@ -6642,6 +7128,11 @@
                         "format": "uuid4",
                         "title": "Project Id"
                     },
+                    "answering_model": {
+                        "type": "string",
+                        "title": "Answering Model",
+                        "default": "openrouter/openai/gpt-oss-120b"
+                    },
                     "last_updated": {
                         "anyOf": [
                             {
@@ -6662,17 +7153,6 @@
                         "type": "integer",
                         "title": "N Interviews",
                         "default": 5
-                    },
-                    "answering_model": {
-                        "anyOf": [
-                            {
-                                "type": "string"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Answering Model"
                     },
                     "delay_before_answers": {
                         "anyOf": [
@@ -6724,6 +7204,11 @@
                         "format": "uuid4",
                         "title": "Project Id"
                     },
+                    "answering_model": {
+                        "type": "string",
+                        "title": "Answering Model",
+                        "default": "openrouter/openai/gpt-oss-120b"
+                    },
                     "last_updated": {
                         "anyOf": [
                             {
@@ -6744,17 +7229,6 @@
                         "type": "integer",
                         "title": "N Interviews",
                         "default": 5
-                    },
-                    "answering_model": {
-                        "anyOf": [
-                            {
-                                "type": "string"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Answering Model"
                     },
                     "delay_before_answers": {
                         "anyOf": [
