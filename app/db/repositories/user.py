@@ -9,7 +9,7 @@ from sqlalchemy import delete, or_, select
 from ainterviewer.utils import now
 
 from ...auth import get_password_hash
-from ...services.mail import send_email
+from ...services.mail import email_templates, send_email
 from ..models import (
     AccessRequestCreate,
     AccessRequestPublic,
@@ -118,13 +118,18 @@ class UserRepository(BaseRepository):
             # and if the email fails, the invite will be deleted. This has
             # the potential to create a race condition where the invite is
             # created but the email has not been send to the user.
-            invite = self.create_invitation(access_request.email)
+            invite = self.create_invitation(
+                access_request.email, access_request_id=access_request.id
+            )
 
             try:
                 await send_email(
                     access_request.email,
                     "Access Approved",
-                    body=invite.invitation_link,
+                    html_content=email_templates.get_template("invite.jinja").render(
+                        recipient_name=access_request.name,
+                        invite_link=invite.invitation_link,
+                    ),
                 )
             except Exception as e:
                 self.delete_invitation(invite.id)
@@ -145,11 +150,16 @@ class UserRepository(BaseRepository):
 
     # ==================== Invitation Methods ====================
 
-    def create_invitation(self, email: str) -> InvitationPublic:
+    def create_invitation(
+        self,
+        email: str,
+        access_request_id: UUID4 | None = None,
+    ) -> InvitationPublic:
         expires_at = now() + timedelta(days=1)
         invitation = InvitationTable(
             email=email,
             expires_at=expires_at,
+            access_request_id=access_request_id,
         )
         self.session.add(invitation)
         self.session.commit()
