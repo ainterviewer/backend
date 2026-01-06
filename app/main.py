@@ -97,7 +97,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=app_settings.app.ainterviewer_port,
+        port=app_settings.app.api_port,
         reload=True,
         reload_dirs=["."],
         reload_includes=["*.html", "*.jinja", "*.yaml"],

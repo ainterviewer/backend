@@ -15,8 +15,15 @@ from ainterviewer.types import DatabaseType, TimeDelta
 
 
 class AppSettings(BaseModel):
-    ainterviewer_port: int = 8666
-    ainterviewer_host: str = "127.0.0.1"
+    api_host: str = "127.0.0.1"
+    api_port: int = 8666
+
+    app_host: str = "127.0.0.1"
+    app_port: int = 5173
+
+    web_host: str = "127.0.0.1"
+    web_port: int = 5174
+
     jwt_interview_token_expiration: dict[str, float] = Field(
         default_factory=lambda: TimeDelta(days=3).model_dump()
     )
@@ -26,9 +33,16 @@ class AppSettings(BaseModel):
     registration_requires_token: bool = True
 
     @computed_field
-    @property
-    def endpoint(self) -> str:
-        return f"{self.ainterviewer_host}:{self.ainterviewer_port}"
+    def api_endpoint(self) -> str:
+        return f"{self.api_host}:{self.api_port}"
+
+    @computed_field
+    def app_endpoint(self) -> str:
+        return f"{self.app_host}:{self.app_port}"
+
+    @computed_field
+    def web_endpoint(self) -> str:
+        return f"{self.web_host}:{self.web_port}"
 
 
 class DatabaseSettings(BaseModel):

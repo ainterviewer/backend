@@ -72,7 +72,7 @@ async def _connect_and_yield_messages(
     cookies = f"interview_token={token}; language={language}"
 
     async with connect(
-        f"ws://{app_settings.app.endpoint}/ws/ai",
+        f"ws://{app_settings.app.api_endpoint}/ws/ai",
         additional_headers=[("Cookie", cookies)],
     ) as websocket:
         try:
@@ -166,7 +166,7 @@ async def add_interviewee(
 ):
     async with aiohttp.ClientSession() as session:
         async with session.post(
-            f"http://{app_settings.app.endpoint}/api/interviewee",
+            f"http://{app_settings.app.api_endpoint}/api/interviewee",
             json={
                 "project_id": project_id,
                 "interview_id": interview_id,

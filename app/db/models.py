@@ -79,7 +79,7 @@ class InvitationPublic(_BaseModel):
 
     @computed_field()
     def invitation_link(self) -> str:
-        return f"{app_settings.app.endpoint}/login?token={self.id}#signup"
+        return f"{app_settings.app.app_endpoint}/sign-up?token={self.id}"
 
 
 class UserBase(_BaseModel):
