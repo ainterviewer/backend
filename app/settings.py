@@ -41,7 +41,6 @@ class DatabaseSettings(BaseModel):
     default_team_id: UUID4
 
     @computed_field
-    @property
     def database_file(self) -> str | None:
         return "db.sqlite" if self.db == DatabaseType.SQLITE else None
 
@@ -79,10 +78,6 @@ class ServiceSettings(BaseSettings):
     model_config = BaseSettingsConfigDict(env_prefix="APP_SERVICE__")
 
 
-class VLLMSettings(BaseModel):
-    available_models: list[str] = Field(default_factory=lambda: ["gpt-5-mini"])
-
-
 class AppSecrets(BaseSettings):
     jwt_secret_key: SecretStr
     session_secret_key: SecretStr
@@ -99,7 +94,6 @@ class Settings(BaseSettings):
     app: AppSettings
     database: DatabaseSettings
     services: ServiceSettings
-    vllm: VLLMSettings
 
     # TODO:
     # - Should the secrets be a standalone class so they cant be read

@@ -18,6 +18,7 @@ from ainterviewer.agents.prompts.models import Prompts
 from ainterviewer.config import AgentConfigs, InterviewConfig
 from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
 from ainterviewer.interview_guides.extra import Consent, Welcome
+from ainterviewer.settings import settings as lib_settings
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions, InterviewSubject
 from ainterviewer.types import (
     Feedback,
@@ -364,10 +365,10 @@ class TestSetupBase(_BaseModel):
     name: Optional[str] = None
     type: TestType
     project_id: UUID4
+    answering_model: str = lib_settings.llm.default_model
     last_updated: Optional[datetime] = None
     language: LanguageCode = "EN"
     n_interviews: int = 5
-    answering_model: Optional[str] = None
     delay_before_answers: Optional[tuple[float, float]] = None
 
 
@@ -387,7 +388,7 @@ class TestRunBase(_BaseModel):
     test_setup_id: UUID4
     language: LanguageCode = "EN"
     n_interviews: int
-    answering_model: Optional[str] = None
+    answering_model: str
     delay_before_answers: Optional[tuple[float, float]] = None
 
 

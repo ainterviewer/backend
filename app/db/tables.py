@@ -457,7 +457,7 @@ class TestSetupTable(Base):
     last_updated: Mapped[datetime.datetime | None] = mapped_column()
     language: Mapped[LanguageCode] = mapped_column(LanguageType, default="EN")
     n_interviews: Mapped[int] = mapped_column(default=5)
-    answering_model: Mapped[str | None] = mapped_column()
+    answering_model: Mapped[str] = mapped_column()
     delay_before_answers: Mapped[Any | None] = mapped_column(JSON)
     background_info: Mapped[BackgroundInfoOptions] = mapped_column(
         PydanticJSONB(BackgroundInfoOptions),

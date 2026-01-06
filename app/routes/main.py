@@ -14,6 +14,7 @@ from sqlalchemy.exc import NoResultFound
 from uvicorn.config import logger
 
 from ainterviewer.constants import LANGUAGES
+from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode, TestType
 
 from ..auth import decode_interview_token, decode_jwt
@@ -24,7 +25,6 @@ from ..dependencies import (
     templates,
     templates_dir,
 )
-from ..settings import app_settings
 from ..translations import MODALS
 from ..types import InterviewType, ProjectStatus, Scope
 from ..utils import parse_url_query_params, replay_history
@@ -299,7 +299,7 @@ async def agents(request: Request):
         request=request,
         name=f"/site{request.url.path}.html",
         context={
-            "models": app_settings.vllm.available_models,
+            "models": lib_settings.llm.available_models,
             "languages": LANGUAGES,
         },
     )
@@ -324,7 +324,7 @@ async def config(
         request=request,
         name=f"/site{request.url.path}.html",
         context={
-            "models": app_settings.vllm.available_models,
+            "models": lib_settings.llm.available_models,
             "languages": project.available_languages,
             "project_title": project.title,
             "project_status": project.status,
@@ -514,7 +514,7 @@ async def test_runs(
             "models": (
                 None
                 if test_setup.type == TestType.FIXED_ANSWERS
-                else app_settings.vllm.available_models
+                else lib_settings.llm.available_models
             ),
             "model": test_setup.answering_model,
             "languages": [
