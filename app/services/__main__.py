@@ -3,12 +3,32 @@ import webbrowser
 from tempfile import NamedTemporaryFile
 
 import css_inline
+from playwright.sync_api import sync_playwright
 from typer import Typer
 
 from ..settings import app_settings
 from .mail import email_templates, send_email
 
 cli = Typer()
+
+
+@cli.command()
+def create_static_email_header():
+    html = email_templates.get_template("header.html").render()
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+
+        # Upscales the image
+        context = browser.new_context(device_scale_factor=2)
+
+        page = context.new_page()
+        page.set_content(html)
+
+        element = page.locator(".header")
+        element.screenshot(path="header.png")
+
+        browser.close()
 
 
 @cli.command()
