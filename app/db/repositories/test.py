@@ -43,6 +43,11 @@ class TestRepository(BaseRepository):
 
         return TestSetupPublic.model_validate(test)
 
+    def delete_test_setup(self, test_id: UUID4):
+        statement = delete(TestSetupTable).where(TestSetupTable.id == test_id)
+        self.session.execute(statement)
+        self.session.commit()
+
     def get_test(self, test_id: UUID4) -> TestSetupPublic:
         statement = select(TestSetupTable).where(TestSetupTable.id == test_id)
         test = self.session.execute(statement).scalar_one()
@@ -155,8 +160,6 @@ class TestRepository(BaseRepository):
         experiment_id: UUID4,
     ):
         # FIXME: Update permissions to collab
-        statement = delete(ExperimentTable).where(
-            ExperimentTable.id == experiment_id,
-        )
+        statement = delete(ExperimentTable).where(ExperimentTable.id == experiment_id)
         self.session.execute(statement)
         self.session.commit()

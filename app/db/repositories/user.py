@@ -96,6 +96,11 @@ class UserRepository(BaseRepository):
 
         return [AccessRequestPublic.model_validate(request) for request in requests]
 
+    def delete_access_requests(self, ids: list[UUID4]) -> None:
+        statement = delete(AccessRequestTable).where(AccessRequestTable.id.in_(ids))
+        self.session.execute(statement)
+        self.session.commit()
+
     async def process_access_request(
         self,
         access_request_id: UUID4,

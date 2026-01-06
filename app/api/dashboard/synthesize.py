@@ -89,6 +89,13 @@ async def create_test_setup(
     return test_setup_public
 
 
+@router.delete("/projects{project_id}/tests/{test_id}")
+async def delete_test_setup(
+    project_id: UUID4, test_id: UUID4, db: DBSession, jwt: UserToken
+):
+    db.tests.delete_test_setup(test_id)
+
+
 @router.post("/interviewee")
 async def add_interviewee(
     interviewee: IntervieweeCreate,

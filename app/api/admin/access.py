@@ -15,6 +15,10 @@ class AccessRequestsProcessRequest(BaseModel):
     action: Literal["approve", "deny"]
 
 
+class AccessRequestsDeleteRequest(BaseModel):
+    ids: list[UUID4]
+
+
 @router.get("/access-requests")
 async def get_access_requests(
     db: DBSession,
@@ -34,3 +38,12 @@ async def process_access_requests(
         await db.users.process_access_request(
             id_, requests.action, approver_id=jwt.user_id
         )
+
+
+@router.post("/access-requests/delete")
+async def delete_access_requests(
+    request: AccessRequestsDeleteRequest,
+    db: DBSession,
+    jwt: AdminToken,
+):
+    db.users.delete_access_requests(request.ids)
