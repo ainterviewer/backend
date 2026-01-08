@@ -1756,7 +1756,7 @@
                     "content": {
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image__1"
+                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image"
                             }
                         }
                     }
@@ -2395,35 +2395,22 @@
                         }
                     },
                     {
-                        "name": "synthetic",
+                        "name": "interview_types",
                         "in": "query",
                         "required": false,
                         "schema": {
                             "anyOf": [
                                 {
-                                    "type": "boolean"
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/InterviewType"
+                                    }
                                 },
                                 {
                                     "type": "null"
                                 }
                             ],
-                            "title": "Synthetic"
-                        }
-                    },
-                    {
-                        "name": "test",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "anyOf": [
-                                {
-                                    "type": "boolean"
-                                },
-                                {
-                                    "type": "null"
-                                }
-                            ],
-                            "title": "Test"
+                            "title": "Interview Types"
                         }
                     },
                     {
@@ -3515,23 +3502,12 @@
                         }
                     },
                     {
-                        "name": "synthetic",
+                        "name": "interview_type",
                         "in": "query",
                         "required": false,
                         "schema": {
-                            "type": "boolean",
-                            "default": false,
-                            "title": "Synthetic"
-                        }
-                    },
-                    {
-                        "name": "test",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "boolean",
-                            "default": false,
-                            "title": "Test"
+                            "$ref": "#/components/schemas/InterviewType",
+                            "default": "distributed"
                         }
                     },
                     {
@@ -3691,7 +3667,7 @@
                     "content": {
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image"
+                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image__2"
                             }
                         }
                     },
@@ -4044,95 +4020,95 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "put": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
             "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
                 "tags": [
                     "admin"
                 ],
@@ -4220,7 +4196,7 @@
                     }
                 }
             },
-            "patch": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -5831,6 +5807,15 @@
                 "title": "InterviewSubject",
                 "description": "Dataclass representing the interview subject"
             },
+            "InterviewType": {
+                "type": "string",
+                "enum": [
+                    "test",
+                    "synthetic",
+                    "distributed"
+                ],
+                "title": "InterviewType"
+            },
             "IntervieweeCreate": {
                 "properties": {
                     "interview_id": {
@@ -6193,13 +6178,8 @@
                         "title": "Annotations",
                         "default": []
                     },
-                    "is_test": {
-                        "type": "boolean",
-                        "title": "Is Test"
-                    },
-                    "is_synthetic": {
-                        "type": "boolean",
-                        "title": "Is Synthetic"
+                    "interview_type": {
+                        "$ref": "#/components/schemas/InterviewType"
                     }
                 },
                 "type": "object",
@@ -6211,8 +6191,7 @@
                     "project_id",
                     "created_at",
                     "id",
-                    "is_test",
-                    "is_synthetic"
+                    "interview_type"
                 ],
                 "title": "MessagePublic"
             },
@@ -7708,32 +7687,6 @@
             },
             "fastapi___compat__v2__Body_upload_image": {
                 "properties": {
-                    "project_id": {
-                        "type": "string",
-                        "format": "uuid4",
-                        "title": "Project Id"
-                    },
-                    "interview_id": {
-                        "type": "string",
-                        "format": "uuid4",
-                        "title": "Interview Id"
-                    },
-                    "file": {
-                        "type": "string",
-                        "format": "binary",
-                        "title": "File"
-                    }
-                },
-                "type": "object",
-                "required": [
-                    "project_id",
-                    "interview_id",
-                    "file"
-                ],
-                "title": "Body_upload_image"
-            },
-            "fastapi___compat__v2__Body_upload_image__1": {
-                "properties": {
                     "primer": {
                         "type": "string",
                         "title": "Primer"
@@ -7757,6 +7710,32 @@
                     "primer",
                     "description",
                     "alt",
+                    "file"
+                ],
+                "title": "Body_upload_image"
+            },
+            "fastapi___compat__v2__Body_upload_image__2": {
+                "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Project Id"
+                    },
+                    "interview_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Interview Id"
+                    },
+                    "file": {
+                        "type": "string",
+                        "format": "binary",
+                        "title": "File"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "project_id",
+                    "interview_id",
                     "file"
                 ],
                 "title": "Body_upload_image"
@@ -8072,6 +8051,19 @@
                 ],
                 "title": "ReceivedData",
                 "type": "object"
+            },
+            "CustomTokens": {
+                "title": "CustomTokens",
+                "type": "string",
+                "enum": [
+                    "<|endofprobe|>",
+                    "<|endofsection|>",
+                    "<|endofinterview|>",
+                    "<|skipquestion|>",
+                    "<|skipsection|>",
+                    "<|noanswer|>",
+                    "<|restartinterview|>"
+                ]
             }
         },
         "securitySchemes": {
