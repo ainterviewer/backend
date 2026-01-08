@@ -1,3 +1,4 @@
+from app.db.types import InterviewType
 import datetime
 from collections.abc import Sequence
 from pathlib import Path
@@ -31,6 +32,7 @@ class InterviewRepository(BaseRepository):
         self,
         project_id: UUID4,
         interview_guide: InterviewGuide,
+        interview_type: InterviewType,
         interviewer: Interviewer = Interviewer.AI,
         synthetic=False,
         test=False,
@@ -39,6 +41,7 @@ class InterviewRepository(BaseRepository):
         interview = InterviewTable(
             project_id=project_id,
             interview_guide=interview_guide,
+            type=interview_type,
             interviewer=interviewer,
             is_synthetic=synthetic,
             is_test=test,
@@ -96,8 +99,7 @@ class InterviewRepository(BaseRepository):
         limit: int | None = None,
         sorting_column: str = "created_at",
         sorting_order: Literal["desc", "asc"] = "desc",
-        synthetic: bool | None = None,
-        test: bool | None = None,
+        interview_types: list[InterviewType] | None = None,
         created_at: datetime.datetime | None = None,
         completed: bool | None = None,
     ) -> tuple[Sequence[InterviewPublic], int]:
@@ -106,22 +108,14 @@ class InterviewRepository(BaseRepository):
         table = InterviewTable
         conditions = [InterviewTable.project_id == project_id]
 
-        or_conditions = []
-        if synthetic is not None:
-            or_conditions.append(InterviewTable.is_synthetic == synthetic)
-
-        if test is not None:
-            or_conditions.append(InterviewTable.is_test == test)
-
-        # Only add the OR clause if at least one condition exists
-        if or_conditions:
-            conditions.append(or_(*or_conditions))
+        if interview_types:
+            conditions.append(InterviewTable.type.in_(interview_types))
 
         if created_at is not None:
-            conditions.append(InterviewTable.is_test == created_at)
+            conditions.append(InterviewTable.created_at == created_at)
 
         if completed is not None:
-            conditions.append(InterviewTable.is_test == completed)
+            conditions.append(InterviewTable.is_complete == completed)
 
         statement = (
             select(table)

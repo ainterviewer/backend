@@ -20,6 +20,7 @@ from pydantic import UUID4
 from ainterviewer.types import Interviewer, LanguageCode
 
 from ..auth import create_interview_token, decode_interview_token
+from ..db.types import InterviewType
 from ..dependencies import AdminToken, DBSession, GuestToken, LanguageCookie, templates
 from ..translations import MODALS
 from ..utils import generate_random_filename
@@ -105,8 +106,7 @@ async def create_interview(
     project_id: Annotated[UUID4, URLPath],
     lang: Annotated[LanguageCode, URLPath],
     interviewer: Annotated[Interviewer, Query()] = Interviewer.AI,
-    synthetic: Annotated[bool, Query()] = False,
-    test: Annotated[bool, Query()] = False,
+    interview_type: Annotated[InterviewType, Query()] = InterviewType.DISTRIBUTED,
     fixed_answers: Annotated[bool, Query()] = False,
     user_agent: Annotated[str | None, Header()] = None,
     ip_address: Annotated[str | None, Header(alias="X-Real-IP")] = None,
@@ -131,9 +131,8 @@ async def create_interview(
     interview = db.interviews.create_interview(
         project_id,
         interview_guide=interview_guide,
+        interview_type=interview_type,
         interviewer=interviewer,
-        synthetic=synthetic,
-        test=test,
         user_agent=user_agent,
         referer=referer,
         external_params=forward_params,

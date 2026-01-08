@@ -22,6 +22,12 @@ class AccessRequestStatus(StrEnum):
     DENIED = "denied"
 
 
+class InterviewType(StrEnum):
+    TEST = "test"
+    SYNTHETIC = "synthetic"
+    DISTRIBUTED = "distributed"
+
+
 @final
 class LanguageType(TypeDecorator):
     """Custom SQLAlchemy type that validates and transforms language codes"""

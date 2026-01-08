@@ -31,6 +31,7 @@ from ainterviewer.interview_guides.generate import generate_interview_guide
 from ainterviewer.types import LanguageCode, LanguageDict
 
 from ...db.models import InterviewSummaryPublic, MessagePublic, ProjectPublic
+from ...db.types import InterviewType
 from ...db.utils import fix_nested_columns
 from ...dependencies import DBSession, UserToken
 from ...paths import QR_CODES_DIR, VIDEO_DIR
@@ -412,8 +413,7 @@ async def get_interviews(
     db: DBSession,
     jwt: UserToken,
     paginated_query: Annotated[PaginatedQueryParams, Depends(PaginatedQueryParams)],
-    synthetic: Annotated[bool | None, Query()] = None,
-    test: Annotated[bool | None, Query()] = None,
+    interview_types: Annotated[list[InterviewType] | None, Query()] = None,
     created_at: Annotated[datetime.datetime | None, Query] = None,
     completed: Annotated[bool | None, Query] = None,
 ):
@@ -424,8 +424,9 @@ async def get_interviews(
         limit=paginated_query.limit,
         sorting_column=paginated_query.column,
         sorting_order=paginated_query.order,
-        synthetic=synthetic,
-        test=test,
+        interview_types=interview_types
+        if interview_types is not None
+        else [InterviewType.DISTRIBUTED],
         created_at=created_at,
         completed=completed,
     )

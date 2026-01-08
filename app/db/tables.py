@@ -31,7 +31,13 @@ from ainterviewer.utils import now
 
 from ..types import ProjectStatus, Scope, TestRunStatus
 from ._extra import PydanticJSONB
-from .types import AccessRequestStatus, AnnotationType, CollaboratorRole, LanguageType
+from .types import (
+    AccessRequestStatus,
+    AnnotationType,
+    CollaboratorRole,
+    LanguageType,
+    InterviewType,
+)
 
 naming_convention = {
     "ix": "ix_%(column_0_label)s",
@@ -308,13 +314,13 @@ class InterviewTable(Base):
         PydanticJSONB(InterviewGuide)
     )
     language: Mapped[LanguageCode] = mapped_column(LanguageType, default="EN")
+    type: Mapped[InterviewType] = mapped_column(SQLEnum(InterviewType))
     interviewer: Mapped[Interviewer] = mapped_column(
         SQLEnum(Interviewer), default=Interviewer.AI
     )
     is_complete: Mapped[bool] = mapped_column(default=False)
     is_active: Mapped[bool] = mapped_column(default=False)
-    is_synthetic: Mapped[bool] = mapped_column(default=False)
-    is_test: Mapped[bool] = mapped_column(default=False)
+
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     last_updated: Mapped[datetime.datetime | None] = mapped_column()
     total_time_spent: Mapped[int] = mapped_column(default=0)
@@ -402,25 +408,13 @@ class MessageTable(Base):
     )
 
     @hybrid_property
-    def is_synthetic(self) -> bool:
-        return self.interview.is_synthetic if self.interview else False
+    def interview_type(self) -> Optional[InterviewType]:
+        return self.interview.type if self.interview else None
 
-    @is_synthetic.expression
-    def is_synthetic(cls):
+    @interview_type.expression
+    def interview_type(cls):
         return (
-            select(InterviewTable.is_synthetic)
-            .where(InterviewTable.id == cls.interview_id)
-            .scalar_subquery()
-        )
-
-    @hybrid_property
-    def is_test(self) -> bool:
-        return self.interview.is_test if self.interview else False
-
-    @is_test.expression
-    def is_test(cls):
-        return (
-            select(InterviewTable.is_test)
+            select(InterviewTable.type)
             .where(InterviewTable.id == cls.interview_id)
             .scalar_subquery()
         )

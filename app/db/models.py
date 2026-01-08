@@ -37,7 +37,7 @@ from ainterviewer.utils import now
 from ..settings import app_settings
 from ..types import ProjectStatus, Scope, TestRunStatus
 from ._extra import CustomEmailStr
-from .types import AccessRequestStatus, AnnotationType, CollaboratorRole
+from .types import AccessRequestStatus, AnnotationType, CollaboratorRole, InterviewType
 
 
 class _BaseModel(BaseModel):
@@ -258,9 +258,8 @@ class InterviewBase(_BaseModel):
     interview_guide: InterviewGuide | None
     language: LanguageCode = "EN"
     interviewer: Interviewer = Interviewer.AI
+    type: InterviewType = InterviewType.DISTRIBUTED
     is_complete: bool = False
-    is_active: bool = False
-    is_synthetic: bool = False
     created_at: datetime
     last_updated: Optional[datetime] = None
     total_time_spent: int = 0
@@ -344,8 +343,7 @@ class MessagePublic(MessageBase):
     id: UUID4
     annotations: list["MessageAnnotationPublic"] = []
 
-    is_test: bool
-    is_synthetic: bool
+    interview_type: InterviewType
 
 
 class TaskBase(_BaseModel):
