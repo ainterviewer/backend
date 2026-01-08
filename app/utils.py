@@ -1,4 +1,5 @@
 import copy
+import enum
 import sys
 import uuid
 from io import BytesIO
@@ -161,12 +162,22 @@ def replay_history(
 
 def extend_openapi_schema(
     openapi: dict[str, Any],
-    models: list[BaseModel],
+    models: list[type[BaseModel] | type[enum.Enum]],
 ) -> dict[str, Any]:
-    """Adds extra pydantic models to the `openapi[\"components\"][\"schema\"]`"""
+    """Adds extra pydantic models or enums to the `openapi[\"components\"][\"schema\"]`"""
     openapi = copy.deepcopy(openapi)
 
     for extra_model in models:
+        # Handle Enum types (including StrEnum)
+        if isinstance(extra_model, type) and issubclass(extra_model, enum.Enum):
+            enum_schema = {
+                "title": extra_model.__name__,
+                "type": "string",
+                "enum": [member.value for member in extra_model],
+            }
+            openapi["components"]["schemas"][extra_model.__name__] = enum_schema
+            continue
+
         # Generate the JSON schema with the correct reference template
         # Use .model_json_schema() for Pydantic v2, or .schema() for v1
         if hasattr(extra_model, "model_json_schema"):

@@ -37,6 +37,7 @@ def generate_openapi_scheme(output: str = "openapi.json"):
         OutgoingMessage,
         ReceivedData,
     )
+    from ainterviewer.lpm.types import CustomTokens
 
     openapi = app.openapi()
 
@@ -55,6 +56,7 @@ def generate_openapi_scheme(output: str = "openapi.json"):
             OutgoingHistoryMessage,
             OutgoingMessage,
             ReceivedData,
+            CustomTokens,
         ],
     )
 
