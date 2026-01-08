@@ -1756,7 +1756,7 @@
                     "content": {
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image"
+                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image__1"
                             }
                         }
                     }
@@ -3525,6 +3525,16 @@
                         }
                     },
                     {
+                        "name": "test",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "default": false,
+                            "title": "Test"
+                        }
+                    },
+                    {
                         "name": "fixed_answers",
                         "in": "query",
                         "required": false,
@@ -3681,7 +3691,7 @@
                     "content": {
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image__2"
+                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image"
                             }
                         }
                     },
@@ -4034,7 +4044,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "delete": {
+            "put": {
                 "tags": [
                     "admin"
                 ],
@@ -4078,7 +4088,7 @@
                     }
                 }
             },
-            "put": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -4166,7 +4176,7 @@
                     }
                 }
             },
-            "patch": {
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -4210,7 +4220,7 @@
                     }
                 }
             },
-            "post": {
+            "patch": {
                 "tags": [
                     "admin"
                 ],
@@ -7698,6 +7708,32 @@
             },
             "fastapi___compat__v2__Body_upload_image": {
                 "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Project Id"
+                    },
+                    "interview_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Interview Id"
+                    },
+                    "file": {
+                        "type": "string",
+                        "format": "binary",
+                        "title": "File"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "project_id",
+                    "interview_id",
+                    "file"
+                ],
+                "title": "Body_upload_image"
+            },
+            "fastapi___compat__v2__Body_upload_image__1": {
+                "properties": {
                     "primer": {
                         "type": "string",
                         "title": "Primer"
@@ -7721,32 +7757,6 @@
                     "primer",
                     "description",
                     "alt",
-                    "file"
-                ],
-                "title": "Body_upload_image"
-            },
-            "fastapi___compat__v2__Body_upload_image__2": {
-                "properties": {
-                    "project_id": {
-                        "type": "string",
-                        "format": "uuid4",
-                        "title": "Project Id"
-                    },
-                    "interview_id": {
-                        "type": "string",
-                        "format": "uuid4",
-                        "title": "Interview Id"
-                    },
-                    "file": {
-                        "type": "string",
-                        "format": "binary",
-                        "title": "File"
-                    }
-                },
-                "type": "object",
-                "required": [
-                    "project_id",
-                    "interview_id",
                     "file"
                 ],
                 "title": "Body_upload_image"
