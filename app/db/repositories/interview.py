@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Literal, Optional
 
 from pydantic import UUID4
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import NoResultFound
 
 from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
@@ -106,11 +106,16 @@ class InterviewRepository(BaseRepository):
         table = InterviewTable
         conditions = [InterviewTable.project_id == project_id]
 
+        or_conditions = []
         if synthetic is not None:
-            conditions.append(InterviewTable.is_synthetic == synthetic)
+            or_conditions.append(InterviewTable.is_synthetic == synthetic)
 
         if test is not None:
-            conditions.append(InterviewTable.is_test == test)
+            or_conditions.append(InterviewTable.is_test == test)
+
+        # Only add the OR clause if at least one condition exists
+        if or_conditions:
+            conditions.append(or_(*or_conditions))
 
         if created_at is not None:
             conditions.append(InterviewTable.is_test == created_at)
