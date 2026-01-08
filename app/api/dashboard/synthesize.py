@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Response
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, Request
 from pydantic import UUID4
 from uvicorn.config import logger
 
@@ -117,9 +117,10 @@ async def get_test_status(
 
 @router.post("/projects/{project_id}/tests/{test_id}/run")
 async def run_synthetic_test(
+    request: Request,
     project_id: UUID4,
     test_id: UUID4,
-    request: SynthesizeRequest,
+    request_data: SynthesizeRequest,
     background_tasks: BackgroundTasks,
     db: DBSession,
     jwt: UserToken,
@@ -155,18 +156,18 @@ async def run_synthetic_test(
 
         return wrapper
 
-    test_setup = db.tests.update_test_setup_settings(test_id, request)
+    test_setup = db.tests.update_test_setup_settings(test_id, request_data)
     # test_setup = db.tests.get_test(test_id)
 
     test_run_id = db.tests.create_test_run(
-        TestRunCreate(test_setup_id=test_id, **request.model_dump())
+        TestRunCreate(test_setup_id=test_id, **request_data.model_dump())
     )
 
     exception = None
 
     match test_setup.type:
         case TestType.SHUFFLED_AI:
-            if not request.answering_model:
+            if not request_data.answering_model:
                 exception = HTTPException(
                     status_code=400,
                     detail="Answering model is required for SHUFFLED_AI test type",
@@ -176,20 +177,21 @@ async def run_synthetic_test(
             background_tasks.add_task(
                 handle_exceptions(run_synthesis_job_shuffled_ai),
                 project_id=str(project_id),
+                user_token=request.cookies["token"],
                 background_info_options=test_setup.background_info,
-                n_interviews=request.n_interviews,
-                answering_model=request.answering_model,
-                language=request.language,
-                delay_before_answer=request.delay_before_answers,
+                n_interviews=request_data.n_interviews,
+                answering_model=request_data.answering_model,
+                language=request_data.language,
+                delay_before_answer=request_data.delay_before_answers,
             )
         case TestType.FIXED_ANSWERS:
             background_tasks.add_task(
                 handle_exceptions(run_synthesis_job_fixed_answers),
                 project_id=str(project_id),
                 fixed_answers=test_setup.fixed_answers,
-                n_interviews=request.n_interviews,
-                language=request.language,
-                delay_before_answer=request.delay_before_answers,
+                n_interviews=request_data.n_interviews,
+                language=request_data.language,
+                delay_before_answer=request_data.delay_before_answers,
             )
 
         case TestType.FIXED_AI:
@@ -209,6 +211,6 @@ async def run_synthetic_test(
 
     return SynthesizeResponse(
         project_id=project_id,
-        message=f"Synthesis job started with {request.n_interviews} interviews",
+        message=f"Synthesis job started with {request_data.n_interviews} interviews",
         status="initializing",
     )

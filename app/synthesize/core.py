@@ -22,7 +22,6 @@ from ainterviewer.agents import AnsweringAgent
 from ainterviewer.interfaces import OutgoingData, OutgoingMessage, ReceivedData
 from ainterviewer.lpm.clients import chat
 from ainterviewer.lpm.types import CustomTokens
-from ainterviewer.settings import settings
 from ainterviewer.synthesize.interviewees import (
     BackgroundInfoOptions,
     generate_synthetic_persons,
@@ -46,7 +45,7 @@ async def fetch_token(
 
     query_params = get_function_signature_as_query_params(fetch_token, func_locals)
 
-    url = f"http://{settings.app.ainterviewer_host}/api/projects/{interview_id}/interviews?{query_params}"
+    url = f"http://{app_settings.app.api_endpoint}/api/projects/{interview_id}/{language}/interviews?{query_params}"
 
     cookies = {"language": language}
     headers = {
@@ -85,6 +84,7 @@ async def _connect_and_yield_messages(
 
 async def run_synthetic_answering_agent(
     agent: AnsweringAgent,
+    user_token: str,
     project_id: str,
     language: Optional[LanguageCode] = None,
     delay_before_answer: Optional[tuple[float, float]] = None,
@@ -95,6 +95,7 @@ async def run_synthetic_answering_agent(
                 data = OutgoingData(**json_data)  # for validation purposes
                 if interview_id := data.interview_id:
                     await add_interviewee(
+                        user_token=user_token,
                         project_id=project_id,
                         interview_id=interview_id,
                         interviewee=agent.interview_subject.model_dump(mode="json"),
@@ -162,22 +163,27 @@ async def _send_response(
 
 
 async def add_interviewee(
-    project_id: str | UUID4, interview_id: str | UUID4, interviewee: dict[str, Any]
+    user_token: str,
+    project_id: str | UUID4,
+    interview_id: str | UUID4,
+    interviewee: dict[str, Any],
 ):
     async with aiohttp.ClientSession() as session:
         async with session.post(
             f"http://{app_settings.app.api_endpoint}/api/interviewee",
             json={
-                "project_id": project_id,
-                "interview_id": interview_id,
+                "project_id": str(project_id),
+                "interview_id": str(interview_id),
                 "interview_subject": interviewee,
             },
+            cookies={"token": user_token},
         ) as response:
             response.raise_for_status()
 
 
 async def run_synthesis_job_shuffled_ai(
     project_id: str,
+    user_token: str,
     background_info_options: BackgroundInfoOptions,
     n_interviews: int,
     answering_model: str,
@@ -195,7 +201,7 @@ async def run_synthesis_job_shuffled_ai(
                 messages, model=answering_model, **kwargs
             ),
             interview_subject=subject,
-            language=language if language != "EN" else None,
+            language=language,
         )
         agents.append(agent)
 
@@ -205,6 +211,7 @@ async def run_synthesis_job_shuffled_ai(
         task = asyncio.create_task(
             run_synthetic_answering_agent(
                 agent=agent,
+                user_token=user_token,
                 project_id=project_id,
                 language=language,
                 delay_before_answer=delay_before_answer,
