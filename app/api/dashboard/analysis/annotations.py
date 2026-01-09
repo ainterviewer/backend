@@ -1,19 +1,15 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import UUID4
 
-from ...db.models import (
+from ....db.models import (
     AnalysisCategoryCreate,
     AnalysisCategoryPublic,
     MessageAnnotationCreate,
     MessageAnnotationPublic,
 )
-from ...dependencies import DBSession, UserToken
-from ..response_models import ErrorResponse
+from ....dependencies import DBSession, UserToken
 
-router = APIRouter(
-    responses={400: {"description": "Invalid request", "model": ErrorResponse}},
-    tags=["analysis"],
-)
+router = APIRouter()
 
 
 @router.get("/projects/{project_id}/analysis/categories")
