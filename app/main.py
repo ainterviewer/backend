@@ -61,12 +61,14 @@ app.add_middleware(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[app_settings.sveltekit_addr],
+    allow_origins=[
+        app_settings.sveltekit_platform_addr,
+        app_settings.sveltekit_website_addr,
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 app.include_router(api.router)
 app.include_router(ws.router)
 

@@ -121,14 +121,24 @@ class Settings(BaseSettings):
     )
 
     @property
-    def sveltekit_addr(self) -> str:
+    def sveltekit_platform_addr(self) -> str:
         match self.app_env:
             case "development":
-                return "localhost:5713"
+                return "http://localhost:5173"
             case "staging":
-                return "localhost:4001"
+                return "http://localhost:4001"
             case "production":
-                return "localhost:3001"
+                return "http://localhost:3001"
+
+    @property
+    def sveltekit_website_addr(self) -> str:
+        match self.app_env:
+            case "development":
+                return "http://localhost:5174"
+            case "staging":
+                return "http://localhost:4000"
+            case "production":
+                return "http://localhost:3000"
 
     @classmethod
     def settings_customise_sources(
