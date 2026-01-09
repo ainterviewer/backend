@@ -12,6 +12,7 @@ from ainterviewer.interfaces import (
 from ainterviewer.settings import settings
 from ainterviewer.types import MessageRole, MessageType
 
+from .embed.main import EmbeddingTask, message_queue
 from .types import WebSocketConversation, WebSocketUsers
 
 
@@ -24,14 +25,33 @@ class WebsocketMessageHandler(IOProtocol):
     async def send_data(self, data: OutgoingData | OutgoingMessage):
         await self.ws.send_json(data.model_dump())
 
+        if isinstance(data, OutgoingMessage):
+            # Add to embedding queue
+            embedding_task = EmbeddingTask(
+                message_id=data.message_id,
+                content=data.content,
+                priority=0,
+            )
+            await message_queue.enqueue(embedding_task)
+
     async def receive_message(
-        self, message_type: MessageType | None = None
+        self,
+        message_id: int,
+        message_type: MessageType | None = None,
     ) -> tuple[str, MessageType]:
         data = ReceivedData(**await self.ws.receive_json())
 
         if data.type == "message":
             text = data.content
             message_type = MessageType.TEXT if not message_type else message_type
+
+            # Add to embedding queue
+            embedding_task = EmbeddingTask(
+                message_id=message_id,
+                content=text,
+                priority=1,
+            )
+            await message_queue.enqueue(embedding_task)
 
         elif data.type == "image":
             # NOTE: The actual images are send over API, and the path is send
@@ -55,8 +75,6 @@ class WebsocketMessageHandler(IOProtocol):
             )
         else:
             raise ValueError("Invalid message type")
-
-        text: str
 
         return text, message_type or data.type
 
