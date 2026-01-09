@@ -14,6 +14,7 @@ from ainterviewer.types import DatabaseType
 from ..settings import app_settings
 from .crud import InterviewDataBase
 from .models import UserCreate
+from .vectors import register_vector_extension
 
 
 def parse_args():
@@ -171,6 +172,7 @@ if __name__ == "__main__":
     args = parse_args()
 
     engine = create_engine(app_settings.database.connection_string, echo=True)
+    register_vector_extension(engine)
     print(f"Connecting to database at {app_settings.database.connection_string}")
 
     session = Session(engine)

@@ -14,6 +14,7 @@ from ainterviewer.types import LanguageCode
 
 from .auth import AuthToken, decode_auth_token
 from .db import InterviewDataBase
+from .db.vectors import register_vector_extension
 from .settings import app_settings
 from .types import Scope
 from .websockets import WebSocketConnectionManager
@@ -45,13 +46,16 @@ engine = create_engine(
     pool_size=20,
     max_overflow=40,
 )
+register_vector_extension(engine)
+
 # TODO:
 # - Should probably be async instead
 # - get_db should yield a session instead, update crud manager accordingly,
 # greatly reduces the number of required lines of code
-#
+# - encrypt data with SQLCipher
 # NOTE:
 # Pragmas implemented in create_db_and_tables
+#
 
 
 class AuthError(HTTPException): ...
