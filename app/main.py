@@ -53,6 +53,7 @@ logger.addHandler(rich_handler)
 
 app = FastAPI(title="AInterviewer", version=__version__)
 
+# Middleware
 app.add_middleware(
     SessionMiddleware,
     secret_key=app_settings.secrets.session_secret_key.get_secret_value(),
@@ -69,6 +70,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Routers
 app.include_router(api.router)
 app.include_router(ws.router)
 
@@ -90,6 +93,9 @@ async def custom_exception_handler(request: Request, exc: Exception):
 async def http_redirect(request: Request, exc: AuthError):
     if request.url.path.startswith("/api"):
         raise exc
+    # TODO:
+    # I think this is redundant since we now use SvelteKit as frontend, and
+    # capture the redirect there.
     if exc.status_code == 401 or exc.status_code == 403:
         return RedirectResponse(url="/login")
     raise exc

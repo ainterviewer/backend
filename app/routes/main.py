@@ -1,3 +1,5 @@
+# NOTE:
+# This is old code from when the frontend was also hosted by the same FastAPI
 import copy
 import json
 import os
