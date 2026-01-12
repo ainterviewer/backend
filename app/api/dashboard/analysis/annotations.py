@@ -4,6 +4,7 @@ from pydantic import UUID4
 from ....db.models import (
     AnalysisCategoryCreate,
     AnalysisCategoryPublic,
+    FilteredMessagesRequest,
     MessageAnnotationCreate,
     MessageAnnotationPublic,
     MessagePublic,
@@ -101,21 +102,39 @@ async def delete_message_annotation(
     db.analysis.delete_message_annotation(annotation_id)
 
 
-@router.get("/analysis/categories/{category_id}/count")
-async def get_annotated_messages_count(
-    category_id: UUID4,
+@router.post("/analysis/{project_id}/messages/count")
+async def get_filtered_messages_count(
+    project_id: UUID4,
+    filters: FilteredMessagesRequest,
     db: DBSession,
     jwt: UserToken,
 ) -> int:
-    return db.analysis.count_messages_by_category(category_id)
+    return db.analysis.count_filtered_messages(
+        project_id,
+        category_ids=filters.category_ids,
+        search_text=filters.search_text,
+        exact_match=filters.exact_match,
+        case_sensitive=filters.case_sensitive,
+        questions=filters.questions,
+    )
 
 
-@router.get("/analysis/categories/{category_id}/messages")
-async def get_annotated_messages(
-    category_id: UUID4,
+@router.post("/analysis/{project_id}/messages")
+async def get_filtered_messages(
+    project_id: UUID4,
+    filters: FilteredMessagesRequest,
     db: DBSession,
     jwt: UserToken,
     skip: int = 0,
     limit: int = 20,
 ) -> list[MessagePublic]:
-    return db.analysis.get_messages_by_category(category_id, skip, limit)
+    return db.analysis.get_filtered_messages(
+        project_id,
+        skip,
+        limit,
+        category_ids=filters.category_ids,
+        search_text=filters.search_text,
+        exact_match=filters.exact_match,
+        case_sensitive=filters.case_sensitive,
+        questions=filters.questions,
+    )

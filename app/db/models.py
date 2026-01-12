@@ -456,6 +456,14 @@ class AnalysisCategoryPublic(AnalysisCategoryBase):
     created_at: datetime
 
 
+class FilteredMessagesRequest(_BaseModel):
+    category_ids: List[UUID4] | None = None
+    search_text: str | None = None
+    exact_match: bool = False
+    case_sensitive: bool = False
+    questions: list[tuple[int, int]] | None = None
+
+
 class AnnotationValueBase(_BaseModel):
     category_id: UUID4
     value_int: int

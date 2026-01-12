@@ -1,5 +1,5 @@
 from pydantic import UUID4
-from sqlalchemy import delete, distinct, func, select
+from sqlalchemy import delete, distinct, func, select, or_
 from sqlalchemy.orm import selectinload
 
 from ainterviewer.utils import now
@@ -72,24 +72,100 @@ class AnalysisRepository(BaseRepository):
         self.session.delete(category)
         self.session.commit()
 
-    def count_messages_by_category(self, category_id: UUID4) -> int:
-        statement = (
-            select(func.count(distinct(MessageTable.id)))
-            .join(MessageTable.annotations)
-            .join(MessageAnnotationTable.values)
-            .where(AnnotationValueTable.category_id == category_id)
+    def _apply_search_filter(
+        self,
+        statement,
+        search_text: str | None,
+        exact_match: bool,
+        case_sensitive: bool,
+    ):
+        if search_text:
+            if exact_match:
+                if case_sensitive:
+                    return statement.where(MessageTable.content == search_text)
+                else:
+                    return statement.where(
+                        func.lower(MessageTable.content) == search_text.lower()
+                    )
+            else:
+                if case_sensitive:
+                    return statement.where(
+                        MessageTable.content.like(f"%{search_text}%")
+                    )
+                else:
+                    return statement.where(
+                        MessageTable.content.ilike(f"%{search_text}%")
+                    )
+        return statement
+
+    def _apply_questions_filter(
+        self,
+        statement,
+        questions: list[tuple[int, int]] | None,
+    ):
+        if questions:
+            question_filters = [
+                (MessageTable.section == section)
+                & (MessageTable.main_question == main_question)
+                for section, main_question in questions
+            ]
+            if question_filters:
+                return statement.where(or_(*question_filters))
+        return statement
+
+    def count_filtered_messages(
+        self,
+        project_id: UUID4,
+        category_ids: list[UUID4] | None = None,
+        search_text: str | None = None,
+        exact_match: bool = False,
+        case_sensitive: bool = False,
+        questions: list[tuple[int, int]] | None = None,
+    ) -> int:
+        statement = select(func.count(distinct(MessageTable.id))).where(
+            MessageTable.project_id == project_id
         )
+
+        if category_ids is not None:
+            statement = (
+                statement.join(MessageTable.annotations)
+                .join(MessageAnnotationTable.values)
+                .where(AnnotationValueTable.category_id.in_(category_ids))
+            )
+
+        statement = self._apply_search_filter(
+            statement, search_text, exact_match, case_sensitive
+        )
+        statement = self._apply_questions_filter(statement, questions)
         return self.session.execute(statement).scalar_one()
 
-    def get_messages_by_category(
-        self, category_id: UUID4, skip: int, limit: int
+    def get_filtered_messages(
+        self,
+        project_id: UUID4,
+        skip: int,
+        limit: int,
+        category_ids: list[UUID4] | None = None,
+        search_text: str | None = None,
+        exact_match: bool = False,
+        case_sensitive: bool = False,
+        questions: list[tuple[int, int]] | None = None,
     ) -> list[MessagePublic]:
+        statement = select(MessageTable).where(MessageTable.project_id == project_id)
+
+        if category_ids:
+            statement = (
+                statement.join(MessageTable.annotations)
+                .join(MessageAnnotationTable.values)
+                .where(AnnotationValueTable.category_id.in_(category_ids))
+            )
+
+        statement = self._apply_search_filter(
+            statement, search_text, exact_match, case_sensitive
+        )
+        statement = self._apply_questions_filter(statement, questions)
+
         statement = (
-            select(MessageTable)
-            .join(MessageTable.annotations)
-            .join(MessageAnnotationTable.values)
-            .where(AnnotationValueTable.category_id == category_id)
-            .distinct()
+            statement.distinct()
             .offset(skip)
             .limit(limit)
             .options(
