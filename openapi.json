@@ -503,13 +503,13 @@
                 }
             }
         },
-        "/api/analysis/categories/{category_id}/count": {
-            "get": {
+        "/api/analysis/{project_id}/messages/count": {
+            "post": {
                 "tags": [
                     "analysis"
                 ],
-                "summary": "Get Annotated Messages Count",
-                "operationId": "get_annotated_messages_count",
+                "summary": "Get Filtered Messages Count",
+                "operationId": "get_filtered_messages_count",
                 "security": [
                     {
                         "APIKeyCookie": []
@@ -517,16 +517,26 @@
                 ],
                 "parameters": [
                     {
-                        "name": "category_id",
+                        "name": "project_id",
                         "in": "path",
                         "required": true,
                         "schema": {
                             "type": "string",
                             "format": "uuid4",
-                            "title": "Category Id"
+                            "title": "Project Id"
                         }
                     }
                 ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FilteredMessagesRequest"
+                            }
+                        }
+                    }
+                },
                 "responses": {
                     "200": {
                         "description": "Successful Response",
@@ -534,7 +544,7 @@
                             "application/json": {
                                 "schema": {
                                     "type": "integer",
-                                    "title": "Response Get Annotated Messages Count"
+                                    "title": "Response Get Filtered Messages Count"
                                 }
                             }
                         }
@@ -562,13 +572,13 @@
                 }
             }
         },
-        "/api/analysis/categories/{category_id}/messages": {
-            "get": {
+        "/api/analysis/{project_id}/messages": {
+            "post": {
                 "tags": [
                     "analysis"
                 ],
-                "summary": "Get Annotated Messages",
-                "operationId": "get_annotated_messages",
+                "summary": "Get Filtered Messages",
+                "operationId": "get_filtered_messages",
                 "security": [
                     {
                         "APIKeyCookie": []
@@ -576,13 +586,13 @@
                 ],
                 "parameters": [
                     {
-                        "name": "category_id",
+                        "name": "project_id",
                         "in": "path",
                         "required": true,
                         "schema": {
                             "type": "string",
                             "format": "uuid4",
-                            "title": "Category Id"
+                            "title": "Project Id"
                         }
                     },
                     {
@@ -606,6 +616,16 @@
                         }
                     }
                 ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FilteredMessagesRequest"
+                            }
+                        }
+                    }
+                },
                 "responses": {
                     "200": {
                         "description": "Successful Response",
@@ -616,7 +636,7 @@
                                     "items": {
                                         "$ref": "#/components/schemas/MessagePublic"
                                     },
-                                    "title": "Response Get Annotated Messages"
+                                    "title": "Response Get Filtered Messages"
                                 }
                             }
                         }
@@ -1988,7 +2008,7 @@
                     "content": {
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image"
+                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image__1"
                             }
                         }
                     }
@@ -3899,7 +3919,7 @@
                     "content": {
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image__2"
+                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image"
                             }
                         }
                     },
@@ -4252,7 +4272,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "get": {
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -4384,7 +4404,7 @@
                     }
                 }
             },
-            "delete": {
+            "get": {
                 "tags": [
                     "admin"
                 ],
@@ -4428,7 +4448,7 @@
                     }
                 }
             },
-            "post": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -5736,6 +5756,72 @@
                 ],
                 "title": "Feedback",
                 "type": "string"
+            },
+            "FilteredMessagesRequest": {
+                "properties": {
+                    "category_ids": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Category Ids"
+                    },
+                    "search_text": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Search Text"
+                    },
+                    "exact_match": {
+                        "type": "boolean",
+                        "title": "Exact Match",
+                        "default": false
+                    },
+                    "case_sensitive": {
+                        "type": "boolean",
+                        "title": "Case Sensitive",
+                        "default": false
+                    },
+                    "questions": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "prefixItems": [
+                                        {
+                                            "type": "integer"
+                                        },
+                                        {
+                                            "type": "integer"
+                                        }
+                                    ],
+                                    "type": "array",
+                                    "maxItems": 2,
+                                    "minItems": 2
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Questions"
+                    }
+                },
+                "type": "object",
+                "title": "FilteredMessagesRequest"
             },
             "HTTPValidationError": {
                 "properties": {
@@ -7919,6 +8005,32 @@
             },
             "fastapi___compat__v2__Body_upload_image": {
                 "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Project Id"
+                    },
+                    "interview_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Interview Id"
+                    },
+                    "file": {
+                        "type": "string",
+                        "format": "binary",
+                        "title": "File"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "project_id",
+                    "interview_id",
+                    "file"
+                ],
+                "title": "Body_upload_image"
+            },
+            "fastapi___compat__v2__Body_upload_image__1": {
+                "properties": {
                     "primer": {
                         "type": "string",
                         "title": "Primer"
@@ -7942,32 +8054,6 @@
                     "primer",
                     "description",
                     "alt",
-                    "file"
-                ],
-                "title": "Body_upload_image"
-            },
-            "fastapi___compat__v2__Body_upload_image__2": {
-                "properties": {
-                    "project_id": {
-                        "type": "string",
-                        "format": "uuid4",
-                        "title": "Project Id"
-                    },
-                    "interview_id": {
-                        "type": "string",
-                        "format": "uuid4",
-                        "title": "Interview Id"
-                    },
-                    "file": {
-                        "type": "string",
-                        "format": "binary",
-                        "title": "File"
-                    }
-                },
-                "type": "object",
-                "required": [
-                    "project_id",
-                    "interview_id",
                     "file"
                 ],
                 "title": "Body_upload_image"
