@@ -10,6 +10,7 @@ import json
 import platform
 import random
 from typing import Any, AsyncGenerator, Optional
+from urllib.parse import urlencode
 
 import aiohttp
 from pydantic import UUID4
@@ -27,8 +28,8 @@ from ainterviewer.synthesize.interviewees import (
     generate_synthetic_persons,
 )
 from ainterviewer.types import LanguageCode, TestType
-from ainterviewer.utils import get_function_signature_as_query_params
 
+from ..db.types import InterviewType
 from ..settings import app_settings
 
 
@@ -36,14 +37,21 @@ async def fetch_token(
     interview_id: str,
     lang: Optional[LanguageCode] = None,
     test_type: TestType | None = None,
-    synthetic: bool = True,
 ) -> str:
     "function args are automatically converted to query params"
     func_locals = locals()
     interview_id = func_locals.pop("interview_id")
     language = func_locals.pop("lang")
 
-    query_params = get_function_signature_as_query_params(fetch_token, func_locals)
+    # TODO: Check the all query params are correctly passed
+    # query_params = get_function_signature_as_query_params(fetch_token, func_locals)
+
+    query_params = urlencode(
+        {
+            "test_type": test_type,
+            "interview_type": InterviewType.SYNTHETIC,
+        }
+    )
 
     url = f"http://{app_settings.app.api_endpoint}/api/projects/{interview_id}/{language}/interviews?{query_params}"
 

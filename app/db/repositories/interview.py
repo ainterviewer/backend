@@ -43,8 +43,6 @@ class InterviewRepository(BaseRepository):
             interview_guide=interview_guide,
             type=interview_type,
             interviewer=interviewer,
-            is_synthetic=synthetic,
-            is_test=test,
             **kwargs,
         )
 
