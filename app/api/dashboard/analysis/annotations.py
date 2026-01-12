@@ -6,6 +6,7 @@ from ....db.models import (
     AnalysisCategoryPublic,
     MessageAnnotationCreate,
     MessageAnnotationPublic,
+    MessagePublic,
 )
 from ....dependencies import DBSession, UserToken
 
@@ -98,3 +99,23 @@ async def delete_message_annotation(
     jwt: UserToken,
 ):
     db.analysis.delete_message_annotation(annotation_id)
+
+
+@router.get("/analysis/categories/{category_id}/count")
+async def get_annotated_messages_count(
+    category_id: UUID4,
+    db: DBSession,
+    jwt: UserToken,
+) -> int:
+    return db.analysis.count_messages_by_category(category_id)
+
+
+@router.get("/analysis/categories/{category_id}/messages")
+async def get_annotated_messages(
+    category_id: UUID4,
+    db: DBSession,
+    jwt: UserToken,
+    skip: int = 0,
+    limit: int = 20,
+) -> list[MessagePublic]:
+    return db.analysis.get_messages_by_category(category_id, skip, limit)

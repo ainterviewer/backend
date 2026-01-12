@@ -1,5 +1,6 @@
 from pydantic import UUID4
-from sqlalchemy import delete, select
+from sqlalchemy import delete, distinct, func, select
+from sqlalchemy.orm import selectinload
 
 from ainterviewer.utils import now
 
@@ -8,8 +9,14 @@ from ..models import (
     AnalysisCategoryPublic,
     MessageAnnotationCreate,
     MessageAnnotationPublic,
+    MessagePublic,
 )
-from ..tables import AnalysisCategoryTable, AnnotationValueTable, MessageAnnotationTable
+from ..tables import (
+    AnalysisCategoryTable,
+    AnnotationValueTable,
+    MessageAnnotationTable,
+    MessageTable,
+)
 from .base import BaseRepository
 
 
@@ -64,6 +71,36 @@ class AnalysisRepository(BaseRepository):
         category = self.session.execute(statement).scalar_one()
         self.session.delete(category)
         self.session.commit()
+
+    def count_messages_by_category(self, category_id: UUID4) -> int:
+        statement = (
+            select(func.count(distinct(MessageTable.id)))
+            .join(MessageTable.annotations)
+            .join(MessageAnnotationTable.values)
+            .where(AnnotationValueTable.category_id == category_id)
+        )
+        return self.session.execute(statement).scalar_one()
+
+    def get_messages_by_category(
+        self, category_id: UUID4, skip: int, limit: int
+    ) -> list[MessagePublic]:
+        statement = (
+            select(MessageTable)
+            .join(MessageTable.annotations)
+            .join(MessageAnnotationTable.values)
+            .where(AnnotationValueTable.category_id == category_id)
+            .distinct()
+            .offset(skip)
+            .limit(limit)
+            .options(
+                selectinload(MessageTable.annotations).selectinload(
+                    MessageAnnotationTable.values
+                ),
+                selectinload(MessageTable.interview),
+            )
+        )
+        messages = self.session.execute(statement).scalars().all()
+        return [MessagePublic.model_validate(message) for message in messages]
 
     # ==================== Message Annotation Methods ====================
 
