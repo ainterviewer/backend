@@ -196,12 +196,16 @@ class ProjectTable(Base):
     )
 
     # Relationships
-    interviews: Mapped[list["InterviewTable"]] = relationship(back_populates="project")
+    interviews: Mapped[list["InterviewTable"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
     localizations: Mapped[list["ProjectLocalizationTable"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
     folder: Mapped["ProjectFolderTable"] = relationship(back_populates="projects")
-    tests: Mapped[list["TestSetupTable"]] = relationship(back_populates="project")
+    tests: Mapped[list["TestSetupTable"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
     analysis_categories: Mapped[list["AnalysisCategoryTable"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
@@ -337,7 +341,9 @@ class InterviewTable(Base):
     experiment: Mapped[Optional["ExperimentTable"]] = relationship(
         back_populates="interviews"
     )
-    messages: Mapped[list["MessageTable"]] = relationship(back_populates="interview")
+    messages: Mapped[list["MessageTable"]] = relationship(
+        back_populates="interview", cascade="all, delete-orphan"
+    )
 
     @hybrid_property
     def n_messages(self) -> int:
@@ -472,7 +478,9 @@ class TestSetupTable(Base):
     fixed_personas: Mapped[Any | None] = mapped_column(JSON)
 
     # Relationships
-    test_runs: Mapped[list["TestRunTable"]] = relationship(back_populates="test_setup")
+    test_runs: Mapped[list["TestRunTable"]] = relationship(
+        back_populates="test_setup", cascade="all, delete-orphan"
+    )
     project: Mapped["ProjectTable"] = relationship(back_populates="tests")
 
     @hybrid_property
