@@ -255,7 +255,9 @@ class InterviewRepository(BaseRepository):
         self.session.refresh(message)
 
     def get_messages(
-        self, interview_id: UUID4, project_id: UUID4
+        self,
+        interview_id: UUID4,
+        project_id: UUID4,
     ) -> list[MessagePublic]:
         statement = (
             select(MessageTable)
