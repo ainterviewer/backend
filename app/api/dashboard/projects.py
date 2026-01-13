@@ -416,7 +416,7 @@ async def get_interviews(
     interview_types: Annotated[list[InterviewType] | None, Query()] = None,
     created_at: Annotated[datetime.datetime | None, Query] = None,
     completed: Annotated[bool | None, Query] = None,
-):
+) -> PaginatedResponse[InterviewSummaryPublic]:
     interviews, total = db.interviews.get_interviews(
         project_id,
         with_messages=True,

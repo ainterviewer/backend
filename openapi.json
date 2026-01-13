@@ -2750,7 +2750,9 @@
                         "description": "Successful Response",
                         "content": {
                             "application/json": {
-                                "schema": {}
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedResponse_InterviewSummaryPublic_"
+                                }
                             }
                         }
                     },
@@ -4272,50 +4274,6 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "post": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
             "put": {
                 "tags": [
                     "admin"
@@ -4360,7 +4318,7 @@
                     }
                 }
             },
-            "patch": {
+            "get": {
                 "tags": [
                     "admin"
                 ],
@@ -4404,7 +4362,51 @@
                     }
                 }
             },
-            "get": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
                 "tags": [
                     "admin"
                 ],
@@ -6125,6 +6127,79 @@
                 "title": "InterviewSubject",
                 "description": "Dataclass representing the interview subject"
             },
+            "InterviewSummaryPublic": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Id"
+                    },
+                    "language": {
+                        "$ref": "#/components/schemas/LanguageCode",
+                        "default": "EN"
+                    },
+                    "interviewer": {
+                        "$ref": "#/components/schemas/Interviewer",
+                        "default": "ai"
+                    },
+                    "is_complete": {
+                        "type": "boolean",
+                        "title": "Is Complete",
+                        "default": false
+                    },
+                    "is_active": {
+                        "type": "boolean",
+                        "title": "Is Active",
+                        "default": false
+                    },
+                    "is_synthetic": {
+                        "type": "boolean",
+                        "title": "Is Synthetic",
+                        "default": false
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Created At"
+                    },
+                    "last_updated": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Last Updated"
+                    },
+                    "total_time_spent": {
+                        "type": "integer",
+                        "title": "Total Time Spent",
+                        "default": 0
+                    },
+                    "n_messages": {
+                        "type": "integer",
+                        "title": "N Messages"
+                    },
+                    "messages": {
+                        "items": {
+                            "$ref": "#/components/schemas/MessagePublic"
+                        },
+                        "type": "array",
+                        "title": "Messages"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "id",
+                    "created_at",
+                    "n_messages",
+                    "messages"
+                ],
+                "title": "InterviewSummaryPublic"
+            },
             "InterviewType": {
                 "type": "string",
                 "enum": [
@@ -6531,6 +6606,27 @@
                 ],
                 "title": "MessageType",
                 "type": "string"
+            },
+            "PaginatedResponse_InterviewSummaryPublic_": {
+                "properties": {
+                    "total": {
+                        "type": "integer",
+                        "title": "Total"
+                    },
+                    "items": {
+                        "items": {
+                            "$ref": "#/components/schemas/InterviewSummaryPublic"
+                        },
+                        "type": "array",
+                        "title": "Items"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "total",
+                    "items"
+                ],
+                "title": "PaginatedResponse[InterviewSummaryPublic]"
             },
             "ProbingAgentConfig": {
                 "properties": {
