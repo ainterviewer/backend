@@ -5,8 +5,9 @@ default:
 dev:
     bash -c 'uv run -m fastapi dev app/main.py --port 8666'
 
-generate-openapi:
-    python -m app.cli generate-openapi-scheme
+generate-sdk:
+    uv run -m app.cli generate-openapi-scheme
+    bunx @hey-api/openapi-ts --input "openapi.json" --output "../frontend/src/lib/api" --file "../frontend/openapi-ts.config.ts"
 
 [group("Database")]
 setup-db:
