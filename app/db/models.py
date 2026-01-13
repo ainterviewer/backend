@@ -288,7 +288,7 @@ class InterviewSummaryPublic(_BaseModel):
     interviewer: Interviewer = Interviewer.AI
     is_complete: bool = False
     is_active: bool = False
-    is_synthetic: bool = False
+    type: InterviewType
     created_at: datetime
     last_updated: Optional[datetime] = None
     total_time_spent: int = 0
