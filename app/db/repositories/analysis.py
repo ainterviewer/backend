@@ -1,5 +1,5 @@
 from pydantic import UUID4
-from sqlalchemy import delete, distinct, func, select, or_
+from sqlalchemy import delete, distinct, exists, func, select, or_
 from sqlalchemy.orm import selectinload
 
 from ainterviewer.utils import now
@@ -113,6 +113,60 @@ class AnalysisRepository(BaseRepository):
                 return statement.where(or_(*question_filters))
         return statement
 
+    def _load_context(self, statement, context_before: bool, context_after: bool):
+        """Fetches related messages, context_before returns all messages
+        to and with the previous main_question and after_context returns all
+        messages up to the next main question"""
+
+        if not context_before and not context_after:
+            return statement
+
+        # Convert current statement to a subquery to get matched messages
+        matched_messages = statement.subquery("matched")
+
+        # Build conditions for the expanded query
+        conditions = [
+            # Include all originally matched messages
+            MessageTable.id.in_(select(matched_messages.c.id))
+        ]
+
+        if context_before:
+            # Include messages from previous main_question
+            conditions.append(
+                exists(
+                    select(1)
+                    .select_from(matched_messages)
+                    .where(
+                        (MessageTable.project_id == matched_messages.c.project_id)
+                        & (MessageTable.section == matched_messages.c.section)
+                        & (
+                            MessageTable.main_question
+                            == matched_messages.c.main_question - 1
+                        )
+                    )
+                )
+            )
+
+        if context_after:
+            # Include messages from next main_question
+            conditions.append(
+                exists(
+                    select(1)
+                    .select_from(matched_messages)
+                    .where(
+                        (MessageTable.project_id == matched_messages.c.project_id)
+                        & (MessageTable.section == matched_messages.c.section)
+                        & (
+                            MessageTable.main_question
+                            == matched_messages.c.main_question + 1
+                        )
+                    )
+                )
+            )
+
+        # Return new statement with all conditions
+        return select(MessageTable).where(or_(*conditions))
+
     def count_filtered_messages(
         self,
         project_id: UUID4,
@@ -144,6 +198,8 @@ class AnalysisRepository(BaseRepository):
         project_id: UUID4,
         skip: int,
         limit: int,
+        context_before: bool = False,
+        context_after: bool = False,
         category_ids: list[UUID4] | None = None,
         search_text: str | None = None,
         exact_match: bool = False,
@@ -163,6 +219,7 @@ class AnalysisRepository(BaseRepository):
             statement, search_text, exact_match, case_sensitive
         )
         statement = self._apply_questions_filter(statement, questions)
+        statement = self._load_context(statement, context_before, context_after)
 
         statement = (
             statement.distinct()
@@ -176,6 +233,60 @@ class AnalysisRepository(BaseRepository):
             )
         )
         messages = self.session.execute(statement).scalars().all()
+        return [MessagePublic.model_validate(message) for message in messages]
+
+    def get_message_context(
+        self,
+        project_id: UUID4,
+        interview_id: UUID4,
+        message_id: UUID4,
+        context_before: bool = False,
+        context_after: bool = False,
+    ) -> list[MessagePublic]:
+        # First, get the target message to determine its section, main_question, and timestamp
+        target_statement = select(MessageTable).where(
+            MessageTable.project_id == project_id,
+            MessageTable.interview_id == interview_id,
+            MessageTable.id == message_id,
+        )
+        target_message = self.session.execute(target_statement).scalar_one()
+
+        # Build base conditions
+        conditions = [
+            MessageTable.project_id == project_id,
+            MessageTable.interview_id == interview_id,
+            MessageTable.section == target_message.section,
+            MessageTable.main_question == target_message.main_question,
+        ]
+
+        # Add time-based filtering based on context flags
+        if not context_before and not context_after:
+            # Just return the target message
+            conditions.append(MessageTable.id == message_id)
+        elif context_before and context_after:
+            # Return all messages in the current main_question except the target
+            conditions.append(MessageTable.id != message_id)
+        elif context_before:
+            # Messages before (not including) the target message
+            conditions.append(MessageTable.created_at < target_message.created_at)
+        elif context_after:
+            # Messages after (not including) the target message
+            conditions.append(MessageTable.created_at > target_message.created_at)
+
+        # Query for messages
+        statement = (
+            select(MessageTable)
+            .where(*conditions)
+            .order_by(MessageTable.created_at)
+            .options(
+                selectinload(MessageTable.annotations).selectinload(
+                    MessageAnnotationTable.values
+                ),
+                selectinload(MessageTable.interview),
+            )
+        )
+        messages = self.session.execute(statement).scalars().all()
+
         return [MessagePublic.model_validate(message) for message in messages]
 
     # ==================== Message Annotation Methods ====================

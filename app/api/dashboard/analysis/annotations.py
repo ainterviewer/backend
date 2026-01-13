@@ -1,3 +1,4 @@
+from zmq.decorators import context
 from fastapi import APIRouter, HTTPException
 from pydantic import UUID4
 
@@ -137,4 +138,40 @@ async def get_filtered_messages(
         exact_match=filters.exact_match,
         case_sensitive=filters.case_sensitive,
         questions=filters.questions,
+    )
+
+
+@router.post(
+    "/analysis/{project_id}/interviews/{interview_id}/messages/{message_id}/context_before"
+)
+async def get_message_context_before(
+    project_id: UUID4,
+    interview_id: UUID4,
+    message_id: UUID4,
+    db: DBSession,
+    jwt: UserToken,
+) -> list[MessagePublic]:
+    return db.analysis.get_message_context(
+        project_id,
+        interview_id,
+        message_id,
+        context_before=True,
+    )
+
+
+@router.post(
+    "/analysis/{project_id}/interviews/{interview_id}/messages/{message_id}/context_after"
+)
+async def get_message_context_after(
+    project_id: UUID4,
+    interview_id: UUID4,
+    message_id: UUID4,
+    db: DBSession,
+    jwt: UserToken,
+) -> list[MessagePublic]:
+    return db.analysis.get_message_context(
+        project_id,
+        interview_id,
+        message_id,
+        context_after=True,
     )
