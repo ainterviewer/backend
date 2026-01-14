@@ -2116,7 +2116,135 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/InterviewGuideGenerationPromptRequest"
+                                "$ref": "#/components/schemas/InterviewGuideGenerationRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/projects/{project_id}/{lang}/guide/section/generate": {
+            "post": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "Generate Guide Section",
+                "operationId": "generate_guide_section",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid4",
+                            "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "lang",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/components/schemas/LanguageCode"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/QuestionSectionGenerationRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/projects/{project_id}/{lang}/guide/section/question/generate": {
+            "post": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "Generate Section Question",
+                "operationId": "generate_section_question",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid4",
+                            "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "lang",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/components/schemas/LanguageCode"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/QuestionGenerationRequest"
                             }
                         }
                     }
@@ -2172,7 +2300,7 @@
                     "content": {
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image"
+                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image__1"
                             }
                         }
                     }
@@ -4085,7 +4213,7 @@
                     "content": {
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image__2"
+                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image"
                             }
                         }
                     },
@@ -4096,7 +4224,55 @@
                         "description": "Successful Response",
                         "content": {
                             "application/json": {
-                                "schema": {}
+                                "schema": {
+                                    "$ref": "#/components/schemas/MediaUploadResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ]
+            }
+        },
+        "/api/audio": {
+            "post": {
+                "tags": [
+                    "interviews"
+                ],
+                "summary": "Upload Audio",
+                "operationId": "upload_audio",
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Body_upload_audio"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MediaUploadResponse"
+                                }
                             }
                         }
                     },
@@ -4438,7 +4614,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "post": {
+            "get": {
                 "tags": [
                     "admin"
                 ],
@@ -4482,7 +4658,7 @@
                     }
                 }
             },
-            "put": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -4570,7 +4746,7 @@
                     }
                 }
             },
-            "get": {
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -4614,7 +4790,7 @@
                     }
                 }
             },
-            "delete": {
+            "put": {
                 "tags": [
                     "admin"
                 ],
@@ -5567,6 +5743,32 @@
                 ],
                 "title": "Body_create_welcome"
             },
+            "Body_upload_audio": {
+                "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Project Id"
+                    },
+                    "interview_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Interview Id"
+                    },
+                    "file": {
+                        "type": "string",
+                        "format": "binary",
+                        "title": "File"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "project_id",
+                    "interview_id",
+                    "file"
+                ],
+                "title": "Body_upload_audio"
+            },
             "Broadcast": {
                 "properties": {
                     "message": {
@@ -5984,6 +6186,11 @@
                             }
                         ],
                         "title": "Questions"
+                    },
+                    "include_previous_on_user": {
+                        "type": "boolean",
+                        "title": "Include Previous On User",
+                        "default": true
                     }
                 },
                 "type": "object",
@@ -6005,6 +6212,33 @@
             "Image": {
                 "description": "An image to show the interviewee",
                 "properties": {
+                    "type": {
+                        "default": "image",
+                        "enum": [
+                            "audio",
+                            "image",
+                            "video"
+                        ],
+                        "title": "Type",
+                        "type": "string"
+                    },
+                    "filename": {
+                        "description": "The filename",
+                        "title": "Filename",
+                        "type": "string"
+                    },
+                    "data": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "format": "binary",
+                                "type": "string"
+                            }
+                        ],
+                        "title": "Data"
+                    },
                     "primer": {
                         "anyOf": [
                             {
@@ -6027,33 +6261,13 @@
                         "description": "The alt text for the image for accessibility",
                         "title": "Alt",
                         "type": "string"
-                    },
-                    "name": {
-                        "description": "The filename",
-                        "title": "Name",
-                        "type": "string"
-                    },
-                    "data": {
-                        "anyOf": [
-                            {
-                                "type": "string"
-                            },
-                            {
-                                "format": "binary",
-                                "type": "string"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "default": null,
-                        "title": "Data"
                     }
                 },
                 "required": [
+                    "filename",
+                    "data",
                     "description",
-                    "alt",
-                    "name"
+                    "alt"
                 ],
                 "title": "Image",
                 "type": "object"
@@ -6193,7 +6407,7 @@
                 "type": "object",
                 "title": "InterviewGuide"
             },
-            "InterviewGuideGenerationPromptRequest": {
+            "InterviewGuideGenerationRequest": {
                 "properties": {
                     "prompt": {
                         "type": "string",
@@ -6204,7 +6418,7 @@
                 "required": [
                     "prompt"
                 ],
-                "title": "InterviewGuideGenerationPromptRequest"
+                "title": "InterviewGuideGenerationRequest"
             },
             "InterviewMessage": {
                 "properties": {
@@ -6397,12 +6611,12 @@
                 "title": "IntervieweeCreate"
             },
             "Interviewer": {
-                "type": "string",
                 "enum": [
                     "human",
                     "ai"
                 ],
-                "title": "Interviewer"
+                "title": "Interviewer",
+                "type": "string"
             },
             "LanguageCode": {
                 "type": "string",
@@ -6449,6 +6663,24 @@
                     "password"
                 ],
                 "title": "LoginData"
+            },
+            "MediaUploadResponse": {
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "title": "Message"
+                    },
+                    "filename": {
+                        "type": "string",
+                        "title": "Filename"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "message",
+                    "filename"
+                ],
+                "title": "MediaUploadResponse"
             },
             "MessageAnnotationCreate": {
                 "properties": {
@@ -7528,6 +7760,24 @@
                 "title": "QuestionContext",
                 "description": "The index of a question in a section\nsection [int]: The index of the section\nquestion [int]: The index of the question"
             },
+            "QuestionGenerationRequest": {
+                "properties": {
+                    "prompt": {
+                        "type": "string",
+                        "title": "Prompt"
+                    },
+                    "section_idx": {
+                        "type": "integer",
+                        "title": "Section Idx"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "prompt",
+                    "section_idx"
+                ],
+                "title": "QuestionGenerationRequest"
+            },
             "QuestionIndex": {
                 "prefixItems": [
                     {
@@ -7540,6 +7790,19 @@
                 "type": "array",
                 "maxItems": 2,
                 "minItems": 2
+            },
+            "QuestionSectionGenerationRequest": {
+                "properties": {
+                    "prompt": {
+                        "type": "string",
+                        "title": "Prompt"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "prompt"
+                ],
+                "title": "QuestionSectionGenerationRequest"
             },
             "QuestionSection_Question_-Input": {
                 "properties": {
@@ -7611,13 +7874,13 @@
                 "description": "Create a reference to a previous answer, useful when refering back to a\nprevious answer, eg. an answer to a survey item. If used, the main question\nmust contains an empty `{}` as a placeholder for the referred answer."
             },
             "Scope": {
-                "type": "string",
                 "enum": [
                     "admin",
                     "user",
                     "guest"
                 ],
-                "title": "Scope"
+                "title": "Scope",
+                "type": "string"
             },
             "SecurityConfig": {
                 "properties": {
@@ -8264,6 +8527,32 @@
             },
             "fastapi___compat__v2__Body_upload_image": {
                 "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Project Id"
+                    },
+                    "interview_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Interview Id"
+                    },
+                    "file": {
+                        "type": "string",
+                        "format": "binary",
+                        "title": "File"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "project_id",
+                    "interview_id",
+                    "file"
+                ],
+                "title": "Body_upload_image"
+            },
+            "fastapi___compat__v2__Body_upload_image__1": {
+                "properties": {
                     "primer": {
                         "type": "string",
                         "title": "Primer"
@@ -8291,31 +8580,72 @@
                 ],
                 "title": "Body_upload_image"
             },
-            "fastapi___compat__v2__Body_upload_image__2": {
+            "AuthToken": {
                 "properties": {
-                    "project_id": {
-                        "type": "string",
+                    "user_id": {
                         "format": "uuid4",
-                        "title": "Project Id"
+                        "title": "User Id",
+                        "type": "string"
                     },
-                    "interview_id": {
-                        "type": "string",
-                        "format": "uuid4",
-                        "title": "Interview Id"
-                    },
-                    "file": {
-                        "type": "string",
-                        "format": "binary",
-                        "title": "File"
+                    "scope": {
+                        "$ref": "#/components/schemas/Scope"
                     }
                 },
-                "type": "object",
+                "required": [
+                    "user_id",
+                    "scope"
+                ],
+                "title": "AuthToken",
+                "type": "object"
+            },
+            "CustomTokens": {
+                "title": "CustomTokens",
+                "type": "string",
+                "enum": [
+                    "<|endofprobe|>",
+                    "<|endofsection|>",
+                    "<|endofinterview|>",
+                    "<|skipquestion|>",
+                    "<|skipsection|>",
+                    "<|noanswer|>",
+                    "<|restartinterview|>"
+                ]
+            },
+            "InterviewRole": {
+                "enum": [
+                    "interviewer",
+                    "respondent"
+                ],
+                "title": "InterviewRole",
+                "type": "string"
+            },
+            "InterviewToken": {
+                "properties": {
+                    "project_id": {
+                        "format": "uuid4",
+                        "title": "Project Id",
+                        "type": "string"
+                    },
+                    "interview_id": {
+                        "format": "uuid4",
+                        "title": "Interview Id",
+                        "type": "string"
+                    },
+                    "interviewer": {
+                        "$ref": "#/components/schemas/Interviewer"
+                    },
+                    "role": {
+                        "$ref": "#/components/schemas/InterviewRole",
+                        "default": "respondent"
+                    }
+                },
                 "required": [
                     "project_id",
                     "interview_id",
-                    "file"
+                    "interviewer"
                 ],
-                "title": "Body_upload_image"
+                "title": "InterviewToken",
+                "type": "object"
             },
             "OutgoingData": {
                 "properties": {
@@ -8581,7 +8911,8 @@
                     "type": {
                         "enum": [
                             "message",
-                            "image"
+                            "image",
+                            "audio"
                         ],
                         "title": "Type",
                         "type": "string"
@@ -8601,10 +8932,9 @@
                         "title": "Content",
                         "type": "string"
                     },
-                    "file": {
+                    "filename": {
                         "anyOf": [
                             {
-                                "format": "file-path",
                                 "type": "string"
                             },
                             {
@@ -8612,7 +8942,8 @@
                             }
                         ],
                         "default": null,
-                        "title": "File"
+                        "description": "filename for media asset",
+                        "title": "Filename"
                     }
                 },
                 "required": [
@@ -8621,19 +8952,6 @@
                 ],
                 "title": "ReceivedData",
                 "type": "object"
-            },
-            "CustomTokens": {
-                "title": "CustomTokens",
-                "type": "string",
-                "enum": [
-                    "<|endofprobe|>",
-                    "<|endofsection|>",
-                    "<|endofinterview|>",
-                    "<|skipquestion|>",
-                    "<|skipsection|>",
-                    "<|noanswer|>",
-                    "<|restartinterview|>"
-                ]
             }
         },
         "securitySchemes": {
