@@ -5,6 +5,7 @@ This module help create synthetic interviews.
 # TODO:
 # - Add language option and implement in rest of module
 # - Handle reconnecting and replay history
+from app.auth import InterviewToken, decode_interview_token
 import asyncio
 import json
 import platform
@@ -70,12 +71,11 @@ async def fetch_token(
 
 
 async def _connect_and_yield_messages(
-    project_id: str,
+    token: str,
     language: Optional[LanguageCode] = None,
-    test_type: Optional[TestType] = None,
 ) -> AsyncGenerator[tuple[dict, ClientConnection], None]:
     """Connect to the websocket and yield parsed messages."""
-    token = await fetch_token(project_id, language, test_type)
+
     cookies = f"interview_token={token}; language={language}"
 
     async with connect(
@@ -97,17 +97,21 @@ async def run_synthetic_answering_agent(
     language: Optional[LanguageCode] = None,
     delay_before_answer: Optional[tuple[float, float]] = None,
 ):
-    async for json_data, websocket in _connect_and_yield_messages(project_id, language):
+    token = await fetch_token(project_id, language, TestType.SHUFFLED_AI)
+
+    interview_token = InterviewToken.decode(token)
+
+    await add_interviewee(
+        user_token=user_token,
+        project_id=project_id,
+        interview_id=interview_token.interview_id,
+        interviewee=agent.interview_subject.model_dump(mode="json"),
+    )
+
+    async for json_data, websocket in _connect_and_yield_messages(token, language):
         match json_data["type"]:
             case "data":
                 data = OutgoingData(**json_data)  # for validation purposes
-                if interview_id := data.interview_id:
-                    await add_interviewee(
-                        user_token=user_token,
-                        project_id=project_id,
-                        interview_id=interview_id,
-                        interviewee=agent.interview_subject.model_dump(mode="json"),
-                    )
 
             case "message":
                 message = OutgoingMessage(**json_data)
@@ -131,9 +135,9 @@ async def run_synthetic_fixed_answers(
 
     i = 0
 
-    async for json_data, websocket in _connect_and_yield_messages(
-        project_id, language, TestType.FIXED_ANSWERS
-    ):
+    token = await fetch_token(project_id, language, TestType.FIXED_ANSWERS)
+
+    async for json_data, websocket in _connect_and_yield_messages(token, language):
         match json_data["type"]:
             case "message":
                 message = OutgoingMessage(**json_data)

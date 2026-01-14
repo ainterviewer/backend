@@ -39,6 +39,8 @@ def generate_openapi_scheme(output: str = "openapi.json"):
     )
     from ainterviewer.lpm.types import CustomTokens
 
+    from .auth import AuthToken, InterviewToken
+
     openapi = app.openapi()
 
     openapi["paths"] = {
@@ -52,11 +54,13 @@ def generate_openapi_scheme(output: str = "openapi.json"):
     openapi = extend_openapi_schema(
         openapi,
         models=[
+            AuthToken,
+            CustomTokens,
+            InterviewToken,
             OutgoingData,
             OutgoingHistoryMessage,
             OutgoingMessage,
             ReceivedData,
-            CustomTokens,
         ],
     )
 

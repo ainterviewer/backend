@@ -1,7 +1,7 @@
 import logging
 from datetime import timedelta
-from typing import Any
-from uuid import UUID
+from typing import Any, Self
+from uuid import UUID, uuid4
 
 from jose import jwt
 from passlib.context import CryptContext
@@ -21,16 +21,53 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 logging.getLogger("passlib").setLevel(logging.ERROR)
 
 
-class InterviewToken(BaseModel):
+class _Token(BaseModel):
+    _timedelta_kwargs: dict[str, int | float]  # FIXME: These should be way shorter
+
+    def encode(self) -> str:
+        payload = dict(self)
+
+        payload["exp"] = now() + timedelta(**self._timedelta_kwargs)
+
+        serializable_payload = {
+            k: str(v) if isinstance(v, UUID) else v for k, v in payload.items()
+        }
+
+        return jwt.encode(
+            serializable_payload,
+            app_settings.secrets.jwt_secret_key.get_secret_value(),
+            algorithm="HS256",
+        )
+
+    @classmethod
+    def decode(cls, token: str) -> Self:
+        payload = jwt.decode(
+            token,
+            app_settings.secrets.jwt_secret_key.get_secret_value(),
+            algorithms=["HS256"],
+        )
+
+        return cls(**payload)
+
+
+class InterviewToken(_Token):
     project_id: UUID4
     interview_id: UUID4
     interviewer: Interviewer
     role: InterviewRole = InterviewRole.RESPONDENT
 
+    _timedelta_kwargs: dict[str, int | float] = (
+        app_settings.app.jwt_interview_token_expiration
+    )
 
-class AuthToken(BaseModel):
+
+class AuthToken(_Token):
     user_id: UUID4
     scope: Scope
+
+    _timedelta_kwargs: dict[str, int | float] = (
+        app_settings.app.jwt_auth_token_expiration
+    )
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -41,51 +78,30 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_token(
-    payload: dict[str, Any], timedelta_kwargs: dict[str, float] | None
-) -> str:
-    if timedelta_kwargs:
-        payload["exp"] = now() + timedelta(**timedelta_kwargs)
-
-    serializable_payload = {
-        k: str(v) if isinstance(v, UUID) else v for k, v in payload.items()
-    }
-
-    return jwt.encode(
-        serializable_payload,
-        app_settings.secrets.jwt_secret_key.get_secret_value(),
-        algorithm="HS256",
-    )
-
-
 def create_interview_token(
     project_id: UUID4,
     interview_id: UUID4,
     interviewer: Interviewer = Interviewer.AI,
 ) -> str:
-    timedelta_kwargs = app_settings.app.jwt_interview_token_expiration
-
-    payload = InterviewToken(
+    token = InterviewToken(
         project_id=project_id,
         interview_id=interview_id,
         interviewer=interviewer,
     )
 
-    return create_token(dict(payload), timedelta_kwargs)
+    return token.encode()
 
 
 def create_auth_token(
     user_id: UUID4,
     scope: Scope = Scope.USER,
 ) -> str:
-    timedelta_kwargs = app_settings.app.jwt_auth_token_expiration
-
-    payload = AuthToken(
+    token = AuthToken(
         user_id=user_id,
         scope=scope,
     )
 
-    return create_token(dict(payload), timedelta_kwargs)
+    return token.encode()
 
 
 def decode_jwt(
@@ -111,15 +127,20 @@ def parse_args():
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--interview_id", type=int, default=None)
-    parser.add_argument("-i", "--project_id", type=int, default=1)
+    parser.add_argument("-c", "--interview_id", type=str, default=None)
+    parser.add_argument("-i", "--project_id", type=str, default=None)
 
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
+    if project_id := args.project_id is None:
+        project_id = uuid4()
+    if interview_id := args.interview_id is None:
+        interview_id = uuid4()
+
     token = create_interview_token(
-        project_id=args.project_id,
-        interview_id=args.interview_id,
+        project_id=project_id,
+        interview_id=interview_id,
     )
