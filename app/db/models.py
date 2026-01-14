@@ -462,6 +462,7 @@ class FilteredMessagesRequest(_BaseModel):
     exact_match: bool = False
     case_sensitive: bool = False
     questions: list[tuple[int, int]] | None = None
+    include_previous_on_user: bool = True
 
 
 class AnnotationValueBase(_BaseModel):

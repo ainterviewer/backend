@@ -12,3 +12,8 @@ class PaginatedResponse(BaseModel, Generic[T]):
 
 class ErrorResponse(BaseModel):
     detail: str
+
+
+class MediaUploadResponse(BaseModel):
+    message: str
+    filename: str

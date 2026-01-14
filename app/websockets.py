@@ -1,3 +1,4 @@
+from app.settings import app_settings
 from collections import defaultdict
 
 from fastapi import WebSocket
@@ -41,7 +42,7 @@ class WebsocketMessageHandler(IOProtocol):
     ) -> tuple[str, MessageType]:
         data = ReceivedData(**await self.ws.receive_json())
 
-        if data.type == "message":
+        if data.type in ("message", "audio"):
             text = data.content
             message_type = MessageType.TEXT if not message_type else message_type
 
@@ -59,8 +60,12 @@ class WebsocketMessageHandler(IOProtocol):
 
             # TODO: Save the image to cloud storage or custom path
 
+            if not data.file:
+                raise ValueError()
+
             image_path = (
-                f"./data/images/{self.project_id}/{self.interview_id}/" + data.file
+                app_settings.storage.interview_storage.image_path(self.interview_id)
+                / data.file
             )
 
             # FIXME: This should not happen in this class / method

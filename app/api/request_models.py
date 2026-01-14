@@ -16,8 +16,18 @@ class PaginatedQueryParams(BaseModel):
     order: Literal["asc", "desc"] = Query("desc", description="Sorting order")
 
 
-class InterviewGuideGenerationPromptRequest(BaseModel):
+class PromptRequest(BaseModel):
     prompt: str
+
+
+class InterviewGuideGenerationRequest(PromptRequest): ...
+
+
+class QuestionSectionGenerationRequest(PromptRequest): ...
+
+
+class QuestionGenerationRequest(PromptRequest):
+    section_idx: int
 
 
 class ProjectStatusChangeRequest(BaseModel):
@@ -41,3 +51,4 @@ class CreateProjectRequest(BaseModel):
 class LoginData(BaseModel):
     email: str
     password: str
+    extended: bool = False

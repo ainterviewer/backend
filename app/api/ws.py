@@ -151,13 +151,6 @@ async def ai_websocket_endpoint(
 
     project_localization = db.projects.get_project_localization(project_id, language)
 
-    await websocket.send_json(
-        OutgoingData(
-            interview_id=interview_id,
-            project_id=project_id,
-        ).model_dump()
-    )
-
     if interview_history:
         if initialized:
             last_message = interview_history[-1]

@@ -1,5 +1,4 @@
 import shutil
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import (
@@ -22,9 +21,11 @@ from ainterviewer.types import Interviewer, LanguageCode
 from ..auth import create_interview_token, decode_interview_token
 from ..db.types import InterviewType
 from ..dependencies import AdminToken, DBSession, GuestToken, LanguageCookie, templates
+from ..settings import app_settings
 from ..translations import MODALS
 from ..utils import generate_random_filename
 from .models import MessageFeedback
+from .response_models import MediaUploadResponse
 
 router = APIRouter(tags=["interviews"])
 
@@ -170,18 +171,45 @@ async def upload_image(
     project_id: Annotated[UUID4, Form()],
     interview_id: Annotated[UUID4, Form()],
     file: Annotated[UploadFile, File()],
-):
+) -> MediaUploadResponse:
     # FIXME: This should be accessible to the users, however need better
     # security, to avoid misuse.
 
     filename = generate_random_filename()
+
     if file.filename:
         filename += "." + file.filename.split(".")[-1]
 
-    folder: Path = Path(f"data/images/{project_id}/{interview_id}")
-    folder.mkdir(parents=True, exist_ok=True)
+    filepath = (
+        app_settings.storage.interview_storage.image_path(interview_id) / filename
+    )
 
-    with open(folder / filename, "wb") as f:
+    with open(filepath, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    return {"message": "Image uploaded successfully", "filename": filename}
+    return MediaUploadResponse(message="Image uploaded successfully", filename=filename)
+
+
+@router.post("/audio")
+async def upload_audio(
+    auth_token: AdminToken,
+    project_id: Annotated[UUID4, Form()],
+    interview_id: Annotated[UUID4, Form()],
+    file: Annotated[UploadFile, File()],
+) -> MediaUploadResponse:
+    # FIXME: This should be accessible to the users, however need better
+    # security, to avoid misuse.
+
+    filename = generate_random_filename()
+
+    if file.filename:
+        filename += "." + file.filename.split(".")[-1]
+
+    filepath = (
+        app_settings.storage.interview_storage.audio_path(interview_id) / filename
+    )
+
+    with open(filepath, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    return MediaUploadResponse(message="Audio uploaded successfully", filename=filename)

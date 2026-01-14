@@ -1,5 +1,6 @@
-from zmq.decorators import context
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import UUID4
 
 from ....db.models import (
@@ -126,8 +127,8 @@ async def get_filtered_messages(
     filters: FilteredMessagesRequest,
     db: DBSession,
     jwt: UserToken,
-    skip: int = 0,
-    limit: int = 20,
+    skip: Annotated[int, Query()] = 0,
+    limit: Annotated[int, Query()] = 20,
 ) -> list[MessagePublic]:
     return db.analysis.get_filtered_messages(
         project_id,
@@ -138,6 +139,7 @@ async def get_filtered_messages(
         exact_match=filters.exact_match,
         case_sensitive=filters.case_sensitive,
         questions=filters.questions,
+        include_previous_on_user=filters.include_previous_on_user,
     )
 
 

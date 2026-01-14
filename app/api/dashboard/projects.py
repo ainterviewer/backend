@@ -24,25 +24,30 @@ from pydantic import UUID4, BaseModel, EmailStr
 from xlsxwriter import Workbook
 
 from ainterviewer.config import AgentConfigs, InterviewConfig
-from ainterviewer.constants import FP_ASSETS_DIR
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.interview_guides.extra import Consent, Welcome
-from ainterviewer.interview_guides.generate import generate_interview_guide
+from ainterviewer.interview_guides.generate import (
+    generate_interview_guide,
+    generate_question,
+    generate_section,
+)
 from ainterviewer.types import LanguageCode, LanguageDict
+from app.settings import app_settings
 
 from ...db.models import InterviewSummaryPublic, MessagePublic, ProjectPublic
 from ...db.types import InterviewType
 from ...db.utils import fix_nested_columns
 from ...dependencies import DBSession, UserToken
-from ...paths import QR_CODES_DIR, VIDEO_DIR
 from ...utils import generate_qr_img
 from ..request_models import (
     CreateProjectRequest,
-    InterviewGuideGenerationPromptRequest,
+    InterviewGuideGenerationRequest,
     PaginatedQueryParams,
     ProjectStatusChangeRequest,
     ProjectTitleUpdateRequest,
     PromptsUpdateRequest,
+    QuestionGenerationRequest,
+    QuestionSectionGenerationRequest,
 )
 from ..response_models import PaginatedResponse
 
@@ -93,7 +98,9 @@ async def create_project(
         ),
     )
 
-    file_path = QR_CODES_DIR / f"{project_id}.png"
+    file_path = (
+        app_settings.storage.project_storage.qr_code_path(project_id) / "interview.png"
+    )
     interview_url = str(request.base_url) + f"interview?id={project_id}"
 
     background_tasks.add_task(generate_qr_img, str(interview_url), file_path)
@@ -234,7 +241,7 @@ async def create_guide(
 async def generate_guide(
     project_id: UUID4,
     lang: LanguageCode,
-    data: InterviewGuideGenerationPromptRequest,
+    data: InterviewGuideGenerationRequest,
     db: DBSession,
     jwt: UserToken,
 ):
@@ -243,6 +250,38 @@ async def generate_guide(
     db.projects.update_interview_guide(project_id, guide, language=lang)
 
     return guide
+
+
+@router.post("/projects/{project_id}/{lang}/guide/section/generate")
+async def generate_guide_section(
+    project_id: UUID4,
+    lang: LanguageCode,
+    data: QuestionSectionGenerationRequest,
+    db: DBSession,
+    jwt: UserToken,
+):
+    project = db.projects.get_project_localization(project_id, lang)
+
+    section = await generate_section(data.prompt, guide=project.interview_guide)
+
+    return section
+
+
+@router.post("/projects/{project_id}/{lang}/guide/section/question/generate")
+async def generate_section_question(
+    project_id: UUID4,
+    lang: LanguageCode,
+    data: QuestionGenerationRequest,
+    db: DBSession,
+    jwt: UserToken,
+):
+    project = db.projects.get_project_localization(project_id, lang)
+
+    question = await generate_question(
+        data.prompt, guide=project.interview_guide, section_idx=data.section_idx
+    )
+
+    return question
 
 
 @router.post("/projects/{project_id}/image")
@@ -398,7 +437,14 @@ async def create_welcome(
     if video:
         data = await video.read()
 
-        with open(VIDEO_DIR / video.filename, "wb") as f:
+        if not video.filename:
+            raise ValueError()
+
+        with open(
+            app_settings.storage.project_storage.video_path(project_id)
+            / video.filename,
+            "wb",
+        ) as f:
             f.write(data)
 
         welcome.video_file_name = video.filename
@@ -536,10 +582,14 @@ async def generate_project_qr(
     project_id: UUID4,
     jwt: UserToken,
 ):
-    file_path = QR_CODES_DIR / "projects" / f"{project_id}.png"
+    file_path = (
+        app_settings.storage.project_storage.qr_code_path(project_id) / "interview.png"
+    )
+
     if not file_path.exists():
         interview_url = str(request.base_url) + f"interview?id={project_id}"
         img_data = generate_qr_img(str(interview_url), file_path)
         # TODO: Why not just return FileResponse after file has been created?
         return StreamingResponse(io.BytesIO(img_data), media_type="image/png")
+
     return FileResponse(file_path)

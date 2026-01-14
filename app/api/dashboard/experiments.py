@@ -1,3 +1,4 @@
+from app.settings import app_settings
 import io
 
 from fastapi import APIRouter, Request
@@ -8,7 +9,6 @@ from app.utils import generate_qr_img
 
 from ...db.models import ExperimentCreate
 from ...dependencies import DBSession, UserToken
-from ...paths import QR_CODES_DIR
 
 router = APIRouter(tags=["experiments"])
 
@@ -45,7 +45,10 @@ async def generate_experiment_qr(
     experiment_id: UUID4,
     jwt: UserToken,
 ):
-    file_path = QR_CODES_DIR / "experiments" / f"{experiment_id}.png"
+    file_path = (
+        app_settings.storage.experiment_storage.qr_code_path(experiment_id)
+        / "distribute.png"
+    )
 
     if not file_path.exists():
         redirect_url = str(request.base_url) + f"interview/redirect?id={experiment_id}"

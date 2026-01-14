@@ -2,6 +2,7 @@ from pydantic import UUID4
 from sqlalchemy import delete, distinct, exists, func, select, or_
 from sqlalchemy.orm import selectinload
 
+from ainterviewer.types import MessageRole
 from ainterviewer.utils import now
 
 from ..models import (
@@ -113,12 +114,18 @@ class AnalysisRepository(BaseRepository):
                 return statement.where(or_(*question_filters))
         return statement
 
-    def _load_context(self, statement, context_before: bool, context_after: bool):
+    def _load_context(
+        self,
+        statement,
+        context_before: bool,
+        context_after: bool,
+        include_previous_on_user: bool = False,
+    ):
         """Fetches related messages, context_before returns all messages
         to and with the previous main_question and after_context returns all
         messages up to the next main question"""
 
-        if not context_before and not context_after:
+        if not context_before and not context_after and not include_previous_on_user:
             return statement
 
         # Convert current statement to a subquery to get matched messages
@@ -129,6 +136,21 @@ class AnalysisRepository(BaseRepository):
             # Include all originally matched messages
             MessageTable.id.in_(select(matched_messages.c.id))
         ]
+
+        if include_previous_on_user:
+            # Include previous message if current message is from user
+            conditions.append(
+                exists(
+                    select(1)
+                    .select_from(matched_messages)
+                    .where(
+                        (matched_messages.c.role == MessageRole.USER)
+                        & (MessageTable.project_id == matched_messages.c.project_id)
+                        & (MessageTable.interview_id == matched_messages.c.interview_id)
+                        & (MessageTable.message_id == matched_messages.c.message_id - 1)
+                    )
+                )
+            )
 
         if context_before:
             # Include messages from previous main_question
@@ -200,6 +222,7 @@ class AnalysisRepository(BaseRepository):
         limit: int,
         context_before: bool = False,
         context_after: bool = False,
+        include_previous_on_user: bool = False,
         category_ids: list[UUID4] | None = None,
         search_text: str | None = None,
         exact_match: bool = False,
@@ -219,7 +242,9 @@ class AnalysisRepository(BaseRepository):
             statement, search_text, exact_match, case_sensitive
         )
         statement = self._apply_questions_filter(statement, questions)
-        statement = self._load_context(statement, context_before, context_after)
+        statement = self._load_context(
+            statement, context_before, context_after, include_previous_on_user
+        )
 
         statement = (
             statement.distinct()
