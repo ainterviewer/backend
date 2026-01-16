@@ -53,7 +53,9 @@ class TestRepository(BaseRepository):
         test = self.session.execute(statement).scalar_one()
         return TestSetupPublic.model_validate(test)
 
-    def update_test_setup_settings(self, test_id: UUID4, request: SynthesizeRequest):
+    def update_test_setup_settings(
+        self, test_id: UUID4, request: SynthesizeRequest
+    ) -> TestSetupPublic:
         statement = select(TestSetupTable).where(TestSetupTable.id == test_id)
         test = self.session.execute(statement).scalar_one()
         test.answering_model = request.answering_model

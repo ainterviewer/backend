@@ -42,11 +42,11 @@ class InterviewDataBase(PersistenceProtocol):
         self._alembic_config = AlembicConfig(APP_DIR.parent / "alembic.ini")
 
         # Initialize all repositories with the shared session
-        self.users = UserRepository(session)
-        self.projects = ProjectRepository(session)
-        self.interviews = InterviewRepository(session)
-        self.tests = TestRepository(session)
-        self.analysis = AnalysisRepository(session)
+        self.users: UserRepository = UserRepository(session)
+        self.projects: ProjectRepository = ProjectRepository(session)
+        self.interviews: InterviewRepository = InterviewRepository(session)
+        self.tests: TestRepository = TestRepository(session)
+        self.analysis: AnalysisRepository = AnalysisRepository(session)
 
     # ==================== Database Management ====================
 
