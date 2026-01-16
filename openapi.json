@@ -4591,6 +4591,50 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "get": {
                 "tags": [
                     "admin"
@@ -4679,7 +4723,7 @@
                     }
                 }
             },
-            "post": {
+            "put": {
                 "tags": [
                     "admin"
                 ],
@@ -4724,50 +4768,6 @@
                 }
             },
             "delete": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "put": {
                 "tags": [
                     "admin"
                 ],
@@ -6458,6 +6458,15 @@
                 ],
                 "title": "InterviewMessage"
             },
+            "InterviewStatus": {
+                "type": "string",
+                "enum": [
+                    "active",
+                    "inactive",
+                    "completed"
+                ],
+                "title": "InterviewStatus"
+            },
             "InterviewSubject": {
                 "properties": {
                     "name": {
@@ -6545,15 +6554,8 @@
                         "$ref": "#/components/schemas/Interviewer",
                         "default": "ai"
                     },
-                    "is_complete": {
-                        "type": "boolean",
-                        "title": "Is Complete",
-                        "default": false
-                    },
-                    "is_active": {
-                        "type": "boolean",
-                        "title": "Is Active",
-                        "default": false
+                    "status": {
+                        "$ref": "#/components/schemas/InterviewStatus"
                     },
                     "type": {
                         "$ref": "#/components/schemas/InterviewType"
@@ -6595,6 +6597,7 @@
                 "type": "object",
                 "required": [
                     "id",
+                    "status",
                     "type",
                     "created_at",
                     "n_messages",
