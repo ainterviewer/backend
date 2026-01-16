@@ -121,10 +121,9 @@ class TestRepository(BaseRepository):
     def update_test_run_status(
         self, test_setup_id: UUID4, test_run_id: UUID4, status: TestRunStatus
     ):
-        statement = (
-            select(TestRunTable)
-            .where(TestRunTable.test_setup_id == test_setup_id)
-            .where(TestRunTable.id == test_run_id)
+        statement = select(TestRunTable).where(
+            TestRunTable.test_setup_id == test_setup_id,
+            TestRunTable.id == test_run_id,
         )
         test_run = self.session.execute(statement).scalar_one()
         test_run.status = status

@@ -157,7 +157,6 @@ async def run_synthetic_test(
         return wrapper
 
     test_setup = db.tests.update_test_setup_settings(test_id, request_data)
-    # test_setup = db.tests.get_test(test_id)
 
     test_run_id = db.tests.create_test_run(
         TestRunCreate(test_setup_id=test_id, **request_data.model_dump())
@@ -177,6 +176,7 @@ async def run_synthetic_test(
             background_tasks.add_task(
                 handle_exceptions(run_synthesis_job_shuffled_ai),
                 project_id=str(project_id),
+                test_run_id=str(test_run_id),
                 user_token=request.cookies["token"],
                 background_info_options=test_setup.background_info,
                 n_interviews=request_data.n_interviews,
@@ -188,6 +188,7 @@ async def run_synthetic_test(
             background_tasks.add_task(
                 handle_exceptions(run_synthesis_job_fixed_answers),
                 project_id=str(project_id),
+                test_run_id=str(test_run_id),
                 fixed_answers=test_setup.fixed_answers,
                 n_interviews=request_data.n_interviews,
                 language=request_data.language,

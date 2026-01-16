@@ -4,8 +4,9 @@ from fastapi import Query
 from pydantic import UUID4, BaseModel
 
 from ainterviewer.agents.prompts.models import PromptTemplates
-from ainterviewer.types import LanguageCode
+from ainterviewer.types import Interviewer, LanguageCode, TestType
 
+from ..db.types import InterviewType
 from ..types import ProjectStatus
 
 
@@ -52,3 +53,11 @@ class LoginData(BaseModel):
     email: str
     password: str
     extended: bool = False
+
+
+class CreateInterviewRequest(BaseModel):
+    interviewer: Interviewer = Interviewer.AI
+    interview_type: InterviewType = InterviewType.DISTRIBUTED
+    test_run_id: UUID4 | None = None
+    experiment_id: UUID4 | None = None
+    synthetic_test_type: TestType | None = None

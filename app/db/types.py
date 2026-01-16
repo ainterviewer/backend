@@ -23,8 +23,8 @@ class AccessRequestStatus(StrEnum):
 
 
 class InterviewType(StrEnum):
-    TEST = "test"
-    SYNTHETIC = "synthetic"
+    MANUAL_TEST = "manual_test"
+    SYNTHETIC_TEST = "synthetic_test"
     DISTRIBUTED = "distributed"
 
 

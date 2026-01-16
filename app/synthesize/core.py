@@ -5,13 +5,11 @@ This module help create synthetic interviews.
 # TODO:
 # - Add language option and implement in rest of module
 # - Handle reconnecting and replay history
-from app.auth import InterviewToken, decode_interview_token
 import asyncio
 import json
 import platform
 import random
 from typing import Any, AsyncGenerator, Optional
-from urllib.parse import urlencode
 
 import aiohttp
 from pydantic import UUID4
@@ -28,44 +26,38 @@ from ainterviewer.synthesize.interviewees import (
     BackgroundInfoOptions,
     generate_synthetic_persons,
 )
-from ainterviewer.types import LanguageCode, TestType
+from ainterviewer.types import LanguageCode
 
+from ..api.request_models import CreateInterviewRequest
+from ..auth import InterviewToken
 from ..db.types import InterviewType
 from ..settings import app_settings
 
 
 async def fetch_token(
-    interview_id: str,
-    lang: Optional[LanguageCode] = None,
-    test_type: TestType | None = None,
+    project_id: str,
+    test_run_id: str,
+    language: Optional[LanguageCode] = None,
 ) -> str:
-    "function args are automatically converted to query params"
-    func_locals = locals()
-    interview_id = func_locals.pop("interview_id")
-    language = func_locals.pop("lang")
-
-    # TODO: Check the all query params are correctly passed
-    # query_params = get_function_signature_as_query_params(fetch_token, func_locals)
-
-    query_params = urlencode(
-        {
-            "test_type": test_type,
-            "interview_type": InterviewType.SYNTHETIC,
-        }
-    )
-
-    url = f"http://{app_settings.app.api_endpoint}/api/projects/{interview_id}/{language}/interviews?{query_params}"
+    url = f"http://{app_settings.app.api_endpoint}/api/projects/{project_id}/{language}/interviews"
 
     cookies = {"language": language}
+
     headers = {
         "User-Agent": f"ainterviewer/{ainterviewer.__version__} ({platform.system()} {platform.release()}; Python/{platform.python_version()})"
     }
 
+    payload = CreateInterviewRequest(
+        interview_type=InterviewType.SYNTHETIC_TEST,
+        test_run_id=test_run_id,  # ty:ignore[invalid-argument-type]
+    )
+
     async with aiohttp.ClientSession(cookies=cookies, headers=headers) as session:
-        async with session.post(url) as response:
+        async with session.post(url, json=payload.model_dump(mode="json")) as response:
+            print(await response.json())
             response.raise_for_status()
 
-            token = await response.text()
+            token = (await response.text()).strip().strip('"')
 
     return token
 
@@ -94,10 +86,11 @@ async def run_synthetic_answering_agent(
     agent: AnsweringAgent,
     user_token: str,
     project_id: str,
+    test_run_id: str,
     language: Optional[LanguageCode] = None,
     delay_before_answer: Optional[tuple[float, float]] = None,
 ):
-    token = await fetch_token(project_id, language, TestType.SHUFFLED_AI)
+    token = await fetch_token(project_id, test_run_id, language)
 
     interview_token = InterviewToken.decode(token)
 
@@ -125,6 +118,7 @@ async def run_synthetic_answering_agent(
 
 async def run_synthetic_fixed_answers(
     project_id: str,
+    test_run_id: str,
     fixed_answers: list[str],
     language: Optional[LanguageCode] = None,
     delay_before_answer: Optional[tuple[float, float]] = None,
@@ -135,7 +129,7 @@ async def run_synthetic_fixed_answers(
 
     i = 0
 
-    token = await fetch_token(project_id, language, TestType.FIXED_ANSWERS)
+    token = await fetch_token(project_id, test_run_id, language)
 
     async for json_data, websocket in _connect_and_yield_messages(token, language):
         match json_data["type"]:
@@ -195,6 +189,7 @@ async def add_interviewee(
 
 async def run_synthesis_job_shuffled_ai(
     project_id: str,
+    test_run_id: str,
     user_token: str,
     background_info_options: BackgroundInfoOptions,
     n_interviews: int,
@@ -225,6 +220,7 @@ async def run_synthesis_job_shuffled_ai(
                 agent=agent,
                 user_token=user_token,
                 project_id=project_id,
+                test_run_id=test_run_id,
                 language=language,
                 delay_before_answer=delay_before_answer,
             )
@@ -240,6 +236,7 @@ async def run_synthesis_job_shuffled_ai(
 
 async def run_synthesis_job_fixed_answers(
     project_id: str,
+    test_run_id: str,
     fixed_answers: list[str],
     n_interviews: int,
     language: LanguageCode,
@@ -250,6 +247,7 @@ async def run_synthesis_job_fixed_answers(
         task = asyncio.create_task(
             run_synthetic_fixed_answers(
                 project_id=project_id,
+                test_run_id=test_run_id,
                 fixed_answers=fixed_answers,
                 language=language,
                 delay_before_answer=delay_before_answer,

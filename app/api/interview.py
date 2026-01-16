@@ -7,7 +7,6 @@ from fastapi import (
     File,
     Form,
     Header,
-    Query,
     Request,
     Response,
     UploadFile,
@@ -16,15 +15,15 @@ from fastapi import Path as URLPath
 from fastapi.responses import HTMLResponse
 from pydantic import UUID4
 
-from ainterviewer.types import Interviewer, LanguageCode
+from ainterviewer.types import LanguageCode, TestType
 
 from ..auth import create_interview_token, decode_interview_token
-from ..db.types import InterviewType
 from ..dependencies import AdminToken, DBSession, GuestToken, LanguageCookie, templates
 from ..settings import app_settings
 from ..translations import MODALS
 from ..utils import generate_random_filename
 from .models import MessageFeedback
+from .request_models import CreateInterviewRequest
 from .response_models import MediaUploadResponse
 
 router = APIRouter(tags=["interviews"])
@@ -102,13 +101,11 @@ async def set_consent(
 
 @router.post("/projects/{project_id}/{lang}/interviews")
 async def create_interview(
+    request: CreateInterviewRequest,
     response: Response,
     db: DBSession,
     project_id: Annotated[UUID4, URLPath],
     lang: Annotated[LanguageCode, URLPath],
-    interviewer: Annotated[Interviewer, Query()] = Interviewer.AI,
-    interview_type: Annotated[InterviewType, Query()] = InterviewType.DISTRIBUTED,
-    fixed_answers: Annotated[bool, Query()] = False,
     user_agent: Annotated[str | None, Header()] = None,
     ip_address: Annotated[str | None, Header(alias="X-Real-IP")] = None,
     referer: Annotated[str | None, Cookie()] = None,
@@ -126,14 +123,15 @@ async def create_interview(
     # state
     interview_guide.shuffle()
 
-    if fixed_answers:
+    if request.synthetic_test_type == TestType.FIXED_ANSWERS:
         interview_guide.reduce()
 
     interview = db.interviews.create_interview(
         project_id,
         interview_guide=interview_guide,
-        interview_type=interview_type,
-        interviewer=interviewer,
+        interview_type=request.interview_type,
+        interviewer=request.interviewer,
+        test_run_id=request.test_run_id,
         user_agent=user_agent,
         referer=referer,
         external_params=forward_params,
@@ -142,7 +140,7 @@ async def create_interview(
 
     interview_token = create_interview_token(
         project_id=project_id,
-        interviewer=interviewer,
+        interviewer=request.interviewer,
         interview_id=interview.id,
     )
 
