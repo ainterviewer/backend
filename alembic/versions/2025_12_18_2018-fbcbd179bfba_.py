@@ -1,10 +1,11 @@
 """empty message
 
 Revision ID: fbcbd179bfba
-Revises: 
+Revises:
 Create Date: 2025-12-18 20:18:23.425637
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -14,7 +15,7 @@ import app.db.types
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'fbcbd179bfba'
+revision: str = "fbcbd179bfba"
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
