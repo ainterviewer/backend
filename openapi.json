@@ -2670,11 +2670,6 @@
                 ],
                 "summary": "Get Consent",
                 "operationId": "get_consent",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
                 "parameters": [
                     {
                         "name": "project_id",
@@ -4039,34 +4034,6 @@
                         }
                     },
                     {
-                        "name": "interviewer",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "$ref": "#/components/schemas/Interviewer",
-                            "default": "ai"
-                        }
-                    },
-                    {
-                        "name": "interview_type",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "$ref": "#/components/schemas/InterviewType",
-                            "default": "distributed"
-                        }
-                    },
-                    {
-                        "name": "fixed_answers",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "boolean",
-                            "default": false,
-                            "title": "Fixed Answers"
-                        }
-                    },
-                    {
                         "name": "user-agent",
                         "in": "header",
                         "required": false,
@@ -4131,6 +4098,16 @@
                         }
                     }
                 ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateInterviewRequest"
+                            }
+                        }
+                    }
+                },
                 "responses": {
                     "200": {
                         "description": "Successful Response",
@@ -4658,50 +4635,6 @@
                     }
                 }
             },
-            "delete": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
             "patch": {
                 "tags": [
                     "admin"
@@ -4747,6 +4680,50 @@
                 }
             },
             "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -6003,6 +5980,54 @@
                 "title": "ContextType",
                 "description": "Context to be upsed for probing"
             },
+            "CreateInterviewRequest": {
+                "properties": {
+                    "interviewer": {
+                        "$ref": "#/components/schemas/Interviewer",
+                        "default": "ai"
+                    },
+                    "interview_type": {
+                        "$ref": "#/components/schemas/InterviewType",
+                        "default": "distributed"
+                    },
+                    "test_run_id": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "uuid4"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Test Run Id"
+                    },
+                    "experiment_id": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "uuid4"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Experiment Id"
+                    },
+                    "synthetic_test_type": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/TestType"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    }
+                },
+                "type": "object",
+                "title": "CreateInterviewRequest"
+            },
             "CreateProjectRequest": {
                 "properties": {
                     "title": {
@@ -6580,8 +6605,8 @@
             "InterviewType": {
                 "type": "string",
                 "enum": [
-                    "test",
-                    "synthetic",
+                    "manual_test",
+                    "synthetic_test",
                     "distributed"
                 ],
                 "title": "InterviewType"
@@ -8667,32 +8692,6 @@
                         "default": null,
                         "title": "Content"
                     },
-                    "interview_id": {
-                        "anyOf": [
-                            {
-                                "format": "uuid4",
-                                "type": "string"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "default": null,
-                        "title": "Interview Id"
-                    },
-                    "project_id": {
-                        "anyOf": [
-                            {
-                                "format": "uuid4",
-                                "type": "string"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "default": null,
-                        "title": "Project Id"
-                    },
                     "progress": {
                         "anyOf": [
                             {
@@ -8726,6 +8725,12 @@
             },
             "OutgoingHistoryMessage": {
                 "properties": {
+                    "type": {
+                        "const": "history",
+                        "default": "history",
+                        "title": "Type",
+                        "type": "string"
+                    },
                     "content": {
                         "title": "Content",
                         "type": "string"
@@ -8733,19 +8738,9 @@
                     "role": {
                         "$ref": "#/components/schemas/MessageRole"
                     },
-                    "interview_id": {
-                        "format": "uuid4",
-                        "title": "Interview Id",
-                        "type": "string"
-                    },
                     "message_id": {
                         "title": "Message Id",
                         "type": "integer"
-                    },
-                    "include_in_history": {
-                        "default": true,
-                        "title": "Include In History",
-                        "type": "boolean"
                     },
                     "feedback": {
                         "anyOf": [
@@ -8786,18 +8781,11 @@
                             }
                         ],
                         "default": null
-                    },
-                    "type": {
-                        "const": "history",
-                        "default": "history",
-                        "title": "Type",
-                        "type": "string"
                     }
                 },
                 "required": [
                     "content",
                     "role",
-                    "interview_id",
                     "message_id"
                 ],
                 "title": "OutgoingHistoryMessage",
@@ -8805,6 +8793,12 @@
             },
             "OutgoingMessage": {
                 "properties": {
+                    "type": {
+                        "const": "message",
+                        "default": "message",
+                        "title": "Type",
+                        "type": "string"
+                    },
                     "content": {
                         "title": "Content",
                         "type": "string"
@@ -8812,19 +8806,9 @@
                     "role": {
                         "$ref": "#/components/schemas/MessageRole"
                     },
-                    "interview_id": {
-                        "format": "uuid4",
-                        "title": "Interview Id",
-                        "type": "string"
-                    },
                     "message_id": {
                         "title": "Message Id",
                         "type": "integer"
-                    },
-                    "include_in_history": {
-                        "default": true,
-                        "title": "Include In History",
-                        "type": "boolean"
                     },
                     "feedback": {
                         "anyOf": [
@@ -8865,12 +8849,6 @@
                             }
                         ],
                         "default": null
-                    },
-                    "type": {
-                        "const": "message",
-                        "default": "message",
-                        "title": "Type",
-                        "type": "string"
                     },
                     "can_answer": {
                         "default": true,
@@ -8900,7 +8878,6 @@
                 "required": [
                     "content",
                     "role",
-                    "interview_id",
                     "message_id"
                 ],
                 "title": "OutgoingMessage",
