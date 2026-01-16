@@ -388,7 +388,6 @@ async def create_prompts(
 async def get_consent(
     project_id: UUID4,
     db: DBSession,
-    jwt: UserToken,
     language: LanguageCode,
 ) -> Consent | None:
     return db.projects.get_consent(
