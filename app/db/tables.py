@@ -22,6 +22,7 @@ from ainterviewer.synthesize.interviewees import (
 from ainterviewer.types import (
     Feedback,
     Interviewer,
+    InterviewStatus,
     LanguageCode,
     MessageRole,
     MessageType,
@@ -35,8 +36,8 @@ from .types import (
     AccessRequestStatus,
     AnnotationType,
     CollaboratorRole,
-    LanguageType,
     InterviewType,
+    LanguageType,
 )
 
 naming_convention = {
@@ -322,8 +323,9 @@ class InterviewTable(Base):
     interviewer: Mapped[Interviewer] = mapped_column(
         SQLEnum(Interviewer), default=Interviewer.AI
     )
-    is_complete: Mapped[bool] = mapped_column(default=False)
-    is_active: Mapped[bool] = mapped_column(default=False)
+    status: Mapped[InterviewStatus] = mapped_column(
+        SQLEnum(InterviewStatus), default=InterviewStatus.INACTIVE
+    )
 
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     last_updated: Mapped[datetime.datetime | None] = mapped_column()

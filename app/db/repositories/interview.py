@@ -1,15 +1,20 @@
-from app.db.types import InterviewType
 import datetime
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal, Optional
 
 from pydantic import UUID4
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import NoResultFound
 
 from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
-from ainterviewer.types import Feedback, Interviewer, MessageRole, MessageType
+from ainterviewer.types import (
+    Feedback,
+    Interviewer,
+    InterviewStatus,
+    MessageRole,
+    MessageType,
+)
 from ainterviewer.utils import now
 
 from ..models import IntervieweeCreate, InterviewPublic, MessagePublic
@@ -20,6 +25,7 @@ from ..tables import (
     ProjectTable,
     TaskTable,
 )
+from ..types import InterviewType
 from .base import BaseRepository
 
 
@@ -168,8 +174,7 @@ class InterviewRepository(BaseRepository):
         self,
         project_id: UUID4,
         interview_id: UUID4,
-        is_active: Optional[bool] = None,
-        is_complete: Optional[bool] = None,
+        status: InterviewStatus | None = None,
         time_spent: int = 0,
     ):
         statement = (
@@ -178,12 +183,14 @@ class InterviewRepository(BaseRepository):
             .where(InterviewTable.id == interview_id)
         )
         interview = self.session.execute(statement).scalar_one()
-        if is_active is not None:
-            interview.is_active = is_active
-        if is_complete is not None:
-            interview.is_complete = is_complete
+
+        if status is not None:
+            interview.status = status
+
         interview.last_updated = now()
+
         interview.total_time_spent += time_spent
+
         self.session.add(interview)
         self.session.commit()
 

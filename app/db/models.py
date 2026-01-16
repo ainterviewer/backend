@@ -31,6 +31,7 @@ from ainterviewer.types import (
     MessageRole,
     MessageType,
     TestType,
+    InterviewStatus,
 )
 from ainterviewer.utils import now
 
@@ -258,8 +259,8 @@ class InterviewBase(_BaseModel):
     interview_guide: InterviewGuide | None
     language: LanguageCode = "EN"
     interviewer: Interviewer = Interviewer.AI
+    status: InterviewStatus = InterviewStatus.INACTIVE
     type: InterviewType = InterviewType.DISTRIBUTED
-    is_complete: bool = False
     created_at: datetime
     last_updated: Optional[datetime] = None
     total_time_spent: int = 0
@@ -286,8 +287,7 @@ class InterviewSummaryPublic(_BaseModel):
     id: UUID4
     language: LanguageCode = "EN"
     interviewer: Interviewer = Interviewer.AI
-    is_complete: bool = False
-    is_active: bool = False
+    status: InterviewStatus
     type: InterviewType
     created_at: datetime
     last_updated: Optional[datetime] = None
