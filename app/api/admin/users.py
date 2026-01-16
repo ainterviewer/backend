@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from pydantic import UUID4
 
-from app.dependencies import AdminToken, DBSession
+from ...dependencies import AdminToken, DBSession
 
 router = APIRouter()
 

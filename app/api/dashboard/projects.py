@@ -32,12 +32,12 @@ from ainterviewer.interview_guides.generate import (
     generate_section,
 )
 from ainterviewer.types import LanguageCode, LanguageDict
-from app.settings import app_settings
 
 from ...db.models import InterviewSummaryPublic, MessagePublic, ProjectPublic
 from ...db.types import InterviewType
 from ...db.utils import fix_nested_columns
 from ...dependencies import DBSession, UserToken
+from ...settings import app_settings
 from ...utils import generate_qr_img
 from ..request_models import (
     CreateProjectRequest,

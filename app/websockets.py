@@ -1,4 +1,3 @@
-from app.settings import app_settings
 from collections import defaultdict
 
 from fastapi import WebSocket
@@ -14,6 +13,7 @@ from ainterviewer.settings import settings
 from ainterviewer.types import MessageRole, MessageType
 
 from .embed.main import EmbeddingTask, message_queue
+from .settings import app_settings
 from .types import WebSocketConversation, WebSocketUsers
 
 

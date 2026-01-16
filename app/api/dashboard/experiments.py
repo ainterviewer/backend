@@ -1,14 +1,13 @@
-from app.settings import app_settings
 import io
 
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import UUID4
 
-from app.utils import generate_qr_img
-
 from ...db.models import ExperimentCreate
 from ...dependencies import DBSession, UserToken
+from ...settings import app_settings
+from ...utils import generate_qr_img
 
 router = APIRouter(tags=["experiments"])
 
