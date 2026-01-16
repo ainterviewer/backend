@@ -38,8 +38,10 @@ class InterviewDataBase(PersistenceProtocol):
     """
 
     def __init__(self, session: Session):
-        self.session = session
-        self._alembic_config = AlembicConfig(APP_DIR.parent / "alembic.ini")
+        self.session: Session = session
+        self._alembic_config: AlembicConfig = AlembicConfig(
+            APP_DIR.parent / "alembic.ini"
+        )
 
         # Initialize all repositories with the shared session
         self.users: UserRepository = UserRepository(session)

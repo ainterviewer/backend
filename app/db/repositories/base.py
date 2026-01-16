@@ -5,4 +5,4 @@ class BaseRepository:
     """Base class for all repositories providing shared session access."""
 
     def __init__(self, session: Session):
-        self.session = session
+        self.session: Session = session
