@@ -335,10 +335,14 @@ class InterviewTable(Base):
     external_params: Mapped[str | None] = mapped_column()
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
     experiment_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("experiment.id"))
+    test_run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("testrun.id"))
 
     # Relationships
     project: Mapped["ProjectTable"] = relationship(back_populates="interviews")
     experiment: Mapped[Optional["ExperimentTable"]] = relationship(
+        back_populates="interviews"
+    )
+    test_run: Mapped[Optional["TestRunTable"]] = relationship(
         back_populates="interviews"
     )
     messages: Mapped[list["MessageTable"]] = relationship(
@@ -508,6 +512,7 @@ class TestRunTable(Base):
 
     # Relationships
     test_setup: Mapped["TestSetupTable"] = relationship(back_populates="test_runs")
+    interviews: Mapped[list["InterviewTable"]] = relationship(back_populates="test_run")
 
 
 class IntervieweeTable(Base):
