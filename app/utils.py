@@ -44,14 +44,7 @@ def generate_qr_img(
     qr = qrcode.QRCode(error_correction=ERROR_CORRECT_H)
     qr.add_data(payload)
 
-    icon_path = (
-        APP_DIR.resolve().parent.parent
-        / "frontend"
-        / "src"
-        / "lib"
-        / "assets"
-        / "favicon.png"
-    )
+    icon_path = APP_DIR.resolve() / "assets" / "favicon.png"
 
     img = qr.make_image(
         image_factory=StyledPilImage,
