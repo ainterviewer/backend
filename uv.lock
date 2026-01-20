@@ -54,8 +54,8 @@ wheels = [
 
 [[package]]
 name = "ainterviewer"
-version = "0.4.0rc4"
-source = { git = "https://github.com/gaardhus/ainterviewer-lib.git#feabe2a3fe756990e07e6f6d1e826e20cca4582b" }
+version = "0.0.5"
+source = { git = "https://github.com/gaardhus/ainterviewer-lib.git#1b9f8fc5ae06f5bc1054e24e13261d3def99ee0b" }
 dependencies = [
     { name = "aiobotocore" },
     { name = "fastapi", extra = ["standard"] },
@@ -104,6 +104,7 @@ dependencies = [
     { name = "qrcode", extra = ["pil"] },
     { name = "semver" },
     { name = "sqlalchemy" },
+    { name = "sqliteai-vector" },
     { name = "starlette" },
     { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
@@ -173,6 +174,7 @@ requires-dist = [
     { name = "semver", specifier = ">=3.0.4" },
     { name = "sentence-transformers", marker = "extra == 'analysis'", specifier = ">=4.1.0" },
     { name = "sqlalchemy", specifier = ">=2.0.43" },
+    { name = "sqliteai-vector", specifier = ">=0.9.52" },
     { name = "starlette", specifier = ">=0.46.2" },
     { name = "typer", specifier = ">=0.20.0" },
     { name = "ua-parser", extras = ["regex"], marker = "extra == 'analysis'", specifier = ">=1.0.1" },
@@ -3152,6 +3154,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/06/ce/37cf36d3765ecea1e5d22b1f107a3022ae5032bf319f805f3b918abdddeb/sqlglotrs-0.9.0-cp312-cp312-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:78eed1e668109ebc61771c0163bf9ff2d8073eea24034ba012edf71ba0759bf0", size = 368648, upload-time = "2025-12-11T17:07:54.861Z" },
     { url = "https://files.pythonhosted.org/packages/b6/a6/faea946e386e29f066a476cbcadc091369ac356f9b24b3e2c7e539d8800b/sqlglotrs-0.9.0-cp312-cp312-win32.whl", hash = "sha256:136a5001e43401b81b678e6f3433edc317cba08af3e7098e0228deef87f23562", size = 188778, upload-time = "2025-12-11T17:08:41.427Z" },
     { url = "https://files.pythonhosted.org/packages/2b/e2/9264dd3b2a4369fbcb7b911f5ddaa0bed73ab5ae2d910b4fa14b0f56879e/sqlglotrs-0.9.0-cp312-cp312-win_amd64.whl", hash = "sha256:b1c54ed249f16676fe8270738c8f05f08b1516d8b2975387b45bd67aa6f3b3a5", size = 201918, upload-time = "2025-12-11T17:08:47.725Z" },
+]
+
+[[package]]
+name = "sqliteai-vector"
+version = "0.9.52"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b8/b2/93f306bc02e90f2d6d91fcd6abc03e9acea603b5e7d636c1e667674f4a69/sqliteai_vector-0.9.52-py3-none-macosx_10_9_x86_64.whl", hash = "sha256:8300bbbf77fc383cb906173df87c7c7761ed6a5a05901c0c8524209a579370d0", size = 110832, upload-time = "2025-11-05T17:24:24.389Z" },
+    { url = "https://files.pythonhosted.org/packages/1f/ae/d1d73865fc60276c555e13941880e3d01cc2ca18e6f1798e1d902d22d697/sqliteai_vector-0.9.52-py3-none-macosx_11_0_arm64.whl", hash = "sha256:e09ab2a0677caff45aa64bc57807f3208a12f7739eff55cfe3509f2608232e8c", size = 110826, upload-time = "2025-11-05T17:24:23.918Z" },
+    { url = "https://files.pythonhosted.org/packages/cb/30/de00c538c358f5ac43ca9fe4ef95c9d8bbf55e0ce3387b440679cd30e0d1/sqliteai_vector-0.9.52-py3-none-manylinux2014_aarch64.whl", hash = "sha256:fca15ad8c28a385a41de07a0255db966a89b1e2ce1167dc6fa04623c9ec802c7", size = 53132, upload-time = "2025-11-05T17:24:25.542Z" },
+    { url = "https://files.pythonhosted.org/packages/96/55/065ba8f2b829bbe9a7bd5733e1d510a85efa18bc5dd8f65c98fea09aa68e/sqliteai_vector-0.9.52-py3-none-manylinux2014_x86_64.whl", hash = "sha256:2b7cacca285bb60a5f592666c721e5909e1c167293b04e9480bd506f74b7313d", size = 66137, upload-time = "2025-11-05T17:24:19.374Z" },
+    { url = "https://files.pythonhosted.org/packages/a9/b1/66a02dd470c0517caecf0fb30d682fe74271dbf8378f1d4cf7380dad9efd/sqliteai_vector-0.9.52-py3-none-win_amd64.whl", hash = "sha256:bb03aaad50bab15ea91fcc4faf35bfc74bf6709397b4c9b1f26056e36909a670", size = 66322, upload-time = "2025-11-05T17:24:23.32Z" },
 ]
 
 [[package]]
