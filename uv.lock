@@ -54,8 +54,8 @@ wheels = [
 
 [[package]]
 name = "ainterviewer"
-version = "0.0.5"
-source = { git = "https://github.com/gaardhus/ainterviewer-lib.git#1b9f8fc5ae06f5bc1054e24e13261d3def99ee0b" }
+version = "0.0.6"
+source = { git = "https://github.com/gaardhus/ainterviewer-lib.git#c6c4d6c52d29a2d3954a55810129b38d7dd37bb7" }
 dependencies = [
     { name = "aiobotocore" },
     { name = "fastapi", extra = ["standard"] },
@@ -94,6 +94,7 @@ dependencies = [
     { name = "itsdangerous" },
     { name = "jinja2" },
     { name = "jinjax" },
+    { name = "numpy" },
     { name = "passlib", extra = ["bcrypt"] },
     { name = "polars" },
     { name = "pyarrow" },
@@ -160,6 +161,7 @@ requires-dist = [
     { name = "jinjax", specifier = ">=0.50" },
     { name = "marimo", extras = ["recommended"], marker = "extra == 'analysis'", specifier = ">=0.13.2" },
     { name = "matplotlib", marker = "extra == 'analysis'", specifier = ">=3.10.3" },
+    { name = "numpy", specifier = ">=2.3.5" },
     { name = "pandas", marker = "extra == 'analysis'", specifier = ">=2.2.3" },
     { name = "passlib", extras = ["bcrypt"], specifier = ">=1.7.4" },
     { name = "plotly", marker = "extra == 'analysis'", specifier = ">=6.3.0" },
