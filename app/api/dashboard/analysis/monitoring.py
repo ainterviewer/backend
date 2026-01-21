@@ -45,6 +45,14 @@ class MessageCountStats(BaseModel):
     avg_messages: float
 
 
+class DropoutPoint(BaseModel):
+    """Count of dropouts at a specific question."""
+
+    main_question: int | None
+    sub_question: int | None
+    count: int
+
+
 class MonitoringStats(BaseModel):
     """Aggregated monitoring statistics for a project."""
 
@@ -63,6 +71,9 @@ class MonitoringStats(BaseModel):
     # Duration/engagement stats
     duration_stats: InterviewDurationStats | None
     message_count_stats: MessageCountStats | None
+
+    # Dropout analysis
+    dropout_stats: list[DropoutPoint]
 
 
 @router.get(
@@ -215,6 +226,56 @@ async def get_project_monitoring_stats(
             avg_messages=float(msg_stats_result.avg_messages or 0),
         )
 
+    # Dropout analysis
+    # Filter for incomplete interviews
+    incomplete_conditions = interview_conditions + [
+        InterviewTable.status != InterviewStatus.COMPLETED,
+    ]
+
+    # Find the last message for each incomplete interview
+    last_msg_subquery = (
+        select(
+            MessageTable.interview_id,
+            func.max(MessageTable.message_id).label("max_msg_id"),
+        )
+        .where(
+            MessageTable.project_id == project_id,
+            MessageTable.interview_id.in_(
+                select(InterviewTable.id).where(*incomplete_conditions)
+            ),
+        )
+        .group_by(MessageTable.interview_id)
+        .subquery()
+    )
+
+    # Count dropouts by question
+    dropout_stmt = (
+        select(
+            MessageTable.main_question,
+            MessageTable.sub_question,
+            func.count(MessageTable.id).label("count"),
+        )
+        .join(
+            last_msg_subquery,
+            (MessageTable.interview_id == last_msg_subquery.c.interview_id)
+            & (MessageTable.message_id == last_msg_subquery.c.max_msg_id),
+        )
+        .group_by(MessageTable.main_question, MessageTable.sub_question)
+        .order_by(MessageTable.main_question, MessageTable.sub_question)
+    )
+
+    dropout_results = session.execute(dropout_stmt).all()
+    dropout_stats = [
+        DropoutPoint(
+            main_question=row.main_question,
+            sub_question=row.sub_question,
+            count=row.count,
+        )
+        for row in dropout_results
+    ]
+
+    print(dropout_stats)
+
     return MonitoringStats(
         total_interviews=total_interviews,
         total_messages=total_messages,
@@ -224,4 +285,5 @@ async def get_project_monitoring_stats(
         interviews_over_time=interviews_over_time,
         duration_stats=duration_stats,
         message_count_stats=message_count_stats,
+        dropout_stats=dropout_stats,
     )
