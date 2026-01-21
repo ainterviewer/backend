@@ -55,7 +55,7 @@ wheels = [
 [[package]]
 name = "ainterviewer"
 version = "0.0.6"
-source = { git = "https://github.com/gaardhus/ainterviewer-lib.git#c6c4d6c52d29a2d3954a55810129b38d7dd37bb7" }
+source = { editable = "../lib" }
 dependencies = [
     { name = "aiobotocore" },
     { name = "fastapi", extra = ["standard"] },
@@ -75,6 +75,65 @@ dependencies = [
     { name = "types-aioboto3", extra = ["ec2"] },
     { name = "uvicorn", extra = ["standard"] },
     { name = "websockets" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "accelerate", marker = "extra == 'local'", specifier = ">=1.7.0" },
+    { name = "adbc-driver-sqlite", marker = "extra == 'analysis'", specifier = ">=1.6.0" },
+    { name = "aiobotocore", specifier = ">=2.25.0" },
+    { name = "fastapi", extras = ["standard"], specifier = ">=0.124" },
+    { name = "faster-whisper", marker = "extra == 'local'", specifier = ">=1.1.1" },
+    { name = "gguf", marker = "extra == 'local'", specifier = ">=0.17.0" },
+    { name = "ipykernel", marker = "extra == 'analysis'", specifier = ">=6.29.5" },
+    { name = "jinja2", specifier = ">=3.1.6" },
+    { name = "jinjax", specifier = ">=0.50" },
+    { name = "litellm", specifier = ">=1.68.1" },
+    { name = "marimo", extras = ["recommended"], marker = "extra == 'analysis'", specifier = ">=0.13.2" },
+    { name = "matplotlib", marker = "extra == 'analysis'", specifier = ">=3.10.3" },
+    { name = "ollama", specifier = "==0.3.2" },
+    { name = "openai", specifier = ">=1.72.0" },
+    { name = "pandas", marker = "extra == 'analysis'", specifier = ">=2.2.3" },
+    { name = "plotly", marker = "extra == 'analysis'", specifier = ">=6.3.0" },
+    { name = "polars", specifier = ">=1.30.0" },
+    { name = "protobuf", marker = "extra == 'local'", specifier = ">=5.29.5" },
+    { name = "pyarrow", specifier = ">=20.0.0" },
+    { name = "pyarrow", marker = "extra == 'analysis'", specifier = ">=20.0.0" },
+    { name = "pydantic", specifier = ">=2.9,<3" },
+    { name = "pydantic-extra-types", specifier = ">=2.10.4" },
+    { name = "pydantic-settings", specifier = ">=2.7.1" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
+    { name = "requests", specifier = ">=2.32.3" },
+    { name = "rich", marker = "extra == 'analysis'", specifier = ">=14.0.0" },
+    { name = "sentence-transformers", marker = "extra == 'analysis'", specifier = ">=4.1.0" },
+    { name = "sentencepiece", marker = "extra == 'local'", specifier = ">=0.2.0" },
+    { name = "structlog", specifier = ">=25.3.0" },
+    { name = "torch", marker = "extra == 'local'", specifier = ">=2.7.0" },
+    { name = "transformers", marker = "extra == 'local'", specifier = ">=4.52.4" },
+    { name = "types-aioboto3", extras = ["ec2"], specifier = ">=13.4.0" },
+    { name = "ua-parser", extras = ["regex"], marker = "extra == 'analysis'", specifier = ">=1.0.1" },
+    { name = "umap-learn", marker = "extra == 'analysis'", specifier = ">=0.5.9.post2" },
+    { name = "user-agents", marker = "extra == 'analysis'", specifier = ">=2.2.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.3" },
+    { name = "watchdog", marker = "extra == 'analysis'", specifier = ">=6.0.0" },
+    { name = "websockets", specifier = ">=15.0.1" },
+]
+provides-extras = ["local", "analysis"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "deptry", specifier = ">=0.23.0" },
+    { name = "djlint", specifier = ">=1.36.4" },
+    { name = "inquirer", specifier = ">=3.4.0" },
+    { name = "ipykernel", specifier = ">=6.29.5" },
+    { name = "locust", specifier = ">=2.37.7" },
+    { name = "locust-plugins", extras = ["websocket"], specifier = ">=4.7.0" },
+    { name = "nbstripout", specifier = ">=0.8.1" },
+    { name = "playwright", specifier = ">=1.52.0" },
+    { name = "pre-commit", specifier = ">=4.2.0" },
+    { name = "psycopg2-binary", specifier = ">=2.9.10" },
+    { name = "pytest", specifier = ">=8.4.0" },
+    { name = "ruff", specifier = ">=0.11.12" },
 ]
 
 [[package]]
@@ -147,7 +206,7 @@ dev = [
 requires-dist = [
     { name = "adbc-driver-postgresql", specifier = ">=1.6.0" },
     { name = "adbc-driver-sqlite", marker = "extra == 'analysis'", specifier = ">=1.6.0" },
-    { name = "ainterviewer", git = "https://github.com/gaardhus/ainterviewer-lib.git" },
+    { name = "ainterviewer", editable = "../lib" },
     { name = "aiobotocore", specifier = ">=2.25.1" },
     { name = "aiosmtplib", specifier = ">=4.0.1" },
     { name = "alembic", specifier = ">=1.16.1" },
