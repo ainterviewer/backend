@@ -231,7 +231,11 @@ async def create_guide(
         if isinstance(image.data, str) and (image.data.startswith("data:image/")):
             data = b64decode(image.data.split(",")[-1])
 
-            with open(FP_ASSETS_DIR / "images" / image.name, "wb") as f:
+            filepath = (
+                app_settings.storage.project_storage.image_path(project_id) / image.name
+            )
+
+            with open(filepath, "wb") as f:
                 f.write(data)
 
     db.projects.update_interview_guide(project_id, guide, language=lang)
