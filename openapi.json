@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.0.15"
+        "version": "0.0.16"
     },
     "paths": {
         "/api/projects/{project_id}/analysis/categories": {
@@ -2904,11 +2904,6 @@
                 ],
                 "summary": "Get Welcome",
                 "operationId": "get_welcome",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
                 "parameters": [
                     {
                         "name": "project_id",
@@ -4704,95 +4699,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "delete": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
             "put": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -4881,6 +4788,94 @@
                 }
             },
             "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -6206,6 +6201,44 @@
                 ],
                 "title": "DeleteInterviewRequest"
             },
+            "DropoutPoint": {
+                "properties": {
+                    "main_question": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Main Question"
+                    },
+                    "sub_question": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Sub Question"
+                    },
+                    "count": {
+                        "type": "integer",
+                        "title": "Count"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "main_question",
+                    "sub_question",
+                    "count"
+                ],
+                "title": "DropoutPoint",
+                "description": "Count of dropouts at a specific question."
+            },
             "ErrorResponse": {
                 "properties": {
                     "detail": {
@@ -6483,17 +6516,6 @@
                     "avg_seconds": {
                         "type": "number",
                         "title": "Avg Seconds"
-                    },
-                    "median_seconds": {
-                        "anyOf": [
-                            {
-                                "type": "number"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Median Seconds"
                     }
                 },
                 "type": "object",
@@ -6804,24 +6826,6 @@
                     "distributed"
                 ],
                 "title": "InterviewType"
-            },
-            "InterviewTypeCount": {
-                "properties": {
-                    "type": {
-                        "$ref": "#/components/schemas/InterviewType"
-                    },
-                    "count": {
-                        "type": "integer",
-                        "title": "Count"
-                    }
-                },
-                "type": "object",
-                "required": [
-                    "type",
-                    "count"
-                ],
-                "title": "InterviewTypeCount",
-                "description": "Count of interviews by type."
             },
             "IntervieweeCreate": {
                 "properties": {
@@ -7253,24 +7257,6 @@
                 "title": "MessageRole",
                 "type": "string"
             },
-            "MessageRoleCount": {
-                "properties": {
-                    "role": {
-                        "$ref": "#/components/schemas/MessageRole"
-                    },
-                    "count": {
-                        "type": "integer",
-                        "title": "Count"
-                    }
-                },
-                "type": "object",
-                "required": [
-                    "role",
-                    "count"
-                ],
-                "title": "MessageRoleCount",
-                "description": "Count of messages by role."
-            },
             "MessageType": {
                 "enum": [
                     "text",
@@ -7306,20 +7292,6 @@
                         "type": "array",
                         "title": "Interviews By Status"
                     },
-                    "interviews_by_type": {
-                        "items": {
-                            "$ref": "#/components/schemas/InterviewTypeCount"
-                        },
-                        "type": "array",
-                        "title": "Interviews By Type"
-                    },
-                    "messages_by_role": {
-                        "items": {
-                            "$ref": "#/components/schemas/MessageRoleCount"
-                        },
-                        "type": "array",
-                        "title": "Messages By Role"
-                    },
                     "interviews_over_time": {
                         "items": {
                             "$ref": "#/components/schemas/DailyInterviewCount"
@@ -7346,6 +7318,13 @@
                                 "type": "null"
                             }
                         ]
+                    },
+                    "dropout_stats": {
+                        "items": {
+                            "$ref": "#/components/schemas/DropoutPoint"
+                        },
+                        "type": "array",
+                        "title": "Dropout Stats"
                     }
                 },
                 "type": "object",
@@ -7355,11 +7334,10 @@
                     "total_completed_interviews",
                     "completion_rate",
                     "interviews_by_status",
-                    "interviews_by_type",
-                    "messages_by_role",
                     "interviews_over_time",
                     "duration_stats",
-                    "message_count_stats"
+                    "message_count_stats",
+                    "dropout_stats"
                 ],
                 "title": "MonitoringStats",
                 "description": "Aggregated monitoring statistics for a project."
@@ -8328,9 +8306,10 @@
                 "type": "string"
             },
             "SurveyOption": {
-                "description": "An option for a survey item.\nlabel [str]: The label for the option, will be displayed in the ui.\nvalue [Optional[str]]: The value for the option, can be used as a point of reference later in the interview.\ntip: [Optional[str]]: A tip to show the interviewee when they hover over the option.",
+                "description": "An option for a survey item.",
                 "properties": {
                     "label": {
+                        "description": "The label for the option, will be displayed in the ui.",
                         "title": "Label",
                         "type": "string"
                     },
@@ -8344,6 +8323,7 @@
                             }
                         ],
                         "default": null,
+                        "description": "The value for the option, can be used as a point of reference later in the interview.",
                         "title": "Value"
                     },
                     "tip": {
@@ -8356,6 +8336,7 @@
                             }
                         ],
                         "default": null,
+                        "description": "A tip to show the interviewee when they hover over the option.",
                         "title": "Tip"
                     }
                 },
