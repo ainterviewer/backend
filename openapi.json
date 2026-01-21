@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.0.11"
+        "version": "0.0.15"
     },
     "paths": {
         "/api/projects/{project_id}/analysis/categories": {
@@ -912,6 +912,119 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/monitoring/projects/{project_id}/stats": {
+            "get": {
+                "tags": [
+                    "analysis",
+                    "monitoring"
+                ],
+                "summary": "Get Project Monitoring Stats",
+                "description": "Get monitoring statistics for a project's interviews",
+                "operationId": "get_project_monitoring_stats",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid4",
+                            "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "interview_types",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/InterviewType"
+                                    }
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Interview Types"
+                        }
+                    },
+                    {
+                        "name": "start_date",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "date-time"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Start Date"
+                        }
+                    },
+                    {
+                        "name": "end_date",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "date-time"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "End Date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MonitoringStats"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
                                 }
                             }
                         }
@@ -4591,95 +4704,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "post": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "get": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "patch": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -4767,7 +4792,95 @@
                     }
                 }
             },
-            "delete": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "get": {
                 "tags": [
                     "admin"
                 ],
@@ -6051,6 +6164,31 @@
                 ],
                 "title": "CreateProjectRequest"
             },
+            "DailyInterviewCount": {
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "date",
+                        "title": "Date"
+                    },
+                    "count": {
+                        "type": "integer",
+                        "title": "Count"
+                    },
+                    "completed_count": {
+                        "type": "integer",
+                        "title": "Completed Count"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "date",
+                    "count",
+                    "completed_count"
+                ],
+                "title": "DailyInterviewCount",
+                "description": "Count of interviews created per day."
+            },
             "DeleteInterviewRequest": {
                 "properties": {
                     "interview_ids": {
@@ -6332,6 +6470,41 @@
                 "type": "object",
                 "title": "InterviewConfig"
             },
+            "InterviewDurationStats": {
+                "properties": {
+                    "min_seconds": {
+                        "type": "integer",
+                        "title": "Min Seconds"
+                    },
+                    "max_seconds": {
+                        "type": "integer",
+                        "title": "Max Seconds"
+                    },
+                    "avg_seconds": {
+                        "type": "number",
+                        "title": "Avg Seconds"
+                    },
+                    "median_seconds": {
+                        "anyOf": [
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Median Seconds"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "min_seconds",
+                    "max_seconds",
+                    "avg_seconds"
+                ],
+                "title": "InterviewDurationStats",
+                "description": "Statistics about interview duration (time spent)."
+            },
             "InterviewGuide-Input": {
                 "properties": {
                     "framing": {
@@ -6466,6 +6639,24 @@
                     "completed"
                 ],
                 "title": "InterviewStatus"
+            },
+            "InterviewStatusCount": {
+                "properties": {
+                    "status": {
+                        "$ref": "#/components/schemas/InterviewStatus"
+                    },
+                    "count": {
+                        "type": "integer",
+                        "title": "Count"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "status",
+                    "count"
+                ],
+                "title": "InterviewStatusCount",
+                "description": "Count of interviews by status."
             },
             "InterviewSubject": {
                 "properties": {
@@ -6613,6 +6804,24 @@
                     "distributed"
                 ],
                 "title": "InterviewType"
+            },
+            "InterviewTypeCount": {
+                "properties": {
+                    "type": {
+                        "$ref": "#/components/schemas/InterviewType"
+                    },
+                    "count": {
+                        "type": "integer",
+                        "title": "Count"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "type",
+                    "count"
+                ],
+                "title": "InterviewTypeCount",
+                "description": "Count of interviews by type."
             },
             "IntervieweeCreate": {
                 "properties": {
@@ -6805,6 +7014,30 @@
                     "values"
                 ],
                 "title": "MessageAnnotationPublic"
+            },
+            "MessageCountStats": {
+                "properties": {
+                    "min_messages": {
+                        "type": "integer",
+                        "title": "Min Messages"
+                    },
+                    "max_messages": {
+                        "type": "integer",
+                        "title": "Max Messages"
+                    },
+                    "avg_messages": {
+                        "type": "number",
+                        "title": "Avg Messages"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "min_messages",
+                    "max_messages",
+                    "avg_messages"
+                ],
+                "title": "MessageCountStats",
+                "description": "Statistics about message counts per interview."
             },
             "MessageFeedback": {
                 "properties": {
@@ -7020,6 +7253,24 @@
                 "title": "MessageRole",
                 "type": "string"
             },
+            "MessageRoleCount": {
+                "properties": {
+                    "role": {
+                        "$ref": "#/components/schemas/MessageRole"
+                    },
+                    "count": {
+                        "type": "integer",
+                        "title": "Count"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "role",
+                    "count"
+                ],
+                "title": "MessageRoleCount",
+                "description": "Count of messages by role."
+            },
             "MessageType": {
                 "enum": [
                     "text",
@@ -7029,6 +7280,89 @@
                 ],
                 "title": "MessageType",
                 "type": "string"
+            },
+            "MonitoringStats": {
+                "properties": {
+                    "total_interviews": {
+                        "type": "integer",
+                        "title": "Total Interviews"
+                    },
+                    "total_messages": {
+                        "type": "integer",
+                        "title": "Total Messages"
+                    },
+                    "total_completed_interviews": {
+                        "type": "integer",
+                        "title": "Total Completed Interviews"
+                    },
+                    "completion_rate": {
+                        "type": "number",
+                        "title": "Completion Rate"
+                    },
+                    "interviews_by_status": {
+                        "items": {
+                            "$ref": "#/components/schemas/InterviewStatusCount"
+                        },
+                        "type": "array",
+                        "title": "Interviews By Status"
+                    },
+                    "interviews_by_type": {
+                        "items": {
+                            "$ref": "#/components/schemas/InterviewTypeCount"
+                        },
+                        "type": "array",
+                        "title": "Interviews By Type"
+                    },
+                    "messages_by_role": {
+                        "items": {
+                            "$ref": "#/components/schemas/MessageRoleCount"
+                        },
+                        "type": "array",
+                        "title": "Messages By Role"
+                    },
+                    "interviews_over_time": {
+                        "items": {
+                            "$ref": "#/components/schemas/DailyInterviewCount"
+                        },
+                        "type": "array",
+                        "title": "Interviews Over Time"
+                    },
+                    "duration_stats": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/InterviewDurationStats"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "message_count_stats": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/MessageCountStats"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "total_interviews",
+                    "total_messages",
+                    "total_completed_interviews",
+                    "completion_rate",
+                    "interviews_by_status",
+                    "interviews_by_type",
+                    "messages_by_role",
+                    "interviews_over_time",
+                    "duration_stats",
+                    "message_count_stats"
+                ],
+                "title": "MonitoringStats",
+                "description": "Aggregated monitoring statistics for a project."
             },
             "PaginatedResponse_InterviewSummaryPublic_": {
                 "properties": {
