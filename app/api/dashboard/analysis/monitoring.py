@@ -5,7 +5,7 @@ from fastapi import APIRouter, Query
 from pydantic import UUID4, BaseModel
 from sqlalchemy import case, func, select
 
-from ainterviewer.types import InterviewStatus, MessageRole
+from ainterviewer.types import InterviewStatus
 
 from ....db.tables import InterviewTable, MessageTable
 from ....db.types import InterviewType
@@ -21,13 +21,6 @@ class InterviewStatusCount(BaseModel):
     count: int
 
 
-class InterviewTypeCount(BaseModel):
-    """Count of interviews by type."""
-
-    type: InterviewType
-    count: int
-
-
 class DailyInterviewCount(BaseModel):
     """Count of interviews created per day."""
 
@@ -36,20 +29,12 @@ class DailyInterviewCount(BaseModel):
     completed_count: int
 
 
-class MessageRoleCount(BaseModel):
-    """Count of messages by role."""
-
-    role: MessageRole
-    count: int
-
-
 class InterviewDurationStats(BaseModel):
     """Statistics about interview duration (time spent)."""
 
     min_seconds: int
     max_seconds: int
     avg_seconds: float
-    median_seconds: float | None = None
 
 
 class MessageCountStats(BaseModel):
@@ -71,8 +56,6 @@ class MonitoringStats(BaseModel):
 
     # Breakdowns
     interviews_by_status: list[InterviewStatusCount]
-    interviews_by_type: list[InterviewTypeCount]
-    messages_by_role: list[MessageRoleCount]
 
     # Time series data
     interviews_over_time: list[DailyInterviewCount]
@@ -109,11 +92,14 @@ async def get_project_monitoring_stats(
     session = db.session
 
     # Base conditions for filtering
-    interview_conditions = [InterviewTable.project_id == project_id]
-    message_conditions = [MessageTable.project_id == project_id]
-
-    if interview_types:
-        interview_conditions.append(InterviewTable.type.in_(interview_types))
+    interview_conditions = [
+        InterviewTable.project_id == project_id,
+        # InterviewTable.type == InterviewType.DISTRIBUTED,
+    ]
+    message_conditions = [
+        MessageTable.project_id == project_id,
+        # MessageTable.interview_type == InterviewType.DISTRIBUTED,
+    ]
 
     if start_date:
         interview_conditions.append(InterviewTable.created_at >= start_date)
@@ -144,7 +130,7 @@ async def get_project_monitoring_stats(
 
     # Completion rate
     completion_rate = (
-        (total_completed / total_interviews * 100) if total_interviews > 0 else 0.0
+        (total_completed / total_interviews) if total_interviews > 0 else 0.0
     )
 
     # Interviews by status
@@ -157,28 +143,6 @@ async def get_project_monitoring_stats(
     interviews_by_status = [
         InterviewStatusCount(status=status, count=count)
         for status, count in status_results
-    ]
-
-    # Interviews by type
-    type_stmt = (
-        select(InterviewTable.type, func.count(InterviewTable.id))
-        .where(*interview_conditions)
-        .group_by(InterviewTable.type)
-    )
-    type_results = session.execute(type_stmt).all()
-    interviews_by_type = [
-        InterviewTypeCount(type=itype, count=count) for itype, count in type_results
-    ]
-
-    # Messages by role
-    role_stmt = (
-        select(MessageTable.role, func.count(MessageTable.id))
-        .where(*message_conditions)
-        .group_by(MessageTable.role)
-    )
-    role_results = session.execute(role_stmt).all()
-    messages_by_role = [
-        MessageRoleCount(role=role, count=count) for role, count in role_results
     ]
 
     # Daily interview counts (last 30 days by default, or within date range)
@@ -209,7 +173,7 @@ async def get_project_monitoring_stats(
     ]
 
     # Duration statistics (for completed interviews with time spent > 0)
-    duration_conditions = interview_conditions + [InterviewTable.total_time_spent > 0]
+    duration_conditions = completed_conditions + [InterviewTable.total_time_spent > 0]
     duration_stmt = select(
         func.min(InterviewTable.total_time_spent).label("min_seconds"),
         func.max(InterviewTable.total_time_spent).label("max_seconds"),
@@ -257,8 +221,6 @@ async def get_project_monitoring_stats(
         total_completed_interviews=total_completed,
         completion_rate=completion_rate,
         interviews_by_status=interviews_by_status,
-        interviews_by_type=interviews_by_type,
-        messages_by_role=messages_by_role,
         interviews_over_time=interviews_over_time,
         duration_stats=duration_stats,
         message_count_stats=message_count_stats,
