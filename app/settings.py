@@ -14,7 +14,7 @@ from pydantic_settings import (
 from ainterviewer.settings import BaseSettingsConfigDict
 from ainterviewer.types import DatabaseType, TimeDelta
 
-from .storage import ProjectStorage, InterviewStorage, ExperimentStorage
+from .storage import ExperimentStorage, InterviewStorage, ProjectStorage
 
 
 class MediaStorageSettings(BaseModel):
