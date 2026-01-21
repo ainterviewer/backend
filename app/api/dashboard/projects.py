@@ -384,6 +384,8 @@ async def create_prompts(
     )
 
 
+# NOTE: Doesn't require auth since it's not sensitive and has to be read
+# from the interview page by visitors
 @router.get("/projects/{project_id}/guide/consent/{language}")
 async def get_consent(
     project_id: UUID4,
@@ -407,12 +409,13 @@ async def create_consent(
     db.projects.update_consent(project_id, consent, language)
 
 
+# NOTE: Doesn't require auth since it's not sensitive and has to be read
+# from the interview page by visitors
 @router.get("/projects/{project_id}/guide/welcome/{language}")
 async def get_welcome(
     project_id: UUID4,
     language: LanguageCode,
     db: DBSession,
-    jwt: UserToken,
 ) -> Welcome | None:
     return db.projects.get_welcome(
         project_id=project_id,
