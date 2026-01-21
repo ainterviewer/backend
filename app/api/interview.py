@@ -15,6 +15,7 @@ from fastapi import Path as URLPath
 from fastapi.responses import HTMLResponse
 from pydantic import UUID4
 
+from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode, TestType
 
 from ..auth import create_interview_token, decode_interview_token
@@ -179,7 +180,7 @@ async def upload_image(
         filename += "." + file.filename.split(".")[-1]
 
     filepath = (
-        app_settings.storage.interview_storage.image_path(interview_id) / filename
+        lib_settings.storage.interview_storage.image_path(interview_id) / filename
     )
 
     with open(filepath, "wb") as f:
@@ -204,7 +205,7 @@ async def upload_audio(
         filename += "." + file.filename.split(".")[-1]
 
     filepath = (
-        app_settings.storage.interview_storage.audio_path(interview_id) / filename
+        lib_settings.storage.interview_storage.audio_path(interview_id) / filename
     )
 
     with open(filepath, "wb") as f:

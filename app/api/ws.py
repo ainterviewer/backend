@@ -161,6 +161,7 @@ async def ai_websocket_endpoint(
         else:
             messages, continue_from_history = replay_history(
                 interview_history=interview_history,
+                project_id=project_id,
                 interview_id=interview_id,
             )
 

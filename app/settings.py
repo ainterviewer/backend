@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Literal
 
-from pydantic import UUID4, BaseModel, Field, SecretStr, computed_field, field_validator
+from pydantic import UUID4, BaseModel, Field, SecretStr, computed_field
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -13,37 +12,6 @@ from pydantic_settings import (
 
 from ainterviewer.settings import BaseSettingsConfigDict
 from ainterviewer.types import DatabaseType, TimeDelta
-
-from .storage import ExperimentStorage, InterviewStorage, ProjectStorage
-
-
-class MediaStorageSettings(BaseModel):
-    """Central configuration for all media storage."""
-
-    base_path: Path = Field(default=Path("storage/"))
-
-    @field_validator("base_path")
-    @classmethod
-    def validate_base_path(cls, v: Path) -> Path:
-        """Ensure base storage path exists."""
-        path = v.resolve()
-        path.mkdir(parents=True, exist_ok=True)
-        return path
-
-    @property
-    def project_storage(self) -> ProjectStorage:
-        """Get project storage instance."""
-        return ProjectStorage(base_path=self.base_path / "projects")
-
-    @property
-    def interview_storage(self) -> InterviewStorage:
-        """Get interview storage instance."""
-        return InterviewStorage(base_path=self.base_path / "interviews")
-
-    @property
-    def experiment_storage(self) -> ExperimentStorage:
-        """Get interview storage instance."""
-        return ExperimentStorage(base_path=self.base_path / "experiments")
 
 
 class AppSettings(BaseModel):
@@ -137,7 +105,6 @@ class Settings(BaseSettings):
     debug: bool = False
     app_env: Literal["production", "staging", "development"] = "development"
 
-    storage: MediaStorageSettings = MediaStorageSettings()
     app: AppSettings
     database: DatabaseSettings
     services: ServiceSettings

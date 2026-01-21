@@ -87,6 +87,7 @@ def parse_url_query_params(url: str) -> dict[str, list[str]]:
 
 def replay_history(
     interview_history: list[MessagePublic],
+    project_id: UUID4,
     interview_id: UUID4,
 ) -> tuple[list[OutgoingHistoryMessage | OutgoingData | OutgoingMessage], bool]:
     """Replays the messages from the history through the websocket. Returns
@@ -103,7 +104,7 @@ def replay_history(
         if message.content in CustomTokens.all:
             continue
         if message.image:
-            message.image.encode()
+            message.image.encode(project_id)
 
         data = OutgoingHistoryMessage(
             content=message.content,
@@ -137,7 +138,7 @@ def replay_history(
             pass
         else:
             if last_message.image:
-                last_message.image.encode()
+                last_message.image.encode(project_id)
 
             data = OutgoingMessage(
                 content=last_message.content,

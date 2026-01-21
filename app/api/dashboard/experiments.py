@@ -4,9 +4,10 @@ from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import UUID4
 
+from ainterviewer.settings import settings as lib_settings
+
 from ...db.models import ExperimentCreate
 from ...dependencies import DBSession, UserToken
-from ...settings import app_settings
 from ...utils import generate_qr_img
 
 router = APIRouter(tags=["experiments"])
@@ -45,7 +46,7 @@ async def generate_experiment_qr(
     jwt: UserToken,
 ):
     file_path = (
-        app_settings.storage.experiment_storage.qr_code_path(experiment_id)
+        lib_settings.storage.experiment_storage.qr_code_path(experiment_id)
         / "distribute.png"
     )
 

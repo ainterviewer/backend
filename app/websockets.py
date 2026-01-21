@@ -9,7 +9,7 @@ from ainterviewer.interfaces import (
     OutgoingMessage,
     ReceivedData,
 )
-from ainterviewer.settings import settings
+from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import MessageRole, MessageType
 
 from .embed.main import EmbeddingTask, message_queue
@@ -64,7 +64,7 @@ class WebsocketMessageHandler(IOProtocol):
                 raise ValueError()
 
             image_path = (
-                app_settings.storage.interview_storage.image_path(self.interview_id)
+                lib_settings.storage.interview_storage.image_path(self.interview_id)
                 / data.file
             )
 
@@ -106,7 +106,7 @@ class WebSocketConnectionManager:
         interview = self.active_connections[project_id][interview_id]
         interview["users"][role.value] = websocket
 
-        if settings.debug:
+        if lib_settings.debug:
             print(f"Connected to {project_id} {interview_id} {role}")
 
     def get_active_interview(

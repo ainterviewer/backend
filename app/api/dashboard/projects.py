@@ -31,6 +31,7 @@ from ainterviewer.interview_guides.generate import (
     generate_question,
     generate_section,
 )
+from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode, LanguageDict
 
 from ...db.models import InterviewSummaryPublic, MessagePublic, ProjectPublic
@@ -99,7 +100,7 @@ async def create_project(
     )
 
     file_path = (
-        app_settings.storage.project_storage.qr_code_path(project_id) / "interview.png"
+        lib_settings.storage.project_storage.qr_code_path(project_id) / "interview.png"
     )
     interview_url = str(request.base_url) + f"interview?id={project_id}"
 
@@ -232,7 +233,7 @@ async def create_guide(
             data = b64decode(image.data.split(",")[-1])
 
             filepath = (
-                app_settings.storage.project_storage.image_path(project_id) / image.name
+                lib_settings.storage.project_storage.image_path(project_id) / image.name
             )
 
             with open(filepath, "wb") as f:
@@ -447,7 +448,7 @@ async def create_welcome(
             raise ValueError()
 
         with open(
-            app_settings.storage.project_storage.video_path(project_id)
+            lib_settings.storage.project_storage.video_path(project_id)
             / video.filename,
             "wb",
         ) as f:
@@ -589,7 +590,7 @@ async def generate_project_qr(
     jwt: UserToken,
 ):
     file_path = (
-        app_settings.storage.project_storage.qr_code_path(project_id) / "interview.png"
+        lib_settings.storage.project_storage.qr_code_path(project_id) / "interview.png"
     )
 
     if not file_path.exists():
