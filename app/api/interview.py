@@ -112,10 +112,18 @@ async def create_interview(
     referer: Annotated[str | None, Cookie()] = None,
     forward_params: Annotated[str | None, Cookie()] = None,
 ) -> str:
-    project_localization = db.projects.get_project_localization(
-        project_id,
-        language=lang,
-    )
+    try:
+        project_localization = db.projects.get_project_localization(
+            project_id,
+            language=lang,
+        )
+    except:
+        project = db.projects.get_project(project_id)
+        default_lang = project.config.default_language
+        project_localization = db.projects.get_project_localization(
+            project_id,
+            language=default_lang,
+        )
 
     if not (interview_guide := project_localization.interview_guide):
         raise ValueError("Interview guide is not set")
