@@ -54,8 +54,8 @@ wheels = [
 
 [[package]]
 name = "ainterviewer"
-version = "0.0.7"
-source = { git = "https://github.com/gaardhus/ainterviewer-lib.git#78ddb8828166a48e57ea1d2cd99c4637e4a9ed6f" }
+version = "0.0.8"
+source = { git = "https://github.com/gaardhus/ainterviewer-lib.git#70c6ef2f97b43f61c03dec90771b47e0da271038" }
 dependencies = [
     { name = "aiobotocore" },
     { name = "fastapi", extra = ["standard"] },
