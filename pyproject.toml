@@ -71,8 +71,8 @@ dev = [
 [tool.uv.sources]
 # ainterviewer = { git = "https://github.com/gaardhus/ainterviewer-lib.git", tag = "v0.3.9" }
 # ainterviewer = { git = "https://github.com/gaardhus/ainterviewer-lib.git", tag = "latest" }
-# ainterviewer = { git = "https://github.com/gaardhus/ainterviewer-lib.git" }
-ainterviewer = { path = "../lib", editable = true }
+ainterviewer = { git = "https://github.com/gaardhus/ainterviewer-lib.git" }
+# ainterviewer = { path = "../lib", editable = true }
 
 [tool.basedpyright]
 reportExplicitAny = false
