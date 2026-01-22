@@ -541,7 +541,7 @@ async def export_messages(
     db: DBSession,
     jwt: UserToken,
 ):
-    messages = [
+    messages: list[MessagePublic] = [
         message
         for interview in (
             db.interviews.get_messages(interview_id, project_id)
@@ -550,13 +550,44 @@ async def export_messages(
         for message in interview
     ]
 
-    df = pl.from_dicts([json.loads(message.model_dump_json()) for message in messages])
+    rows = []
+
+    for message in messages:
+        d = json.loads(message.model_dump_json())
+
+        if d.get("feedback") is None:
+            d["feedback"] = ""
+
+        if (attachment := d.get("attachment")) is not None:
+            d["attachment"] = str(attachment)
+        else:
+            d["attachment"] = ""
+
+        if (image := d.get("image")) is not None:
+            d["image"] = json.dumps(image)
+        else:
+            d["image"] = ""
+
+        if (survey_item := d.get("survey_item")) is not None:
+            d["survey_item"] = json.dumps(survey_item)
+        else:
+            d["survey_item"] = ""
+
+        if (annotations := d.get("annotations")) is not None:
+            d["annotations"] = json.dumps(annotations)
+        else:
+            d["annotations"] = ""
+
+        rows.append(d)
+
+    df = pl.from_dicts(rows)
 
     with io.BytesIO() as stream:
         match export_request.format:
             case "csv":
                 df = fix_nested_columns(df)
                 df.write_csv(stream)
+
             case "xlsx":
                 with Workbook(stream) as workbook:
                     text_format = workbook.add_format({"text_wrap": True})
@@ -567,7 +598,7 @@ async def export_messages(
                             workbook,
                             column_formats={"backend_content": text_format},
                             column_widths={"backend_content": 400},
-                            worksheet=interview_id[0][:31],  # type: ignore
+                            worksheet=interview_id[0][:31],
                         )
 
             case _:
