@@ -239,7 +239,6 @@ async def get_project_monitoring_stats(
             func.max(MessageTable.message_id).label("max_msg_id"),
         )
         .where(
-            MessageTable.project_id == project_id,
             MessageTable.interview_id.in_(
                 select(InterviewTable.id).where(*incomplete_conditions)
             ),
@@ -254,6 +253,14 @@ async def get_project_monitoring_stats(
             MessageTable.main_question,
             MessageTable.sub_question,
             func.count(MessageTable.id).label("count"),
+        )
+        .where(
+            MessageTable.interview_id.in_(
+                select(InterviewTable.id).where(
+                    *interview_conditions,
+                    InterviewTable.status == InterviewStatus.INACTIVE,
+                )
+            ),
         )
         .join(
             last_msg_subquery,
@@ -273,8 +280,6 @@ async def get_project_monitoring_stats(
         )
         for row in dropout_results
     ]
-
-    print(dropout_stats)
 
     return MonitoringStats(
         total_interviews=total_interviews,
