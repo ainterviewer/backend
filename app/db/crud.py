@@ -1,8 +1,9 @@
+from ainterviewer.types import InterviewStatus
 from pathlib import Path
 
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
 
 from ainterviewer.interfaces import PersistenceProtocol
@@ -15,7 +16,7 @@ from .repositories import (
     TestRepository,
     UserRepository,
 )
-from .tables import Base
+from .tables import Base, InterviewTable
 
 ALEMBIC_BASE_RIVISON_ID = "fbcbd179bfba"
 
@@ -82,6 +83,11 @@ class InterviewDataBase(PersistenceProtocol):
     def drop_all_tables(self):
         """Drops all tables - useful for testing or complete reset"""
         Base.metadata.drop_all(self.session.bind)
+
+    def on_startup(self):
+        self.interviews.change_active_to_inactive()
+
+    def on_shutdown(self): ...
 
     # ==================== PersistenceProtocol Implementation ====================
     # These methods delegate to the InterviewRepository to satisfy the protocol

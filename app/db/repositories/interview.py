@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Literal, Optional
 
 from pydantic import UUID4
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import NoResultFound
 
 from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
@@ -33,6 +33,13 @@ class InterviewRepository(BaseRepository):
     """Repository for Interview, Message, and Task operations."""
 
     # ==================== Interview Methods ====================
+    def change_active_to_inactive(self):
+        self.session.execute(
+            update(InterviewTable)
+            .where(InterviewTable.status == InterviewStatus.ACTIVE)
+            .values(status=InterviewStatus.INACTIVE)
+        )
+        self.session.commit()
 
     def create_interview(
         self,

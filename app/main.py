@@ -1,8 +1,8 @@
 # TODO: Fully implement suggestions from this guide, both in creation of the
 # SDK and afterwards implement it in frontend
 # https://fastapi.tiangolo.com/advanced/generate-clients/#custom-generate-unique-id-function
-
 import logging
+from contextlib import asynccontextmanager
 
 import rich.console
 import rich.logging
@@ -11,12 +11,14 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import __version__
 from .api import main as api
 from .api import ws
-from .dependencies import AuthError, templates
+from .db import InterviewDataBase
+from .dependencies import AuthError, engine, templates
 from .settings import app_settings
 
 # =========== #
@@ -51,7 +53,25 @@ logger.addHandler(rich_handler)
 # Init FastAPI #
 # ============ #
 
-app = FastAPI(title="AInterviewer", version=__version__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    with Session(engine) as session:
+        db = InterviewDataBase(session)
+        db.on_startup()
+
+    yield
+
+    with Session(engine) as session:
+        db = InterviewDataBase(session)
+        db.on_shutdown()
+
+
+app = FastAPI(
+    title="AInterviewer",
+    version=__version__,
+    lifespan=lifespan,
+)
 
 # Middleware
 app.add_middleware(
