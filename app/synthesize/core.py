@@ -204,9 +204,6 @@ async def run_synthesis_job_shuffled_ai(
     for subject in subjects:
         agent = AnsweringAgent(
             model=answering_model,
-            chat_api=lambda messages, **kwargs: chat(
-                messages, model=answering_model, **kwargs
-            ),
             interview_subject=subject,
             language=language,
         )
