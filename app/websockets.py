@@ -58,26 +58,24 @@ class WebsocketMessageHandler(IOProtocol):
             # NOTE: The actual images are send over API, and the path is send
             # over the websocket
 
-            # TODO: Save the image to cloud storage or custom path
-
-            if not data.file:
+            if data.filename is None:
                 raise ValueError()
 
             image_path = (
                 lib_settings.storage.interview_storage.image_path(self.interview_id)
-                / data.file
+                / data.filename
             )
 
             # FIXME: This should not happen in this class / method
-            image_description = self.visual_agent.describe_image(image_path)
+            # image_description = self.visual_agent.describe_image(image_path)
 
             # TODO: Add image description to the database
             # NOTE: The image description is added to the interview_messages
-
-            text = (
-                "The user uploaded an image with the following description:\n\n"
-                + image_description
-            )
+            #
+            # text = (
+            #     "The user uploaded an image with the following description:\n\n"
+            #     + image_description
+            # )
         else:
             raise ValueError("Invalid message type")
 
