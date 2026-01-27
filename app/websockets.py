@@ -13,7 +13,6 @@ from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import MessageRole, MessageType
 
 from .embed.main import EmbeddingTask, message_queue
-from .settings import app_settings
 from .types import WebSocketConversation, WebSocketUsers
 
 
