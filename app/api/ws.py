@@ -5,6 +5,7 @@
 # NOTE:
 # - Consider changing to server side events instead of websockets if it
 # improves unstable connections
+from fastapi.websockets import WebSocketState
 
 import json
 
@@ -211,14 +212,15 @@ async def ai_websocket_endpoint(
                 # initialized.
                 # TODO: Add more errors or handle it in a different
                 # way.
-                print(e)
                 await websocket.send_json(
                     OutgoingData(error="InstanceInitializing").model_dump()
                 )
-        await websocket.close()
-
+                raise e
     except WebSocketDisconnect:
         pass
+    finally:
+        if not websocket.application_state == WebSocketState.DISCONNECTED:
+            await websocket.close()
 
 
 @router.websocket("/chat")
