@@ -101,8 +101,10 @@ def replay_history(
     continue_from_history = True
 
     for message in interview_history[:-1]:
-        if message.content in CustomTokens.all:
-            continue
+        # NOTE: Why did we skip these in the first place?
+        # if message.content in CustomTokens.all:
+        #     continue
+
         if message.image:
             message.image.encode(project_id)
 
