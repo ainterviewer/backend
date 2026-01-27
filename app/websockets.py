@@ -19,7 +19,7 @@ from .types import WebSocketConversation, WebSocketUsers
 
 class WebsocketMessageHandler(IOProtocol):
     def __init__(self, websocket: WebSocket, project_id: UUID4, interview_id: UUID4):
-        self.ws = websocket
+        self.ws: WebSocket = websocket
         self.project_id = project_id
         self.interview_id = interview_id
 
