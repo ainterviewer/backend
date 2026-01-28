@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from pydantic import UUID4
 from uvicorn.config import logger
 
@@ -11,7 +11,7 @@ from ...db.models import (
     TestSetupCreate,
     TestSetupPublic,
 )
-from ...dependencies import DBSession, UserToken
+from ...dependencies import DBSession, ProjectEditor, ProjectViewer, UserToken
 from ...synthesize.core import (
     run_synthesis_job_fixed_answers,
     run_synthesis_job_shuffled_ai,
@@ -33,7 +33,7 @@ async def get_background_info(
     project_id: UUID4,
     test_id: UUID4,
     db: DBSession,
-    jwt: UserToken,
+    jwt: ProjectViewer,
 ) -> BackgroundInfoOptions:
     return db.tests.get_background_info(project_id, test_id)
 
@@ -44,7 +44,7 @@ async def update_background_info(
     test_id: UUID4,
     request: UpdateBackgroundInfoRequest,
     db: DBSession,
-    jwt: UserToken,
+    jwt: ProjectEditor,
 ):
     return db.tests.update_background_info(test_id, request.background_info)
 
@@ -54,7 +54,7 @@ async def get_fixed_answers(
     project_id: UUID4,
     test_id: UUID4,
     db: DBSession,
-    jwt: UserToken,
+    jwt: ProjectViewer,
 ):
     return db.tests.get_fixed_answers(test_id)
 
@@ -65,7 +65,7 @@ async def update_fixed_answers(
     test_id: UUID4,
     request: UpdateFixedAnswersRequest,
     db: DBSession,
-    jwt: UserToken,
+    jwt: ProjectEditor,
 ):
     return db.tests.update_fixed_answers(test_id, request.answers)
 
@@ -74,7 +74,7 @@ async def update_fixed_answers(
 async def get_test_setups(
     project_id: UUID4,
     db: DBSession,
-    jwt: UserToken,
+    jwt: ProjectViewer,
 ) -> list[TestSetupPublic]:
     return db.tests.get_test_setups(project_id)
 
@@ -83,21 +83,25 @@ async def get_test_setups(
 async def create_test_setup(
     test_setup: TestSetupCreate,
     db: DBSession,
-    jwt: UserToken,
+    jwt: ProjectEditor,
 ) -> TestSetupPublic:
     test_setup_public = db.tests.create_test_setup(test_setup)
     return test_setup_public
 
 
-@router.delete("/projects{project_id}/tests/{test_id}")
+@router.delete("/projects/{project_id}/tests/{test_id}")
 async def delete_test_setup(
-    project_id: UUID4, test_id: UUID4, db: DBSession, jwt: UserToken
+    project_id: UUID4,
+    test_id: UUID4,
+    db: DBSession,
+    jwt: ProjectEditor,
 ):
     db.tests.delete_test_setup(test_id)
 
 
-@router.post("/interviewee")
+@router.post("/projects/{project_id}/interviewee")
 async def add_interviewee(
+    project_id: UUID4,
     interviewee: IntervieweeCreate,
     db: DBSession,
     jwt: UserToken,
@@ -110,7 +114,7 @@ async def get_test_status(
     project_id: UUID4,
     test_id: UUID4,
     db: DBSession,
-    jwt: UserToken,
+    jwt: ProjectViewer,
 ):
     return db.tests.get_test_status(test_id)
 
@@ -123,7 +127,7 @@ async def run_synthetic_test(
     request_data: SynthesizeRequest,
     background_tasks: BackgroundTasks,
     db: DBSession,
-    jwt: UserToken,
+    jwt: ProjectEditor,
 ):
     # TODO:
     # Switch to Celery or similar framework for better control and management

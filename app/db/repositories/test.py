@@ -156,11 +156,20 @@ class TestRepository(BaseRepository):
 
         return ExperimentPublic.model_validate(experiment)
 
-    def delete_experiment(
-        self,
-        experiment_id: UUID4,
-    ):
+    def delete_experiment(self, experiment_id: UUID4):
         # FIXME: Update permissions to collab
         statement = delete(ExperimentTable).where(ExperimentTable.id == experiment_id)
         self.session.execute(statement)
         self.session.commit()
+
+    # ==================== Authorization Methods ====================
+    #
+    def check_user(self, user_id: UUID4, experiment_id: UUID4):
+        statement = select(ExperimentTable).where(
+            ExperimentTable.id == experiment_id,
+            ExperimentTable.user_id == user_id,
+        )
+
+        experiment = self.session.execute(statement).scalar_one_or_none()
+
+        return experiment

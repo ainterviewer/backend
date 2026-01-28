@@ -1,11 +1,10 @@
 from fastapi import APIRouter
 
-from . import analysis, collaborators, experiments, folders, projects, synthesize
+from . import analysis, experiments, folders, projects, synthesize
 
 router = APIRouter()
 
 router.include_router(analysis.router)
-router.include_router(collaborators.router)
 router.include_router(experiments.router)
 router.include_router(folders.router)
 router.include_router(projects.router)

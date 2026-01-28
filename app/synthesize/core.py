@@ -176,9 +176,8 @@ async def add_interviewee(
 ):
     async with aiohttp.ClientSession() as session:
         async with session.post(
-            f"http://{app_settings.app.api_endpoint}/api/interviewee",
+            f"http://{app_settings.app.api_endpoint}/api/projects/{project_id}/interviewee",
             json={
-                "project_id": str(project_id),
                 "interview_id": str(interview_id),
                 "interview_subject": interviewee,
             },

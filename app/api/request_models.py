@@ -45,7 +45,6 @@ class PromptsUpdateRequest(BaseModel):
 
 class CreateProjectRequest(BaseModel):
     title: str
-    folder_id: UUID4
     default_language: LanguageCode
 
 

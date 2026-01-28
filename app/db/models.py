@@ -135,7 +135,6 @@ class CollaboratorBase(_BaseModel):
 
 class CollaboratorCreate(CollaboratorBase):
     email: EmailStr
-    folder_id: UUID4
 
 
 class CollaboratorPublic(CollaboratorBase):
@@ -184,13 +183,7 @@ class ProjectFolderPublic(ProjectFolderBase):
     )
 
 
-class ProjectFolderEdit(ProjectFolderBase):
-    id: UUID4
-    title: str
-
-
-class ProjectFolderDelete(_BaseModel):
-    id: UUID4
+class ProjectFolderEdit(ProjectFolderBase): ...
 
 
 class ProjectFolderWithProjects(ProjectFolderPublic):
@@ -420,7 +413,6 @@ class TestRunPublic(TestRunBase):
 
 class IntervieweeBase(_BaseModel):
     interview_id: UUID4
-    project_id: UUID4
     interview_subject: InterviewSubject
 
 
