@@ -8,9 +8,8 @@ import rich.console
 import rich.logging
 import rich.theme
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -18,7 +17,7 @@ from . import __version__
 from .api import main as api
 from .api import ws
 from .db import InterviewDataBase
-from .dependencies import AuthError, engine, templates
+from .dependencies import engine
 from .settings import app_settings
 
 # =========== #
@@ -94,32 +93,6 @@ app.add_middleware(
 # Routers
 app.include_router(api.router)
 app.include_router(ws.router)
-
-
-@app.exception_handler(ValueError)
-async def custom_exception_handler(request: Request, exc: Exception):
-    logger.error(f"ValueError occurred: {str(exc)}")
-
-    if request.url.path.startswith("/api"):
-        raise exc
-
-    # FIXME: This doesnt work with new SvelteKit frontend
-    return templates.TemplateResponse(
-        "error.html", {"request": request, "error_message": str(exc)}, status_code=500
-    )
-
-
-@app.exception_handler(AuthError)
-async def http_redirect(request: Request, exc: AuthError):
-    if request.url.path.startswith("/api"):
-        raise exc
-    # TODO:
-    # I think this is redundant since we now use SvelteKit as frontend, and
-    # capture the redirect there.
-    if exc.status_code == 401 or exc.status_code == 403:
-        return RedirectResponse(url="/login")
-    raise exc
-
 
 if __name__ == "__main__":
     uvicorn.run(
