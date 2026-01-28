@@ -38,7 +38,6 @@ from ...db.models import InterviewSummaryPublic, MessagePublic, ProjectPublic
 from ...db.types import InterviewType
 from ...db.utils import fix_nested_columns
 from ...dependencies import DBSession, UserToken
-from ...settings import app_settings
 from ...utils import generate_qr_img
 from ..request_models import (
     CreateProjectRequest,
