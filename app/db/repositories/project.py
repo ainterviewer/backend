@@ -14,7 +14,7 @@ from ainterviewer.types import LanguageCode, LanguageDict
 from ainterviewer.utils import get_language_dict
 
 from ...api.request_models import PromptsUpdateRequest
-from ...types import ProjectStatus
+from ...types import CollaboratorRole, ProjectStatus
 from ..models import (
     Collaborator,
     CollaboratorCreate,
@@ -33,7 +33,6 @@ from ..tables import (
     ProjectTable,
     UserTable,
 )
-from ..types import CollaboratorRole
 from .base import BaseRepository
 
 

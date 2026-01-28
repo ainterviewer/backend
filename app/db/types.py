@@ -1,14 +1,9 @@
+from __future__ import annotations
+
 from enum import StrEnum
 from typing import final
 
 from sqlalchemy.types import VARCHAR, TypeDecorator
-
-
-class CollaboratorRole(StrEnum):
-    VIEWER = "viewer"
-    ANNOTATOR = "annotator"
-    EDITOR = "editor"
-    ADMIN = "admin"
 
 
 class AnnotationType(StrEnum):

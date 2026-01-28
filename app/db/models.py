@@ -1,9 +1,9 @@
 from __future__ import annotations
-from uuid import UUID
 
 from datetime import datetime
 from pathlib import Path
 from typing import List, Literal, Optional
+from uuid import UUID
 
 from pydantic import (
     UUID4,
@@ -12,8 +12,8 @@ from pydantic import (
     EmailStr,
     Field,
     computed_field,
-    model_validator,
     field_validator,
+    model_validator,
 )
 from pydantic.json_schema import SkipJsonSchema
 
@@ -26,19 +26,19 @@ from ainterviewer.synthesize.interviewees import BackgroundInfoOptions, Intervie
 from ainterviewer.types import (
     Feedback,
     Interviewer,
+    InterviewStatus,
     LanguageCode,
     LanguageDict,
     MessageRole,
     MessageType,
     TestType,
-    InterviewStatus,
 )
 from ainterviewer.utils import now
 
 from ..settings import app_settings
-from ..types import ProjectStatus, Scope, TestRunStatus
+from ..types import CollaboratorRole, ProjectStatus, Scope, TestRunStatus
 from ._extra import CustomEmailStr
-from .types import AccessRequestStatus, AnnotationType, CollaboratorRole, InterviewType
+from .types import AccessRequestStatus, AnnotationType, InterviewType
 
 
 class _BaseModel(BaseModel):

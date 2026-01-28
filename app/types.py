@@ -23,6 +23,39 @@ _SCOPE_HIERARCHY: dict[Scope, set[Scope]] = {
 }
 
 
+class CollaboratorRole(StrEnum):
+    VIEWER = "viewer"
+    ANNOTATOR = "annotator"
+    EDITOR = "editor"
+    ADMIN = "admin"
+
+    def includes(self, other: CollaboratorRole) -> bool:
+        """Check if this scope includes the permissions of another scope."""
+        return other in _COLLABORATOR_HIERARCHY[self]
+
+
+_COLLABORATOR_HIERARCHY: dict[CollaboratorRole, set[CollaboratorRole]] = {
+    CollaboratorRole.ADMIN: {
+        CollaboratorRole.ADMIN,
+        CollaboratorRole.EDITOR,
+        CollaboratorRole.ANNOTATOR,
+        CollaboratorRole.VIEWER,
+    },
+    CollaboratorRole.EDITOR: {
+        CollaboratorRole.EDITOR,
+        CollaboratorRole.ANNOTATOR,
+        CollaboratorRole.VIEWER,
+    },
+    CollaboratorRole.ANNOTATOR: {
+        CollaboratorRole.ANNOTATOR,
+        CollaboratorRole.VIEWER,
+    },
+    CollaboratorRole.VIEWER: {
+        CollaboratorRole.VIEWER,
+    },
+}
+
+
 class WebSocketUsers(TypedDict):
     user: NotRequired[WebSocket]
     interviewer: NotRequired[WebSocket]

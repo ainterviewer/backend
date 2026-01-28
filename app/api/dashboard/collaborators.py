@@ -1,30 +1,18 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from pydantic import UUID4
 
 from ...db.models import CollaboratorCreate, CollaboratorPublic
-from ...db.types import CollaboratorRole
 from ...dependencies import DBSession, UserToken
+from ...types import CollaboratorRole
 
 router = APIRouter(tags=["collaborators"])
 
 
 @router.get("/dashboard/collaborators", response_model=list[CollaboratorPublic])
 async def get_collaborators(
-    request: Request,
-    db: DBSession,
-    jwt: UserToken,
-    project_id: UUID4 | None = None,
-    folder_id: UUID4 | None = None,
+    request: Request, db: DBSession, jwt: UserToken, folder_id: UUID4
 ):
-    if project_id:
-        project = db.projects.get_project(project_id)
-        if project.folder_id:
-            return db.projects.get_collaborators(project.folder_id)
-        return []
-    elif folder_id:
-        return db.projects.get_collaborators(folder_id)
-    else:
-        raise HTTPException(400, "Either project_id or folder_id is required")
+    return db.projects.get_collaborators(folder_id)
 
 
 @router.post("/dashboard/collaborators", response_model=CollaboratorPublic)

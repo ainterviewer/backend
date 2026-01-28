@@ -30,12 +30,11 @@ from ainterviewer.types import (
 )
 from ainterviewer.utils import now
 
-from ..types import ProjectStatus, Scope, TestRunStatus
+from ..types import CollaboratorRole, ProjectStatus, Scope, TestRunStatus
 from ._extra import PydanticJSONB
 from .types import (
     AccessRequestStatus,
     AnnotationType,
-    CollaboratorRole,
     InterviewType,
     LanguageType,
 )
