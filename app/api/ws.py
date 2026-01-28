@@ -173,16 +173,16 @@ async def ai_websocket_endpoint(
                 await websocket.close()
                 return
 
+    agent_prompts = project_localization.prompts
+    prompt_loader = DictLoader(agent_prompts.dump_templates())
+
+    if settings.debug:
+        pass
+        # agent_prompts.print_prompts()
+
+    wmh = WebsocketMessageHandler(websocket, project_id, interview_id)
+
     try:
-        agent_prompts = project_localization.prompts
-        prompt_loader = DictLoader(agent_prompts.dump_templates())
-
-        if settings.debug:
-            pass
-            # agent_prompts.print_prompts()
-
-        wmh = WebsocketMessageHandler(websocket, project_id, interview_id)
-
         async with AInterviewer(
             io=wmh,
             db=db,
@@ -212,15 +212,15 @@ async def ai_websocket_endpoint(
                 # initialized.
                 # TODO: Add more errors or handle it in a different
                 # way.
-                await websocket.send_json(
-                    OutgoingData(error="InstanceInitializing").model_dump()
-                )
+                if isinstance(e, WebSocketDisconnect):
+                    pass
+                else:
+                    await websocket.send_json(
+                        OutgoingData(error="InstanceInitializing").model_dump()
+                    )
                 raise e
     except WebSocketDisconnect:
         pass
-    finally:
-        if not websocket.application_state == WebSocketState.DISCONNECTED:
-            await websocket.close()
 
 
 @router.websocket("/chat")
