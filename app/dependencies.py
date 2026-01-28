@@ -1,12 +1,12 @@
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import Cookie, Depends, HTTPException
 from fastapi.security import APIKeyCookie
 from fastapi.templating import Jinja2Templates
 from jinjax import Catalog, JinjaX
 from jose import JWTError
-from pydantic import ValidationError
+from pydantic import UUID4, ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -16,7 +16,7 @@ from .auth import AuthToken, decode_auth_token
 from .db import InterviewDataBase
 from .db.vectors import register_vector_extension
 from .settings import app_settings
-from .types import Scope
+from .types import CollaboratorRole, Scope
 from .websockets import WebSocketConnectionManager
 
 # Templating
@@ -41,21 +41,31 @@ auth_cookie_scheme = APIKeyCookie(name="token", auto_error=False)
 # )
 
 
-engine = create_engine(
-    app_settings.database.connection_string,
-    pool_size=20,
-    max_overflow=40,
-)
-register_vector_extension(engine)
-
 # TODO:
 # - Should probably be async instead
 # - get_db should yield a session instead, update crud manager accordingly,
 # greatly reduces the number of required lines of code
 # - encrypt data with SQLCipher
-# NOTE:
-# Pragmas implemented in create_db_and_tables
-#
+engine = create_engine(
+    app_settings.database.connection_string,
+    pool_size=20,
+    max_overflow=40,
+)
+
+register_vector_extension(engine)
+
+
+def get_db():
+    with Session(engine) as session:
+        db = InterviewDataBase(session)
+        yield db
+
+
+manager = WebSocketConnectionManager()
+
+
+def get_ws_manager():
+    return manager
 
 
 class AuthError(HTTPException): ...
@@ -101,22 +111,79 @@ class ScopeChecker:
             raise e
 
 
-manager = WebSocketConnectionManager()
+class ResourceRoleChecker:
+    """Check user has required CollaboratorRole on a resource."""
 
+    def __init__(
+        self,
+        required_role: CollaboratorRole,
+        resource_type: Literal["project", "folder"],
+    ):
+        self.required_role = required_role
+        self.resource_type = resource_type
 
-def get_ws_manager():
-    return manager
+    def __call__(
+        self,
+        project_id: UUID4 | None = None,
+        folder_id: UUID4 | None = None,
+        token: AuthToken = Depends(ScopeChecker(Scope.USER)),
+        db: InterviewDataBase = Depends(get_db),
+    ) -> AuthToken:
+        # Admin scope bypasses resource checks
+        if Scope.ADMIN in {Scope(s) for s in token.scope.split()}:
+            return token
 
+        if self.resource_type == "project" and project_id:
+            user_role = db.projects.get_user_role_on_project(token.user_id, project_id)
+        elif self.resource_type == "folder" and folder_id:
+            user_role = db.projects.get_user_role_on_folder(token.user_id, folder_id)
+        else:
+            print(self.required_role, self.resource_type)
+            print(project_id, folder_id)
+            raise HTTPException(400, "Missing resource identifier")
 
-def get_db():
-    with Session(engine) as session:
-        db = InterviewDataBase(session)
-        yield db
+        if user_role is None:
+            raise HTTPException(404, "Resource not found")
+
+        if not user_role.includes(self.required_role):
+            raise HTTPException(403, f"Requires {self.required_role} role")
+
+        return token
 
 
 DBSession = Annotated[InterviewDataBase, Depends(get_db)]
+LocalizationCookie = Annotated[LanguageCode, Cookie(alias="localization")]
+LanguageCookie = Annotated[LanguageCode, Cookie(alias="language")]
+
+# User tokens
 AdminToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.ADMIN))]
 UserToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.USER))]
 GuestToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.GUEST))]
-LocalizationCookie = Annotated[LanguageCode, Cookie(alias="localization")]
-LanguageCookie = Annotated[LanguageCode, Cookie(alias="language")]
+
+
+# Resource checks
+ProjectViewer = Annotated[
+    AuthToken, Depends(ResourceRoleChecker(CollaboratorRole.VIEWER, "project"))
+]
+ProjectAnnotator = Annotated[
+    AuthToken, Depends(ResourceRoleChecker(CollaboratorRole.ANNOTATOR, "project"))
+]
+ProjectEditor = Annotated[
+    AuthToken, Depends(ResourceRoleChecker(CollaboratorRole.EDITOR, "project"))
+]
+ProjectAdmin = Annotated[
+    AuthToken, Depends(ResourceRoleChecker(CollaboratorRole.ADMIN, "project"))
+]
+
+FolderViewer = Annotated[
+    AuthToken, Depends(ResourceRoleChecker(CollaboratorRole.VIEWER, "folder"))
+]
+FolderAnnotator = Annotated[
+    AuthToken, Depends(ResourceRoleChecker(CollaboratorRole.ANNOTATOR, "folder"))
+]
+FolderEditor = Annotated[
+    AuthToken, Depends(ResourceRoleChecker(CollaboratorRole.EDITOR, "folder"))
+]
+FolderAdmin = Annotated[
+    AuthToken, Depends(ResourceRoleChecker(CollaboratorRole.ADMIN, "folder"))
+]

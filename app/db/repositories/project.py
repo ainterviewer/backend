@@ -699,3 +699,31 @@ class ProjectRepository(BaseRepository):
         project_localization.welcome = welcome
 
         self.session.commit()
+
+    # ==================== Authorization Methods ====================
+
+    def get_user_role_on_folder(
+        self, user_id: UUID4, folder_id: UUID4
+    ) -> CollaboratorRole | None:
+        """Get user's role on a folder, or None if no access."""
+        statement = select(CollaboratorTable).where(
+            CollaboratorTable.folder_id == folder_id,
+            CollaboratorTable.user_id == user_id,
+        )
+        collab = self.session.execute(statement).scalar_one_or_none()
+        return collab.role if collab else None
+
+    def get_user_role_on_project(
+        self, user_id: UUID4, project_id: UUID4
+    ) -> CollaboratorRole | None:
+        """Get user's role on a project via its folder."""
+        statement = (
+            select(CollaboratorTable.role)
+            .join(ProjectFolderTable, CollaboratorTable.folder_id == ProjectFolderTable.id)
+            .join(ProjectTable, ProjectTable.folder_id == ProjectFolderTable.id)
+            .where(
+                ProjectTable.id == project_id,
+                CollaboratorTable.user_id == user_id,
+            )
+        )
+        return self.session.execute(statement).scalar_one_or_none()

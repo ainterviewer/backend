@@ -37,7 +37,7 @@ from ainterviewer.types import LanguageCode, LanguageDict
 from ...db.models import InterviewSummaryPublic, MessagePublic, ProjectPublic
 from ...db.types import InterviewType
 from ...db.utils import fix_nested_columns
-from ...dependencies import DBSession, UserToken
+from ...dependencies import DBSession, UserToken, ProjectEditor, FolderEditor
 from ...utils import generate_qr_img
 from ..request_models import (
     CreateProjectRequest,
@@ -85,7 +85,7 @@ async def create_project(
     project_request: CreateProjectRequest,
     background_tasks: BackgroundTasks,
     db: DBSession,
-    jwt: UserToken,
+    jwt: FolderEditor,
 ):
     if isinstance(jwt, RedirectResponse):
         return jwt
