@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.0.16"
+        "version": "0.0.21"
     },
     "paths": {
         "/api/projects/{project_id}/analysis/categories": {
@@ -1032,244 +1032,6 @@
                 }
             }
         },
-        "/api/dashboard/collaborators": {
-            "get": {
-                "tags": [
-                    "collaborators"
-                ],
-                "summary": "Get Collaborators",
-                "operationId": "get_collaborators",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "project_id",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "anyOf": [
-                                {
-                                    "type": "string",
-                                    "format": "uuid4"
-                                },
-                                {
-                                    "type": "null"
-                                }
-                            ],
-                            "title": "Project Id"
-                        }
-                    },
-                    {
-                        "name": "folder_id",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "anyOf": [
-                                {
-                                    "type": "string",
-                                    "format": "uuid4"
-                                },
-                                {
-                                    "type": "null"
-                                }
-                            ],
-                            "title": "Folder Id"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/CollaboratorPublic"
-                                    },
-                                    "title": "Response Get Collaborators"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "post": {
-                "tags": [
-                    "collaborators"
-                ],
-                "summary": "Add Collaborator",
-                "operationId": "add_collaborator",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/CollaboratorCreate"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/CollaboratorPublic"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "tags": [
-                    "collaborators"
-                ],
-                "summary": "Remove Collaborator",
-                "operationId": "remove_collaborator",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "folder_id",
-                        "in": "query",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid4",
-                            "title": "Folder Id"
-                        }
-                    },
-                    {
-                        "name": "user_id",
-                        "in": "query",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid4",
-                            "title": "User Id"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "patch": {
-                "tags": [
-                    "collaborators"
-                ],
-                "summary": "Update Collaborator Role",
-                "operationId": "update_collaborator_role",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "folder_id",
-                        "in": "query",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid4",
-                            "title": "Folder Id"
-                        }
-                    },
-                    {
-                        "name": "user_id",
-                        "in": "query",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid4",
-                            "title": "User Id"
-                        }
-                    },
-                    {
-                        "name": "role",
-                        "in": "query",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/components/schemas/CollaboratorRole"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/CollaboratorPublic"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/api/experiments": {
             "get": {
                 "tags": [
@@ -1431,7 +1193,7 @@
         "/api/folders": {
             "get": {
                 "tags": [
-                    "projects"
+                    "folders"
                 ],
                 "summary": "Get Folders",
                 "description": "Get project folders",
@@ -1460,7 +1222,7 @@
             },
             "post": {
                 "tags": [
-                    "projects"
+                    "folders"
                 ],
                 "summary": "Create Folder",
                 "description": "Create new project folder",
@@ -1502,24 +1264,57 @@
                         "APIKeyCookie": []
                     }
                 ]
-            },
+            }
+        },
+        "/api/folders/{folder_id}": {
             "delete": {
                 "tags": [
-                    "projects"
+                    "folders"
                 ],
                 "summary": "Delete Folder",
                 "description": "Delete folder",
                 "operationId": "delete_folder",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/ProjectFolderDelete"
-                            }
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "folder_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     },
-                    "required": true
-                },
+                    {
+                        "name": "project_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "Successful Response",
@@ -1539,29 +1334,65 @@
                             }
                         }
                     }
-                },
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ]
+                }
             },
             "patch": {
                 "tags": [
-                    "projects"
+                    "folders"
                 ],
                 "summary": "Edit Folder",
                 "description": "Delete folder",
                 "operationId": "edit_folder",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "folder_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
+                        }
+                    },
+                    {
+                        "name": "project_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    }
+                ],
                 "requestBody": {
+                    "required": true,
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/ProjectFolderEdit"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "responses": {
                     "200": {
@@ -1582,60 +1413,389 @@
                             }
                         }
                     }
-                },
+                }
+            }
+        },
+        "/api/folders/{folder_id}/collaborators": {
+            "get": {
+                "tags": [
+                    "folders"
+                ],
+                "summary": "Get Collaborators",
+                "operationId": "get_collaborators",
                 "security": [
                     {
                         "APIKeyCookie": []
                     }
-                ]
-            }
-        },
-        "/api/projects": {
-            "get": {
-                "tags": [
-                    "projects"
                 ],
-                "summary": "Get Projects",
-                "description": "Load projects",
-                "operationId": "get_projects",
+                "parameters": [
+                    {
+                        "name": "folder_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
+                        }
+                    },
+                    {
+                        "name": "project_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "Successful Response",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "items": {
-                                        "$ref": "#/components/schemas/ProjectPublic"
-                                    },
                                     "type": "array",
-                                    "title": "Response Get Projects"
+                                    "items": {
+                                        "$ref": "#/components/schemas/CollaboratorPublic"
+                                    },
+                                    "title": "Response Get Collaborators"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
                                 }
                             }
                         }
                     }
-                },
+                }
+            },
+            "post": {
+                "tags": [
+                    "folders"
+                ],
+                "summary": "Add Collaborator",
+                "operationId": "add_collaborator",
                 "security": [
                     {
                         "APIKeyCookie": []
                     }
-                ]
+                ],
+                "parameters": [
+                    {
+                        "name": "folder_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
+                        }
+                    },
+                    {
+                        "name": "project_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CollaboratorCreate"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CollaboratorPublic"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
             },
+            "delete": {
+                "tags": [
+                    "folders"
+                ],
+                "summary": "Remove Collaborator",
+                "operationId": "remove_collaborator",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "folder_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
+                        }
+                    },
+                    {
+                        "name": "user_id",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid4",
+                            "title": "User Id"
+                        }
+                    },
+                    {
+                        "name": "project_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "tags": [
+                    "folders"
+                ],
+                "summary": "Update Collaborator Role",
+                "operationId": "update_collaborator_role",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "folder_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
+                        }
+                    },
+                    {
+                        "name": "user_id",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid4",
+                            "title": "User Id"
+                        }
+                    },
+                    {
+                        "name": "role",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/components/schemas/CollaboratorRole"
+                        }
+                    },
+                    {
+                        "name": "project_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CollaboratorPublic"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/folders/{folder_id}/projects": {
             "post": {
                 "tags": [
-                    "projects"
+                    "folders"
                 ],
                 "summary": "Create Project",
                 "description": "Create a new project",
                 "operationId": "create_project",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "folder_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
+                        }
+                    },
+                    {
+                        "name": "project_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    }
+                ],
                 "requestBody": {
+                    "required": true,
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/CreateProjectRequest"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "responses": {
                     "200": {
@@ -1656,43 +1816,7 @@
                             }
                         }
                     }
-                },
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ]
-            }
-        },
-        "/api/projects/ids": {
-            "get": {
-                "tags": [
-                    "projects"
-                ],
-                "summary": "Get Project Ids",
-                "operationId": "get_project_ids",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "items": {
-                                        "type": "string",
-                                        "format": "uuid4"
-                                    },
-                                    "type": "array",
-                                    "title": "Response Get Project Ids"
-                                }
-                            }
-                        }
-                    }
-                },
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ]
+                }
             }
         },
         "/api/projects/{project_id}": {
@@ -1713,9 +1837,33 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -1758,9 +1906,33 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -1806,9 +1978,33 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -1855,9 +2051,33 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -1916,9 +2136,33 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -1979,9 +2223,33 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -2036,9 +2304,33 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -2092,8 +2384,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -2103,6 +2402,23 @@
                         "required": true,
                         "schema": {
                             "$ref": "#/components/schemas/LanguageCode"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -2146,8 +2462,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -2157,6 +2480,23 @@
                         "required": true,
                         "schema": {
                             "$ref": "#/components/schemas/LanguageCode"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -2210,8 +2550,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -2221,6 +2568,23 @@
                         "required": true,
                         "schema": {
                             "$ref": "#/components/schemas/LanguageCode"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -2274,8 +2638,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -2285,6 +2656,23 @@
                         "required": true,
                         "schema": {
                             "$ref": "#/components/schemas/LanguageCode"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -2338,8 +2726,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -2349,6 +2744,23 @@
                         "required": true,
                         "schema": {
                             "$ref": "#/components/schemas/LanguageCode"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -2402,9 +2814,33 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -2413,7 +2849,7 @@
                     "content": {
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image__1"
+                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image"
                             }
                         }
                     }
@@ -2458,8 +2894,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -2469,6 +2912,23 @@
                         "required": true,
                         "schema": {
                             "$ref": "#/components/schemas/LanguageCode"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -2512,8 +2972,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -2523,6 +2990,23 @@
                         "required": true,
                         "schema": {
                             "$ref": "#/components/schemas/LanguageCode"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -2576,9 +3060,33 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -2622,9 +3130,33 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -2678,8 +3210,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -2689,6 +3228,23 @@
                         "required": true,
                         "schema": {
                             "$ref": "#/components/schemas/LanguageCode"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -2730,8 +3286,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -2741,6 +3304,23 @@
                         "required": true,
                         "schema": {
                             "$ref": "#/components/schemas/LanguageCode"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -2851,8 +3431,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -2862,6 +3449,23 @@
                         "required": true,
                         "schema": {
                             "$ref": "#/components/schemas/LanguageCode"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -2972,8 +3576,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -2983,6 +3594,23 @@
                         "required": true,
                         "schema": {
                             "$ref": "#/components/schemas/LanguageCode"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -3036,8 +3664,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -3091,6 +3726,23 @@
                                 }
                             ],
                             "title": "Completed"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     },
                     {
@@ -3180,9 +3832,33 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -3236,8 +3912,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -3259,6 +3942,23 @@
                             "type": "string",
                             "format": "uuid4",
                             "title": "Message Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -3302,8 +4002,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -3315,6 +4022,23 @@
                             "type": "string",
                             "format": "uuid4",
                             "title": "Interview Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -3364,9 +4088,33 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -3420,9 +4168,33 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -3466,8 +4238,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -3479,6 +4258,23 @@
                             "type": "string",
                             "format": "uuid4",
                             "title": "Test Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -3522,8 +4318,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -3535,6 +4338,23 @@
                             "type": "string",
                             "format": "uuid4",
                             "title": "Test Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -3588,8 +4408,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -3601,6 +4428,23 @@
                             "type": "string",
                             "format": "uuid4",
                             "title": "Test Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -3642,8 +4486,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -3655,6 +4506,23 @@
                             "type": "string",
                             "format": "uuid4",
                             "title": "Test Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -3708,9 +4576,33 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -3752,6 +4644,42 @@
                         "APIKeyCookie": []
                     }
                 ],
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
+                        }
+                    }
+                ],
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -3786,7 +4714,7 @@
                 }
             }
         },
-        "/api/projects{project_id}/tests/{test_id}": {
+        "/api/projects/{project_id}/tests/{test_id}": {
             "delete": {
                 "tags": [
                     "synthesize"
@@ -3804,8 +4732,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -3817,6 +4752,23 @@
                             "type": "string",
                             "format": "uuid4",
                             "title": "Test Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -3842,23 +4794,40 @@
                 }
             }
         },
-        "/api/interviewee": {
+        "/api/projects/{project_id}/interviewee": {
             "post": {
                 "tags": [
                     "synthesize"
                 ],
-                "summary": "Add Interviewee",
-                "operationId": "add_interviewee",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/IntervieweeCreate"
-                            }
+                "summary": "Get Interviewee",
+                "operationId": "get_interviewee",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid4",
+                            "title": "Project Id"
                         }
                     },
-                    "required": true
-                },
+                    {
+                        "name": "interview_id",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid4",
+                            "title": "Interview Id"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "Successful Response",
@@ -3878,12 +4847,7 @@
                             }
                         }
                     }
-                },
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ]
+                }
             }
         },
         "/api/projects/{project_id}/tests/{test_id}/status": {
@@ -3904,8 +4868,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -3917,6 +4888,23 @@
                             "type": "string",
                             "format": "uuid4",
                             "title": "Test Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -3960,8 +4948,15 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "string",
-                            "format": "uuid4",
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
                             "title": "Project Id"
                         }
                     },
@@ -3973,6 +4968,23 @@
                             "type": "string",
                             "format": "uuid4",
                             "title": "Test Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -4298,7 +5310,7 @@
                     "content": {
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image"
+                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image__2"
                             }
                         }
                     },
@@ -4699,7 +5711,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "put": {
+            "patch": {
                 "tags": [
                     "admin"
                 ],
@@ -4743,7 +5755,7 @@
                     }
                 }
             },
-            "patch": {
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -4831,7 +5843,7 @@
                     }
                 }
             },
-            "delete": {
+            "put": {
                 "tags": [
                     "admin"
                 ],
@@ -4875,7 +5887,7 @@
                     }
                 }
             },
-            "post": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -5894,18 +6906,12 @@
                         "type": "string",
                         "format": "email",
                         "title": "Email"
-                    },
-                    "folder_id": {
-                        "type": "string",
-                        "format": "uuid4",
-                        "title": "Folder Id"
                     }
                 },
                 "type": "object",
                 "required": [
                     "role",
-                    "email",
-                    "folder_id"
+                    "email"
                 ],
                 "title": "CollaboratorCreate"
             },
@@ -6142,11 +7148,6 @@
                         "type": "string",
                         "title": "Title"
                     },
-                    "folder_id": {
-                        "type": "string",
-                        "format": "uuid4",
-                        "title": "Folder Id"
-                    },
                     "default_language": {
                         "$ref": "#/components/schemas/LanguageCode"
                     }
@@ -6154,7 +7155,6 @@
                 "type": "object",
                 "required": [
                     "title",
-                    "folder_id",
                     "default_language"
                 ],
                 "title": "CreateProjectRequest"
@@ -6258,34 +7258,46 @@
                         "type": "string",
                         "title": "Title"
                     },
-                    "project_ids": {
+                    "projects": {
                         "items": {
-                            "type": "string"
+                            "$ref": "#/components/schemas/ExperimentProjectCreate"
                         },
                         "type": "array",
-                        "title": "Project Ids"
-                    },
-                    "weights": {
-                        "anyOf": [
-                            {
-                                "items": {
-                                    "type": "number"
-                                },
-                                "type": "array"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Weights"
+                        "title": "Projects"
                     }
                 },
                 "type": "object",
                 "required": [
                     "title",
-                    "project_ids"
+                    "projects"
                 ],
                 "title": "ExperimentCreate"
+            },
+            "ExperimentProjectCreate": {
+                "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Project Id"
+                    },
+                    "weight": {
+                        "anyOf": [
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Weight"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "project_id"
+                ],
+                "title": "ExperimentProjectCreate",
+                "description": "Input model for adding a project to an experiment."
             },
             "ExportMessagesRequest": {
                 "properties": {
@@ -6418,9 +7430,9 @@
                         "title": "Type",
                         "type": "string"
                     },
-                    "filename": {
+                    "name": {
                         "description": "The filename",
-                        "title": "Filename",
+                        "title": "Name",
                         "type": "string"
                     },
                     "data": {
@@ -6431,6 +7443,9 @@
                             {
                                 "format": "binary",
                                 "type": "string"
+                            },
+                            {
+                                "type": "null"
                             }
                         ],
                         "title": "Data"
@@ -6460,7 +7475,7 @@
                     }
                 },
                 "required": [
-                    "filename",
+                    "name",
                     "data",
                     "description",
                     "alt"
@@ -6571,7 +7586,7 @@
                             }
                         ],
                         "title": "Outro",
-                        "description": "An outro to the interview. Displayed to the interviewee as the last message. They will not be able to answer this message."
+                        "description": "An outro message for the interview. Displayed to the interviewee as the last message they will see. They will not be able to answer this message."
                     }
                 },
                 "type": "object",
@@ -6621,7 +7636,7 @@
                             }
                         ],
                         "title": "Outro",
-                        "description": "An outro to the interview. Displayed to the interviewee as the last message. They will not be able to answer this message."
+                        "description": "An outro message for the interview. Displayed to the interviewee as the last message they will see. They will not be able to answer this message."
                     }
                 },
                 "type": "object",
@@ -6834,11 +7849,6 @@
                         "format": "uuid4",
                         "title": "Interview Id"
                     },
-                    "project_id": {
-                        "type": "string",
-                        "format": "uuid4",
-                        "title": "Project Id"
-                    },
                     "interview_subject": {
                         "$ref": "#/components/schemas/InterviewSubject"
                     }
@@ -6846,7 +7856,6 @@
                 "type": "object",
                 "required": [
                     "interview_id",
-                    "project_id",
                     "interview_subject"
                 ],
                 "title": "IntervieweeCreate"
@@ -7426,36 +8435,16 @@
                 ],
                 "title": "ProjectFolderCreate"
             },
-            "ProjectFolderDelete": {
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid4",
-                        "title": "Id"
-                    }
-                },
-                "type": "object",
-                "required": [
-                    "id"
-                ],
-                "title": "ProjectFolderDelete"
-            },
             "ProjectFolderEdit": {
                 "properties": {
                     "title": {
                         "type": "string",
                         "title": "Title"
-                    },
-                    "id": {
-                        "type": "string",
-                        "format": "uuid4",
-                        "title": "Id"
                     }
                 },
                 "type": "object",
                 "required": [
-                    "title",
-                    "id"
+                    "title"
                 ],
                 "title": "ProjectFolderEdit"
             },
@@ -8870,32 +9859,6 @@
             },
             "fastapi___compat__v2__Body_upload_image": {
                 "properties": {
-                    "project_id": {
-                        "type": "string",
-                        "format": "uuid4",
-                        "title": "Project Id"
-                    },
-                    "interview_id": {
-                        "type": "string",
-                        "format": "uuid4",
-                        "title": "Interview Id"
-                    },
-                    "file": {
-                        "type": "string",
-                        "format": "binary",
-                        "title": "File"
-                    }
-                },
-                "type": "object",
-                "required": [
-                    "project_id",
-                    "interview_id",
-                    "file"
-                ],
-                "title": "Body_upload_image"
-            },
-            "fastapi___compat__v2__Body_upload_image__1": {
-                "properties": {
                     "primer": {
                         "type": "string",
                         "title": "Primer"
@@ -8919,6 +9882,32 @@
                     "primer",
                     "description",
                     "alt",
+                    "file"
+                ],
+                "title": "Body_upload_image"
+            },
+            "fastapi___compat__v2__Body_upload_image__2": {
+                "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Project Id"
+                    },
+                    "interview_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Interview Id"
+                    },
+                    "file": {
+                        "type": "string",
+                        "format": "binary",
+                        "title": "File"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "project_id",
+                    "interview_id",
                     "file"
                 ],
                 "title": "Body_upload_image"
