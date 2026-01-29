@@ -20,7 +20,6 @@ from ainterviewer.types import LanguageCode, TestType
 
 from ..auth import create_interview_token, decode_interview_token
 from ..dependencies import AdminToken, DBSession, GuestToken, LanguageCookie, templates
-from ..settings import app_settings
 from ..translations import MODALS
 from ..utils import generate_random_filename
 from .models import MessageFeedback
