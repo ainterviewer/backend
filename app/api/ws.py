@@ -37,7 +37,7 @@ from ..dependencies import (
 )
 from ..utils import replay_history
 from ..websockets import WebSocketConnectionManager, WebsocketMessageHandler
-from .models import Broadcast
+from .request_models import BroadcastRequest
 
 router = APIRouter(prefix="/ws", tags=["interviews"])
 
@@ -82,7 +82,7 @@ async def connect(
 @router.post("/broadcast")
 async def broadcast(
     jwt: AdminToken,
-    broadcast: Broadcast,
+    broadcast: BroadcastRequest,
     manager: WebSocketConnectionManager = Depends(get_ws_manager),
 ):
     payload = {

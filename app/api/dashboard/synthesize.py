@@ -17,12 +17,12 @@ from ...synthesize.core import (
     run_synthesis_job_shuffled_ai,
 )
 from ...types import TestRunStatus
-from ..models import (
+from ..request_models import (
     SynthesizeRequest,
-    SynthesizeResponse,
     UpdateBackgroundInfoRequest,
     UpdateFixedAnswersRequest,
 )
+from ..response_models import SynthesizeResponse
 
 router = APIRouter(tags=["synthesize"])
 

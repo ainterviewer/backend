@@ -22,9 +22,8 @@ from ..auth import create_interview_token, decode_interview_token
 from ..dependencies import AdminToken, DBSession, GuestToken, LanguageCookie, templates
 from ..translations import MODALS
 from ..utils import generate_random_filename
-from .models import MessageFeedback
 from .request_models import CreateInterviewRequest
-from .response_models import MediaUploadResponse
+from .response_models import MediaUploadResponse, MessageFeedbackResponse
 
 router = APIRouter(tags=["interviews"])
 
@@ -157,10 +156,10 @@ async def create_interview(
     return interview_token
 
 
-@router.patch("/feedback", response_model=MessageFeedback)
+@router.patch("/feedback", response_model=MessageFeedbackResponse)
 async def put_feedback(
     auth_token: GuestToken,
-    message: MessageFeedback,
+    message: MessageFeedbackResponse,
     db: DBSession,
 ):
     db.interviews.update_feedback(

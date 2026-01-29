@@ -1,6 +1,8 @@
 from typing import Generic, TypeVar
 
-from pydantic import BaseModel
+from pydantic import UUID4, BaseModel
+
+from ainterviewer.types import Feedback
 
 T = TypeVar("T")
 
@@ -17,3 +19,16 @@ class ErrorResponse(BaseModel):
 class MediaUploadResponse(BaseModel):
     message: str
     filename: str
+
+
+class SynthesizeResponse(BaseModel):
+    project_id: UUID4
+    message: str
+    status: str
+
+
+class MessageFeedbackResponse(BaseModel):
+    interview_id: UUID4
+    project_id: UUID4
+    message_id: int
+    feedback: Feedback | None

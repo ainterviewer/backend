@@ -1,9 +1,10 @@
 from typing import Literal
 
 from fastapi import Query
-from pydantic import UUID4, BaseModel
+from pydantic import UUID4, BaseModel, Field, field_validator
 
 from ainterviewer.agents.prompts.models import PromptTemplates
+from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
 from ainterviewer.types import Interviewer, LanguageCode, TestType
 
 from ..db.types import InterviewType
@@ -19,6 +20,10 @@ class PaginatedQueryParams(BaseModel):
 
 class PromptRequest(BaseModel):
     prompt: str
+
+
+class BroadcastRequest(BaseModel):
+    message: str
 
 
 class InterviewGuideGenerationRequest(PromptRequest): ...
@@ -60,3 +65,28 @@ class CreateInterviewRequest(BaseModel):
     test_run_id: UUID4 | None = None
     experiment_id: UUID4 | None = None
     synthetic_test_type: TestType | None = None
+
+
+class SynthesizeRequest(BaseModel):
+    answering_model: str | None = None
+    n_interviews: int = Field(ge=1, le=100)
+    language: LanguageCode = "EN"
+    delay_before_answers: tuple[float, float] | None = None
+
+
+class UpdateBackgroundInfoRequest(BaseModel):
+    background_info: BackgroundInfoOptions
+
+
+class UpdateFixedAnswersRequest(BaseModel):
+    answers: list[str]
+
+    @field_validator("answers")
+    @classmethod
+    def validate_answers(cls, value):
+        return [answer.strip() for answer in value]
+
+
+class TestSetupRequest(BaseModel):
+    project_id: UUID4
+    test_id: UUID4

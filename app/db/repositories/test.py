@@ -5,7 +5,7 @@ from sqlalchemy import Column, delete, select
 
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
 
-from ...api.models import SynthesizeRequest
+from ...api.request_models import SynthesizeRequest
 from ...types import TestRunStatus
 from ..models import (
     ExperimentCreate,
