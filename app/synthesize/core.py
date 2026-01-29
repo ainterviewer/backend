@@ -13,20 +13,19 @@ from typing import Any, AsyncGenerator, Optional
 
 import aiohttp
 from pydantic import UUID4
-from websockets import ClientConnection
+from websockets import ClientConnection, ConnectionClosedError
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosedOK
 
 import ainterviewer
 from ainterviewer.agents import AnsweringAgent
 from ainterviewer.interfaces import OutgoingData, OutgoingMessage, ReceivedData
-from ainterviewer.lpm.clients import chat
 from ainterviewer.lpm.types import CustomTokens
 from ainterviewer.synthesize.interviewees import (
     BackgroundInfoOptions,
     generate_synthetic_persons,
 )
-from ainterviewer.types import LanguageCode
+from ainterviewer.types import LanguageCode, MessageRole
 
 from ..api.request_models import CreateInterviewRequest
 from ..auth import InterviewToken
@@ -80,6 +79,8 @@ async def _connect_and_yield_messages(
                 yield json_data, websocket
         except ConnectionClosedOK:
             print("Connection closed")
+        except ConnectionClosedError as e:
+            print(e)
 
 
 async def run_synthetic_answering_agent(
@@ -104,13 +105,15 @@ async def run_synthetic_answering_agent(
     async for json_data, websocket in _connect_and_yield_messages(token, language):
         match json_data["type"]:
             case "data":
-                data = OutgoingData(**json_data)  # for validation purposes
+                _ = OutgoingData(**json_data)  # for validation purposes
 
             case "message":
                 message = OutgoingMessage(**json_data)
                 content = json_data["content"]
                 if not message.can_answer:
-                    agent.messages.append({"role": "user", "content": content})
+                    agent.messages.append(
+                        {"role": MessageRole.USER, "content": content}
+                    )
                 else:
                     response_text = await agent.answer(content)
                     await _send_response(websocket, response_text, delay_before_answer)
