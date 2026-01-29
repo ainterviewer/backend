@@ -104,9 +104,19 @@ async def add_interviewee(
     project_id: UUID4,
     interviewee: IntervieweeCreate,
     db: DBSession,
+    jwt: ProjectEditor,
+):
+    db.interviews.add_interviewee(project_id, interviewee)
+
+
+@router.post("/projects/{project_id}/interviewee")
+async def get_interviewee(
+    project_id: UUID4,
+    interview_id: UUID4,
+    db: DBSession,
     jwt: UserToken,
 ):
-    db.interviews.add_interviewee(interviewee)
+    return db.interviews.get_interviewee(project_id, interview_id)
 
 
 @router.get("/projects/{project_id}/tests/{test_id}/status")

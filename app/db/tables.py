@@ -145,6 +145,9 @@ class UserTable(Base):
     annotations: Mapped[list["MessageAnnotationTable"]] = relationship(
         back_populates="user"
     )
+    experiments: Mapped[list["ExperimentTable"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 #############
@@ -208,6 +211,14 @@ class ProjectTable(Base):
     )
     analysis_categories: Mapped[list["AnalysisCategoryTable"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
+    )
+    experiment_projects: Mapped[list["ExperimentProjectTable"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    experiments = association_proxy(
+        "experiment_projects",
+        "experiment",
+        creator=lambda experiment: ExperimentProjectTable(experiment=experiment),
     )
 
     @property
@@ -275,9 +286,32 @@ class CollaboratorTable(Base):
     added_by: Mapped[Optional["UserTable"]] = relationship(foreign_keys=[added_by_id])
 
 
-############
-# Redirect #
-############
+##############
+# Experiment #
+##############
+
+
+class ExperimentProjectTable(Base):
+    """Association table for many-to-many relationship between experiments and projects."""
+
+    __tablename__ = "experiment_project"
+    __table_args__ = (
+        UniqueConstraint("experiment_id", "project_id", name="uq_experiment_project"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
+    )
+    experiment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("experiment.id"))
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
+    weight: Mapped[float | None] = mapped_column(default=None)
+    added_at: Mapped[datetime.datetime] = mapped_column(default=now)
+
+    # Relationships
+    experiment: Mapped["ExperimentTable"] = relationship(
+        back_populates="experiment_projects"
+    )
+    project: Mapped["ProjectTable"] = relationship(back_populates="experiment_projects")
 
 
 class ExperimentTable(Base):
@@ -288,13 +322,21 @@ class ExperimentTable(Base):
     )
     title: Mapped[str] = mapped_column()
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
-    project_ids: Mapped[Any] = mapped_column(JSON)
-    weights: Mapped[Any | None] = mapped_column(JSON)
     status: Mapped[ProjectStatus] = mapped_column(
         SQLEnum(ProjectStatus), default=ProjectStatus.ACTIVE
     )
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("user.id"))
 
     # Relationships
+    user: Mapped["UserTable"] = relationship(back_populates="experiments")
+    experiment_projects: Mapped[list["ExperimentProjectTable"]] = relationship(
+        back_populates="experiment", cascade="all, delete-orphan"
+    )
+    projects = association_proxy(
+        "experiment_projects",
+        "project",
+        creator=lambda project: ExperimentProjectTable(project=project),
+    )
     interviews: Mapped[list["InterviewTable"]] = relationship(
         back_populates="experiment"
     )

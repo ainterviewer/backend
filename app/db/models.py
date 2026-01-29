@@ -13,7 +13,6 @@ from pydantic import (
     Field,
     computed_field,
     field_validator,
-    model_validator,
 )
 from pydantic.json_schema import SkipJsonSchema
 
@@ -213,38 +212,37 @@ class ProjectPublic(ProjectBase):
 
 
 class ProjectPublicWithTests(ProjectPublic):
-    tests: list[TestSetupPublic]  # type: ignore
+    tests: list[TestSetupPublic]
 
 
-class ExperimentBase(_BaseModel):
+class ExperimentProjectCreate(_BaseModel):
+    """Input model for adding a project to an experiment."""
+
+    project_id: UUID4
+    weight: Optional[float] = None
+
+
+class ExperimentProjectPublic(_BaseModel):
+    """Public model for experiment-project association."""
+
     id: UUID4
-    title: str
-    created_at: datetime
-    project_ids: List[str]
-    weights: Optional[List[float]] = None
-    status: ProjectStatus = ProjectStatus.ACTIVE
-
-    @model_validator(mode="after")
-    def validate_model(self):
-        n_interviews = self.project_ids
-        if weights := self.weights:
-            if len(weights) != len(n_interviews):
-                raise ValueError(
-                    "Redirect probabilities must match the number of interview IDs."
-                )
-        else:
-            self.weights = [1.0] * len(n_interviews)
-        return self
+    project_id: UUID4
+    weight: Optional[float] = None
+    added_at: datetime
 
 
 class ExperimentCreate(_BaseModel):
     title: str
-    project_ids: List[str]
-    weights: Optional[List[float]] = None
+    projects: List[ExperimentProjectCreate]
 
 
-class ExperimentPublic(ExperimentBase):
-    pass
+class ExperimentPublic(_BaseModel):
+    id: UUID4
+    title: str
+    user_id: UUID4
+    created_at: datetime
+    status: ProjectStatus = ProjectStatus.ACTIVE
+    projects: List[ExperimentProjectPublic] = []
 
 
 class InterviewBase(_BaseModel):

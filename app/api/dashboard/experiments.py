@@ -18,7 +18,7 @@ async def get_experiments(
     db: DBSession,
     jwt: UserToken,
 ):
-    return db.tests.get_experiments()
+    return db.tests.get_experiments(user_id=jwt.user_id)
 
 
 @router.post("/experiments")
@@ -27,7 +27,7 @@ async def create_experiment(
     db: DBSession,
     jwt: UserToken,
 ):
-    return db.tests.create_experiment(experiment)
+    return db.tests.create_experiment(experiment, user_id=jwt.user_id)
 
 
 @router.delete("/experiments/{experiment_id}")
@@ -36,7 +36,7 @@ async def delete_experiment(
     db: DBSession,
     jwt: UserToken,
 ):
-    return db.tests.delete_experiment(experiment_id)
+    return db.tests.delete_experiment(experiment_id, user_id=jwt.user_id)
 
 
 @router.get("/experiments/{experiment_id}/qr.png")
@@ -44,6 +44,7 @@ async def generate_experiment_qr(
     request: Request,
     experiment_id: UUID4,
     jwt: UserToken,
+    db: DBSession,
 ):
     file_path = (
         lib_settings.storage.experiment_storage.qr_code_path(experiment_id)

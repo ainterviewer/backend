@@ -17,7 +17,12 @@ from ainterviewer.types import (
 )
 from ainterviewer.utils import now
 
-from ..models import IntervieweeCreate, InterviewPublic, MessagePublic
+from ..models import (
+    IntervieweeCreate,
+    InterviewPublic,
+    MessagePublic,
+    IntervieweePublic,
+)
 from ..tables import (
     IntervieweeTable,
     InterviewTable,
@@ -313,6 +318,19 @@ class InterviewRepository(BaseRepository):
 
     # ==================== Interviewee Methods ====================
 
-    def add_interviewee(self, interviewee: IntervieweeCreate):
-        self.session.add(IntervieweeTable(**interviewee.model_dump()))
+    def add_interviewee(self, project_id: UUID4, interviewee: IntervieweeCreate):
+        self.session.add(
+            IntervieweeTable(project_id=project_id, **interviewee.model_dump())
+        )
         self.session.commit()
+
+    def get_interviewee(
+        self, project_id: UUID4, interview_id: UUID4
+    ) -> IntervieweePublic:
+        statement = select(IntervieweeTable).where(
+            IntervieweeTable.project_id == project_id,
+            IntervieweeTable.interview_id == interview_id,
+        )
+        interviewee = self.session.execute(statement).scalar_one()
+
+        return IntervieweePublic.model_validate(interviewee)
