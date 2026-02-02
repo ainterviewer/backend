@@ -719,7 +719,9 @@ class ProjectRepository(BaseRepository):
         """Get user's role on a project via its folder."""
         statement = (
             select(CollaboratorTable.role)
-            .join(ProjectFolderTable, CollaboratorTable.folder_id == ProjectFolderTable.id)
+            .join(
+                ProjectFolderTable, CollaboratorTable.folder_id == ProjectFolderTable.id
+            )
             .join(ProjectTable, ProjectTable.folder_id == ProjectFolderTable.id)
             .where(
                 ProjectTable.id == project_id,
