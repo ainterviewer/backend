@@ -1,9 +1,8 @@
-from ainterviewer.types import InterviewStatus
 from pathlib import Path
 
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
-from sqlalchemy import text, select
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ainterviewer.interfaces import PersistenceProtocol
@@ -16,7 +15,7 @@ from .repositories import (
     TestRepository,
     UserRepository,
 )
-from .tables import Base, InterviewTable
+from .tables import Base
 
 ALEMBIC_BASE_RIVISON_ID = "fbcbd179bfba"
 
