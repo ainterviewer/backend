@@ -2,7 +2,7 @@ import uuid
 from typing import Literal, Optional, overload
 
 from pydantic import UUID4
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -621,13 +621,16 @@ class ProjectRepository(BaseRepository):
         prompts: Prompts,
     ):
         # FIXME: Update permissions to collab
-        statement = select(ProjectLocalizationTable).where(
-            ProjectLocalizationTable.project_id == project_id,
-            ProjectLocalizationTable.language == language,
+
+        self.session.execute(
+            update(ProjectLocalizationTable)
+            .where(
+                ProjectLocalizationTable.project_id == project_id,
+                ProjectLocalizationTable.language == language,
+            )
+            .values(prompts=prompts)
         )
-        project_localization = self.session.execute(statement).scalar_one()
-        project_localization.prompts = prompts
-        self.session.add(project_localization)
+
         self.session.commit()
 
     def update_prompts(
