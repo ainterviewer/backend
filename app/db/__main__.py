@@ -403,7 +403,7 @@ if __name__ == "__main__":
         print(f"Interview config updated for project {args.project_id}")
 
     if args.update_prompts:
-        projects = db.get_projects(args.team_id)
+        projects = db.projects.get_projects(args.team_id)
         for project in projects:
             db.set_prompts(
                 project.id,
