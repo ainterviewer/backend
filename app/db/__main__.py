@@ -403,14 +403,14 @@ if __name__ == "__main__":
         print(f"Interview config updated for project {args.project_id}")
 
     if args.update_prompts:
-        projects = db.projects.get_projects(args.team_id)
-        for project in projects:
-            db.set_prompts(
-                project.id,
-                args.team_id,
-                language=args.language,
-                prompts=DEFAULT_PROMPTS,
-            )
+        for user in db.users.get_users():
+            for folder in db.projects.get_folders(user_id=user.id):
+                for project in db.projects.get_projects(folder_id=folder.id):
+                    db.projects.set_prompts(
+                        project.id,
+                        language=project.config.default_language,
+                        prompts=DEFAULT_PROMPTS,
+                    )
 
     if args.create_interviews:
         for i in range(args.n_interviews):
