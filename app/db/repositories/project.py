@@ -17,7 +17,6 @@ from ...api.request_models import PromptsUpdateRequest
 from ...types import CollaboratorRole, ProjectStatus
 from ..models import (
     Collaborator,
-    CollaboratorCreate,
     CollaboratorPublic,
     ProjectFolderPublic,
     ProjectFolderWithProjects,
@@ -117,12 +116,15 @@ class ProjectRepository(BaseRepository):
         return ProjectFolderPublic.model_validate(folder)
 
     def update_folder(self, folder_id: UUID4, title: str) -> ProjectFolderPublic:
-        statement = select(ProjectFolderTable).where(ProjectFolderTable.id == folder_id)
+        statement = (
+            update(ProjectFolderTable)
+            .where(ProjectFolderTable.id == folder_id)
+            .values(title=title)
+            .returning(ProjectFolderTable)
+        )
         folder = self.session.execute(statement).scalar_one()
-        folder.title = title
-        self.session.add(folder)
         self.session.commit()
-        self.session.refresh(folder)
+
         return ProjectFolderPublic.model_validate(folder)
 
     def delete_folder(self, folder_id: UUID4):
@@ -168,15 +170,18 @@ class ProjectRepository(BaseRepository):
     def update_collaborator_role(
         self, folder_id: UUID4, user_id: UUID4, role: CollaboratorRole
     ) -> CollaboratorPublic:
-        statement = select(CollaboratorTable).where(
-            CollaboratorTable.folder_id == folder_id,
-            CollaboratorTable.user_id == user_id,
+        statement = (
+            update(CollaboratorTable)
+            .where(
+                CollaboratorTable.folder_id == folder_id,
+                CollaboratorTable.user_id == user_id,
+            )
+            .values(role=role)
+            .returning(CollaboratorTable)
         )
         collab = self.session.execute(statement).scalar_one()
-        collab.role = role
-        self.session.add(collab)
         self.session.commit()
-        self.session.refresh(collab)
+
         return CollaboratorPublic.model_validate(collab)
 
     def get_collaborators(self, folder_id: UUID4) -> list[CollaboratorPublic]:
@@ -415,14 +420,12 @@ class ProjectRepository(BaseRepository):
         project_id: UUID4,
         status: ProjectStatus,
     ):
-        statement = select(ProjectTable).where(
-            ProjectTable.id == project_id,
+        statement = (
+            update(ProjectTable)
+            .where(ProjectTable.id == project_id)
+            .values(status=status)
         )
-
-        project = self.session.execute(statement).scalar_one()
-        project.status = status
-
-        self.session.add(project)
+        self.session.execute(statement)
         self.session.commit()
 
     def update_project_title(
@@ -430,14 +433,12 @@ class ProjectRepository(BaseRepository):
         project_id: UUID4,
         title: str,
     ):
-        statement = select(ProjectTable).where(
-            ProjectTable.id == project_id,
+        statement = (
+            update(ProjectTable)
+            .where(ProjectTable.id == project_id)
+            .values(title=title)
         )
-
-        project = self.session.execute(statement).scalar_one()
-        project.title = title
-
-        self.session.add(project)
+        self.session.execute(statement)
         self.session.commit()
 
     def delete_project(self, project_id: UUID4):
@@ -577,14 +578,15 @@ class ProjectRepository(BaseRepository):
         interview_guide_content: InterviewGuide,
         language: LanguageCode,
     ):
-        statement = select(ProjectLocalizationTable).where(
-            ProjectLocalizationTable.project_id == project_id,
-            ProjectLocalizationTable.language == language,
+        statement = (
+            update(ProjectLocalizationTable)
+            .where(
+                ProjectLocalizationTable.project_id == project_id,
+                ProjectLocalizationTable.language == language,
+            )
+            .values(interview_guide=interview_guide_content)
         )
-        project_localization = self.session.execute(statement).scalar_one()
-        project_localization.interview_guide = interview_guide_content
-
-        self.session.add(project_localization)
+        self.session.execute(statement)
         self.session.commit()
 
     def update_interview_config(
@@ -592,10 +594,12 @@ class ProjectRepository(BaseRepository):
         project_id: UUID4,
         interview_config: InterviewConfig,
     ):
-        statement = select(ProjectTable).where(ProjectTable.id == project_id)
-        project = self.session.execute(statement).scalar_one()
-        project.config = interview_config
-        self.session.add(project)
+        statement = (
+            update(ProjectTable)
+            .where(ProjectTable.id == project_id)
+            .values(config=interview_config)
+        )
+        self.session.execute(statement)
         self.session.commit()
 
     def update_agent_configs(
@@ -605,13 +609,15 @@ class ProjectRepository(BaseRepository):
         agent_configs: AgentConfigs,
     ):
         # FIXME: Update permissions to collab
-        statement = select(ProjectLocalizationTable).where(
-            ProjectLocalizationTable.project_id == project_id,
-            ProjectLocalizationTable.language == language,
+        statement = (
+            update(ProjectLocalizationTable)
+            .where(
+                ProjectLocalizationTable.project_id == project_id,
+                ProjectLocalizationTable.language == language,
+            )
+            .values(agent_configs=agent_configs)
         )
-        project_localization = self.session.execute(statement).scalar_one()
-        project_localization.agent_configs = agent_configs
-        self.session.add(project_localization)
+        self.session.execute(statement)
         self.session.commit()
 
     def set_prompts(
@@ -675,13 +681,15 @@ class ProjectRepository(BaseRepository):
     def update_consent(
         self, project_id: UUID4, consent: Consent, language: LanguageCode
     ):
-        statement = select(ProjectLocalizationTable).where(
-            ProjectLocalizationTable.project_id == project_id,
-            ProjectLocalizationTable.language == language,
+        statement = (
+            update(ProjectLocalizationTable)
+            .where(
+                ProjectLocalizationTable.project_id == project_id,
+                ProjectLocalizationTable.language == language,
+            )
+            .values(consent=consent)
         )
-        project_localization = self.session.execute(statement).scalar_one()
-        project_localization.consent = consent
-
+        self.session.execute(statement)
         self.session.commit()
 
     def get_welcome(self, project_id: UUID4, language: LanguageCode) -> Welcome | None:
@@ -694,13 +702,15 @@ class ProjectRepository(BaseRepository):
     def update_welcome(
         self, project_id: UUID4, welcome: Welcome, language: LanguageCode
     ):
-        statement = select(ProjectLocalizationTable).where(
-            ProjectLocalizationTable.project_id == project_id,
-            ProjectLocalizationTable.language == language,
+        statement = (
+            update(ProjectLocalizationTable)
+            .where(
+                ProjectLocalizationTable.project_id == project_id,
+                ProjectLocalizationTable.language == language,
+            )
+            .values(welcome=welcome)
         )
-        project_localization = self.session.execute(statement).scalar_one()
-        project_localization.welcome = welcome
-
+        self.session.execute(statement)
         self.session.commit()
 
     # ==================== Authorization Methods ====================

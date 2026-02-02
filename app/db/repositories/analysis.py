@@ -1,5 +1,5 @@
 from pydantic import UUID4
-from sqlalchemy import delete, distinct, exists, func, select, or_
+from sqlalchemy import delete, distinct, exists, func, select, update, or_
 from sqlalchemy.orm import selectinload
 
 from ainterviewer.types import MessageRole
@@ -49,20 +49,14 @@ class AnalysisRepository(BaseRepository):
     def update_analysis_category(
         self, category_id: UUID4, category: AnalysisCategoryCreate
     ) -> AnalysisCategoryPublic:
-        statement = select(AnalysisCategoryTable).where(
-            AnalysisCategoryTable.id == category_id
+        statement = (
+            update(AnalysisCategoryTable)
+            .where(AnalysisCategoryTable.id == category_id)
+            .values(**category.model_dump())
+            .returning(AnalysisCategoryTable)
         )
         existing_category = self.session.execute(statement).scalar_one()
-
-        existing_category.name = category.name
-        existing_category.description = category.description
-        existing_category.type = category.type
-        existing_category.color = category.color
-        existing_category.min_value = category.min_value
-        existing_category.max_value = category.max_value
-
         self.session.commit()
-        self.session.refresh(existing_category)
         return AnalysisCategoryPublic.model_validate(existing_category)
 
     def delete_analysis_category(self, category_id: UUID4):
@@ -364,14 +358,13 @@ class AnalysisRepository(BaseRepository):
     def update_message_annotation(
         self, annotation_id: UUID4, annotation: MessageAnnotationCreate
     ) -> MessageAnnotationPublic:
-        statement = select(MessageAnnotationTable).where(
-            MessageAnnotationTable.id == annotation_id
-        )
-        existing_annotation = self.session.execute(statement).scalar_one()
-
         # Update core fields
-        existing_annotation.comment = annotation.comment
-        existing_annotation.updated_at = now()
+        statement = (
+            update(MessageAnnotationTable)
+            .where(MessageAnnotationTable.id == annotation_id)
+            .values(comment=annotation.comment, updated_at=now())
+        )
+        self.session.execute(statement)
 
         # Replace values (delete all existing, add new)
         # This is simpler and safer than diffing for this use case
@@ -390,7 +383,11 @@ class AnalysisRepository(BaseRepository):
             self.session.add(new_value)
 
         self.session.commit()
-        self.session.refresh(existing_annotation)
+
+        statement = select(MessageAnnotationTable).where(
+            MessageAnnotationTable.id == annotation_id
+        )
+        existing_annotation = self.session.execute(statement).scalar_one()
 
         # Ensure values are loaded for response
         existing_annotation.values

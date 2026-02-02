@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 
 from pydantic import UUID4
-from sqlalchemy import Column, delete, select
+from sqlalchemy import Column, delete, select, update
 
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
 
@@ -62,15 +62,20 @@ class TestRepository(BaseRepository):
     def update_test_setup_settings(
         self, test_id: UUID4, request: SynthesizeRequest
     ) -> TestSetupPublic:
-        statement = select(TestSetupTable).where(TestSetupTable.id == test_id)
+        statement = (
+            update(TestSetupTable)
+            .where(TestSetupTable.id == test_id)
+            .values(
+                answering_model=request.answering_model,
+                n_interviews=request.n_interviews,
+                language=request.language,
+                delay_before_answers=request.delay_before_answers,
+            )
+            .returning(TestSetupTable)
+        )
         test = self.session.execute(statement).scalar_one()
-        test.answering_model = request.answering_model
-        test.n_interviews = request.n_interviews
-        test.language = request.language
-        test.delay_before_answers = request.delay_before_answers
-        self.session.add(test)
         self.session.commit()
-        self.session.refresh(test)
+
         return TestSetupPublic.model_validate(test)
 
     def get_background_info(
@@ -86,10 +91,12 @@ class TestRepository(BaseRepository):
     def update_background_info(
         self, test_id: UUID4, background_info: BackgroundInfoOptions
     ):
-        statement = select(TestSetupTable).where(TestSetupTable.id == test_id)
-        test = self.session.execute(statement).scalar_one()
-        test.background_info = background_info.model_dump()
-        self.session.add(test)
+        statement = (
+            update(TestSetupTable)
+            .where(TestSetupTable.id == test_id)
+            .values(background_info=background_info.model_dump())
+        )
+        self.session.execute(statement)
         self.session.commit()
 
     def get_fixed_answers(self, test_id: UUID4) -> list[str]:
@@ -98,10 +105,12 @@ class TestRepository(BaseRepository):
         return test.fixed_answers
 
     def update_fixed_answers(self, test_id: UUID4, answers: list[str]):
-        statement = select(TestSetupTable).where(TestSetupTable.id == test_id)
-        test = self.session.execute(statement).scalar_one()
-        test.fixed_answers = answers
-        self.session.add(test)
+        statement = (
+            update(TestSetupTable)
+            .where(TestSetupTable.id == test_id)
+            .values(fixed_answers=answers)
+        )
+        self.session.execute(statement)
         self.session.commit()
 
     # ==================== Test Run Methods ====================
@@ -127,13 +136,15 @@ class TestRepository(BaseRepository):
     def update_test_run_status(
         self, test_setup_id: UUID4, test_run_id: UUID4, status: TestRunStatus
     ):
-        statement = select(TestRunTable).where(
-            TestRunTable.test_setup_id == test_setup_id,
-            TestRunTable.id == test_run_id,
+        statement = (
+            update(TestRunTable)
+            .where(
+                TestRunTable.test_setup_id == test_setup_id,
+                TestRunTable.id == test_run_id,
+            )
+            .values(status=status)
         )
-        test_run = self.session.execute(statement).scalar_one()
-        test_run.status = status
-        self.session.add(test_run)
+        self.session.execute(statement)
         self.session.commit()
 
     # ==================== Experiment Methods ====================

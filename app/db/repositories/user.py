@@ -4,7 +4,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from pydantic import UUID4
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, or_, select, update
 
 from ainterviewer.utils import now
 
@@ -48,14 +48,17 @@ class UserRepository(BaseRepository):
         last_login: bool = False,
         last_active: bool = True,
     ):
-        statement = select(UserTable).where(UserTable.id == id)
-        user = self.session.execute(statement).scalar_one()
-
+        values = {}
         if last_login:
-            user.last_login = now()
+            values["last_login"] = now()
         if last_active:
-            user.last_active = now()
+            values["last_active"] = now()
 
+        if not values:
+            return
+
+        statement = update(UserTable).where(UserTable.id == id).values(**values)
+        self.session.execute(statement)
         self.session.commit()
 
     def get_user_private(

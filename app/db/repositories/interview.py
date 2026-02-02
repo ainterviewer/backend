@@ -189,21 +189,20 @@ class InterviewRepository(BaseRepository):
         status: InterviewStatus | None = None,
         time_spent: int = 0,
     ):
+        values = {
+            "last_updated": now(),
+            "total_time_spent": InterviewTable.total_time_spent + time_spent,
+        }
+        if status is not None:
+            values["status"] = status
+
         statement = (
-            select(InterviewTable)
+            update(InterviewTable)
             .where(InterviewTable.project_id == project_id)
             .where(InterviewTable.id == interview_id)
+            .values(**values)
         )
-        interview = self.session.execute(statement).scalar_one()
-
-        if status is not None:
-            interview.status = status
-
-        interview.last_updated = now()
-
-        interview.total_time_spent += time_spent
-
-        self.session.add(interview)
+        self.session.execute(statement)
         self.session.commit()
 
     # ==================== Message Methods ====================
@@ -263,15 +262,13 @@ class InterviewRepository(BaseRepository):
         """Updates a message with feedback"""
 
         statement = (
-            select(MessageTable)
+            update(MessageTable)
             .where(MessageTable.message_id == message_id)
             .where(MessageTable.interview_id == interview_id)
+            .values(feedback=feedback)
         )
-        message = self.session.execute(statement).scalar_one()
-        message.feedback = feedback
-        self.session.add(message)
+        self.session.execute(statement)
         self.session.commit()
-        self.session.refresh(message)
 
     def get_messages(
         self,
