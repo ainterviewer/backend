@@ -35,6 +35,7 @@ class InterviewDurationStats(BaseModel):
     min_seconds: int
     max_seconds: int
     avg_seconds: float
+    sum_seconds: float
 
 
 class MessageCountStats(BaseModel):
@@ -43,6 +44,7 @@ class MessageCountStats(BaseModel):
     min_messages: int
     max_messages: int
     avg_messages: float
+    sum_messages: int
 
 
 class DropoutPoint(BaseModel):
@@ -58,8 +60,6 @@ class MonitoringStats(BaseModel):
 
     # Basic counts
     total_interviews: int
-    total_messages: int
-    total_completed_interviews: int
     completion_rate: float
 
     # Breakdowns
@@ -135,10 +135,6 @@ async def get_project_monitoring_stats(
     )
     total_completed = session.execute(total_completed_stmt).scalar() or 0
 
-    # Total messages count
-    total_messages_stmt = select(func.count(MessageTable.id)).where(*message_conditions)
-    total_messages = session.execute(total_messages_stmt).scalar() or 0
-
     # Completion rate
     completion_rate = (
         (total_completed / total_interviews) if total_interviews > 0 else 0.0
@@ -183,12 +179,17 @@ async def get_project_monitoring_stats(
         for row in daily_results
     ]
 
-    # Duration statistics (for completed interviews with time spent > 0)
+    # ++++++++++++++++++++++++++++++ #
+    # Stats for COMPLETED interviews #
+    # ++++++++++++++++++++++++++++++ #
+
+    # Duration statistics
     duration_conditions = completed_conditions + [InterviewTable.total_time_spent > 0]
     duration_stmt = select(
         func.min(InterviewTable.total_time_spent).label("min_seconds"),
         func.max(InterviewTable.total_time_spent).label("max_seconds"),
         func.avg(InterviewTable.total_time_spent).label("avg_seconds"),
+        func.sum(InterviewTable.total_time_spent).label("sum_seconds"),
     ).where(*duration_conditions)
     duration_result = session.execute(duration_stmt).first()
 
@@ -198,6 +199,7 @@ async def get_project_monitoring_stats(
             min_seconds=duration_result.min_seconds,
             max_seconds=duration_result.max_seconds,
             avg_seconds=float(duration_result.avg_seconds or 0),
+            sum_seconds=duration_result.sum_seconds,
         )
 
     # Message count statistics per interview
@@ -206,7 +208,12 @@ async def get_project_monitoring_stats(
             MessageTable.interview_id,
             func.count(MessageTable.id).label("msg_count"),
         )
-        .where(*message_conditions)
+        .where(
+            *message_conditions,
+            MessageTable.interview_id.in_(
+                select(InterviewTable.id).where(*completed_conditions)
+            ),
+        )
         .group_by(MessageTable.interview_id)
         .subquery()
     )
@@ -215,6 +222,7 @@ async def get_project_monitoring_stats(
         func.min(message_counts_subquery.c.msg_count).label("min_messages"),
         func.max(message_counts_subquery.c.msg_count).label("max_messages"),
         func.avg(message_counts_subquery.c.msg_count).label("avg_messages"),
+        func.sum(message_counts_subquery.c.msg_count).label("sum_messages"),
     )
     msg_stats_result = session.execute(msg_stats_stmt).first()
 
@@ -224,9 +232,13 @@ async def get_project_monitoring_stats(
             min_messages=msg_stats_result.min_messages,
             max_messages=msg_stats_result.max_messages,
             avg_messages=float(msg_stats_result.avg_messages or 0),
+            sum_messages=msg_stats_result.sum_messages,
         )
 
-    # Dropout analysis
+    # ++++++++++++++++++++++++++++++ #
+    # Stats for INCOMPLETE interviews #
+    # ++++++++++++++++++++++++++++++ #
+
     # Filter for incomplete interviews
     incomplete_conditions = interview_conditions + [
         InterviewTable.status != InterviewStatus.COMPLETED,
@@ -283,8 +295,6 @@ async def get_project_monitoring_stats(
 
     return MonitoringStats(
         total_interviews=total_interviews,
-        total_messages=total_messages,
-        total_completed_interviews=total_completed,
         completion_rate=completion_rate,
         interviews_by_status=interviews_by_status,
         interviews_over_time=interviews_over_time,
