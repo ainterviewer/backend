@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.0.21"
+        "version": "0.0.25"
     },
     "paths": {
         "/api/projects/{project_id}/analysis/categories": {
@@ -5264,7 +5264,7 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/MessageFeedback"
+                                "$ref": "#/components/schemas/MessageFeedbackResponse"
                             }
                         }
                     },
@@ -5276,7 +5276,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/MessageFeedback"
+                                    "$ref": "#/components/schemas/MessageFeedbackResponse"
                                 }
                             }
                         }
@@ -5711,7 +5711,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "patch": {
+            "put": {
                 "tags": [
                     "admin"
                 ],
@@ -5755,7 +5755,7 @@
                     }
                 }
             },
-            "post": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -5843,7 +5843,7 @@
                     }
                 }
             },
-            "put": {
+            "patch": {
                 "tags": [
                     "admin"
                 ],
@@ -5887,7 +5887,7 @@
                     }
                 }
             },
-            "delete": {
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -6161,7 +6161,7 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/Broadcast"
+                                "$ref": "#/components/schemas/BroadcastRequest"
                             }
                         }
                     },
@@ -6328,6 +6328,9 @@
                     },
                     "answering": {
                         "$ref": "#/components/schemas/AgentConfig"
+                    },
+                    "reformulation": {
+                        "$ref": "#/components/schemas/AgentConfig"
                     }
                 },
                 "additionalProperties": false,
@@ -6352,6 +6355,9 @@
                         "$ref": "#/components/schemas/VisualConfig"
                     },
                     "answering": {
+                        "$ref": "#/components/schemas/AgentConfig"
+                    },
+                    "reformulation": {
                         "$ref": "#/components/schemas/AgentConfig"
                     }
                 },
@@ -6866,7 +6872,7 @@
                 ],
                 "title": "Body_upload_audio"
             },
-            "Broadcast": {
+            "BroadcastRequest": {
                 "properties": {
                     "message": {
                         "type": "string",
@@ -6877,7 +6883,7 @@
                 "required": [
                     "message"
                 ],
-                "title": "Broadcast"
+                "title": "BroadcastRequest"
             },
             "Collaborator": {
                 "properties": {
@@ -7016,29 +7022,46 @@
             },
             "Condition": {
                 "properties": {
-                    "type": {
-                        "$ref": "#/components/schemas/ConditionType"
-                    },
-                    "trigger_type": {
-                        "$ref": "#/components/schemas/ConditionTriggerType"
-                    },
                     "question_context": {
                         "$ref": "#/components/schemas/QuestionContext"
                     },
-                    "trigger_value": {
-                        "title": "Trigger Value"
+                    "evaluation": {
+                        "items": {
+                            "$ref": "#/components/schemas/ConditionEvaluation"
+                        },
+                        "type": "array",
+                        "title": "Evaluation"
                     },
-                    "action": {
-                        "$ref": "#/components/schemas/ConditionAction"
+                    "negated": {
+                        "type": "boolean",
+                        "title": "Negated",
+                        "default": false
+                    },
+                    "trigger_type": {
+                        "$ref": "#/components/schemas/ConditionTrigger",
+                        "default": "match"
+                    },
+                    "combine_next": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "enum": [
+                                    "AND",
+                                    "OR"
+                                ]
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Combine Next",
+                        "description": "Operator to combine this condition's result with the next. None for the last condition."
                     }
                 },
                 "type": "object",
                 "required": [
-                    "type",
-                    "trigger_type",
                     "question_context",
-                    "trigger_value",
-                    "action"
+                    "evaluation"
                 ],
                 "title": "Condition",
                 "description": "Create a condition that must be met to ask a question"
@@ -7046,26 +7069,104 @@
             "ConditionAction": {
                 "type": "string",
                 "enum": [
+                    "end_interview",
                     "skip_section",
                     "skip_question",
-                    "end_interview"
+                    "ask_question"
                 ],
                 "title": "ConditionAction"
             },
-            "ConditionTriggerType": {
+            "ConditionEvaluation": {
+                "properties": {
+                    "trigger_value": {
+                        "type": "string",
+                        "title": "Trigger Value",
+                        "description": "The pattern to match or value to compare against"
+                    },
+                    "comparison_operator": {
+                        "type": "string",
+                        "enum": [
+                            "==",
+                            "<",
+                            "<=",
+                            ">",
+                            ">="
+                        ],
+                        "title": "Comparison Operator",
+                        "description": "Comparison operator. '==' for pattern matching, others for numeric/date comparison.",
+                        "default": "=="
+                    },
+                    "combine_next": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "enum": [
+                                    "AND",
+                                    "OR"
+                                ]
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Combine Next",
+                        "description": "Operator to combine this evaluation's result with the next. None for the last evaluation."
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "trigger_value"
+                ],
+                "title": "ConditionEvaluation",
+                "description": "A single evaluation check with an optional operator to combine with the next evaluation.\n\nFor \"A AND B OR C\", create:\n    [\n        ConditionEvaluation(trigger_value=\"A\", combine_next=\"AND\"),\n        ConditionEvaluation(trigger_value=\"B\", combine_next=\"OR\"),\n        ConditionEvaluation(trigger_value=\"C\"),\n    ]\n\nFor numeric comparisons (e.g., age >= 18):\n    ConditionEvaluation(trigger_value=\"18\", comparison_operator=\">=\")"
+            },
+            "ConditionTrigger": {
                 "type": "string",
                 "enum": [
-                    "re",
+                    "match",
                     "classification"
                 ],
-                "title": "ConditionTriggerType"
+                "title": "ConditionTrigger"
             },
-            "ConditionType": {
-                "type": "string",
-                "enum": [
-                    "yes/no"
+            "Conditions-Input": {
+                "properties": {
+                    "conditions": {
+                        "items": {
+                            "$ref": "#/components/schemas/Condition"
+                        },
+                        "type": "array",
+                        "title": "Conditions"
+                    },
+                    "action": {
+                        "$ref": "#/components/schemas/ConditionAction"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "conditions",
+                    "action"
                 ],
-                "title": "ConditionType"
+                "title": "Conditions"
+            },
+            "Conditions-Output": {
+                "properties": {
+                    "conditions": {
+                        "items": {
+                            "$ref": "#/components/schemas/Condition"
+                        },
+                        "type": "array",
+                        "title": "Conditions"
+                    },
+                    "action": {
+                        "$ref": "#/components/schemas/ConditionAction"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "conditions",
+                    "action"
+                ],
+                "title": "Conditions"
             },
             "Consent": {
                 "properties": {
@@ -7531,13 +7632,18 @@
                     "avg_seconds": {
                         "type": "number",
                         "title": "Avg Seconds"
+                    },
+                    "sum_seconds": {
+                        "type": "number",
+                        "title": "Sum Seconds"
                     }
                 },
                 "type": "object",
                 "required": [
                     "min_seconds",
                     "max_seconds",
-                    "avg_seconds"
+                    "avg_seconds",
+                    "sum_seconds"
                 ],
                 "title": "InterviewDurationStats",
                 "description": "Statistics about interview duration (time spent)."
@@ -7587,6 +7693,21 @@
                         ],
                         "title": "Outro",
                         "description": "An outro message for the interview. Displayed to the interviewee as the last message they will see. They will not be able to answer this message."
+                    },
+                    "timed_messages": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "$ref": "#/components/schemas/TimedMessage"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Timed Messages",
+                        "description": "Messages that are displayed to the interviewee after a certain amount of time"
                     }
                 },
                 "type": "object",
@@ -7637,6 +7758,21 @@
                         ],
                         "title": "Outro",
                         "description": "An outro message for the interview. Displayed to the interviewee as the last message they will see. They will not be able to answer this message."
+                    },
+                    "timed_messages": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "$ref": "#/components/schemas/TimedMessage"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Timed Messages",
+                        "description": "Messages that are displayed to the interviewee after a certain amount of time"
                     }
                 },
                 "type": "object",
@@ -8041,18 +8177,23 @@
                     "avg_messages": {
                         "type": "number",
                         "title": "Avg Messages"
+                    },
+                    "sum_messages": {
+                        "type": "integer",
+                        "title": "Sum Messages"
                     }
                 },
                 "type": "object",
                 "required": [
                     "min_messages",
                     "max_messages",
-                    "avg_messages"
+                    "avg_messages",
+                    "sum_messages"
                 ],
                 "title": "MessageCountStats",
                 "description": "Statistics about message counts per interview."
             },
-            "MessageFeedback": {
+            "MessageFeedbackResponse": {
                 "properties": {
                     "interview_id": {
                         "type": "string",
@@ -8086,7 +8227,7 @@
                     "message_id",
                     "feedback"
                 ],
-                "title": "MessageFeedback"
+                "title": "MessageFeedbackResponse"
             },
             "MessagePublic": {
                 "properties": {
@@ -8282,14 +8423,6 @@
                         "type": "integer",
                         "title": "Total Interviews"
                     },
-                    "total_messages": {
-                        "type": "integer",
-                        "title": "Total Messages"
-                    },
-                    "total_completed_interviews": {
-                        "type": "integer",
-                        "title": "Total Completed Interviews"
-                    },
                     "completion_rate": {
                         "type": "number",
                         "title": "Completion Rate"
@@ -8339,8 +8472,6 @@
                 "type": "object",
                 "required": [
                     "total_interviews",
-                    "total_messages",
-                    "total_completed_interviews",
                     "completion_rate",
                     "interviews_by_status",
                     "interviews_over_time",
@@ -8831,10 +8962,10 @@
                         "description": "Whether the user should be able to upload an image as a response",
                         "default": false
                     },
-                    "condition": {
+                    "conditions": {
                         "anyOf": [
                             {
-                                "$ref": "#/components/schemas/Condition"
+                                "$ref": "#/components/schemas/Conditions-Input"
                             },
                             {
                                 "type": "null"
@@ -9032,10 +9163,10 @@
                         "description": "Whether the user should be able to upload an image as a response",
                         "default": false
                     },
-                    "condition": {
+                    "conditions": {
                         "anyOf": [
                             {
-                                "$ref": "#/components/schemas/Condition"
+                                "$ref": "#/components/schemas/Conditions-Output"
                             },
                             {
                                 "type": "null"
@@ -9064,20 +9195,23 @@
                 "properties": {
                     "section": {
                         "type": "integer",
-                        "title": "Section"
+                        "title": "Section",
+                        "description": "The index of a secition"
                     },
                     "question": {
                         "type": "integer",
-                        "title": "Question"
+                        "title": "Question",
+                        "description": "The index of a question"
                     },
                     "part": {
                         "type": "string",
                         "enum": [
                             "main",
                             "probes",
-                            "all"
+                            "both"
                         ],
                         "title": "Part",
+                        "description": "The part of the question to include.",
                         "default": "main"
                     }
                 },
@@ -9087,7 +9221,7 @@
                     "question"
                 ],
                 "title": "QuestionContext",
-                "description": "The index of a question in a section\nsection [int]: The index of the section\nquestion [int]: The index of the question"
+                "description": "The index of a question in a section\nsection [int]: The index of the section\nquestion [int]: The index of the question\npart"
             },
             "QuestionGenerationRequest": {
                 "properties": {
@@ -9274,6 +9408,56 @@
                         "default": true,
                         "title": "Required",
                         "type": "boolean"
+                    },
+                    "min": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "default": null,
+                        "title": "Min"
+                    },
+                    "max": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "default": null,
+                        "title": "Max"
+                    },
+                    "step": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "default": 1,
+                        "title": "Step"
+                    },
+                    "with_other": {
+                        "default": false,
+                        "title": "With Other",
+                        "type": "boolean"
                     }
                 },
                 "required": [
@@ -9289,7 +9473,8 @@
                     "checkbox",
                     "slider",
                     "number",
-                    "date"
+                    "date",
+                    "datetime"
                 ],
                 "title": "SurveyItemType",
                 "type": "string"
