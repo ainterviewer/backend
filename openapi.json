@@ -2401,7 +2401,10 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "$ref": "#/components/schemas/LanguageCode"
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Lang"
                         }
                     },
                     {
@@ -2479,7 +2482,10 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "$ref": "#/components/schemas/LanguageCode"
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Lang"
                         }
                     },
                     {
@@ -2567,7 +2573,10 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "$ref": "#/components/schemas/LanguageCode"
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Lang"
                         }
                     },
                     {
@@ -2655,7 +2664,10 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "$ref": "#/components/schemas/LanguageCode"
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Lang"
                         }
                     },
                     {
@@ -2743,7 +2755,10 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "$ref": "#/components/schemas/LanguageCode"
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Lang"
                         }
                     },
                     {
@@ -2849,7 +2864,7 @@
                     "content": {
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image"
+                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image__1"
                             }
                         }
                     }
@@ -2911,7 +2926,10 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "$ref": "#/components/schemas/LanguageCode"
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Lang"
                         }
                     },
                     {
@@ -2989,7 +3007,10 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "$ref": "#/components/schemas/LanguageCode"
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Lang"
                         }
                     },
                     {
@@ -3227,7 +3248,10 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "$ref": "#/components/schemas/LanguageCode"
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Lang"
                         }
                     },
                     {
@@ -3303,7 +3327,10 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "$ref": "#/components/schemas/LanguageCode"
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Lang"
                         }
                     },
                     {
@@ -3379,7 +3406,10 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "$ref": "#/components/schemas/LanguageCode"
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Language"
                         }
                     }
                 ],
@@ -3448,7 +3478,10 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "$ref": "#/components/schemas/LanguageCode"
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Language"
                         }
                     },
                     {
@@ -3524,7 +3557,10 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "$ref": "#/components/schemas/LanguageCode"
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Language"
                         }
                     }
                 ],
@@ -3593,7 +3629,10 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "$ref": "#/components/schemas/LanguageCode"
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Language"
                         }
                     },
                     {
@@ -5711,94 +5750,6 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "put": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
             "get": {
                 "tags": [
                     "admin"
@@ -5888,6 +5839,94 @@
                 }
             },
             "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -7590,18 +7629,6 @@
                         "$ref": "#/components/schemas/LanguageCode",
                         "default": "EN"
                     },
-                    "referer_id_key": {
-                        "anyOf": [
-                            {
-                                "type": "string"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Referer Id Key",
-                        "description": "Key for the value of the id sent in the referer header"
-                    },
                     "with_consent": {
                         "type": "boolean",
                         "title": "With Consent",
@@ -7613,6 +7640,24 @@
                         "title": "With Welcome",
                         "description": "Whether to show a welcome message before starting the interview",
                         "default": true
+                    },
+                    "with_audio": {
+                        "type": "boolean",
+                        "title": "With Audio",
+                        "description": "Allows the respondents to record their answers as audio messages which are transcribed before send as answers to the AInterviewer.",
+                        "default": true
+                    },
+                    "referer_id_key": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Referer Id Key",
+                        "description": "Key for the value of the id sent in the referer header"
                     }
                 },
                 "additionalProperties": false,
@@ -9964,6 +10009,13 @@
                     "type": {
                         "type": "string",
                         "title": "Error Type"
+                    },
+                    "input": {
+                        "title": "Input"
+                    },
+                    "ctx": {
+                        "type": "object",
+                        "title": "Context"
                     }
                 },
                 "type": "object",
@@ -10042,7 +10094,7 @@
                 ],
                 "title": "Welcome"
             },
-            "fastapi___compat__v2__Body_upload_image": {
+            "fastapi___compat__v2__Body_upload_image__1": {
                 "properties": {
                     "primer": {
                         "type": "string",
