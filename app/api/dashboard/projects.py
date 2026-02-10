@@ -290,7 +290,6 @@ async def create_interview_agents(
 async def get_interview_config(
     project_id: UUID4,
     db: DBSession,
-    jwt: ProjectViewer,
 ) -> InterviewConfig:
     project = db.projects.get_project(project_id)
 
