@@ -17,7 +17,7 @@ from typing import (
     get_origin,
 )
 
-from pydantic import BaseModel, EmailStr, validate_email
+from pydantic import BaseModel, EmailStr, TypeAdapter, validate_email
 from pydantic_core import to_jsonable_python
 from sqlalchemy import JSON, types
 from sqlalchemy.dialects.postgresql import JSONB  # noqa: F401 for Postgres JSONB
@@ -64,12 +64,19 @@ class PydanticJSONB(types.TypeDecorator):
             Type[BaseModelType],
             Type[List[BaseModelType]],
             Type[Dict[str, BaseModelType]],
+            Any,
         ],
         *args: Any,
         **kwargs: Any,
     ):
         super().__init__(*args, **kwargs)
         self.model_class = model_class  # Pydantic model class to use
+        # Use TypeAdapter for union/annotated types that aren't plain BaseModel subclasses
+        self._is_plain_model = isinstance(model_class, type) and issubclass(
+            model_class, BaseModel
+        )
+        if not self._is_plain_model:
+            self._type_adapter: TypeAdapter[Any] = TypeAdapter(model_class)
 
     def process_bind_param(self, value: Any, dialect: Any) -> JSONValue:  # noqa: ANN401, ARG002, ANN001
         if value is None:
@@ -107,6 +114,9 @@ class PydanticJSONB(types.TypeDecorator):
                     1
                 ]  # Get the value type (the model)
                 return {k: model_class.model_validate(v) for k, v in value.items()}
+            # For union/annotated types, use TypeAdapter
+            if not self._is_plain_model:
+                return self._type_adapter.validate_python(value)
             # Regular case: the whole dict represents a single model
             return self.model_class.model_validate(value)  # type: ignore
         if isinstance(value, list):
