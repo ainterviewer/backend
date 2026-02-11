@@ -7,95 +7,22 @@ from fastapi import (
     File,
     Form,
     Header,
-    Request,
     Response,
     UploadFile,
 )
 from fastapi import Path as URLPath
-from fastapi.responses import HTMLResponse
 from pydantic import UUID4
 
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode, TestType
 
-from ..auth import create_interview_token, decode_interview_token
-from ..dependencies import AdminToken, DBSession, GuestToken, LanguageCookie, templates
-from ..translations import MODALS
+from ..auth import create_interview_token
+from ..dependencies import AdminToken, DBSession, GuestToken
 from ..utils import generate_random_filename
 from .request_models import CreateInterviewRequest
 from .response_models import MediaUploadResponse, MessageFeedbackResponse
 
 router = APIRouter(tags=["interviews"])
-
-
-@router.post("/projects/{project_id}/consent/render")
-async def render_consent_modal(
-    request: Request,
-    db: DBSession,
-    language: LanguageCookie,
-    project_id: Annotated[UUID4, URLPath],
-) -> HTMLResponse:
-    project_localization = db.projects.get_project_localization(
-        project_id,
-        language=language,
-    )
-
-    consent = (
-        MODALS["consent"].get(language, MODALS["consent"]["EN"]) | consent.model_dump()
-        if (consent := project_localization.consent)
-        else {}
-    )
-
-    return templates.TemplateResponse(
-        "site/interview/components/ConsentModal.jinja",
-        context={
-            "request": request,
-            "project_id": project_id,
-            "consent": consent,
-            "display_modal": True,
-        },
-    )
-
-
-@router.post("/projects/{project_id}/welcome/render")
-async def set_consent(
-    request: Request,
-    db: DBSession,
-    language: LanguageCookie,
-    project_id: Annotated[UUID4, URLPath],
-    interview_token: Annotated[str, Cookie()],
-) -> HTMLResponse:
-    token = decode_interview_token(interview_token)
-
-    project_localization = db.projects.get_project_localization(
-        project_id,
-        language=language,
-    )
-
-    if project_localization.interview_guide.welcome is None:
-        welcome = {}
-    else:
-        welcome = project_localization.interview_guide.welcome.model_dump()
-
-    welcome_modal = MODALS["welcome"].get(language, MODALS["welcome"]["EN"]).copy()
-
-    welcome = dict(
-        section_before_id=welcome_modal.pop("section_before_id").format(
-            email=welcome.pop("email") if "email" in welcome else "",
-        ),
-        section_after_id=welcome_modal.pop("section_after_id"),
-        **welcome_modal | welcome,
-    )
-
-    return templates.TemplateResponse(
-        "site/interview/components/WelcomeModal.jinja",
-        context={
-            "request": request,
-            "interview_id": token.interview_id,
-            "welcome": welcome,
-            "display_modal": True,
-        },
-    )
 
 
 @router.post("/projects/{project_id}/{lang}/interviews")
