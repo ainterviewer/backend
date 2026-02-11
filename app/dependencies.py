@@ -4,7 +4,6 @@ from typing import Annotated, Literal
 from fastapi import Cookie, Depends, HTTPException
 from fastapi.security import APIKeyCookie
 from fastapi.templating import Jinja2Templates
-from jinjax import Catalog, JinjaX
 from jose import JWTError
 from pydantic import UUID4, ValidationError
 from sqlalchemy import create_engine
@@ -24,10 +23,6 @@ fronted_dir = Path(__file__).parent.absolute() / "frontend"
 
 templates_dir = fronted_dir / "templates"
 templates = Jinja2Templates(directory=templates_dir)
-
-templates.env.add_extension(JinjaX)
-catalog = Catalog(jinja_env=templates.env)
-catalog.add_folder(templates_dir / "site" / "interview" / "components")
 
 auth_cookie_scheme = APIKeyCookie(name="token", auto_error=False)
 
