@@ -115,7 +115,9 @@ async def run_synthetic_answering_agent(
                         {"role": MessageRole.USER, "content": content}
                     )
                 else:
-                    response_text = await agent.answer(content)
+                    response_text = await agent.answer(
+                        content, survey_item=message.survey_item
+                    )
                     await _send_response(websocket, response_text, delay_before_answer)
 
 
