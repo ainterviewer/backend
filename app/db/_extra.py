@@ -40,7 +40,7 @@ BaseModelType = TypeVar("BaseModelType", bound=BaseModel)
 JSONValue = Union[Dict[str, Any], List[Any], str, int, float, bool, None]
 
 
-class AutoString(types.TypeDecorator):  # type: ignore
+class AutoString(types.TypeDecorator):
     impl = types.String
     cache_ok = True
     mysql_default_length = 255
@@ -52,7 +52,7 @@ class AutoString(types.TypeDecorator):  # type: ignore
         return super().load_dialect_impl(dialect)
 
 
-class PydanticJSONB(types.TypeDecorator):  # type: ignore
+class PydanticJSONB(types.TypeDecorator):
     """Custom type to automatically handle Pydantic model serialization."""
 
     impl = JSON  # use JSONB type in Postgres (fallback to JSON for others)
@@ -92,7 +92,7 @@ class PydanticJSONB(types.TypeDecorator):  # type: ignore
             }
 
         # We know to_jsonable_python returns a JSON-serializable value, but mypy sees it as an Any type
-        return to_jsonable_python(value)  # type: ignore[no-any-return]
+        return to_jsonable_python(value)
 
     def process_result_value(
         self, value: Any, dialect: Any
