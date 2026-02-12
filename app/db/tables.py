@@ -377,8 +377,12 @@ class InterviewTable(Base):
     referer: Mapped[str | None] = mapped_column()
     external_params: Mapped[str | None] = mapped_column()
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
-    experiment_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("experiment.id"))
-    test_run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("testrun.id"))
+    experiment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("experiment.id", ondelete="SET NULL")
+    )
+    test_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("testrun.id", ondelete="CASCADE")
+    )
 
     # Relationships
     project: Mapped["ProjectTable"] = relationship(back_populates="interviews")
@@ -389,6 +393,12 @@ class InterviewTable(Base):
         back_populates="interviews"
     )
     messages: Mapped[list["MessageTable"]] = relationship(
+        back_populates="interview", cascade="all, delete-orphan"
+    )
+    tasks: Mapped[list["TaskTable"]] = relationship(
+        back_populates="interview", cascade="all, delete-orphan"
+    )
+    interviewee: Mapped[list["IntervieweeTable"]] = relationship(
         back_populates="interview", cascade="all, delete-orphan"
     )
 
@@ -435,8 +445,12 @@ class MessageTable(Base):
     message_id: Mapped[int] = mapped_column()
     content: Mapped[str] = mapped_column(Text)
     role: Mapped[MessageRole] = mapped_column(SQLEnum(MessageRole))
-    interview_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("interview.id"))
-    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
+    interview_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("interview.id", ondelete="CASCADE")
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE")
+    )
     message_type: Mapped[MessageType] = mapped_column(
         SQLEnum(MessageType), default=MessageType.TEXT
     )
@@ -486,8 +500,12 @@ class TaskTable(Base):
     )
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     message_id: Mapped[int] = mapped_column()
-    interview_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("interview.id"))
-    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
+    interview_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("interview.id", ondelete="CASCADE")
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE")
+    )
     task: Mapped[str] = mapped_column(Text)
     reason: Mapped[str | None] = mapped_column(Text)
     context: Mapped[str | None] = mapped_column(Text)
@@ -495,6 +513,9 @@ class TaskTable(Base):
     response: Mapped[str | None] = mapped_column(Text)
     model: Mapped[str | None] = mapped_column()
     time_spend: Mapped[int | None] = mapped_column()
+
+    # Relationships
+    interview: Mapped["InterviewTable"] = relationship(back_populates="tasks")
 
 
 ###################
@@ -555,7 +576,9 @@ class TestRunTable(Base):
 
     # Relationships
     test_setup: Mapped["TestSetupTable"] = relationship(back_populates="test_runs")
-    interviews: Mapped[list["InterviewTable"]] = relationship(back_populates="test_run")
+    interviews: Mapped[list["InterviewTable"]] = relationship(
+        back_populates="test_run", cascade="all, delete-orphan"
+    )
 
 
 class IntervieweeTable(Base):
@@ -564,11 +587,18 @@ class IntervieweeTable(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
     )
-    interview_id: Mapped[uuid.UUID] = mapped_column()
-    project_id: Mapped[uuid.UUID] = mapped_column()
+    interview_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("interview.id", ondelete="CASCADE")
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE")
+    )
     interview_subject: Mapped[InterviewSubject] = mapped_column(
         PydanticJSONB(InterviewSubject)
     )
+
+    # Relationships
+    interview: Mapped["InterviewTable"] = relationship(back_populates="interviewee")
 
 
 ############
@@ -607,7 +637,9 @@ class MessageAnnotationTable(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
     )
-    message_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("message.id"))
+    message_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("message.id", ondelete="CASCADE")
+    )
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("user.id"))
     comment: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
