@@ -3,7 +3,10 @@ default:
     @just --list
 
 dev:
-    bash -c 'uv run -m fastapi dev app/main.py --port 8666'
+    bash -c 'uv run -m fastapi dev app/main.py --port 8666 \
+      --reload-dir app/ \
+      --reload-dir .venv/ \
+      --reload-dir ../lib/src'
 
 generate-sdk:
     uv run -m app.cli generate-openapi-scheme
