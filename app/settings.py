@@ -95,6 +95,7 @@ class ServiceSettings(BaseSettings):
 class AppSecrets(BaseSettings):
     jwt_secret_key: SecretStr
     session_secret_key: SecretStr
+
     db_username: str | None = None
     db_password: SecretStr | None = None
 
