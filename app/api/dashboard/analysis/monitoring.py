@@ -1,4 +1,5 @@
 import datetime
+import math
 from typing import Annotated
 
 from fastapi import APIRouter, Query
@@ -30,7 +31,7 @@ class DailyInterviewCount(BaseModel):
 
 
 class InterviewTimeOfDayCount(BaseModel):
-    time: datetime.time
+    time: str
     count: int
 
 
@@ -57,6 +58,62 @@ class HistogramBucket(BaseModel):
 
     value: int
     count: int
+    label: str
+
+
+def _compute_histogram_buckets(
+    data_rows: list, num_bins: int = 20
+) -> list[HistogramBucket]:
+    """Helper to bin grouped data into a fixed number of buckets."""
+    if not data_rows:
+        return []
+
+    # data_rows are expected to be sorted by value
+    # and have .value and .count attributes
+    min_val = data_rows[0].value
+    max_val = data_rows[-1].value
+
+    span = max_val - min_val
+
+    # If single value or no span, return single bucket
+    if span == 0:
+        total_count = sum(row.count for row in data_rows)
+        return [
+            HistogramBucket(value=int(min_val), count=total_count, label=str(min_val))
+        ]
+
+    # Calculate step size to be a whole number (integer)
+    # We want roughly num_bins, so step = ceil(span / num_bins)
+    step = math.ceil(span / num_bins)
+    if step < 1:
+        step = 1
+
+    # Recalculate number of bins based on the integer step
+    # We maintain the passed num_bins as the fixed output size if possible,
+    # or effectively we cover the span.
+    # The user asked for "based on a bin size of 20", so we try to output 20 buckets.
+    # However, if step is large due to ceil, the last buckets might be empty.
+
+    buckets = [0] * num_bins
+    # Calculate bucket starts for the response
+    bucket_starts = [int(min_val + i * step) for i in range(num_bins)]
+
+    for row in data_rows:
+        val = row.value
+        # Determine bin index
+        idx = int((val - min_val) / step)
+        # Clamp max value to last bin (if it exceeds due to some reason, though logic says it shouldn't if num_bins covers it)
+        # But wait, if step is rounded up, idx will be smaller.
+        # e.g. span=30, num_bins=20, step=2. val=30. idx=15.
+        # If val is very large? No, max_val is used to compute span.
+        if idx >= num_bins:
+            idx = num_bins - 1
+        buckets[idx] += row.count
+
+    return [
+        HistogramBucket(value=v, count=c, label=f"{v}-{v + step}")
+        for v, c in zip(bucket_starts, buckets)
+    ]
 
 
 class DropoutPoint(BaseModel):
@@ -209,12 +266,13 @@ async def get_project_monitoring_stats(
         .order_by(hour_extract)
     )
     time_of_day_results = session.execute(time_of_day_stmt).all()
+    hour_counts = {int(row.hour): row.count for row in time_of_day_results}
     interviews_by_time_of_day = [
         InterviewTimeOfDayCount(
-            time=datetime.time(hour=int(row.hour)),
-            count=row.count,
+            time=datetime.time(hour=h).strftime("%H:%M"),
+            count=hour_counts.get(h, 0),
         )
-        for row in time_of_day_results
+        for h in range(24)
     ]
 
     # ++++++++++++++++++++++++++++++ #
@@ -283,10 +341,8 @@ async def get_project_monitoring_stats(
         .group_by(InterviewTable.total_time_spent)
         .order_by(InterviewTable.total_time_spent)
     )
-    duration_histogram = [
-        HistogramBucket(value=row.value, count=row.count)
-        for row in session.execute(duration_hist_stmt).all()
-    ]
+    duration_rows = session.execute(duration_hist_stmt).all()
+    duration_histogram = _compute_histogram_buckets(duration_rows)
 
     # Message count histogram (one entry per distinct message count per interview)
     msg_count_hist_stmt = (
@@ -297,10 +353,8 @@ async def get_project_monitoring_stats(
         .group_by(message_counts_subquery.c.msg_count)
         .order_by(message_counts_subquery.c.msg_count)
     )
-    message_count_histogram = [
-        HistogramBucket(value=row.value, count=row.count)
-        for row in session.execute(msg_count_hist_stmt).all()
-    ]
+    msg_count_rows = session.execute(msg_count_hist_stmt).all()
+    message_count_histogram = _compute_histogram_buckets(msg_count_rows)
 
     # Message length histogram (one entry per distinct character length)
     msg_length_stmt = (
@@ -317,10 +371,8 @@ async def get_project_monitoring_stats(
         .group_by(func.length(MessageTable.content))
         .order_by(func.length(MessageTable.content))
     )
-    message_length_histogram = [
-        HistogramBucket(value=row.value, count=row.count)
-        for row in session.execute(msg_length_stmt).all()
-    ]
+    msg_length_rows = session.execute(msg_length_stmt).all()
+    message_length_histogram = _compute_histogram_buckets(msg_length_rows)
 
     # ++++++++++++++++++++++++++++++ #
     # Stats for INCOMPLETE interviews #
