@@ -29,6 +29,11 @@ class DailyInterviewCount(BaseModel):
     completed_count: int
 
 
+class InterviewTimeOfDayCount(BaseModel):
+    time: datetime.time
+    count: int
+
+
 class InterviewDurationStats(BaseModel):
     """Statistics about interview duration (time spent)."""
 
@@ -67,6 +72,7 @@ class MonitoringStats(BaseModel):
 
     # Time series data
     interviews_over_time: list[DailyInterviewCount]
+    interviews_by_time_of_day: list[InterviewTimeOfDayCount]
 
     # Duration/engagement stats
     duration_stats: InterviewDurationStats | None
@@ -177,6 +183,26 @@ async def get_project_monitoring_stats(
             completed_count=row.completed_count or 0,
         )
         for row in daily_results
+    ]
+
+    # Interviews by time of day (grouped by hour)
+    hour_extract = func.extract("hour", InterviewTable.created_at)
+    time_of_day_stmt = (
+        select(
+            hour_extract.label("hour"),
+            func.count(InterviewTable.id).label("count"),
+        )
+        .where(*interview_conditions)
+        .group_by(hour_extract)
+        .order_by(hour_extract)
+    )
+    time_of_day_results = session.execute(time_of_day_stmt).all()
+    interviews_by_time_of_day = [
+        InterviewTimeOfDayCount(
+            time=datetime.time(hour=int(row.hour)),
+            count=row.count,
+        )
+        for row in time_of_day_results
     ]
 
     # ++++++++++++++++++++++++++++++ #
@@ -298,6 +324,7 @@ async def get_project_monitoring_stats(
         completion_rate=completion_rate,
         interviews_by_status=interviews_by_status,
         interviews_over_time=interviews_over_time,
+        interviews_by_time_of_day=interviews_by_time_of_day,
         duration_stats=duration_stats,
         message_count_stats=message_count_stats,
         dropout_stats=dropout_stats,
