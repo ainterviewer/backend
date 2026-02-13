@@ -3070,44 +3070,15 @@
                 ],
                 "summary": "Get Interview Config",
                 "operationId": "get_interview_config",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
                 "parameters": [
                     {
                         "name": "project_id",
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "anyOf": [
-                                {
-                                    "type": "string",
-                                    "format": "uuid4"
-                                },
-                                {
-                                    "type": "null"
-                                }
-                            ],
+                            "type": "string",
+                            "format": "uuid4",
                             "title": "Project Id"
-                        }
-                    },
-                    {
-                        "name": "folder_id",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "anyOf": [
-                                {
-                                    "type": "string",
-                                    "format": "uuid4"
-                                },
-                                {
-                                    "type": "null"
-                                }
-                            ],
-                            "title": "Folder Id"
                         }
                     }
                 ],
@@ -5059,113 +5030,6 @@
                 }
             }
         },
-        "/api/projects/{project_id}/consent/render": {
-            "post": {
-                "tags": [
-                    "interviews"
-                ],
-                "summary": "Render Consent Modal",
-                "operationId": "render_consent_modal",
-                "parameters": [
-                    {
-                        "name": "project_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid4",
-                            "title": "Project Id"
-                        }
-                    },
-                    {
-                        "name": "language",
-                        "in": "cookie",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/components/schemas/LanguageCode"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/projects/{project_id}/welcome/render": {
-            "post": {
-                "tags": [
-                    "interviews"
-                ],
-                "summary": "Set Consent",
-                "operationId": "set_consent",
-                "parameters": [
-                    {
-                        "name": "project_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid4",
-                            "title": "Project Id"
-                        }
-                    },
-                    {
-                        "name": "language",
-                        "in": "cookie",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/components/schemas/LanguageCode"
-                        }
-                    },
-                    {
-                        "name": "interview_token",
-                        "in": "cookie",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Interview Token"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/api/projects/{project_id}/{lang}/interviews": {
             "post": {
                 "tags": [
@@ -5750,7 +5614,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "get": {
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -5838,7 +5702,7 @@
                     }
                 }
             },
-            "post": {
+            "put": {
                 "tags": [
                     "admin"
                 ],
@@ -5882,7 +5746,7 @@
                     }
                 }
             },
-            "put": {
+            "get": {
                 "tags": [
                     "admin"
                 ],
@@ -6924,6 +6788,39 @@
                 ],
                 "title": "BroadcastRequest"
             },
+            "CheckboxItem": {
+                "additionalProperties": false,
+                "properties": {
+                    "type": {
+                        "const": "checkbox",
+                        "default": "checkbox",
+                        "title": "Type",
+                        "type": "string"
+                    },
+                    "required": {
+                        "default": true,
+                        "title": "Required",
+                        "type": "boolean"
+                    },
+                    "options": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "title": "Options",
+                        "type": "array"
+                    },
+                    "with_other": {
+                        "default": false,
+                        "title": "With Other",
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "options"
+                ],
+                "title": "CheckboxItem",
+                "type": "object"
+            },
             "Collaborator": {
                 "properties": {
                     "email": {
@@ -7324,6 +7221,90 @@
                 "title": "DailyInterviewCount",
                 "description": "Count of interviews created per day."
             },
+            "DateItem": {
+                "additionalProperties": false,
+                "properties": {
+                    "type": {
+                        "const": "date",
+                        "default": "date",
+                        "title": "Type",
+                        "type": "string"
+                    },
+                    "required": {
+                        "default": true,
+                        "title": "Required",
+                        "type": "boolean"
+                    },
+                    "min": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "default": null,
+                        "title": "Min"
+                    },
+                    "max": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "default": null,
+                        "title": "Max"
+                    }
+                },
+                "title": "DateItem",
+                "type": "object"
+            },
+            "DatetimeItem": {
+                "additionalProperties": false,
+                "properties": {
+                    "type": {
+                        "const": "datetime",
+                        "default": "datetime",
+                        "title": "Type",
+                        "type": "string"
+                    },
+                    "required": {
+                        "default": true,
+                        "title": "Required",
+                        "type": "boolean"
+                    },
+                    "min": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "default": null,
+                        "title": "Min"
+                    },
+                    "max": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "default": null,
+                        "title": "Max"
+                    }
+                },
+                "title": "DatetimeItem",
+                "type": "object"
+            },
             "DeleteInterviewRequest": {
                 "properties": {
                     "interview_ids": {
@@ -7556,6 +7537,30 @@
                 },
                 "type": "object",
                 "title": "HTTPValidationError"
+            },
+            "HistogramBucket": {
+                "properties": {
+                    "value": {
+                        "type": "integer",
+                        "title": "Value"
+                    },
+                    "count": {
+                        "type": "integer",
+                        "title": "Count"
+                    },
+                    "label": {
+                        "type": "string",
+                        "title": "Label"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "value",
+                    "count",
+                    "label"
+                ],
+                "title": "HistogramBucket",
+                "description": "A value-count pair for histogram use."
             },
             "Image": {
                 "description": "An image to show the interviewee",
@@ -8014,6 +8019,24 @@
                 ],
                 "title": "InterviewSummaryPublic"
             },
+            "InterviewTimeOfDayCount": {
+                "properties": {
+                    "time": {
+                        "type": "string",
+                        "title": "Time"
+                    },
+                    "count": {
+                        "type": "integer",
+                        "title": "Count"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "time",
+                    "count"
+                ],
+                "title": "InterviewTimeOfDayCount"
+            },
             "InterviewType": {
                 "type": "string",
                 "enum": [
@@ -8071,6 +8094,43 @@
                     "code"
                 ],
                 "title": "LanguageDict"
+            },
+            "LikertItem": {
+                "additionalProperties": false,
+                "properties": {
+                    "type": {
+                        "const": "likert",
+                        "default": "likert",
+                        "title": "Type",
+                        "type": "string"
+                    },
+                    "required": {
+                        "default": true,
+                        "title": "Required",
+                        "type": "boolean"
+                    },
+                    "options": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "title": "Options",
+                        "type": "array"
+                    },
+                    "ui": {
+                        "default": "radio",
+                        "enum": [
+                            "radio",
+                            "slider"
+                        ],
+                        "title": "Ui",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "options"
+                ],
+                "title": "LikertItem",
+                "type": "object"
             },
             "LoginData": {
                 "properties": {
@@ -8406,12 +8466,51 @@
                     "survey_item": {
                         "anyOf": [
                             {
-                                "$ref": "#/components/schemas/SurveyItem"
+                                "oneOf": [
+                                    {
+                                        "$ref": "#/components/schemas/RadioItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/CheckboxItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/LikertItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/SliderItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/NumberItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/DateItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/DatetimeItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/TimeItem"
+                                    }
+                                ],
+                                "discriminator": {
+                                    "propertyName": "type",
+                                    "mapping": {
+                                        "checkbox": "#/components/schemas/CheckboxItem",
+                                        "date": "#/components/schemas/DateItem",
+                                        "datetime": "#/components/schemas/DatetimeItem",
+                                        "likert": "#/components/schemas/LikertItem",
+                                        "number": "#/components/schemas/NumberItem",
+                                        "radio": "#/components/schemas/RadioItem",
+                                        "slider": "#/components/schemas/SliderItem",
+                                        "time": "#/components/schemas/TimeItem"
+                                    }
+                                }
                             },
                             {
                                 "type": "null"
                             }
-                        ]
+                        ],
+                        "title": "Survey Item"
                     },
                     "id": {
                         "type": "string",
@@ -8486,6 +8585,13 @@
                         "type": "array",
                         "title": "Interviews Over Time"
                     },
+                    "interviews_by_time_of_day": {
+                        "items": {
+                            "$ref": "#/components/schemas/InterviewTimeOfDayCount"
+                        },
+                        "type": "array",
+                        "title": "Interviews By Time Of Day"
+                    },
                     "duration_stats": {
                         "anyOf": [
                             {
@@ -8506,6 +8612,27 @@
                             }
                         ]
                     },
+                    "duration_histogram": {
+                        "items": {
+                            "$ref": "#/components/schemas/HistogramBucket"
+                        },
+                        "type": "array",
+                        "title": "Duration Histogram"
+                    },
+                    "message_count_histogram": {
+                        "items": {
+                            "$ref": "#/components/schemas/HistogramBucket"
+                        },
+                        "type": "array",
+                        "title": "Message Count Histogram"
+                    },
+                    "message_length_histogram": {
+                        "items": {
+                            "$ref": "#/components/schemas/HistogramBucket"
+                        },
+                        "type": "array",
+                        "title": "Message Length Histogram"
+                    },
                     "dropout_stats": {
                         "items": {
                             "$ref": "#/components/schemas/DropoutPoint"
@@ -8520,12 +8647,79 @@
                     "completion_rate",
                     "interviews_by_status",
                     "interviews_over_time",
+                    "interviews_by_time_of_day",
                     "duration_stats",
                     "message_count_stats",
+                    "duration_histogram",
+                    "message_count_histogram",
+                    "message_length_histogram",
                     "dropout_stats"
                 ],
                 "title": "MonitoringStats",
                 "description": "Aggregated monitoring statistics for a project."
+            },
+            "NumberItem": {
+                "additionalProperties": false,
+                "properties": {
+                    "type": {
+                        "const": "number",
+                        "default": "number",
+                        "title": "Type",
+                        "type": "string"
+                    },
+                    "required": {
+                        "default": true,
+                        "title": "Required",
+                        "type": "boolean"
+                    },
+                    "min": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "default": null,
+                        "title": "Min"
+                    },
+                    "max": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "default": null,
+                        "title": "Max"
+                    },
+                    "step": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "default": 1,
+                        "title": "Step"
+                    }
+                },
+                "title": "NumberItem",
+                "type": "object"
             },
             "PaginatedResponse_InterviewSummaryPublic_": {
                 "properties": {
@@ -8970,12 +9164,51 @@
                     "survey_item": {
                         "anyOf": [
                             {
-                                "$ref": "#/components/schemas/SurveyItem"
+                                "oneOf": [
+                                    {
+                                        "$ref": "#/components/schemas/RadioItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/CheckboxItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/LikertItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/SliderItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/NumberItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/DateItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/DatetimeItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/TimeItem"
+                                    }
+                                ],
+                                "discriminator": {
+                                    "propertyName": "type",
+                                    "mapping": {
+                                        "checkbox": "#/components/schemas/CheckboxItem",
+                                        "date": "#/components/schemas/DateItem",
+                                        "datetime": "#/components/schemas/DatetimeItem",
+                                        "likert": "#/components/schemas/LikertItem",
+                                        "number": "#/components/schemas/NumberItem",
+                                        "radio": "#/components/schemas/RadioItem",
+                                        "slider": "#/components/schemas/SliderItem",
+                                        "time": "#/components/schemas/TimeItem"
+                                    }
+                                }
                             },
                             {
                                 "type": "null"
                             }
-                        ]
+                        ],
+                        "title": "Survey Item"
                     },
                     "references": {
                         "anyOf": [
@@ -9171,12 +9404,51 @@
                     "survey_item": {
                         "anyOf": [
                             {
-                                "$ref": "#/components/schemas/SurveyItem"
+                                "oneOf": [
+                                    {
+                                        "$ref": "#/components/schemas/RadioItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/CheckboxItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/LikertItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/SliderItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/NumberItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/DateItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/DatetimeItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/TimeItem"
+                                    }
+                                ],
+                                "discriminator": {
+                                    "propertyName": "type",
+                                    "mapping": {
+                                        "checkbox": "#/components/schemas/CheckboxItem",
+                                        "date": "#/components/schemas/DateItem",
+                                        "datetime": "#/components/schemas/DatetimeItem",
+                                        "likert": "#/components/schemas/LikertItem",
+                                        "number": "#/components/schemas/NumberItem",
+                                        "radio": "#/components/schemas/RadioItem",
+                                        "slider": "#/components/schemas/SliderItem",
+                                        "time": "#/components/schemas/TimeItem"
+                                    }
+                                }
                             },
                             {
                                 "type": "null"
                             }
-                        ]
+                        ],
+                        "title": "Survey Item"
                     },
                     "references": {
                         "anyOf": [
@@ -9368,6 +9640,39 @@
                 ],
                 "title": "QuestionSection[Question]"
             },
+            "RadioItem": {
+                "additionalProperties": false,
+                "properties": {
+                    "type": {
+                        "const": "radio",
+                        "default": "radio",
+                        "title": "Type",
+                        "type": "string"
+                    },
+                    "required": {
+                        "default": true,
+                        "title": "Required",
+                        "type": "boolean"
+                    },
+                    "options": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "title": "Options",
+                        "type": "array"
+                    },
+                    "with_other": {
+                        "default": false,
+                        "title": "With Other",
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "options"
+                ],
+                "title": "RadioItem",
+                "type": "object"
+            },
             "Reference": {
                 "properties": {
                     "question_index": {
@@ -9430,24 +9735,14 @@
                 "type": "object",
                 "title": "SecurityConfig"
             },
-            "SurveyItem": {
+            "SliderItem": {
+                "additionalProperties": false,
                 "properties": {
                     "type": {
-                        "$ref": "#/components/schemas/SurveyItemType"
-                    },
-                    "options": {
-                        "items": {
-                            "anyOf": [
-                                {
-                                    "type": "string"
-                                },
-                                {
-                                    "$ref": "#/components/schemas/SurveyOption"
-                                }
-                            ]
-                        },
-                        "title": "Options",
-                        "type": "array"
+                        "const": "slider",
+                        "default": "slider",
+                        "title": "Type",
+                        "type": "string"
                     },
                     "required": {
                         "default": true,
@@ -9461,12 +9756,8 @@
                             },
                             {
                                 "type": "number"
-                            },
-                            {
-                                "type": "null"
                             }
                         ],
-                        "default": null,
                         "title": "Min"
                     },
                     "max": {
@@ -9476,13 +9767,33 @@
                             },
                             {
                                 "type": "number"
+                            }
+                        ],
+                        "title": "Max"
+                    },
+                    "min_label": {
+                        "anyOf": [
+                            {
+                                "type": "string"
                             },
                             {
                                 "type": "null"
                             }
                         ],
                         "default": null,
-                        "title": "Max"
+                        "title": "Min Label"
+                    },
+                    "max_label": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "default": null,
+                        "title": "Max Label"
                     },
                     "step": {
                         "anyOf": [
@@ -9498,71 +9809,13 @@
                         ],
                         "default": 1,
                         "title": "Step"
-                    },
-                    "with_other": {
-                        "default": false,
-                        "title": "With Other",
-                        "type": "boolean"
                     }
                 },
                 "required": [
-                    "type",
-                    "options"
+                    "min",
+                    "max"
                 ],
-                "title": "SurveyItem",
-                "type": "object"
-            },
-            "SurveyItemType": {
-                "enum": [
-                    "radio",
-                    "checkbox",
-                    "slider",
-                    "number",
-                    "date",
-                    "datetime"
-                ],
-                "title": "SurveyItemType",
-                "type": "string"
-            },
-            "SurveyOption": {
-                "description": "An option for a survey item.",
-                "properties": {
-                    "label": {
-                        "description": "The label for the option, will be displayed in the ui.",
-                        "title": "Label",
-                        "type": "string"
-                    },
-                    "value": {
-                        "anyOf": [
-                            {
-                                "type": "string"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "default": null,
-                        "description": "The value for the option, can be used as a point of reference later in the interview.",
-                        "title": "Value"
-                    },
-                    "tip": {
-                        "anyOf": [
-                            {
-                                "type": "string"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "default": null,
-                        "description": "A tip to show the interviewee when they hover over the option.",
-                        "title": "Tip"
-                    }
-                },
-                "required": [
-                    "label"
-                ],
-                "title": "SurveyOption",
+                "title": "SliderItem",
                 "type": "object"
             },
             "SynthesizeRequest": {
@@ -9817,6 +10070,48 @@
                     "fixed_answers"
                 ],
                 "title": "TestType"
+            },
+            "TimeItem": {
+                "additionalProperties": false,
+                "properties": {
+                    "type": {
+                        "const": "time",
+                        "default": "time",
+                        "title": "Type",
+                        "type": "string"
+                    },
+                    "required": {
+                        "default": true,
+                        "title": "Required",
+                        "type": "boolean"
+                    },
+                    "min": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "default": null,
+                        "title": "Min"
+                    },
+                    "max": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "default": null,
+                        "title": "Max"
+                    }
+                },
+                "title": "TimeItem",
+                "type": "object"
             },
             "TimedMessage": {
                 "properties": {
@@ -10318,13 +10613,52 @@
                     "survey_item": {
                         "anyOf": [
                             {
-                                "$ref": "#/components/schemas/SurveyItem"
+                                "discriminator": {
+                                    "mapping": {
+                                        "checkbox": "#/components/schemas/CheckboxItem",
+                                        "date": "#/components/schemas/DateItem",
+                                        "datetime": "#/components/schemas/DatetimeItem",
+                                        "likert": "#/components/schemas/LikertItem",
+                                        "number": "#/components/schemas/NumberItem",
+                                        "radio": "#/components/schemas/RadioItem",
+                                        "slider": "#/components/schemas/SliderItem",
+                                        "time": "#/components/schemas/TimeItem"
+                                    },
+                                    "propertyName": "type"
+                                },
+                                "oneOf": [
+                                    {
+                                        "$ref": "#/components/schemas/RadioItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/CheckboxItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/LikertItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/SliderItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/NumberItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/DateItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/DatetimeItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/TimeItem"
+                                    }
+                                ]
                             },
                             {
                                 "type": "null"
                             }
                         ],
-                        "default": null
+                        "default": null,
+                        "title": "Survey Item"
                     }
                 },
                 "required": [
@@ -10386,13 +10720,52 @@
                     "survey_item": {
                         "anyOf": [
                             {
-                                "$ref": "#/components/schemas/SurveyItem"
+                                "discriminator": {
+                                    "mapping": {
+                                        "checkbox": "#/components/schemas/CheckboxItem",
+                                        "date": "#/components/schemas/DateItem",
+                                        "datetime": "#/components/schemas/DatetimeItem",
+                                        "likert": "#/components/schemas/LikertItem",
+                                        "number": "#/components/schemas/NumberItem",
+                                        "radio": "#/components/schemas/RadioItem",
+                                        "slider": "#/components/schemas/SliderItem",
+                                        "time": "#/components/schemas/TimeItem"
+                                    },
+                                    "propertyName": "type"
+                                },
+                                "oneOf": [
+                                    {
+                                        "$ref": "#/components/schemas/RadioItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/CheckboxItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/LikertItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/SliderItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/NumberItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/DateItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/DatetimeItem"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/TimeItem"
+                                    }
+                                ]
                             },
                             {
                                 "type": "null"
                             }
                         ],
-                        "default": null
+                        "default": null,
+                        "title": "Survey Item"
                     },
                     "can_answer": {
                         "default": true,
