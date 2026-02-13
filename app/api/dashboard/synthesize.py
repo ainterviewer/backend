@@ -15,12 +15,14 @@ from ...dependencies import DBSession, ProjectEditor, ProjectViewer, UserToken
 from ...synthesize.core import (
     run_synthesis_job_fixed_answers,
     run_synthesis_job_shuffled_ai,
+    run_synthesis_job_fixed_ai,
 )
 from ...types import TestRunStatus
 from ..request_models import (
     SynthesizeRequest,
     UpdateBackgroundInfoRequest,
     UpdateFixedAnswersRequest,
+    UpdateFixedPersonasRequest,
 )
 from ..response_models import SynthesizeResponse
 
@@ -47,6 +49,28 @@ async def update_background_info(
     jwt: ProjectEditor,
 ):
     return db.tests.update_background_info(test_id, request.background_info)
+
+
+@router.get("/projects/{project_id}/tests/{test_id}/fixed_personas")
+async def get_fixed_personas(
+    response: Response,
+    project_id: UUID4,
+    test_id: UUID4,
+    db: DBSession,
+    jwt: ProjectViewer,
+) -> list[str]:
+    return db.tests.get_fixed_personas(project_id, test_id)
+
+
+@router.post("/projects/{project_id}/tests/{test_id}/fixed_personas")
+async def update_fixed_personas(
+    project_id: UUID4,
+    test_id: UUID4,
+    request: UpdateFixedPersonasRequest,
+    db: DBSession,
+    jwt: ProjectEditor,
+):
+    return db.tests.update_fixed_personas(test_id, request.fixed_personas)
 
 
 @router.get("/projects/{project_id}/tests/{test_id}/fixed_answers")
@@ -179,6 +203,30 @@ async def run_synthetic_test(
     exception = None
 
     match test_setup.type:
+        case TestType.FIXED_ANSWERS:
+            background_tasks.add_task(
+                handle_exceptions(run_synthesis_job_fixed_answers),
+                project_id=str(project_id),
+                test_run_id=str(test_run_id),
+                fixed_answers=test_setup.fixed_answers,
+                n_interviews=request_data.n_interviews,
+                language=request_data.language,
+                delay_before_answer=request_data.delay_before_answers,
+            )
+
+        case TestType.FIXED_AI:
+            background_tasks.add_task(
+                handle_exceptions(run_synthesis_job_fixed_ai),
+                project_id=str(project_id),
+                test_run_id=str(test_run_id),
+                user_token=request.cookies["token"],
+                fixed_personas=test_setup.fixed_personas,
+                n_interviews=request_data.n_interviews,
+                answering_model=request_data.answering_model,
+                language=request_data.language,
+                delay_before_answer=request_data.delay_before_answers,
+            )
+
         case TestType.SHUFFLED_AI:
             if not request_data.answering_model:
                 exception = HTTPException(
@@ -197,22 +245,6 @@ async def run_synthetic_test(
                 answering_model=request_data.answering_model,
                 language=request_data.language,
                 delay_before_answer=request_data.delay_before_answers,
-            )
-        case TestType.FIXED_ANSWERS:
-            background_tasks.add_task(
-                handle_exceptions(run_synthesis_job_fixed_answers),
-                project_id=str(project_id),
-                test_run_id=str(test_run_id),
-                fixed_answers=test_setup.fixed_answers,
-                n_interviews=request_data.n_interviews,
-                language=request_data.language,
-                delay_before_answer=request_data.delay_before_answers,
-            )
-
-        case TestType.FIXED_AI:
-            exception = HTTPException(
-                status_code=400,
-                detail="Fixed AI test type is not yet implemented",
             )
 
     if exception:

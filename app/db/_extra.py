@@ -128,6 +128,10 @@ class PydanticJSONB(types.TypeDecorator):
             # Fallback case (though this shouldn't happen given our __init__ types)
             return [self.model_class.model_validate(v) for v in value]  # type: ignore
 
+        # For union types (e.g. Model | str), delegate to TypeAdapter
+        if not self._is_plain_model:
+            return self._type_adapter.validate_python(value)
+
         raise TypeError(
             f"Unsupported type for PydanticJSONB from database: {type(value)}. Expected a dictionary or list."
         )

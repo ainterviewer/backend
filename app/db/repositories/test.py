@@ -99,6 +99,25 @@ class TestRepository(BaseRepository):
         self.session.execute(statement)
         self.session.commit()
 
+    def get_fixed_personas(self, project_id: UUID4, test_id: UUID4) -> list[str]:
+        statement = select(TestSetupTable).where(
+            TestSetupTable.project_id == project_id,
+            TestSetupTable.id == test_id,
+        )
+        test = self.session.execute(statement).scalar_one()
+
+        return test.fixed_personas
+
+    def update_fixed_personas(self, test_id: UUID4, personas: list[str]):
+        statement = (
+            update(TestSetupTable)
+            .where(TestSetupTable.id == test_id)
+            .values(fixed_personas=personas)
+        )
+
+        self.session.execute(statement)
+        self.session.commit()
+
     def get_fixed_answers(self, test_id: UUID4) -> list[str]:
         statement = select(TestSetupTable).where(TestSetupTable.id == test_id)
         test = self.session.execute(statement).scalar_one()

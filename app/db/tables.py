@@ -543,7 +543,7 @@ class TestSetupTable(Base):
         default=DEFAULT_BACKGROUND_INFO_OPTIONS,
     )
     fixed_answers: Mapped[list[str] | None] = mapped_column(JSON)
-    fixed_personas: Mapped[Any | None] = mapped_column(JSON)
+    fixed_personas: Mapped[list[str] | None] = mapped_column(JSON)
 
     # Relationships
     test_runs: Mapped[list["TestRunTable"]] = relationship(
@@ -593,8 +593,8 @@ class IntervieweeTable(Base):
     project_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("project.id", ondelete="CASCADE")
     )
-    interview_subject: Mapped[InterviewSubject] = mapped_column(
-        PydanticJSONB(InterviewSubject)
+    interview_subject: Mapped[InterviewSubject | str] = mapped_column(
+        PydanticJSONB(InterviewSubject | str)
     )
 
     # Relationships

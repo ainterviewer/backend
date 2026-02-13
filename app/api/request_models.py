@@ -78,6 +78,10 @@ class UpdateBackgroundInfoRequest(BaseModel):
     background_info: BackgroundInfoOptions
 
 
+class UpdateFixedPersonasRequest(BaseModel):
+    fixed_personas: list[str]
+
+
 class UpdateFixedAnswersRequest(BaseModel):
     answers: list[str]
 

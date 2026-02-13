@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import Literal, Optional
 from uuid import UUID
 
 from pydantic import (
@@ -207,7 +207,7 @@ class ProjectCreate(_BaseModel):
 
 class ProjectPublic(ProjectBase):
     n_interviews: int | None = None
-    available_languages: List[LanguageDict] | None = None
+    available_languages: list[LanguageDict] | None = None
     tests: list[TestSetupPublic] | None = None
 
 
@@ -233,7 +233,7 @@ class ExperimentProjectPublic(_BaseModel):
 
 class ExperimentCreate(_BaseModel):
     title: str
-    projects: List[ExperimentProjectCreate]
+    projects: list[ExperimentProjectCreate]
 
 
 class ExperimentPublic(_BaseModel):
@@ -242,7 +242,7 @@ class ExperimentPublic(_BaseModel):
     user_id: UUID4
     created_at: datetime
     status: ProjectStatus = ProjectStatus.ACTIVE
-    projects: List[ExperimentProjectPublic] = []
+    projects: list[ExperimentProjectPublic] = []
 
 
 class InterviewBase(_BaseModel):
@@ -305,7 +305,7 @@ class MessageBase(_BaseModel):
     attachment: Optional[Path] = None
     feedback: Optional[Feedback] = None
     created_at: datetime
-    image: Optional[Image | List[Image]] = None
+    image: Optional[Image | list[Image]] = None
     survey_item: Optional[SurveyItem] = None
 
 
@@ -326,7 +326,7 @@ class MessageCreate(_BaseModel):
     include_in_history: bool = True
     attachment: Optional[Path] = None
     feedback: Optional[Feedback] = None
-    image: Optional[Image | List[Image]] = None
+    image: Optional[Image | list[Image]] = None
     survey_item: Optional[SurveyItem] = None
 
 
@@ -386,8 +386,9 @@ class TestSetupPublic(TestSetupBase):
     n_runs: int
     id: UUID4
     created_at: datetime
-    background_info: Optional[BackgroundInfoOptions] = None
-    fixed_answers: Optional[List[str]] = None
+    background_info: BackgroundInfoOptions | None = None
+    fixed_answers: list[str] | None = None
+    fixed_personas: list[str] | None = None
 
 
 class TestRunBase(_BaseModel):
@@ -411,7 +412,7 @@ class TestRunPublic(TestRunBase):
 
 class IntervieweeBase(_BaseModel):
     interview_id: UUID4
-    interview_subject: InterviewSubject
+    interview_subject: InterviewSubject | str
 
 
 class IntervieweeCreate(IntervieweeBase):
@@ -447,7 +448,7 @@ class AnalysisCategoryPublic(AnalysisCategoryBase):
 
 
 class FilteredMessagesRequest(_BaseModel):
-    category_ids: List[UUID4] | None = None
+    category_ids: list[UUID4] | None = None
     search_text: str | None = None
     exact_match: bool = False
     case_sensitive: bool = False
@@ -475,11 +476,11 @@ class MessageAnnotationBase(_BaseModel):
 
 
 class MessageAnnotationCreate(MessageAnnotationBase):
-    values: List[AnnotationValueCreate]
+    values: list[AnnotationValueCreate]
 
 
 class MessageAnnotationPublic(MessageAnnotationBase):
     id: UUID4
     created_at: datetime
     updated_at: datetime
-    values: List[AnnotationValuePublic]
+    values: list[AnnotationValuePublic]

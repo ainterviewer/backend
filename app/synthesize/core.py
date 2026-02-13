@@ -23,6 +23,7 @@ from ainterviewer.interfaces import OutgoingData, OutgoingMessage, ReceivedData
 from ainterviewer.lpm.types import CustomTokens
 from ainterviewer.synthesize.interviewees import (
     BackgroundInfoOptions,
+    InterviewSubject,
     generate_synthetic_persons,
 )
 from ainterviewer.types import LanguageCode, MessageRole
@@ -95,11 +96,16 @@ async def run_synthetic_answering_agent(
 
     interview_token = InterviewToken.decode(token)
 
+    if isinstance(agent.interview_subject, InterviewSubject):
+        interviewee: dict[str, Any] = agent.interview_subject.model_dump(mode="json")
+    else:
+        interviewee = agent.interview_subject
+
     await add_interviewee(
         user_token=user_token,
         project_id=project_id,
         interview_id=interview_token.interview_id,
-        interviewee=agent.interview_subject.model_dump(mode="json"),
+        interviewee=interviewee,
     )
 
     async for json_data, websocket in _connect_and_yield_messages(token, language):
@@ -177,7 +183,7 @@ async def add_interviewee(
     user_token: str,
     project_id: str | UUID4,
     interview_id: str | UUID4,
-    interviewee: dict[str, Any],
+    interviewee: dict[str, Any] | str,
 ):
     async with aiohttp.ClientSession() as session:
         async with session.post(
@@ -189,6 +195,78 @@ async def add_interviewee(
             cookies={"token": user_token},
         ) as response:
             response.raise_for_status()
+
+
+async def run_synthesis_job_fixed_answers(
+    project_id: str,
+    test_run_id: str,
+    fixed_answers: list[str],
+    n_interviews: int,
+    language: LanguageCode,
+    delay_before_answer: Optional[tuple[float, float]] = None,
+):
+    tasks = []
+    for _ in range(n_interviews):
+        task = asyncio.create_task(
+            run_synthetic_fixed_answers(
+                project_id=project_id,
+                test_run_id=test_run_id,
+                fixed_answers=fixed_answers,
+                language=language,
+                delay_before_answer=delay_before_answer,
+            )
+        )
+        tasks.append(task)
+        await asyncio.sleep(1)  # Small delay between starting agents
+
+    # Wait for all agents to complete
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    return results
+
+
+async def run_synthesis_job_fixed_ai(
+    project_id: str,
+    test_run_id: str,
+    user_token: str,
+    fixed_personas: list[str],
+    n_interviews: int,
+    answering_model: str,
+    language: LanguageCode,
+    delay_before_answer: Optional[tuple[float, float]] = None,
+):
+    shuffled_personas = [random.choice(fixed_personas) for _ in range(n_interviews)]
+
+    # Create agents
+    agents = []
+    for persona in shuffled_personas:
+        agent = AnsweringAgent(
+            model=answering_model,
+            interview_subject=persona,
+            language=language,
+        )
+        agents.append(agent)
+
+    # Run agents concurrently but with a small delay between starts
+    tasks = []
+    for agent in agents:
+        task = asyncio.create_task(
+            run_synthetic_answering_agent(
+                agent=agent,
+                user_token=user_token,
+                project_id=project_id,
+                test_run_id=test_run_id,
+                language=language,
+                delay_before_answer=delay_before_answer,
+            )
+        )
+        tasks.append(task)
+        await asyncio.sleep(1)  # Small delay between starting agents
+
+    # Wait for all agents to complete
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    return results
 
 
 async def run_synthesis_job_shuffled_ai(
@@ -222,34 +300,6 @@ async def run_synthesis_job_shuffled_ai(
                 user_token=user_token,
                 project_id=project_id,
                 test_run_id=test_run_id,
-                language=language,
-                delay_before_answer=delay_before_answer,
-            )
-        )
-        tasks.append(task)
-        await asyncio.sleep(1)  # Small delay between starting agents
-
-    # Wait for all agents to complete
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    return results
-
-
-async def run_synthesis_job_fixed_answers(
-    project_id: str,
-    test_run_id: str,
-    fixed_answers: list[str],
-    n_interviews: int,
-    language: LanguageCode,
-    delay_before_answer: Optional[tuple[float, float]] = None,
-):
-    tasks = []
-    for _ in range(n_interviews):
-        task = asyncio.create_task(
-            run_synthetic_fixed_answers(
-                project_id=project_id,
-                test_run_id=test_run_id,
-                fixed_answers=fixed_answers,
                 language=language,
                 delay_before_answer=delay_before_answer,
             )
