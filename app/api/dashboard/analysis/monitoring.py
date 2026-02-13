@@ -52,6 +52,13 @@ class MessageCountStats(BaseModel):
     sum_messages: int
 
 
+class HistogramBucket(BaseModel):
+    """A value-count pair for histogram use."""
+
+    value: int
+    count: int
+
+
 class DropoutPoint(BaseModel):
     """Count of dropouts at a specific question."""
 
@@ -77,6 +84,11 @@ class MonitoringStats(BaseModel):
     # Duration/engagement stats
     duration_stats: InterviewDurationStats | None
     message_count_stats: MessageCountStats | None
+
+    # Histogram distributions
+    duration_histogram: list[HistogramBucket]
+    message_count_histogram: list[HistogramBucket]
+    message_length_histogram: list[HistogramBucket]
 
     # Dropout analysis
     dropout_stats: list[DropoutPoint]
@@ -261,6 +273,55 @@ async def get_project_monitoring_stats(
             sum_messages=msg_stats_result.sum_messages,
         )
 
+    # Duration histogram (one entry per distinct total_time_spent value)
+    duration_hist_stmt = (
+        select(
+            InterviewTable.total_time_spent.label("value"),
+            func.count(InterviewTable.id).label("count"),
+        )
+        .where(*duration_conditions)
+        .group_by(InterviewTable.total_time_spent)
+        .order_by(InterviewTable.total_time_spent)
+    )
+    duration_histogram = [
+        HistogramBucket(value=row.value, count=row.count)
+        for row in session.execute(duration_hist_stmt).all()
+    ]
+
+    # Message count histogram (one entry per distinct message count per interview)
+    msg_count_hist_stmt = (
+        select(
+            message_counts_subquery.c.msg_count.label("value"),
+            func.count().label("count"),
+        )
+        .group_by(message_counts_subquery.c.msg_count)
+        .order_by(message_counts_subquery.c.msg_count)
+    )
+    message_count_histogram = [
+        HistogramBucket(value=row.value, count=row.count)
+        for row in session.execute(msg_count_hist_stmt).all()
+    ]
+
+    # Message length histogram (one entry per distinct character length)
+    msg_length_stmt = (
+        select(
+            func.length(MessageTable.content).label("value"),
+            func.count(MessageTable.id).label("count"),
+        )
+        .where(
+            *message_conditions,
+            MessageTable.interview_id.in_(
+                select(InterviewTable.id).where(*completed_conditions)
+            ),
+        )
+        .group_by(func.length(MessageTable.content))
+        .order_by(func.length(MessageTable.content))
+    )
+    message_length_histogram = [
+        HistogramBucket(value=row.value, count=row.count)
+        for row in session.execute(msg_length_stmt).all()
+    ]
+
     # ++++++++++++++++++++++++++++++ #
     # Stats for INCOMPLETE interviews #
     # ++++++++++++++++++++++++++++++ #
@@ -327,5 +388,8 @@ async def get_project_monitoring_stats(
         interviews_by_time_of_day=interviews_by_time_of_day,
         duration_stats=duration_stats,
         message_count_stats=message_count_stats,
+        duration_histogram=duration_histogram,
+        message_count_histogram=message_count_histogram,
+        message_length_histogram=message_length_histogram,
         dropout_stats=dropout_stats,
     )
