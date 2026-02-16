@@ -105,6 +105,9 @@ def replay_history(
         # if message.content in CustomTokens.all:
         #     continue
 
+        if message.skipped_by_condition:
+            continue
+
         if message.image:
             message.image.encode(project_id)
 

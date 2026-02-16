@@ -226,6 +226,7 @@ class InterviewRepository(BaseRepository):
         is_introduction: bool = False,
         outro: bool = False,
         timed: bool = False,
+        skipped_by_condition: bool = False,
     ) -> int:
         message = MessageTable(
             content=content,
@@ -245,6 +246,7 @@ class InterviewRepository(BaseRepository):
             is_introduction=is_introduction,
             outro=outro,
             timed=timed,
+            skipped_by_condition=skipped_by_condition,
         )
         self.session.add(message)
         self.session.commit()

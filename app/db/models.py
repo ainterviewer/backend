@@ -307,6 +307,7 @@ class MessageBase(_BaseModel):
     created_at: datetime
     image: Optional[Image | list[Image]] = None
     survey_item: Optional[SurveyItem] = None
+    skipped_by_condition: bool = False
 
 
 class MessageCreate(_BaseModel):
@@ -328,6 +329,7 @@ class MessageCreate(_BaseModel):
     feedback: Optional[Feedback] = None
     image: Optional[Image | list[Image]] = None
     survey_item: Optional[SurveyItem] = None
+    skipped_by_condition: bool = False
 
 
 class MessagePublic(MessageBase):

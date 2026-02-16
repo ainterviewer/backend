@@ -467,6 +467,7 @@ class MessageTable(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     image: Mapped[Image | None] = mapped_column(PydanticJSONB(Image))
     survey_item: Mapped[SurveyItem | None] = mapped_column(PydanticJSONB(SurveyItem))
+    skipped_by_condition: Mapped[bool] = mapped_column(default=False)
 
     # Relationships
     interview: Mapped["InterviewTable"] = relationship(back_populates="messages")
