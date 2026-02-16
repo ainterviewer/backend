@@ -114,7 +114,6 @@ def replay_history(
         data = OutgoingHistoryMessage(
             content=message.content,
             role=message.role,
-            interview_id=interview_id,
             message_id=message.message_id,
             feedback=message.feedback,
             image=message.image,
@@ -127,7 +126,6 @@ def replay_history(
         data = OutgoingHistoryMessage(
             content=last_message.content,
             role=last_message.role,
-            interview_id=interview_id,
             message_id=last_message.message_id,
             include_in_history=last_message.include_in_history,
         )
@@ -148,7 +146,6 @@ def replay_history(
             data = OutgoingMessage(
                 content=last_message.content,
                 role=last_message.role,
-                interview_id=interview_id,
                 message_id=last_message.message_id,
                 feedback=last_message.feedback,
                 image=last_message.image,
