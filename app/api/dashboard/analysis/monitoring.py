@@ -269,7 +269,7 @@ async def get_project_monitoring_stats(
     hour_counts = {int(row.hour): row.count for row in time_of_day_results}
     interviews_by_time_of_day = [
         InterviewTimeOfDayCount(
-            time=datetime.time(hour=h).strftime("%H:%M"),
+            time=datetime.time(hour=h).strftime("%H"),
             count=hour_counts.get(h, 0),
         )
         for h in range(24)
