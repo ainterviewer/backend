@@ -1,8 +1,8 @@
-from pathlib import Path
 import datetime
 import io
 import json
 from base64 import b64decode
+from pathlib import Path
 from typing import Annotated, Literal
 
 import polars as pl
@@ -39,7 +39,6 @@ from ...db.types import InterviewType
 from ...db.utils import fix_nested_columns
 from ...dependencies import (
     DBSession,
-    UserToken,
     ProjectAdmin,
     ProjectEditor,
     ProjectViewer,
