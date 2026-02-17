@@ -129,10 +129,6 @@ async def ai_websocket_endpoint(
         )
 
         interview_history = interview.messages
-        if interview_history:
-            message_id = interview.messages[-1].message_id
-        else:
-            message_id = 0
 
     except (NoResultFound, RestartInterview):
         print("creating new interview")
@@ -193,7 +189,6 @@ async def ai_websocket_endpoint(
             project_id=project_id,
             interview_id=interview_id,
             previous_time_spent=interview.total_time_spent,
-            message_id=message_id,
             frontend_language=language,
             referable_values={
                 "referer": referer,
