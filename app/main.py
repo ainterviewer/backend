@@ -15,7 +15,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from . import __version__
 from .api import main as api
-from .api import ws
+from .api.websockets import main as websockets
 from .db import InterviewDataBase
 from .dependencies import engine
 from .settings import app_settings
@@ -92,7 +92,7 @@ app.add_middleware(
 
 # Routers
 app.include_router(api.router)
-app.include_router(ws.router)
+app.include_router(websockets.router)
 
 if __name__ == "__main__":
     uvicorn.run(

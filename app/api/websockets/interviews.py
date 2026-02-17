@@ -5,7 +5,6 @@
 # NOTE:
 # - Consider changing to server side events instead of websockets if it
 # improves unstable connections
-from fastapi.websockets import WebSocketState
 
 import json
 
@@ -29,15 +28,15 @@ from ainterviewer.lpm.types import CustomTokens
 from ainterviewer.settings import settings
 from ainterviewer.types import Interviewer, MessageRole
 
-from ..auth import create_interview_token, decode_interview_token, decode_jwt
-from ..dependencies import (
+from ...auth import create_interview_token, decode_interview_token, decode_jwt
+from ...dependencies import (
     AdminToken,
     DBSession,
     get_ws_manager,
 )
-from ..utils import replay_history
-from ..websockets import WebSocketConnectionManager, WebsocketMessageHandler
-from .request_models import BroadcastRequest
+from ...utils import replay_history
+from ...websockets import WebSocketConnectionManager, WebsocketMessageHandler
+from ..request_models import BroadcastRequest
 
 router = APIRouter(prefix="/ws", tags=["interviews"])
 
@@ -96,7 +95,7 @@ async def broadcast(
 
 
 @router.websocket("/ai")
-async def ai_websocket_endpoint(
+async def ai_interview_websocket_endpoint(
     *,
     websocket: WebSocket,
     db: DBSession,
@@ -219,7 +218,7 @@ async def ai_websocket_endpoint(
 
 
 @router.websocket("/chat")
-async def chat_websocket_endpoint(
+async def human_interview_websocket_endpoint(
     db: DBSession,
     websocket: WebSocket,
     manager: WebSocketConnectionManager = Depends(get_ws_manager),
