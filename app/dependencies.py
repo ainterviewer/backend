@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from ainterviewer.types import LanguageCode
 
-from .auth import AuthToken, decode_auth_token
+from .auth import AuthToken, decode_auth_token, AssistanceSessionToken
 from .db import InterviewDataBase
 from .db.vectors import register_vector_extension
 from .settings import app_settings
@@ -149,6 +149,7 @@ class ResourceRoleChecker:
 DBSession = Annotated[InterviewDataBase, Depends(get_db)]
 LocalizationCookie = Annotated[LanguageCode, Cookie(alias="localization")]
 LanguageCookie = Annotated[LanguageCode, Cookie(alias="language")]
+AssistanceSessionCookie = Annotated[AssistanceSessionToken, Cookie()]
 
 # User tokens
 AdminToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.ADMIN))]
