@@ -24,7 +24,7 @@ from ainterviewer.types import LanguageCode
 from ...auth import AssistanceSessionToken
 from ...dependencies import AssistanceSessionCookie, DBSession, ProjectEditor
 
-router = APIRouter(prefix="/ws", tags=["assistance"])
+router = APIRouter(tags=["assistance"])
 
 
 class AssistanceDependencies(BaseModel):

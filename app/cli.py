@@ -42,8 +42,8 @@ def generate_openapi_scheme(output: str = "openapi.json"):
     )
     from ainterviewer.lpm.types import CustomTokens
 
+    from .api.dashboard.assistance import ChatMessage
     from .auth import AuthToken, InterviewToken
-    from .api.websockets.assistance import ChatMessage
 
     openapi = app.openapi()
 
