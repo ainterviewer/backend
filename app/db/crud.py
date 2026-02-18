@@ -10,6 +10,7 @@ from ainterviewer.interfaces import PersistenceProtocol
 from ..paths import APP_DIR
 from .repositories import (
     AnalysisRepository,
+    AssistanceRepository,
     InterviewRepository,
     ProjectRepository,
     TestRepository,
@@ -49,6 +50,7 @@ class InterviewDataBase(PersistenceProtocol):
         self.interviews: InterviewRepository = InterviewRepository(session)
         self.tests: TestRepository = TestRepository(session)
         self.analysis: AnalysisRepository = AnalysisRepository(session)
+        self.assistance: AssistanceRepository = AssistanceRepository(session)
 
     # ==================== Database Management ====================
 

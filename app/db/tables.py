@@ -674,3 +674,48 @@ class AnnotationValueTable(Base):
     # Relationships
     annotation: Mapped["MessageAnnotationTable"] = relationship(back_populates="values")
     category: Mapped["AnalysisCategoryTable"] = relationship(back_populates="values")
+
+
+##############
+# Assistance #
+##############
+
+
+class AssistanceSessionTable(Base):
+    __tablename__ = "assistance_session"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE")
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE")
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(default=now)
+
+    # Relationships
+    message_chunks: Mapped[list["AssistanceMessageChunkTable"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
+
+
+class AssistanceMessageChunkTable(Base):
+    """One row per agent run — stores the raw JSON from new_messages_json()."""
+
+    __tablename__ = "assistance_message_chunk"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("assistance_session.id", ondelete="CASCADE")
+    )
+    messages_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime.datetime] = mapped_column(default=now)
+
+    # Relationships
+    session: Mapped["AssistanceSessionTable"] = relationship(
+        back_populates="message_chunks"
+    )
