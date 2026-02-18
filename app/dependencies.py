@@ -149,7 +149,20 @@ class ResourceRoleChecker:
 DBSession = Annotated[InterviewDataBase, Depends(get_db)]
 LocalizationCookie = Annotated[LanguageCode, Cookie(alias="localization")]
 LanguageCookie = Annotated[LanguageCode, Cookie(alias="language")]
-AssistanceSessionCookie = Annotated[AssistanceSessionToken | None, Cookie()]
+
+
+def _parse_assistance_session(
+    assistance_session: Annotated[str | None, Cookie()] = None,
+) -> AssistanceSessionToken | None:
+    if assistance_session is None:
+        return None
+    try:
+        return AssistanceSessionToken.model_validate_json(assistance_session)
+    except Exception:
+        return None
+
+
+AssistanceSessionCookie = Annotated[AssistanceSessionToken | None, Depends(_parse_assistance_session)]
 
 # User tokens
 AdminToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.ADMIN))]

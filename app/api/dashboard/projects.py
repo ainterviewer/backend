@@ -229,7 +229,9 @@ async def generate_section_question(
     project = db.projects.get_project_localization(project_id, lang)
 
     question = await generate_question(
-        data.prompt, guide=project.interview_guide, section_idx=data.section_idx
+        data.prompt,
+        guide=project.interview_guide,
+        section=project.interview_guide.question_sections[data.section_idx],
     )
 
     return question

@@ -4,7 +4,13 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Form
 from fastapi.responses import Response, StreamingResponse
-from pydantic import UUID4, BaseModel, Field, TypeAdapter
+from pydantic import (
+    UUID4,
+    BaseModel,
+    Field,
+    TypeAdapter,
+    model_validator,
+)
 from pydantic_ai import (
     Agent,
     ModelMessage,
@@ -12,13 +18,15 @@ from pydantic_ai import (
     ModelResponse,
     RunContext,
     TextPart,
+    ToolReturnPart,
     UserPromptPart,
 )
 from pydantic_ai.models.openai import OpenAIChatModel
-from typing_extensions import TypedDict
+from pydantic_ai.result import StreamedRunResult
 
-from ainterviewer.interview_guides import InterviewGuide
+from ainterviewer.interview_guides import InterviewGuide, Question
 from ainterviewer.interview_guides.generate import generate_question, generate_section
+from ainterviewer.interview_guides.interview_guide import QuestionSection
 from ainterviewer.types import LanguageCode
 
 from ...auth import AssistanceSessionToken
@@ -29,26 +37,56 @@ router = APIRouter(tags=["assistance"])
 
 class AssistanceDependencies(BaseModel):
     guide: InterviewGuide
+    user_name: str
 
 
-class ChatMessage(TypedDict):
+class ChatMessage(BaseModel):
     """Format of messages sent to the browser."""
 
     role: Literal["user", "model"]
     timestamp: str
     content: str
+    type: Literal["message", "question", "section"] = "message"
+
+    @model_validator(mode="after")
+    def validate_type(self):
+        match self.type:
+            case "question":
+                Question.model_validate_json(self.content)
+            case "section":
+                QuestionSection.model_validate_json(self.content)
+
+        return self
 
 
 system_prompt = """\
-You are the AInterviewer assistant who are to assist users with constructing their interview guides.
-Gain an understanding of the users interest and scope before giving suggestions or solutions.
+You are a helpful assistant whos job it is to assist users with constructing their interview guides for qualitative research purposes.
+
+The interview guide and interviews are constructed and conducted on the platform on which you run: AInterviewer.
+
+You should gain an understanding of the users interest and scope of the interview before giving suggestions or solutions.
 """
+
+
+def agent_instruction(ctx: RunContext[AssistanceDependencies]) -> str:
+    return f"""\
+Always use user name {ctx.deps.user_name} while responding.
+
+Do not reiterate the output of tool calls, the user will see them in a different interface.
+
+This is the state of the users interview guide:
+```
+{ctx.deps.guide.model_dump_json()}
+```
+"""
+
 
 model = OpenAIChatModel("gpt-5-mini")
 
 assistance_agent = Agent(
     model,
     system_prompt=system_prompt,
+    instructions=agent_instruction,
     deps_type=AssistanceDependencies,
 )
 
@@ -57,37 +95,79 @@ assistance_agent = Agent(
 async def create_new_section(
     ctx: RunContext[AssistanceDependencies],
     prompt: str = Field(description="The prompt used to generate the question."),
-) -> str:
-    return str(await generate_section(prompt, ctx.deps.guide))
+) -> QuestionSection:
+    """Generates an new section with grouped interview questions based on the
+    existing interview guide and the users prompt.
+
+    You should not reiterate the output, it will be shown to the user in another interface.
+    """
+    return await generate_section(prompt, ctx.deps.guide)
 
 
 @assistance_agent.tool()
 async def create_new_question(
     ctx: RunContext[AssistanceDependencies],
     prompt: str = Field(description="The prompt used to generate the question."),
-    section_idx: int = Field(
-        description="The index of the section the generated question belongs to."
+    section: QuestionSection | None = Field(
+        None, description="The existing section the generated question belongs to."
     ),
-) -> str:
-    return str(await generate_question(prompt, ctx.deps.guide, section_idx))
+) -> Question:
+    """Generates an new interview questions based on the existing interview
+    guide, the users prompt, and the index of the section to which the question
+    fits.
+
+    You should not reiterate the output, it will be shown to the user in another interface.
+    """
+    return await generate_question(prompt, ctx.deps.guide, section=section)
 
 
-def to_chat_message(m: ModelMessage) -> ChatMessage | None:
-    first_part = m.parts[0]
-    if isinstance(m, ModelRequest) and isinstance(first_part, UserPromptPart):
-        assert isinstance(first_part.content, str)
-        return ChatMessage(
-            role="user",
-            timestamp=first_part.timestamp.isoformat(),
-            content=first_part.content,
-        )
-    elif isinstance(m, ModelResponse) and isinstance(first_part, TextPart):
-        return ChatMessage(
-            role="model",
-            timestamp=m.timestamp.isoformat(),
-            content=first_part.content,
-        )
-    return None
+def to_chat_message(m: ModelMessage) -> bytes | None:
+    for part in m.parts:
+        if isinstance(m, ModelRequest) and isinstance(part, UserPromptPart):
+            assert isinstance(part.content, str)
+            return (
+                ChatMessage(
+                    role="user",
+                    timestamp=part.timestamp.isoformat(),
+                    content=part.content,
+                )
+                .model_dump_json()
+                .encode("utf-8")
+            )
+
+        elif isinstance(m, ModelResponse) and isinstance(part, TextPart):
+            return (
+                ChatMessage(
+                    role="model",
+                    timestamp=m.timestamp.isoformat(),
+                    content=part.content,
+                )
+                .model_dump_json()
+                .encode("utf-8")
+            )
+        elif isinstance(m, ModelRequest) and isinstance(part, ToolReturnPart):
+            if part.tool_name == "create_new_section":
+                return (
+                    ChatMessage(
+                        role="model",
+                        timestamp=m.timestamp.isoformat(),
+                        content=json.dumps(part.content),
+                        type="section",
+                    )
+                    .model_dump_json()
+                    .encode("utf-8")
+                )
+            elif part.tool_name == "create_new_question":
+                return (
+                    ChatMessage(
+                        role="model",
+                        timestamp=m.timestamp.isoformat(),
+                        content=json.dumps(part.content),
+                        type="question",
+                    )
+                    .model_dump_json()
+                    .encode("utf-8")
+                )
 
 
 async def stream_messages(
@@ -97,16 +177,17 @@ async def stream_messages(
     user_id: UUID4,
     db: DBSession,
     guide: InterviewGuide,
+    user_name: str,
 ):
     """Streams newline-delimited JSON ChatMessages to the client."""
     yield (
-        json.dumps(
-            ChatMessage(
-                role="user",
-                timestamp=datetime.now(tz=timezone.utc).isoformat(),
-                content=prompt,
-            )
-        ).encode("utf-8")
+        ChatMessage(
+            role="user",
+            timestamp=datetime.now(tz=timezone.utc).isoformat(),
+            content=prompt,
+        )
+        .model_dump_json()
+        .encode("utf-8")
         + b"\n"
     )
 
@@ -117,11 +198,15 @@ async def stream_messages(
     )
 
     async with assistance_agent.run_stream(
-        prompt, message_history=messages, deps=AssistanceDependencies(guide=guide)
+        prompt,
+        message_history=messages,
+        deps=AssistanceDependencies(guide=guide, user_name=user_name),
     ) as result:
+        result: StreamedRunResult
         async for text in result.stream_output(debounce_by=0.01):
             m = ModelResponse(parts=[TextPart(text)], timestamp=result.timestamp())
-            yield json.dumps(to_chat_message(m)).encode("utf-8") + b"\n"
+            if message := to_chat_message(m):
+                yield message + b"\n"
 
     db.assistance.add_messages(
         result.new_messages_json(),
@@ -131,7 +216,25 @@ async def stream_messages(
     )
 
 
-@router.get("/assistance/{project_id}/{lang}/chat/")
+@router.post("/assistance/{project_id}/{lang}/chat/new")
+async def reset_session(
+    project_id: UUID4,
+    lang: LanguageCode,
+    db: DBSession,
+    jwt: ProjectEditor,
+    assistance_session: AssistanceSessionCookie = None,
+):
+    response = Response()
+
+    response.delete_cookie(
+        key="assistance_session",
+        secure=True,
+        httponly=True,
+    )
+    return response
+
+
+@router.get("/assistance/{project_id}/{lang}/chat")
 async def get_chat(
     project_id: UUID4,
     lang: LanguageCode,
@@ -148,18 +251,16 @@ async def get_chat(
         user_id=jwt.user_id,
     )
 
-    chat_messages = [to_chat_message(m) for m in messages]
+    chat_messages = [message for m in messages if (message := to_chat_message(m))]
 
     return Response(
-        b"\n".join(
-            json.dumps(m).encode("utf-8") for m in chat_messages if m is not None
-        ),
+        b"\n".join(m for m in chat_messages if m is not None),
         media_type="text/plain",
     )
 
 
 @router.post(
-    "/assistance/{project_id}/{lang}/chat/",
+    "/assistance/{project_id}/{lang}/chat",
     responses={
         200: {
             "content": {
@@ -187,8 +288,18 @@ async def send_chat(
         session_id = assistance_session.session_id
         new_session = False
 
+    user = db.users.get_user_by_id(jwt.user_id)
+
     response = StreamingResponse(
-        stream_messages(prompt, session_id, project_id, jwt.user_id, db, guide),
+        stream_messages(
+            prompt,
+            session_id,
+            project_id,
+            jwt.user_id,
+            db,
+            guide,
+            user_name=user.first_name,
+        ),
         media_type="text/plain",
     )
 
