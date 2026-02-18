@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlparse
 
 import fastapi.openapi.constants
 import qrcode
-from pydantic import UUID4, BaseModel
+from pydantic import UUID4, BaseModel, TypeAdapter
 from qrcode.constants import ERROR_CORRECT_H
 from qrcode.image.styledpil import StyledPilImage
 from qrcode.image.styles.colormasks import (
@@ -19,6 +19,7 @@ from qrcode.image.styles.colormasks import (
 )
 from qrcode.image.styles.moduledrawers.pil import RoundedModuleDrawer
 from typer import Context, Typer
+from typing_extensions import is_typeddict, TypedDict
 
 from ainterviewer.interfaces import (
     OutgoingData,
@@ -158,9 +159,9 @@ def replay_history(
 
 def extend_openapi_schema(
     openapi: dict[str, Any],
-    models: list[type[BaseModel] | type[enum.Enum]],
+    models: list[type[BaseModel] | type[enum.Enum] | type[TypedDict]],  # ty: ignore[invalid-type-form]
 ) -> dict[str, Any]:
-    """Adds extra pydantic models or enums to the `openapi[\"components\"][\"schema\"]`"""
+    """Adds extra pydantic models, enums, or TypedDicts to the `openapi[\"components\"][\"schema\"]`"""
     openapi = copy.deepcopy(openapi)
 
     for extra_model in models:
@@ -174,9 +175,15 @@ def extend_openapi_schema(
             openapi["components"]["schemas"][extra_model.__name__] = enum_schema
             continue
 
+        # Handle TypedDict types via Pydantic's TypeAdapter
+        if is_typeddict(extra_model):
+            extra_model_schema = TypeAdapter(extra_model).json_schema(
+                ref_template=fastapi.openapi.constants.REF_TEMPLATE
+            )
+            extra_model_schema.setdefault("title", extra_model.__name__)
         # Generate the JSON schema with the correct reference template
         # Use .model_json_schema() for Pydantic v2, or .schema() for v1
-        if hasattr(extra_model, "model_json_schema"):
+        elif hasattr(extra_model, "model_json_schema"):
             extra_model_schema = extra_model.model_json_schema(
                 ref_template=fastapi.openapi.constants.REF_TEMPLATE
             )

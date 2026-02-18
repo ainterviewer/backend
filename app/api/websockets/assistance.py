@@ -1,10 +1,21 @@
-from typing import Annotated
+import json
+from datetime import datetime, timezone
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Form
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import UUID4, BaseModel, Field
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import (
+    Agent,
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    RunContext,
+    TextPart,
+    UserPromptPart,
+)
 from pydantic_ai.models.openai import OpenAIChatModel
+from typing_extensions import TypedDict
 
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.interview_guides.generate import generate_question, generate_section
@@ -18,6 +29,14 @@ router = APIRouter(prefix="/ws", tags=["assistance"])
 
 class AssistanceDependencies(BaseModel):
     guide: InterviewGuide
+
+
+class ChatMessage(TypedDict):
+    """Format of messages sent to the browser."""
+
+    role: Literal["user", "model"]
+    timestamp: str
+    content: str
 
 
 system_prompt = """\
@@ -53,7 +72,25 @@ async def create_new_question(
     return str(await generate_question(prompt, ctx.deps.guide, section_idx))
 
 
-async def stream_chat(
+def to_chat_message(m: ModelMessage) -> ChatMessage | None:
+    first_part = m.parts[0]
+    if isinstance(m, ModelRequest) and isinstance(first_part, UserPromptPart):
+        assert isinstance(first_part.content, str)
+        return ChatMessage(
+            role="user",
+            timestamp=first_part.timestamp.isoformat(),
+            content=first_part.content,
+        )
+    elif isinstance(m, ModelResponse) and isinstance(first_part, TextPart):
+        return ChatMessage(
+            role="model",
+            timestamp=m.timestamp.isoformat(),
+            content=first_part.content,
+        )
+    return None
+
+
+async def stream_messages(
     prompt: str,
     session_id: UUID4,
     project_id: UUID4,
@@ -61,6 +98,18 @@ async def stream_chat(
     db: DBSession,
     guide: InterviewGuide,
 ):
+    """Streams newline-delimited JSON ChatMessages to the client."""
+    yield (
+        json.dumps(
+            ChatMessage(
+                role="user",
+                timestamp=datetime.now(tz=timezone.utc).isoformat(),
+                content=prompt,
+            )
+        ).encode("utf-8")
+        + b"\n"
+    )
+
     messages = db.assistance.get_messages(
         session_id=session_id,
         project_id=project_id,
@@ -71,7 +120,8 @@ async def stream_chat(
         prompt, message_history=messages, deps=AssistanceDependencies(guide=guide)
     ) as result:
         async for text in result.stream_output(debounce_by=0.01):
-            yield text
+            m = ModelResponse(parts=[TextPart(text)], timestamp=result.timestamp())
+            yield json.dumps(to_chat_message(m)).encode("utf-8") + b"\n"
 
     db.assistance.add_messages(
         result.new_messages_json(),
@@ -81,11 +131,37 @@ async def stream_chat(
     )
 
 
+@router.get("/assistance/{project_id}/{lang}/chat/")
+async def get_chat(
+    project_id: UUID4,
+    lang: LanguageCode,
+    assistance_session: AssistanceSessionCookie | None,
+    db: DBSession,
+    jwt: ProjectEditor,
+) -> Response:
+    if not assistance_session or assistance_session.project_id != project_id:
+        return Response(b"", media_type="text/plain")
+
+    messages = db.assistance.get_messages(
+        session_id=assistance_session.session_id,
+        project_id=project_id,
+        user_id=jwt.user_id,
+    )
+    chat_messages = [to_chat_message(m) for m in messages]
+    return Response(
+        b"\n".join(
+            json.dumps(m).encode("utf-8") for m in chat_messages if m is not None
+        ),
+        media_type="text/plain",
+    )
+
+
 @router.post("/assistance/{project_id}/{lang}/chat/")
 async def send_chat(
     project_id: UUID4,
     lang: LanguageCode,
     prompt: Annotated[str, Form()],
+    # TODO: Should Session be bound to language?
     assistance_session: AssistanceSessionCookie | None,
     db: DBSession,
     jwt: ProjectEditor,
@@ -101,7 +177,7 @@ async def send_chat(
         new_session = False
 
     response = StreamingResponse(
-        stream_chat(prompt, session_id, project_id, jwt.user_id, db, guide),
+        stream_messages(prompt, session_id, project_id, jwt.user_id, db, guide),
         media_type="text/plain",
     )
 
@@ -121,5 +197,3 @@ async def send_chat(
 
 if __name__ == "__main__":
     print(system_prompt)
-    # assistance_agent.run_sync("It should be about bird watching", deps="Yashar")
-    #

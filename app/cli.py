@@ -8,7 +8,10 @@ from . import __version__
 from .main import app
 from .utils import extend_openapi_schema
 
-cli = Typer()
+cli = Typer(
+    pretty_exceptions_enable=False,
+    pretty_exceptions_show_locals=False,
+)
 
 
 def version_callback(value: bool) -> None:
@@ -40,6 +43,7 @@ def generate_openapi_scheme(output: str = "openapi.json"):
     from ainterviewer.lpm.types import CustomTokens
 
     from .auth import AuthToken, InterviewToken
+    from .api.websockets.assistance import ChatMessage
 
     openapi = app.openapi()
 
@@ -55,6 +59,7 @@ def generate_openapi_scheme(output: str = "openapi.json"):
         openapi,
         models=[
             AuthToken,
+            ChatMessage,
             CustomTokens,
             InterviewToken,
             OutgoingData,
