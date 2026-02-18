@@ -158,7 +158,16 @@ async def get_chat(
     )
 
 
-@router.post("/assistance/{project_id}/{lang}/chat/")
+@router.post(
+    "/assistance/{project_id}/{lang}/chat/",
+    responses={
+        200: {
+            "content": {
+                "text/event-stream": {"schema": TypeAdapter(ChatMessage).json_schema()}
+            }
+        }
+    },
+)
 async def send_chat(
     project_id: UUID4,
     lang: LanguageCode,
