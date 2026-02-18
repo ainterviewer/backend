@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Form
 from fastapi.responses import Response, StreamingResponse
-from pydantic import UUID4, BaseModel, Field
+from pydantic import UUID4, BaseModel, Field, TypeAdapter
 from pydantic_ai import (
     Agent,
     ModelMessage,
@@ -135,9 +135,9 @@ async def stream_messages(
 async def get_chat(
     project_id: UUID4,
     lang: LanguageCode,
-    assistance_session: AssistanceSessionCookie | None,
     db: DBSession,
     jwt: ProjectEditor,
+    assistance_session: AssistanceSessionCookie = None,
 ) -> Response:
     if not assistance_session or assistance_session.project_id != project_id:
         return Response(b"", media_type="text/plain")
@@ -147,7 +147,9 @@ async def get_chat(
         project_id=project_id,
         user_id=jwt.user_id,
     )
+
     chat_messages = [to_chat_message(m) for m in messages]
+
     return Response(
         b"\n".join(
             json.dumps(m).encode("utf-8") for m in chat_messages if m is not None
@@ -162,9 +164,9 @@ async def send_chat(
     lang: LanguageCode,
     prompt: Annotated[str, Form()],
     # TODO: Should Session be bound to language?
-    assistance_session: AssistanceSessionCookie | None,
     db: DBSession,
     jwt: ProjectEditor,
+    assistance_session: AssistanceSessionCookie = None,
 ) -> StreamingResponse:
     project_localization = db.projects.get_project_localization(project_id, lang)
     guide = project_localization.interview_guide or InterviewGuide()
