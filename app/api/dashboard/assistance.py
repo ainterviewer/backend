@@ -21,8 +21,10 @@ from pydantic_ai import (
     ToolReturnPart,
     UserPromptPart,
 )
+from pydantic_ai._agent_graph import CallToolsNode, ModelRequestNode
+from pydantic_ai.messages import FunctionToolResultEvent
 from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.result import StreamedRunResult
+from pydantic_graph import End
 
 from ainterviewer.interview_guides import InterviewGuide, Question
 from ainterviewer.interview_guides.generate import generate_question, generate_section
@@ -197,19 +199,57 @@ async def stream_messages(
         user_id=user_id,
     )
 
-    async with assistance_agent.run_stream(
+    async with assistance_agent.iter(
         prompt,
         message_history=messages,
         deps=AssistanceDependencies(guide=guide, user_name=user_name),
-    ) as result:
-        result: StreamedRunResult
-        async for text in result.stream_output(debounce_by=0.01):
-            m = ModelResponse(parts=[TextPart(text)], timestamp=result.timestamp())
-            if message := to_chat_message(m):
-                yield message + b"\n"
+    ) as agent_run:
+        node = agent_run.next_node
+        while not isinstance(node, End):
+            if isinstance(node, ModelRequestNode):
+                async with node.stream(agent_run.ctx) as agent_stream:
+                    async for text in agent_stream.stream_text(debounce_by=0.01):
+                        m = ModelResponse(
+                            parts=[TextPart(text)], timestamp=agent_stream.timestamp()
+                        )
+                        if message := to_chat_message(m):
+                            yield message + b"\n"
+            elif isinstance(node, CallToolsNode):
+                async with node.stream(agent_run.ctx) as events:
+                    async for event in events:
+                        if isinstance(event, FunctionToolResultEvent) and isinstance(
+                            event.result, ToolReturnPart
+                        ):
+                            content = event.result.content
+                            timestamp = event.result.timestamp.isoformat()
+                            if event.result.tool_name == "create_new_section":
+                                yield (
+                                    ChatMessage(
+                                        role="model",
+                                        timestamp=timestamp,
+                                        content=content.model_dump_json(),
+                                        type="section",
+                                    )
+                                    .model_dump_json()
+                                    .encode("utf-8")
+                                    + b"\n"
+                                )
+                            elif event.result.tool_name == "create_new_question":
+                                yield (
+                                    ChatMessage(
+                                        role="model",
+                                        timestamp=timestamp,
+                                        content=content.model_dump_json(),
+                                        type="question",
+                                    )
+                                    .model_dump_json()
+                                    .encode("utf-8")
+                                    + b"\n"
+                                )
+            node = await agent_run.next(node)
 
     db.assistance.add_messages(
-        result.new_messages_json(),
+        agent_run.result.new_messages_json(),
         session_id=session_id,
         project_id=project_id,
         user_id=user_id,
