@@ -45,10 +45,10 @@ class AssistanceDependencies(BaseModel):
 class ChatMessage(BaseModel):
     """Format of messages sent to the browser."""
 
+    type: Literal["message", "question", "section"] = "message"
     role: Literal["user", "model"]
     timestamp: str
     content: str
-    type: Literal["message", "question", "section"] = "message"
 
     @model_validator(mode="after")
     def validate_type(self):
