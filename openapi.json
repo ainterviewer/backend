@@ -1320,6 +1320,16 @@
                                 "schema": {
                                     "description": "Format of messages sent to the browser.",
                                     "properties": {
+                                        "type": {
+                                            "default": "message",
+                                            "enum": [
+                                                "message",
+                                                "question",
+                                                "section"
+                                            ],
+                                            "title": "Type",
+                                            "type": "string"
+                                        },
                                         "role": {
                                             "enum": [
                                                 "user",
@@ -6117,7 +6127,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "put": {
+            "get": {
                 "tags": [
                     "admin"
                 ],
@@ -6161,7 +6171,7 @@
                     }
                 }
             },
-            "post": {
+            "put": {
                 "tags": [
                     "admin"
                 ],
@@ -6249,7 +6259,7 @@
                     }
                 }
             },
-            "get": {
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -8990,45 +9000,28 @@
                     "survey_item": {
                         "anyOf": [
                             {
-                                "oneOf": [
-                                    {
-                                        "$ref": "#/components/schemas/RadioItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/CheckboxItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/LikertItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/SliderItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/NumberItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/DateItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/DatetimeItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/TimeItem"
-                                    }
-                                ],
-                                "discriminator": {
-                                    "propertyName": "type",
-                                    "mapping": {
-                                        "checkbox": "#/components/schemas/CheckboxItem",
-                                        "date": "#/components/schemas/DateItem",
-                                        "datetime": "#/components/schemas/DatetimeItem",
-                                        "likert": "#/components/schemas/LikertItem",
-                                        "number": "#/components/schemas/NumberItem",
-                                        "radio": "#/components/schemas/RadioItem",
-                                        "slider": "#/components/schemas/SliderItem",
-                                        "time": "#/components/schemas/TimeItem"
-                                    }
-                                }
+                                "$ref": "#/components/schemas/RadioItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/CheckboxItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/LikertItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/SliderItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NumberItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/DateItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/DatetimeItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/TimeItem"
                             },
                             {
                                 "type": "null"
@@ -9618,6 +9611,38 @@
                         "title": "Max Probes Time",
                         "description": "Max time to spend on probing, in seconds"
                     },
+                    "survey_item": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/RadioItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/CheckboxItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/LikertItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/SliderItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NumberItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/DateItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/DatetimeItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/TimeItem"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Survey Item"
+                    },
                     "can_answer": {
                         "type": "boolean",
                         "title": "Can Answer",
@@ -9674,55 +9699,6 @@
                         ],
                         "title": "Variables",
                         "description": "Variables that can be used in the question, ie. uuid. In case they are supplied, they will be filled in before the question is asked. The question should be formatted with Jinja2 style templating."
-                    },
-                    "survey_item": {
-                        "anyOf": [
-                            {
-                                "oneOf": [
-                                    {
-                                        "$ref": "#/components/schemas/RadioItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/CheckboxItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/LikertItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/SliderItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/NumberItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/DateItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/DatetimeItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/TimeItem"
-                                    }
-                                ],
-                                "discriminator": {
-                                    "propertyName": "type",
-                                    "mapping": {
-                                        "checkbox": "#/components/schemas/CheckboxItem",
-                                        "date": "#/components/schemas/DateItem",
-                                        "datetime": "#/components/schemas/DatetimeItem",
-                                        "likert": "#/components/schemas/LikertItem",
-                                        "number": "#/components/schemas/NumberItem",
-                                        "radio": "#/components/schemas/RadioItem",
-                                        "slider": "#/components/schemas/SliderItem",
-                                        "time": "#/components/schemas/TimeItem"
-                                    }
-                                }
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Survey Item"
                     },
                     "references": {
                         "anyOf": [
@@ -9843,6 +9819,38 @@
                         "title": "Max Probes Time",
                         "description": "Max time to spend on probing, in seconds"
                     },
+                    "survey_item": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/RadioItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/CheckboxItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/LikertItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/SliderItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NumberItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/DateItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/DatetimeItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/TimeItem"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Survey Item"
+                    },
                     "can_answer": {
                         "type": "boolean",
                         "title": "Can Answer",
@@ -9899,55 +9907,6 @@
                         ],
                         "title": "Variables",
                         "description": "Variables that can be used in the question, ie. uuid. In case they are supplied, they will be filled in before the question is asked. The question should be formatted with Jinja2 style templating."
-                    },
-                    "survey_item": {
-                        "anyOf": [
-                            {
-                                "oneOf": [
-                                    {
-                                        "$ref": "#/components/schemas/RadioItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/CheckboxItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/LikertItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/SliderItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/NumberItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/DateItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/DatetimeItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/TimeItem"
-                                    }
-                                ],
-                                "discriminator": {
-                                    "propertyName": "type",
-                                    "mapping": {
-                                        "checkbox": "#/components/schemas/CheckboxItem",
-                                        "date": "#/components/schemas/DateItem",
-                                        "datetime": "#/components/schemas/DatetimeItem",
-                                        "likert": "#/components/schemas/LikertItem",
-                                        "number": "#/components/schemas/NumberItem",
-                                        "radio": "#/components/schemas/RadioItem",
-                                        "slider": "#/components/schemas/SliderItem",
-                                        "time": "#/components/schemas/TimeItem"
-                                    }
-                                }
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Survey Item"
                     },
                     "references": {
                         "anyOf": [
@@ -11018,6 +10977,16 @@
             "ChatMessage": {
                 "description": "Format of messages sent to the browser.",
                 "properties": {
+                    "type": {
+                        "default": "message",
+                        "enum": [
+                            "message",
+                            "question",
+                            "section"
+                        ],
+                        "title": "Type",
+                        "type": "string"
+                    },
                     "role": {
                         "enum": [
                             "user",
@@ -11194,45 +11163,28 @@
                     "survey_item": {
                         "anyOf": [
                             {
-                                "discriminator": {
-                                    "mapping": {
-                                        "checkbox": "#/components/schemas/CheckboxItem",
-                                        "date": "#/components/schemas/DateItem",
-                                        "datetime": "#/components/schemas/DatetimeItem",
-                                        "likert": "#/components/schemas/LikertItem",
-                                        "number": "#/components/schemas/NumberItem",
-                                        "radio": "#/components/schemas/RadioItem",
-                                        "slider": "#/components/schemas/SliderItem",
-                                        "time": "#/components/schemas/TimeItem"
-                                    },
-                                    "propertyName": "type"
-                                },
-                                "oneOf": [
-                                    {
-                                        "$ref": "#/components/schemas/RadioItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/CheckboxItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/LikertItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/SliderItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/NumberItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/DateItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/DatetimeItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/TimeItem"
-                                    }
-                                ]
+                                "$ref": "#/components/schemas/RadioItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/CheckboxItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/LikertItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/SliderItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NumberItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/DateItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/DatetimeItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/TimeItem"
                             },
                             {
                                 "type": "null"
@@ -11301,45 +11253,28 @@
                     "survey_item": {
                         "anyOf": [
                             {
-                                "discriminator": {
-                                    "mapping": {
-                                        "checkbox": "#/components/schemas/CheckboxItem",
-                                        "date": "#/components/schemas/DateItem",
-                                        "datetime": "#/components/schemas/DatetimeItem",
-                                        "likert": "#/components/schemas/LikertItem",
-                                        "number": "#/components/schemas/NumberItem",
-                                        "radio": "#/components/schemas/RadioItem",
-                                        "slider": "#/components/schemas/SliderItem",
-                                        "time": "#/components/schemas/TimeItem"
-                                    },
-                                    "propertyName": "type"
-                                },
-                                "oneOf": [
-                                    {
-                                        "$ref": "#/components/schemas/RadioItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/CheckboxItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/LikertItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/SliderItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/NumberItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/DateItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/DatetimeItem"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/TimeItem"
-                                    }
-                                ]
+                                "$ref": "#/components/schemas/RadioItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/CheckboxItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/LikertItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/SliderItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NumberItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/DateItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/DatetimeItem"
+                            },
+                            {
+                                "$ref": "#/components/schemas/TimeItem"
                             },
                             {
                                 "type": "null"
