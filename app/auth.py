@@ -22,7 +22,8 @@ logging.getLogger("passlib").setLevel(logging.ERROR)
 
 
 class _Token(BaseModel):
-    _timedelta_kwargs: dict[str, int | float]  # FIXME: These should be way shorter
+    # FIXME: These should be way shorter
+    _timedelta_kwargs: dict[str, int | float]
 
     def encode(self) -> str:
         payload = dict(self)
