@@ -57,6 +57,8 @@ class ChatMessage(BaseModel):
                 Question.model_validate_json(self.content)
             case "section":
                 QuestionSection.model_validate_json(self.content)
+            case "message":
+                pass
 
         return self
 
@@ -72,7 +74,7 @@ You should gain an understanding of the users interest and scope of the intervie
 
 def agent_instruction(ctx: RunContext[AssistanceDependencies]) -> str:
     return f"""\
-Always use user name {ctx.deps.user_name} while responding.
+Refer to the user's name {ctx.deps.user_name} when appropiate.
 
 Do not reiterate the output of tool calls, the user will see them in a different interface.
 
