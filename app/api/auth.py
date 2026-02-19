@@ -8,7 +8,7 @@ from ainterviewer.utils import now
 from ..auth import create_auth_token, decode_auth_token, verify_password
 from ..db.models import AccessRequestCreate, UserCreate, UserPublic
 from ..dependencies import DBSession, UserToken, auth_cookie_scheme
-from ..services.mail import send_email
+from ..services.email.mail import send_email
 from ..settings import app_settings
 from ..types import Scope
 from .request_models import LoginData

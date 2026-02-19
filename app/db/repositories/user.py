@@ -9,7 +9,7 @@ from sqlalchemy import delete, or_, select, update
 from ainterviewer.utils import now
 
 from ...auth import get_password_hash
-from ...services.mail import email_templates, send_email
+from ...services.email.mail import email_templates, send_email
 from ..models import (
     AccessRequestCreate,
     AccessRequestPublic,

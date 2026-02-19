@@ -6,7 +6,7 @@ import css_inline
 from playwright.sync_api import sync_playwright
 from typer import Typer
 
-from ..settings import app_settings
+from ...settings import app_settings
 from .mail import email_templates, send_email
 
 cli = Typer()

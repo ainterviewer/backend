@@ -9,11 +9,11 @@ from aiosmtplib import SMTPResponse
 from html2text import html2text
 from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescape
 
-from ..settings import app_settings
+from ...settings import app_settings
 
 email_templates = Environment(
     loader=PackageLoader(
-        package_name="app.services",
+        package_name="app.services.email",
         package_path="templates/email",
     ),
     autoescape=select_autoescape(),
