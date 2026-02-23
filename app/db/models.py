@@ -96,7 +96,7 @@ class UserCreate(UserBase):
     created_at: datetime = Field(default_factory=now)
     last_active: datetime = Field(default_factory=now)
     last_login: datetime = Field(default_factory=now)
-    invite_token: Optional[UUID4 | SkipJsonSchema[Literal["test"]]] = None
+    invite_token: Optional[UUID4 | SkipJsonSchema[Literal["demo"]]] = None
     research_consent: bool = False
     password: str
 
@@ -105,7 +105,7 @@ class UserCreate(UserBase):
         if v is None:
             return v
 
-        if v == "test":
+        if v == "demo":
             return v
 
         try:

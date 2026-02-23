@@ -7,7 +7,7 @@ from ainterviewer.utils import now
 
 from ..auth import create_auth_token, decode_auth_token, verify_password
 from ..db.models import AccessRequestCreate, UserCreate, UserPublic
-from ..dependencies import DBSession, UserToken, auth_cookie_scheme
+from ..dependencies import DBSession, UserToken, auth_cookie_scheme, DemoToken
 from ..services.email.mail import send_email
 from ..settings import app_settings
 from ..types import Scope
@@ -52,7 +52,7 @@ async def login(login_request: LoginData, db: DBSession):
 
 
 @router.get("/me")
-async def me(db: DBSession, jwt: UserToken) -> UserPublic:
+async def me(db: DBSession, jwt: DemoToken) -> UserPublic:
     return UserPublic.model_validate(db.users.get_user_private(user_id=jwt.user_id))
 
 
@@ -61,8 +61,8 @@ async def register(
     user: UserCreate,
     db: DBSession,
 ) -> JSONResponse:
-    # NOTE: Overwrite user scope to user when created through the API, should
-    # this be done at the model level?
+    # NOTE: Overwrite user scope to user when created through the API.
+    # - should this be done at the model level?
     user.scope = Scope.USER
     invitation = None
 
@@ -70,14 +70,19 @@ async def register(
         if not user.invite_token:
             return JSONResponse({"detail": "Invite token required"}, status_code=406)
         else:
-            if user.invite_token == "test":
-                return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
-            try:
-                invitation = db.users.check_invite_token(user.invite_token)
-            except sqlalchemy.exc.NoResultFound:
-                return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
-            if invitation.expires_at < now():
-                return JSONResponse({"detail": "Invite token expired"}, status_code=406)
+            if user.invite_token == "demo":
+                user.scope = Scope.DEMO
+            else:
+                try:
+                    invitation = db.users.check_invite_token(user.invite_token)
+                except sqlalchemy.exc.NoResultFound:
+                    return JSONResponse(
+                        {"detail": "Invalid invite token"}, status_code=406
+                    )
+                if invitation.expires_at < now():
+                    return JSONResponse(
+                        {"detail": "Invite token expired"}, status_code=406
+                    )
 
     # NOTE: Password hashing happens in the users.create_user method
     new_user = db.users.create_user(UserCreate(**user.model_dump()))

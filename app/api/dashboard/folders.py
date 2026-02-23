@@ -12,7 +12,7 @@ from ...db.models import (
     ProjectFolderPublic,
     ProjectFolderWithProjects,
 )
-from ...dependencies import DBSession, FolderAdmin, FolderEditor, UserToken
+from ...dependencies import DBSession, DemoToken, FolderAdmin, FolderEditor, UserToken
 from ...types import CollaboratorRole
 from ...utils import generate_qr_img
 from ..request_models import CreateProjectRequest
@@ -27,7 +27,7 @@ router = APIRouter(tags=["folders"])
 )
 async def get_folders(
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
 ):
     return db.projects.get_folders(jwt.user_id, with_projects=True)
 

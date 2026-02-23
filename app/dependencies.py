@@ -162,11 +162,14 @@ def _parse_assistance_session(
         return None
 
 
-AssistanceSessionCookie = Annotated[AssistanceSessionToken | None, Depends(_parse_assistance_session)]
+AssistanceSessionCookie = Annotated[
+    AssistanceSessionToken | None, Depends(_parse_assistance_session)
+]
 
 # User tokens
 AdminToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.ADMIN))]
 UserToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.USER))]
+DemoToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.DEMO))]
 GuestToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.GUEST))]
 
 
