@@ -211,6 +211,7 @@ class ProjectPublic(ProjectBase):
     n_interviews: int | None = None
     available_languages: list[LanguageDict] | None = None
     tests: list[TestSetupPublic] | None = None
+    owner: UserPublic
 
 
 class ProjectPublicWithTests(ProjectPublic):

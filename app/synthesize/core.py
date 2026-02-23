@@ -35,13 +35,14 @@ from ..settings import app_settings
 
 
 async def fetch_token(
+    auth_token: str,
     project_id: str,
     test_run_id: str,
     language: Optional[LanguageCode] = None,
-) -> str:
+) -> InterviewToken:
     url = f"http://{app_settings.app.api_endpoint}/api/projects/{project_id}/{language}/interviews"
 
-    cookies = {"language": language}
+    cookies = {"language": language, "token": auth_token}
 
     headers = {
         "User-Agent": f"ainterviewer/{ainterviewer.__version__} ({platform.system()} {platform.release()}; Python/{platform.python_version()})"
@@ -59,7 +60,7 @@ async def fetch_token(
 
             token = (await response.text()).strip().strip('"')
 
-    return token
+    return InterviewToken.decode(token)
 
 
 async def _connect_and_yield_messages(
@@ -92,9 +93,12 @@ async def run_synthetic_answering_agent(
     language: Optional[LanguageCode] = None,
     delay_before_answer: Optional[tuple[float, float]] = None,
 ):
-    token = await fetch_token(project_id, test_run_id, language)
-
-    interview_token = InterviewToken.decode(token)
+    interview_token = await fetch_token(
+        auth_token=user_token,
+        project_id=project_id,
+        test_run_id=test_run_id,
+        language=language,
+    )
 
     if isinstance(agent.interview_subject, InterviewSubject):
         interviewee: dict[str, Any] = agent.interview_subject.model_dump(mode="json")
@@ -108,7 +112,9 @@ async def run_synthetic_answering_agent(
         interviewee=interviewee,
     )
 
-    async for json_data, websocket in _connect_and_yield_messages(token, language):
+    async for json_data, websocket in _connect_and_yield_messages(
+        interview_token.encode(), language
+    ):
         match json_data["type"]:
             case "data":
                 _ = OutgoingData(**json_data)  # for validation purposes
@@ -128,6 +134,7 @@ async def run_synthetic_answering_agent(
 
 
 async def run_synthetic_fixed_answers(
+    user_token: str,
     project_id: str,
     test_run_id: str,
     fixed_answers: list[str],
@@ -140,9 +147,16 @@ async def run_synthetic_fixed_answers(
 
     i = 0
 
-    token = await fetch_token(project_id, test_run_id, language)
+    interview_token = await fetch_token(
+        auth_token=user_token,
+        project_id=project_id,
+        test_run_id=test_run_id,
+        language=language,
+    )
 
-    async for json_data, websocket in _connect_and_yield_messages(token, language):
+    async for json_data, websocket in _connect_and_yield_messages(
+        interview_token.encode(), language
+    ):
         match json_data["type"]:
             case "message":
                 message = OutgoingMessage(**json_data)
@@ -200,6 +214,7 @@ async def add_interviewee(
 async def run_synthesis_job_fixed_answers(
     project_id: str,
     test_run_id: str,
+    user_token: str,
     fixed_answers: list[str],
     n_interviews: int,
     language: LanguageCode,
@@ -209,6 +224,7 @@ async def run_synthesis_job_fixed_answers(
     for _ in range(n_interviews):
         task = asyncio.create_task(
             run_synthetic_fixed_answers(
+                user_token=user_token,
                 project_id=project_id,
                 test_run_id=test_run_id,
                 fixed_answers=fixed_answers,

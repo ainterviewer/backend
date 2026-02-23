@@ -601,7 +601,6 @@ async def generate_project_qr(
 
 @router.post("/projects/{project_id}/owner")
 async def check_project_owner(
-    export_request: ExportMessagesRequest,
     project_id: UUID4,
     db: DBSession,
 ) -> bool:

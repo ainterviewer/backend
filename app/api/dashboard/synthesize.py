@@ -208,6 +208,7 @@ async def run_synthetic_test(
                 handle_exceptions(run_synthesis_job_fixed_answers),
                 project_id=str(project_id),
                 test_run_id=str(test_run_id),
+                user_token=request.cookies["token"],
                 fixed_answers=test_setup.fixed_answers,
                 n_interviews=request_data.n_interviews,
                 language=request_data.language,

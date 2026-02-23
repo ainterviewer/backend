@@ -7,6 +7,7 @@ from fastapi import (
     File,
     Form,
     Header,
+    Request,
     Response,
     UploadFile,
 )
@@ -16,8 +17,17 @@ from pydantic import UUID4
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode, TestType
 
-from ..auth import create_interview_token
-from ..dependencies import AdminToken, DBSession, GuestToken
+from ..auth import create_interview_token, decode_auth_token
+from ..db.types import InterviewType
+from ..dependencies import (
+    AdminToken,
+    AuthError,
+    DBSession,
+    GuestToken,
+    ResourceRoleChecker,
+    ScopeChecker,
+)
+from ..types import CollaboratorRole, Scope
 from ..utils import generate_random_filename
 from .request_models import CreateInterviewRequest
 from .response_models import MediaUploadResponse, MessageFeedbackResponse
@@ -27,7 +37,8 @@ router = APIRouter(tags=["interviews"])
 
 @router.post("/projects/{project_id}/{lang}/interviews")
 async def create_interview(
-    request: CreateInterviewRequest,
+    request: Request,
+    new_interview: CreateInterviewRequest,
     response: Response,
     db: DBSession,
     project_id: Annotated[UUID4, URLPath],
@@ -37,17 +48,39 @@ async def create_interview(
     referer: Annotated[str | None, Cookie()] = None,
     forward_params: Annotated[str | None, Cookie()] = None,
 ) -> str:
+    project = db.projects.get_project(project_id)
+
     try:
         project_localization = db.projects.get_project_localization(
             project_id,
             language=lang,
         )
     except:
-        project = db.projects.get_project(project_id)
+        # TODO: This should probably trigger an error allowing the user to pick
+        # a language instead of just returning the default
         default_lang = project.config.default_language
         project_localization = db.projects.get_project_localization(
             project_id,
             language=default_lang,
+        )
+
+    if new_interview.interview_type == InterviewType.DISTRIBUTED:
+        if project.owner.scope == Scope.DEMO:
+            raise AuthError(
+                status_code=403,
+                detail="Forbidden, scope required: " + Scope.USER,
+            )
+    else:
+        if not (token := request.cookies.get("token")):
+            raise AuthError(
+                status_code=403,
+                detail="Forbidden, scope required: " + Scope.GUEST,
+            )
+
+        auth_token = decode_auth_token(token)
+        ScopeChecker(Scope.DEMO)(auth_token=auth_token)
+        ResourceRoleChecker(CollaboratorRole.VIEWER, "project")(
+            project_id=project_id, token=auth_token, db=db
         )
 
     if not (interview_guide := project_localization.interview_guide):
@@ -57,15 +90,15 @@ async def create_interview(
     # state
     interview_guide.shuffle()
 
-    if request.synthetic_test_type == TestType.FIXED_ANSWERS:
+    if new_interview.synthetic_test_type == TestType.FIXED_ANSWERS:
         interview_guide.reduce()
 
     interview = db.interviews.create_interview(
         project_id,
         interview_guide=interview_guide,
-        interview_type=request.interview_type,
-        interviewer=request.interviewer,
-        test_run_id=request.test_run_id,
+        interview_type=new_interview.interview_type,
+        interviewer=new_interview.interviewer,
+        test_run_id=new_interview.test_run_id,
         user_agent=user_agent,
         referer=referer,
         external_params=forward_params,
@@ -74,7 +107,7 @@ async def create_interview(
 
     interview_token = create_interview_token(
         project_id=project_id,
-        interviewer=request.interviewer,
+        interviewer=new_interview.interviewer,
         interview_id=interview.id,
     )
 

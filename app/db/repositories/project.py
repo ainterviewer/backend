@@ -758,10 +758,8 @@ class ProjectRepository(BaseRepository):
         return result is not None
 
     def is_project_owner_demo_user(self, project_id: UUID4):
-        result = self.session.execute(
-            select(ProjectTable.owner).where(
-                ProjectTable.id == project_id,
-            )
+        project = self.session.execute(
+            select(ProjectTable).where(ProjectTable.id == project_id)
         ).scalar_one()
 
-        return result.scope == Scope.DEMO
+        return project.owner.scope == Scope.DEMO
