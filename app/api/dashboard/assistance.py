@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
-from typing import Annotated
 
-from fastapi import APIRouter, Form
+from fastapi import APIRouter
 from fastapi.responses import Response, StreamingResponse
 from pydantic import (
     UUID4,
@@ -14,8 +13,8 @@ from pydantic_ai import (
     UserPromptPart,
 )
 
-from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.types import LanguageCode
+from app.api.request_models import AssistanceChatRequest
 
 from ...auth import AssistanceSessionToken
 from ...dependencies import AssistanceSessionCookie, DBSession, ProjectEditor
@@ -132,15 +131,12 @@ async def get_chat(
 async def send_chat(
     project_id: UUID4,
     lang: LanguageCode,
-    prompt: Annotated[str, Form()],
+    request: AssistanceChatRequest,
     # TODO: Should Session be bound to language?
     db: DBSession,
     jwt: ProjectEditor,
     assistance_session: AssistanceSessionCookie = None,
 ) -> StreamingResponse:
-    project_localization = db.projects.get_project_localization(project_id, lang)
-    guide = project_localization.interview_guide or InterviewGuide()
-
     if not assistance_session or assistance_session.project_id != project_id:
         session_id = db.assistance.create_new_session(project_id, jwt.user_id)
         new_session = True
@@ -152,12 +148,12 @@ async def send_chat(
 
     response = StreamingResponse(
         stream_messages(
-            prompt,
+            request.prompt,
             session_id,
             project_id,
             jwt.user_id,
             db,
-            guide,
+            request.guide,
             user_name=user.first_name,
         ),
         media_type="text/plain",

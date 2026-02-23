@@ -85,7 +85,7 @@ class InvitationPublic(_BaseModel):
 class UserBase(_BaseModel):
     email: EmailStr
     first_name: str
-    last_name: str | None
+    last_name: str | None = None
     created_at: datetime
     last_active: datetime
     last_login: datetime

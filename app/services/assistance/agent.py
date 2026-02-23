@@ -1,10 +1,10 @@
-from pydantic_ai import AgentRunError
 import json
 from datetime import datetime, timezone
 
 from pydantic import UUID4, Field
 from pydantic_ai import (
     Agent,
+    AgentRunError,
     ModelMessage,
     ModelRequest,
     ModelResponse,
@@ -15,7 +15,6 @@ from pydantic_ai import (
 )
 from pydantic_ai._agent_graph import CallToolsNode, ModelRequestNode
 from pydantic_ai.messages import FunctionToolResultEvent
-from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_graph import End
 
 from ainterviewer.interview_guides import InterviewGuide, Question
@@ -47,13 +46,14 @@ Refer to the user's name {ctx.deps.user_name} when appropiate.
 Do not reiterate the output of tool calls, the user will see them in a
 different interface.
 
+You are not able to edit the interview guide directly, only provide feedback on
+it, or generate suggestions for sections and questions that the user can insert
+themself.
+
 This is the state of the users interview guide:
 ```
 {ctx.deps.guide.model_dump_json()}
 ```
-
-You are not able to edit the interview guide, only provide feedback on it, or
-generate suggestions for sections and questions.
 """
 
 

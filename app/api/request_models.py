@@ -4,6 +4,7 @@ from fastapi import Query
 from pydantic import UUID4, BaseModel, Field, field_validator
 
 from ainterviewer.agents.prompts.models import PromptTemplates
+from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
 from ainterviewer.types import Interviewer, LanguageCode, TestType
 
@@ -94,3 +95,8 @@ class UpdateFixedAnswersRequest(BaseModel):
 class TestSetupRequest(BaseModel):
     project_id: UUID4
     test_id: UUID4
+
+
+class AssistanceChatRequest(BaseModel):
+    prompt: str
+    guide: InterviewGuide
