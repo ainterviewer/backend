@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from ainterviewer.types import LanguageCode
 
-from .auth import AuthToken, decode_auth_token, AssistanceSessionToken
+from .auth import AssistanceSessionToken, AuthToken, decode_auth_token
 from .db import InterviewDataBase
 from .db.vectors import register_vector_extension
 from .settings import app_settings
@@ -66,6 +66,17 @@ def get_ws_manager():
 class AuthError(HTTPException): ...
 
 
+def _decode_token(
+    token: str | None = Depends(auth_cookie_scheme),
+) -> AuthToken:
+    if token is None:
+        raise AuthError(status_code=401, detail="Not authenticated")
+    try:
+        return decode_auth_token(token)
+    except (JWTError, ValidationError):
+        raise AuthError(status_code=403, detail="Could not validate credentials")
+
+
 class ScopeChecker:
     def __init__(self, required_scope: Scope = Scope.ADMIN):
         self.required_scope = required_scope
@@ -78,36 +89,33 @@ class ScopeChecker:
 
     def __call__(
         self,
-        token: str | None = Depends(auth_cookie_scheme),
+        auth_token: AuthToken = Depends(_decode_token),
     ) -> AuthToken:
-        # TODO:
-        # Should this also check is the user_id is in the database?
-        try:
-            if token is None:
-                raise AuthError(status_code=401, detail="Not authenticated")
+        scope_strings = set(auth_token.scope.split())
+        user_scopes = {Scope(scope) for scope in scope_strings}
 
-            try:
-                auth_token = decode_auth_token(token)
-                scope_strings = set(auth_token.scope.split())
-                user_scopes = {Scope(scope) for scope in scope_strings}
-
-                if not self.has_required_scope(user_scopes):
-                    raise AuthError(
-                        status_code=403,
-                        detail="Forbidden, scope required: " + self.required_scope,
-                    )
-                return auth_token
-            except (JWTError, ValidationError):
-                raise AuthError(
-                    status_code=403, detail="Could not validate credentials"
-                )
-        except AuthError as e:
-            print(e)
-            raise e
+        if not self.has_required_scope(user_scopes):
+            raise AuthError(
+                status_code=403,
+                detail="Forbidden, scope required: " + self.required_scope,
+            )
+        return auth_token
 
 
 class ResourceRoleChecker:
-    """Check user has required CollaboratorRole on a resource."""
+    """Check user has required CollaboratorRole on a resource.
+
+    This checker only validates the user's role on the resource.
+    Scope checking should be handled separately at the endpoint level
+    using scope aliases (e.g. UserToken, DemoToken).
+
+    Usage at endpoints:
+        async def my_endpoint(
+            jwt: UserToken,      # scope check
+            _: FolderAdmin,      # role check
+            db: DBSession,
+        ): ...
+    """
 
     def __init__(
         self,
@@ -121,7 +129,7 @@ class ResourceRoleChecker:
         self,
         project_id: UUID4 | None = None,
         folder_id: UUID4 | None = None,
-        token: AuthToken = Depends(ScopeChecker(Scope.USER)),
+        token: AuthToken = Depends(_decode_token),
         db: InterviewDataBase = Depends(get_db),
     ) -> AuthToken:
         # Admin scope bypasses resource checks

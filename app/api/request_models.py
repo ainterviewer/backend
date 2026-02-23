@@ -19,6 +19,15 @@ class PaginatedQueryParams(BaseModel):
     order: Literal["asc", "desc"] = Query("desc", description="Sorting order")
 
 
+class DeleteInterviewRequest(BaseModel):
+    interview_ids: list[UUID4]
+
+
+class ExportMessagesRequest(BaseModel):
+    interview_ids: list[UUID4]
+    format: Literal["csv", "xlsx"] = "csv"
+
+
 class PromptRequest(BaseModel):
     prompt: str
 

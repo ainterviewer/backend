@@ -12,7 +12,12 @@ from ...db.models import (
     ProjectFolderPublic,
     ProjectFolderWithProjects,
 )
-from ...dependencies import DBSession, DemoToken, FolderAdmin, FolderEditor, UserToken
+from ...dependencies import (
+    DBSession,
+    DemoToken,
+    FolderAdmin,
+    FolderEditor,
+)
 from ...types import CollaboratorRole
 from ...utils import generate_qr_img
 from ..request_models import CreateProjectRequest
@@ -36,7 +41,7 @@ async def get_folders(
 async def create_folder(
     project_folder: ProjectFolderCreate,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
 ) -> ProjectFolderPublic:
     return db.projects.create_folder(
         project_folder.title, jwt.user_id, project_folder.collaborators
@@ -47,7 +52,8 @@ async def create_folder(
 async def delete_folder(
     folder_id: UUID4,
     db: DBSession,
-    jwt: FolderAdmin,
+    jwt: DemoToken,
+    _: FolderAdmin,
 ):
     db.projects.delete_folder(folder_id)
 
@@ -57,7 +63,8 @@ async def edit_folder(
     folder_id: UUID4,
     project_folder: ProjectFolderEdit,
     db: DBSession,
-    jwt: FolderAdmin,
+    jwt: DemoToken,
+    _: FolderAdmin,
 ):
     db.projects.update_folder(folder_id, project_folder.title)
 
@@ -69,7 +76,8 @@ async def get_collaborators(
     request: Request,
     folder_id: UUID4,
     db: DBSession,
-    jwt: FolderEditor,
+    jwt: DemoToken,
+    _: FolderEditor,
 ):
     return db.projects.get_collaborators(folder_id)
 
@@ -79,7 +87,8 @@ async def add_collaborator(
     folder_id: UUID4,
     collaborator: CollaboratorCreate,
     db: DBSession,
-    jwt: FolderEditor,
+    jwt: DemoToken,
+    _: FolderEditor,
 ):
     return db.projects.add_collaborator(
         folder_id,
@@ -94,7 +103,8 @@ async def remove_collaborator(
     folder_id: UUID4,
     user_id: UUID4,
     db: DBSession,
-    jwt: FolderEditor,
+    jwt: DemoToken,
+    _: FolderEditor,
 ):
     db.projects.remove_collaborator(folder_id, user_id)
 
@@ -105,7 +115,8 @@ async def update_collaborator_role(
     user_id: UUID4,
     role: CollaboratorRole,
     db: DBSession,
-    jwt: FolderEditor,
+    jwt: DemoToken,
+    _: FolderEditor,
 ):
     return db.projects.update_collaborator_role(folder_id, user_id, role)
 
@@ -117,11 +128,13 @@ async def create_project(
     project_request: CreateProjectRequest,
     background_tasks: BackgroundTasks,
     db: DBSession,
-    jwt: FolderEditor,
+    jwt: DemoToken,
+    _: FolderEditor,
 ):
     project_id = db.projects.create_project(
         folder_id=folder_id,
         title=project_request.title,
+        owner_id=jwt.user_id,
         interview_config=InterviewConfig(
             default_language=project_request.default_language
         ),

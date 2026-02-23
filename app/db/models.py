@@ -199,6 +199,7 @@ class ProjectBase(_BaseModel):
     last_updated: Optional[datetime] = None
     status: ProjectStatus = ProjectStatus.ACTIVE
     config: InterviewConfig
+    owner_id: UUID4
 
 
 class ProjectCreate(_BaseModel):

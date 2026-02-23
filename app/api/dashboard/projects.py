@@ -3,7 +3,7 @@ import io
 import json
 from base64 import b64decode
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated
 
 import polars as pl
 from fastapi import (
@@ -20,7 +20,7 @@ from fastapi.responses import (
     RedirectResponse,
     StreamingResponse,
 )
-from pydantic import UUID4, BaseModel, EmailStr
+from pydantic import UUID4, EmailStr
 from xlsxwriter import Workbook
 
 from ainterviewer.config import AgentConfigs, InterviewConfig
@@ -39,12 +39,16 @@ from ...db.types import InterviewType
 from ...db.utils import fix_nested_columns
 from ...dependencies import (
     DBSession,
+    DemoToken,
     ProjectAdmin,
     ProjectEditor,
     ProjectViewer,
+    UserToken,
 )
 from ...utils import generate_qr_img
 from ..request_models import (
+    DeleteInterviewRequest,
+    ExportMessagesRequest,
     InterviewGuideGenerationRequest,
     PaginatedQueryParams,
     ProjectStatusChangeRequest,
@@ -63,7 +67,8 @@ async def delete_project(
     request: Request,
     project_id: UUID4,
     db: DBSession,
-    jwt: ProjectAdmin,
+    jwt: DemoToken,
+    _: ProjectAdmin,
 ):
     db.projects.delete_project(project_id)
 
@@ -73,9 +78,10 @@ async def clone_project(
     request: Request,
     project_id: UUID4,
     db: DBSession,
-    jwt: ProjectEditor,
+    jwt: DemoToken,
+    _: ProjectEditor,
 ) -> ProjectPublic:
-    return db.projects.clone_project(project_id)
+    return db.projects.clone_project(project_id, owner_id=jwt.user_id)
 
 
 @router.post(
@@ -87,7 +93,8 @@ async def add_project_languages(
     project_id: UUID4,
     language: Annotated[LanguageCode, Body()],
     db: DBSession,
-    jwt: ProjectEditor,
+    jwt: DemoToken,
+    _: ProjectEditor,
 ):
     if isinstance(jwt, RedirectResponse):
         return jwt
@@ -106,7 +113,8 @@ async def remove_project_languages(
     project_id: UUID4,
     language: Annotated[LanguageCode, Body()],
     db: DBSession,
-    jwt: ProjectEditor,
+    jwt: DemoToken,
+    _: ProjectEditor,
 ):
     available_languages = db.projects.remove_project_language(project_id, language)
 
@@ -121,7 +129,8 @@ async def change_project_status(
     project_id: UUID4,
     status_request: ProjectStatusChangeRequest,
     db: DBSession,
-    jwt: ProjectAdmin,
+    jwt: DemoToken,
+    _: ProjectAdmin,
 ):
     db.projects.change_project_status(project_id, status_request.status)
 
@@ -134,7 +143,8 @@ async def change_project_title(
     project_id: UUID4,
     title_request: ProjectTitleUpdateRequest,
     db: DBSession,
-    jwt: ProjectAdmin,
+    jwt: DemoToken,
+    _: ProjectAdmin,
 ):
     db.projects.update_project_title(project_id, title_request.title)
 
@@ -143,7 +153,8 @@ async def change_project_title(
 async def get_project(
     project_id: UUID4,
     db: DBSession,
-    jwt: ProjectViewer,
+    jwt: DemoToken,
+    _: ProjectViewer,
 ) -> ProjectPublic:
     return db.projects.get_project(project_id)
 
@@ -153,7 +164,8 @@ async def get_guide(
     project_id: UUID4,
     lang: LanguageCode,
     db: DBSession,
-    jwt: ProjectViewer,
+    jwt: DemoToken,
+    _: ProjectViewer,
 ) -> InterviewGuide:
     project_localization = db.projects.get_project_localization(project_id, lang)
     return project_localization.interview_guide or InterviewGuide()
@@ -165,7 +177,8 @@ async def create_guide(
     lang: LanguageCode,
     guide: InterviewGuide,
     db: DBSession,
-    jwt: ProjectEditor,
+    jwt: DemoToken,
+    _: ProjectEditor,
 ):
     images = [
         question.image
@@ -194,7 +207,8 @@ async def generate_guide(
     lang: LanguageCode,
     data: InterviewGuideGenerationRequest,
     db: DBSession,
-    jwt: ProjectEditor,
+    jwt: DemoToken,
+    _: ProjectEditor,
 ):
     guide = await generate_interview_guide(data.prompt, output_path=None)
 
@@ -209,7 +223,8 @@ async def generate_guide_section(
     lang: LanguageCode,
     data: QuestionSectionGenerationRequest,
     db: DBSession,
-    jwt: ProjectEditor,
+    jwt: DemoToken,
+    _: ProjectEditor,
 ):
     project = db.projects.get_project_localization(project_id, lang)
 
@@ -224,7 +239,8 @@ async def generate_section_question(
     lang: LanguageCode,
     data: QuestionGenerationRequest,
     db: DBSession,
-    jwt: ProjectEditor,
+    jwt: DemoToken,
+    _: ProjectEditor,
 ):
     project = db.projects.get_project_localization(project_id, lang)
 
@@ -245,10 +261,9 @@ async def upload_image(
     alt: Annotated[str, Form()],
     file: UploadFile,
     db: DBSession,
-    jwt: ProjectEditor,
+    jwt: DemoToken,
+    _: ProjectEditor,
 ):
-    # FIXME: Is the file saved?
-
     filepath: Path = (
         lib_settings.storage.project_storage.image_path(project_id) / file.filename
     )
@@ -262,7 +277,8 @@ async def get_interview_agents(
     project_id: UUID4,
     lang: LanguageCode,
     db: DBSession,
-    jwt: ProjectViewer,
+    jwt: DemoToken,
+    _: ProjectViewer,
 ) -> AgentConfigs:
     project_localization = db.projects.get_project_localization(
         project_id,
@@ -278,7 +294,8 @@ async def create_interview_agents(
     lang: LanguageCode,
     config: AgentConfigs,
     db: DBSession,
-    jwt: ProjectEditor,
+    jwt: DemoToken,
+    _: ProjectEditor,
 ):
     db.projects.update_agent_configs(
         project_id=project_id,
@@ -302,7 +319,8 @@ async def create_interview_config(
     project_id: UUID4,
     config: InterviewConfig,
     db: DBSession,
-    jwt: ProjectEditor,
+    jwt: DemoToken,
+    _: ProjectEditor,
 ):
     db.projects.update_interview_config(project_id, config)
 
@@ -312,7 +330,8 @@ async def get_prompts(
     project_id: UUID4,
     lang: LanguageCode,
     db: DBSession,
-    jwt: ProjectViewer,
+    jwt: DemoToken,
+    _: ProjectViewer,
 ):
     project_localization = db.projects.get_project_localization(
         project_id=project_id,
@@ -328,7 +347,8 @@ async def create_prompts(
     lang: LanguageCode,
     prompts: PromptsUpdateRequest,
     db: DBSession,
-    jwt: ProjectEditor,
+    jwt: DemoToken,
+    _: ProjectEditor,
 ):
     db.projects.update_prompts(
         project_id=project_id,
@@ -357,7 +377,8 @@ async def create_consent(
     language: LanguageCode,
     consent: Consent,
     db: DBSession,
-    jwt: ProjectEditor,
+    jwt: DemoToken,
+    _: ProjectEditor,
 ):
     db.projects.update_consent(project_id, consent, language)
 
@@ -381,7 +402,8 @@ async def create_welcome(
     project_id: UUID4,
     language: LanguageCode,
     db: DBSession,
-    jwt: ProjectEditor,
+    jwt: DemoToken,
+    _: ProjectEditor,
     title: Annotated[str, Form()],
     text: Annotated[str, Form()],
     email: Annotated[EmailStr, Form()],
@@ -411,7 +433,8 @@ async def create_welcome(
 async def get_interviews(
     project_id: UUID4,
     db: DBSession,
-    jwt: ProjectViewer,
+    jwt: DemoToken,
+    _: ProjectViewer,
     paginated_query: Annotated[PaginatedQueryParams, Depends(PaginatedQueryParams)],
     interview_types: Annotated[list[InterviewType] | None, Query()] = None,
     created_at: Annotated[datetime.datetime | None, Query] = None,
@@ -437,16 +460,13 @@ async def get_interviews(
     return PaginatedResponse(total=total, items=response)
 
 
-class DeleteInterviewRequest(BaseModel):
-    interview_ids: list[UUID4]
-
-
 @router.delete("/projects/{project_id}/interviews")
 async def delete_interviews(
     delete_request: DeleteInterviewRequest,
     project_id: UUID4,
     db: DBSession,
-    jwt: ProjectAdmin,
+    jwt: DemoToken,
+    _: ProjectAdmin,
 ):
     db.interviews.delete_interviews(project_id, delete_request.interview_ids)
 
@@ -457,7 +477,8 @@ async def get_message(
     interview_id: UUID4,
     message_id: UUID4,
     db: DBSession,
-    jwt: ProjectViewer,
+    jwt: DemoToken,
+    _: ProjectViewer,
 ):
     # TODO: Implement fetching singular messages based on some id, and maybe
     # before=N and after=N messages from query arg. return
@@ -471,14 +492,10 @@ async def get_interview_messages(
     project_id: UUID4,
     interview_id: UUID4,
     db: DBSession,
-    jwt: ProjectViewer,
+    jwt: DemoToken,
+    _: ProjectViewer,
 ) -> list[MessagePublic]:
     return db.interviews.get_messages(interview_id, project_id)
-
-
-class ExportMessagesRequest(BaseModel):
-    interview_ids: list[UUID4]
-    format: Literal["csv", "xlsx"] = "csv"
 
 
 @router.post("/projects/{project_id}/interviews/messages/export")
@@ -486,7 +503,8 @@ async def export_messages(
     export_request: ExportMessagesRequest,
     project_id: UUID4,
     db: DBSession,
-    jwt: ProjectViewer,
+    jwt: DemoToken,
+    _: ProjectViewer,
 ):
     messages: list[MessagePublic] = [
         message
@@ -565,7 +583,8 @@ async def export_messages(
 async def generate_project_qr(
     request: Request,
     project_id: UUID4,
-    jwt: ProjectViewer,
+    jwt: DemoToken,
+    _: ProjectViewer,
 ):
     file_path = (
         lib_settings.storage.project_storage.qr_code_path(project_id) / "interview.png"
@@ -578,3 +597,12 @@ async def generate_project_qr(
         return StreamingResponse(io.BytesIO(img_data), media_type="image/png")
 
     return FileResponse(file_path)
+
+
+@router.post("/projects/{project_id}/owner")
+async def check_project_owner(
+    export_request: ExportMessagesRequest,
+    project_id: UUID4,
+    db: DBSession,
+) -> bool:
+    return db.projects.is_project_owner_demo_user(project_id)

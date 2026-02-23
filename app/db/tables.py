@@ -149,6 +149,10 @@ class UserTable(Base):
     experiments: Mapped[list["ExperimentTable"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    owned_projects: Mapped[list["ProjectTable"]] = relationship(
+        back_populates="owner", foreign_keys="ProjectTable.owner_id",
+        cascade="all, delete-orphan",
+    )
 
 
 #############
@@ -198,8 +202,14 @@ class ProjectTable(Base):
         PydanticJSONB(InterviewConfig),
         default=InterviewConfig,
     )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE")
+    )
 
     # Relationships
+    owner: Mapped["UserTable"] = relationship(
+        back_populates="owned_projects", foreign_keys=[owner_id]
+    )
     interviews: Mapped[list["InterviewTable"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )

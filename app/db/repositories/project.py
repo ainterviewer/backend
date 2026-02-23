@@ -14,7 +14,7 @@ from ainterviewer.types import LanguageCode, LanguageDict
 from ainterviewer.utils import get_language_dict
 
 from ...api.request_models import PromptsUpdateRequest
-from ...types import CollaboratorRole, ProjectStatus
+from ...types import CollaboratorRole, ProjectStatus, Scope
 from ..models import (
     Collaborator,
     CollaboratorPublic,
@@ -197,7 +197,8 @@ class ProjectRepository(BaseRepository):
         self,
         folder_id: UUID4,
         title: str,
-        interview_config: Optional[InterviewConfig],
+        owner_id: UUID4,
+        interview_config: Optional[InterviewConfig] = None,
         interview_guide_content: Optional[InterviewGuide] = None,
         agent_configs: Optional[AgentConfigs] = None,
         prompts: Optional[Prompts] = None,
@@ -213,6 +214,7 @@ class ProjectRepository(BaseRepository):
         project = ProjectTable(
             folder_id=folder_id,
             title=title,
+            owner_id=owner_id,
             **project_kwargs,
         )
 
@@ -241,6 +243,7 @@ class ProjectRepository(BaseRepository):
     def clone_project(
         self,
         project_id: UUID4,
+        owner_id: UUID4,
     ) -> ProjectPublic:
         """
         Copies a project with all its configurations (localizations, guides, agent configs, prompts)
@@ -270,6 +273,7 @@ class ProjectRepository(BaseRepository):
                 title=clone_title,
                 config=original_config,
                 status=original_status,
+                owner_id=owner_id,
             )
 
             self.session.add(new_project)
@@ -742,3 +746,22 @@ class ProjectRepository(BaseRepository):
             )
         )
         return self.session.execute(statement).scalar_one_or_none()
+
+    def is_project_owner(self, user_id: UUID4, project_id: UUID4) -> bool:
+        """Check if a user is the owner of a project."""
+        result = self.session.execute(
+            select(ProjectTable.id).where(
+                ProjectTable.id == project_id,
+                ProjectTable.owner_id == user_id,
+            )
+        ).scalar_one_or_none()
+        return result is not None
+
+    def is_project_owner_demo_user(self, project_id: UUID4):
+        result = self.session.execute(
+            select(ProjectTable.owner).where(
+                ProjectTable.id == project_id,
+            )
+        ).scalar_one()
+
+        return result.scope == Scope.DEMO
