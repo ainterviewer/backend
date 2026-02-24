@@ -10,7 +10,7 @@ from ainterviewer.types import InterviewStatus
 
 from ....db.tables import InterviewTable, MessageTable
 from ....db.types import InterviewType
-from ....dependencies import DBSession, UserToken
+from ....dependencies import DBSession, UserToken, DemoToken
 
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])
 
@@ -158,7 +158,7 @@ class MonitoringStats(BaseModel):
 async def get_project_monitoring_stats(
     project_id: UUID4,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     interview_types: Annotated[list[InterviewType] | None, Query()] = None,
     start_date: Annotated[datetime.datetime | None, Query()] = None,
     end_date: Annotated[datetime.datetime | None, Query()] = None,
