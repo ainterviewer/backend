@@ -166,18 +166,6 @@ async def get_project_monitoring_stats(
     start_date: Annotated[datetime.datetime | None, Query()] = None,
     end_date: Annotated[datetime.datetime | None, Query()] = None,
 ) -> MonitoringStats:
-    """
-    Returns summarized statistics for monitoring distributed interviews.
-
-    Includes:
-    - Total counts (interviews, messages, completions)
-    - Completion rate
-    - Breakdown by interview status and type
-    - Breakdown of messages by role (user/assistant)
-    - Daily interview counts over time
-    - Duration statistics (min, max, avg time spent)
-    - Message count statistics per interview
-    """
     session = db.session
 
     # Base conditions for filtering
