@@ -64,11 +64,12 @@ class DatabaseSettings(BaseModel):
         if self.db == DatabaseType.SQLITE:
             connection_string = f"sqlite:///{self.db_path}/{self.database_file}"
         else:
-            if not self.db_username or not self.db_password:
-                raise ValueError(
-                    "`db_username` and `db_password` must be set for PostgreSQL"
-                )
-            connection_string = f"postgresql://{self.db_username}:{self.db_password.get_secret_value()}@{self.db_url}:{self.db_port}/{self.db_name}"
+            # if not self.db_username or not self.db_password:
+            #     raise ValueError(
+            #         "`db_username` and `db_password` must be set for PostgreSQL"
+            #     )
+            # connection_string = f"postgresql://{self.db_username}:{self.db_password.get_secret_value()}@{self.db_url}:{self.db_port}/{self.db_name}"
+            pass
 
         return connection_string
 
