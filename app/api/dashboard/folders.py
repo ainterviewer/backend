@@ -12,12 +12,7 @@ from ...db.models import (
     ProjectFolderPublic,
     ProjectFolderWithProjects,
 )
-from ...dependencies import (
-    DBSession,
-    DemoToken,
-    FolderAdmin,
-    FolderEditor,
-)
+from ...dependencies import DBSession, DemoToken, FolderAdmin, FolderEditor
 from ...types import CollaboratorRole
 from ...utils import generate_qr_img
 from ..request_models import CreateProjectRequest

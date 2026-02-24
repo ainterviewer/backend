@@ -6,20 +6,8 @@ from pathlib import Path
 from typing import Annotated
 
 import polars as pl
-from fastapi import (
-    APIRouter,
-    Body,
-    Depends,
-    Form,
-    Query,
-    Request,
-    UploadFile,
-)
-from fastapi.responses import (
-    FileResponse,
-    RedirectResponse,
-    StreamingResponse,
-)
+from fastapi import APIRouter, Body, Depends, Form, Query, Request, UploadFile
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from pydantic import UUID4, EmailStr
 from xlsxwriter import Workbook
 
@@ -43,7 +31,6 @@ from ...dependencies import (
     ProjectAdmin,
     ProjectEditor,
     ProjectViewer,
-    UserToken,
 )
 from ...utils import generate_qr_img
 from ..request_models import (

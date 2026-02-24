@@ -10,7 +10,7 @@ from ainterviewer.types import InterviewStatus
 
 from ....db.tables import InterviewTable, MessageTable
 from ....db.types import InterviewType
-from ....dependencies import DBSession, UserToken, DemoToken
+from ....dependencies import DBSession, DemoToken
 
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])
 

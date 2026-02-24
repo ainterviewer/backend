@@ -2,19 +2,10 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter
 from fastapi.responses import Response, StreamingResponse
-from pydantic import (
-    UUID4,
-    TypeAdapter,
-)
-from pydantic_ai import (
-    ModelRequest,
-    ModelResponse,
-    TextPart,
-    UserPromptPart,
-)
+from pydantic import UUID4, TypeAdapter
+from pydantic_ai import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
 from ainterviewer.types import LanguageCode
-from app.api.request_models import AssistanceChatRequest
 
 from ...auth import AssistanceSessionToken
 from ...dependencies import AssistanceSessionCookie, DBSession, ProjectEditor
@@ -24,10 +15,8 @@ from ...services.assistance.agent import (
     stream_messages,
     to_chat_message,
 )
-from ...services.assistance.models import (
-    ChatMessage,
-    _messages_adapter,
-)
+from ...services.assistance.models import ChatMessage, _messages_adapter
+from ..request_models import AssistanceChatRequest
 
 router = APIRouter(tags=["assistance"])
 
