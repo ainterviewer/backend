@@ -1302,9 +1302,9 @@
                 "requestBody": {
                     "required": true,
                     "content": {
-                        "application/x-www-form-urlencoded": {
+                        "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/Body_send_chat"
+                                "$ref": "#/components/schemas/AssistanceChatRequest"
                             }
                         }
                     }
@@ -4569,6 +4569,60 @@
                 }
             }
         },
+        "/api/projects/{project_id}/owner": {
+            "post": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "Check Project Owner",
+                "operationId": "check_project_owner",
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid4",
+                            "title": "Project Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ExportMessagesRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "boolean",
+                                    "title": "Response Check Project Owner"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/projects/{project_id}/tests/{test_id}/background_info": {
             "get": {
                 "tags": [
@@ -6127,6 +6181,50 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
+            "put": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "get": {
                 "tags": [
                     "admin"
@@ -6171,7 +6269,7 @@
                     }
                 }
             },
-            "put": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -6260,50 +6358,6 @@
                 }
             },
             "post": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -6976,6 +7030,23 @@
                 ],
                 "title": "AnswerLength"
             },
+            "AssistanceChatRequest": {
+                "properties": {
+                    "prompt": {
+                        "type": "string",
+                        "title": "Prompt"
+                    },
+                    "guide": {
+                        "$ref": "#/components/schemas/InterviewGuide-Input"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "prompt",
+                    "guide"
+                ],
+                "title": "AssistanceChatRequest"
+            },
             "BackgroundInfoOptions-Input": {
                 "properties": {
                     "names_gender": {
@@ -7245,7 +7316,7 @@
                         "anyOf": [
                             {
                                 "type": "string",
-                                "format": "binary"
+                                "contentMediaType": "application/octet-stream"
                             },
                             {
                                 "type": "null"
@@ -7262,19 +7333,6 @@
                 ],
                 "title": "Body_create_welcome"
             },
-            "Body_send_chat": {
-                "properties": {
-                    "prompt": {
-                        "type": "string",
-                        "title": "Prompt"
-                    }
-                },
-                "type": "object",
-                "required": [
-                    "prompt"
-                ],
-                "title": "Body_send_chat"
-            },
             "Body_upload_audio": {
                 "properties": {
                     "project_id": {
@@ -7289,7 +7347,7 @@
                     },
                     "file": {
                         "type": "string",
-                        "format": "binary",
+                        "contentMediaType": "application/octet-stream",
                         "title": "File"
                     }
                 },
@@ -9437,6 +9495,11 @@
                     "config": {
                         "$ref": "#/components/schemas/InterviewConfig"
                     },
+                    "owner_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Owner Id"
+                    },
                     "n_interviews": {
                         "anyOf": [
                             {
@@ -9483,7 +9546,8 @@
                     "id",
                     "title",
                     "created_at",
-                    "config"
+                    "config",
+                    "owner_id"
                 ],
                 "title": "ProjectPublic"
             },
@@ -10148,6 +10212,7 @@
                 "enum": [
                     "admin",
                     "user",
+                    "demo",
                     "guest"
                 ],
                 "title": "Scope",
@@ -10729,7 +10794,6 @@
                 "required": [
                     "email",
                     "first_name",
-                    "last_name",
                     "password"
                 ],
                 "title": "UserCreate"
@@ -10785,7 +10849,6 @@
                 "required": [
                     "email",
                     "first_name",
-                    "last_name",
                     "created_at",
                     "last_active",
                     "last_login",
@@ -10917,7 +10980,7 @@
                     },
                     "file": {
                         "type": "string",
-                        "format": "binary",
+                        "contentMediaType": "application/octet-stream",
                         "title": "File"
                     }
                 },
@@ -10944,7 +11007,7 @@
                     },
                     "file": {
                         "type": "string",
-                        "format": "binary",
+                        "contentMediaType": "application/octet-stream",
                         "title": "File"
                     }
                 },
