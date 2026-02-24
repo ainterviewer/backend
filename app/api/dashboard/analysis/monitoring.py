@@ -159,7 +159,10 @@ async def get_project_monitoring_stats(
     project_id: UUID4,
     db: DBSession,
     jwt: DemoToken,
-    interview_types: Annotated[list[InterviewType] | None, Query()] = None,
+    interview_types: Annotated[
+        list[InterviewType],
+        Query(default_factory=lambda: [t.value for t in InterviewType]),
+    ],
     start_date: Annotated[datetime.datetime | None, Query()] = None,
     end_date: Annotated[datetime.datetime | None, Query()] = None,
 ) -> MonitoringStats:
@@ -180,11 +183,11 @@ async def get_project_monitoring_stats(
     # Base conditions for filtering
     interview_conditions = [
         InterviewTable.project_id == project_id,
-        # InterviewTable.type == InterviewType.DISTRIBUTED,
+        InterviewTable.type.in_(interview_types),
     ]
     message_conditions = [
         MessageTable.project_id == project_id,
-        # MessageTable.interview_type == InterviewType.DISTRIBUTED,
+        MessageTable.interview_type.in_(interview_types),
     ]
 
     if start_date:
