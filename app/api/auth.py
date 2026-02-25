@@ -76,7 +76,7 @@ async def register(
 
             except sqlalchemy.exc.NoResultFound:
                 return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
-            if invitation.expires_at < now():
+            if invitation.expires_at and invitation.expires_at < now():
                 return JSONResponse({"detail": "Invite token expired"}, status_code=406)
 
     # NOTE: Password hashing happens in the users.create_user method

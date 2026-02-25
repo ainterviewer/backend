@@ -159,6 +159,7 @@ class UserRepository(BaseRepository):
     def create_invitation(
         self,
         email: str | None = None,
+        expires_at: datetime.datetime | None = None,
         access_request_id: UUID4 | None = None,
         reuseable: bool = False,
         user_scope: Scope = Scope.USER,
@@ -187,9 +188,10 @@ class UserRepository(BaseRepository):
         statement = select(InvitationTable).where(InvitationTable.id == token)
         invitation = self.session.execute(statement).scalar_one()
 
-        invitation.expires_at = invitation.expires_at.replace(
-            tzinfo=lib_settings.tzinfo
-        )
+        if invitation.expires_at:
+            invitation.expires_at = invitation.expires_at.replace(
+                tzinfo=lib_settings.tzinfo
+            )
 
         return InvitationPublic.model_validate(invitation)
 
