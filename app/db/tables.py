@@ -97,6 +97,12 @@ class InvitationTable(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     expires_at: Mapped[datetime.datetime] = mapped_column()
     redeemed_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
+
+    reuseable: Mapped[bool] = mapped_column(default=False)
+    user_scope: Mapped[Scope] = mapped_column(default=Scope.USER)
+    user_expires: Mapped[datetime.datetime | None] = mapped_column(default=None)
+    title: Mapped[str | None] = mapped_column(default=None)
+
     access_request_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("access_requests.id")
     )
@@ -150,7 +156,8 @@ class UserTable(Base):
         back_populates="user", cascade="all, delete-orphan"
     )
     owned_projects: Mapped[list["ProjectTable"]] = relationship(
-        back_populates="owner", foreign_keys="ProjectTable.owner_id",
+        back_populates="owner",
+        foreign_keys="ProjectTable.owner_id",
         cascade="all, delete-orphan",
     )
 

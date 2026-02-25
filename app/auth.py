@@ -1,13 +1,13 @@
 import logging
-from datetime import timedelta
+from datetime import datetime
 from typing import Any, Self
 from uuid import UUID, uuid4
 
 from jose import jwt
 from passlib.context import CryptContext
-from pydantic import UUID4, BaseModel
+from pydantic import UUID4, BaseModel, Field, PrivateAttr
 
-from ainterviewer.types import Interviewer, InterviewRole
+from ainterviewer.types import Interviewer, InterviewRole, TimeDelta
 from ainterviewer.utils import now
 
 from .settings import app_settings
@@ -22,13 +22,13 @@ logging.getLogger("passlib").setLevel(logging.ERROR)
 
 
 class _Token(BaseModel):
-    # FIXME: These should be way shorter
-    _timedelta_kwargs: dict[str, int | float]
+    # FIXME: These should be way shorter for authentication at least
+    _timedelta: TimeDelta = PrivateAttr()
 
     def encode(self) -> str:
         payload = dict(self)
 
-        payload["exp"] = now() + timedelta(**self._timedelta_kwargs)
+        payload["exp"] = now() + self._timedelta.to_timedelta()
 
         serializable_payload = {
             k: str(v) if isinstance(v, UUID) else v for k, v in payload.items()
@@ -51,24 +51,29 @@ class _Token(BaseModel):
         return cls(**payload)
 
 
+# FIXME: Make sure this is validated in new setup
 class InterviewToken(_Token):
     project_id: UUID4
     interview_id: UUID4
     interviewer: Interviewer
     role: InterviewRole = InterviewRole.RESPONDENT
 
-    _timedelta_kwargs: dict[str, int | float] = (
-        app_settings.app.jwt_interview_token_expiration
-    )
+    _timedelta: TimeDelta = app_settings.app.jwt_interview_token_expiration
 
 
 class AuthToken(_Token):
     user_id: UUID4
     scope: Scope
 
-    _timedelta_kwargs: dict[str, int | float] = (
-        app_settings.app.jwt_auth_token_expiration
-    )
+    _timedelta: TimeDelta = app_settings.app.jwt_auth_token_expiration
+
+
+class InviteToken(_Token):
+    id: UUID4
+    title: str | None = None
+    user_expires: TimeDelta | datetime | None = Field(None)
+
+    _timedelta: TimeDelta = app_settings.app.jwt_invite_token_expiration
 
 
 class AssistanceSessionToken(BaseModel):

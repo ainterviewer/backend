@@ -24,11 +24,14 @@ class AppSettings(BaseModel):
     web_host: str = "127.0.0.1"
     web_port: int = 5174
 
-    jwt_interview_token_expiration: dict[str, int | float] = Field(
-        default_factory=lambda: TimeDelta(days=3).model_dump()
+    jwt_interview_token_expiration: TimeDelta = Field(
+        default_factory=lambda: TimeDelta(days=3)
     )
-    jwt_auth_token_expiration: dict[str, int | float] = Field(
-        default_factory=lambda: TimeDelta(days=1).model_dump()
+    jwt_auth_token_expiration: TimeDelta = Field(
+        default_factory=lambda: TimeDelta(days=1)
+    )
+    jwt_invite_token_expiration: TimeDelta = Field(
+        default_factory=lambda: TimeDelta(days=1)
     )
     registration_requires_token: bool = True
 

@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Literal, Optional
-from uuid import UUID
+from typing import Optional
 
 from pydantic import (
     UUID4,
@@ -14,7 +13,6 @@ from pydantic import (
     computed_field,
     field_validator,
 )
-from pydantic.json_schema import SkipJsonSchema
 
 from ainterviewer.agents.prompts.models import Prompts
 from ainterviewer.config import AgentConfigs, InterviewConfig
@@ -31,9 +29,11 @@ from ainterviewer.types import (
     MessageRole,
     MessageType,
     TestType,
+    TimeDelta,
 )
 from ainterviewer.utils import now
 
+from ..auth import InviteToken
 from ..settings import app_settings
 from ..types import CollaboratorRole, ProjectStatus, Scope, TestRunStatus
 from ._extra import CustomEmailStr
@@ -63,23 +63,29 @@ class AccessRequestPublic(AccessRequestBase):
 
 
 class InvitationBase(_BaseModel):
-    token: str
-    created_at: datetime
     expires_at: datetime
-    used: bool = False
+    reuseable: bool = False
+    user_scope: Scope = Scope.USER
+    user_expires: datetime | None = None
+    name: str | None = None
 
 
-class InvitationCreate(_BaseModel):
-    expires_at: datetime
+class InvitationCreate(InvitationBase): ...
 
 
-class InvitationPublic(_BaseModel):
+class InvitationPublic(InvitationBase):
     id: UUID4
     expires_at: datetime
 
     @computed_field()
     def invitation_link(self) -> str:
-        return f"{app_settings.app.app_endpoint}/sign-up?token={self.id}"
+        token = InviteToken(
+            timedelta=TimeDelta.parse_timedelta(self.expires_at - now()),
+            id=self.id,
+            name=self.name,
+        ).encode()
+
+        return f"{app_settings.app.app_endpoint}/sign-up?token={token}"
 
 
 class UserBase(_BaseModel):
@@ -93,35 +99,41 @@ class UserBase(_BaseModel):
 
 
 class UserCreate(UserBase):
+    invite_token: InviteToken | None = None
+
     created_at: datetime = Field(default_factory=now)
     last_active: datetime = Field(default_factory=now)
     last_login: datetime = Field(default_factory=now)
-    invite_token: Optional[UUID4 | SkipJsonSchema[Literal["demo"]]] = None
     research_consent: bool = False
     password: str
 
     @field_validator("invite_token", mode="before")
-    def validate_invite_token(cls, v: Optional[str]) -> Optional[str]:
+    def validate_invite_token(cls, v: str | None) -> Optional[InviteToken]:
+        """Validates the encoded invite_token from a str and returns it as an
+        InviteToken object"""
         if v is None:
             return v
 
-        if v == "demo":
-            return v
-
-        try:
-            UUID(v)
-            return v
-        except ValueError:
-            raise ValueError("Invalid invite token")
+        return InviteToken.decode(v)
 
 
 class UserPublic(UserBase):
     id: UUID4
+    invite_token: str | None = Field()
+
+    @field_validator("invite_token", mode="before")
+    def transform_invite_token(cls, v: str | None) -> str | None:
+        if v is not None:
+            if len(v.split(":::")) == 2:
+                return v.split(":::")[0]
+
+        return None
 
 
 class UserPrivate(UserBase):
     id: UUID4
     password: str
+    invite_token: str | None = Field()
 
 
 class Collaborator(_BaseModel):

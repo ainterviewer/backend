@@ -64,25 +64,20 @@ async def register(
     # NOTE: Overwrite user scope to user when created through the API.
     # - should this be done at the model level?
     user.scope = Scope.USER
-    invitation = None
 
     if app_settings.app.registration_requires_token is True:
         if not user.invite_token:
             return JSONResponse({"detail": "Invite token required"}, status_code=406)
         else:
-            if user.invite_token == "demo":
-                user.scope = Scope.DEMO
-            else:
-                try:
-                    invitation = db.users.check_invite_token(user.invite_token)
-                except sqlalchemy.exc.NoResultFound:
-                    return JSONResponse(
-                        {"detail": "Invalid invite token"}, status_code=406
-                    )
-                if invitation.expires_at < now():
-                    return JSONResponse(
-                        {"detail": "Invite token expired"}, status_code=406
-                    )
+            try:
+                invitation = db.users.check_invite_token(user.invite_token.id)
+                if not invitation.reuseable:
+                    db.users.delete_invitation(invitation.id)
+
+            except sqlalchemy.exc.NoResultFound:
+                return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
+            if invitation.expires_at < now():
+                return JSONResponse({"detail": "Invite token expired"}, status_code=406)
 
     # NOTE: Password hashing happens in the users.create_user method
     new_user = db.users.create_user(UserCreate(**user.model_dump()))
@@ -97,9 +92,6 @@ async def register(
         secure=True,
         httponly=True,
     )
-
-    if app_settings.app.registration_requires_token is True and invitation:
-        db.users.delete_invitation(invitation.id)
 
     return response
 

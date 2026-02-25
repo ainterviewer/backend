@@ -1,15 +1,17 @@
+import datetime
 from collections.abc import Sequence
 from datetime import timedelta
 from typing import Literal
-from zoneinfo import ZoneInfo
 
 from pydantic import UUID4
 from sqlalchemy import delete, or_, select, update
 
+from ainterviewer.settings import settings as lib_settings
 from ainterviewer.utils import now
 
 from ...auth import get_password_hash
 from ...services.email.mail import email_templates, send_email
+from ...types import Scope
 from ..models import (
     AccessRequestCreate,
     AccessRequestPublic,
@@ -35,6 +37,7 @@ class UserRepository(BaseRepository):
         self.session.add(new_user)
         self.session.commit()
         self.session.refresh(new_user)
+
         return UserPublic.model_validate(new_user)
 
     def delete_user(self, id: UUID4):
@@ -116,7 +119,6 @@ class UserRepository(BaseRepository):
         access_request = self.session.execute(statement).scalar_one()
 
         if action == "approve":
-            access_request.status = AccessRequestStatus.FULFILLED
             # WARNING: Invites are added to the DB, then the email is send,
             # and if the email fails, the invite will be deleted. This has
             # the potential to create a race condition where the invite is
@@ -134,6 +136,7 @@ class UserRepository(BaseRepository):
                         invite_link=invite.invitation_link,
                     ),
                 )
+                access_request.status = AccessRequestStatus.FULFILLED
             except Exception as e:
                 self.delete_invitation(invite.id)
                 raise e
@@ -157,13 +160,23 @@ class UserRepository(BaseRepository):
         self,
         email: str,
         access_request_id: UUID4 | None = None,
+        reuseable: bool = False,
+        user_scope: Scope = Scope.USER,
+        user_expires: datetime.datetime | None = None,
+        name: str | None = None,
     ) -> InvitationPublic:
         expires_at = now() + timedelta(days=1)
+
         invitation = InvitationTable(
             email=email,
             expires_at=expires_at,
             access_request_id=access_request_id,
+            reuseable=reuseable,
+            user_scope=user_scope,
+            user_expires=user_expires,
+            name=name,
         )
+
         self.session.add(invitation)
         self.session.commit()
         self.session.refresh(invitation)
@@ -175,7 +188,7 @@ class UserRepository(BaseRepository):
         invitation = self.session.execute(statement).scalar_one()
 
         invitation.expires_at = invitation.expires_at.replace(
-            tzinfo=ZoneInfo("Europe/Copenhagen")
+            tzinfo=lib_settings.tzinfo
         )
 
         return InvitationPublic.model_validate(invitation)
