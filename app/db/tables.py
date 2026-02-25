@@ -135,7 +135,7 @@ class UserTable(Base):
     last_active: Mapped[datetime.datetime] = mapped_column(default=now)
     last_login: Mapped[datetime.datetime] = mapped_column(default=now)
     scope: Mapped[Scope] = mapped_column(SQLEnum(Scope), default=Scope.USER)
-    invite_token: Mapped[str | None] = mapped_column()
+    invite_token: Mapped[uuid.UUID | None] = mapped_column()
     research_consent: Mapped[bool] = mapped_column(default=False)
 
     # Relationships
