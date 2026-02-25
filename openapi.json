@@ -6235,8 +6235,52 @@
                 ]
             }
         },
+        "/api/admin/admin/invitations/delete": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Delete Invitations",
+                "operationId": "delete_invitations",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/InvitationsDeleteRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ]
+            }
+        },
         "/api/admin/aws/ec2/{full_path}": {
-            "put": {
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -6324,95 +6368,95 @@
                     }
                 }
             },
-            "patch": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "post": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
             "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
                 "tags": [
                     "admin"
                 ],
@@ -8722,8 +8766,15 @@
             "InvitationCreate": {
                 "properties": {
                     "expires_at": {
-                        "type": "string",
-                        "format": "date-time",
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
                         "title": "Expires At"
                     },
                     "reuseable": {
@@ -8740,6 +8791,9 @@
                             {
                                 "type": "string",
                                 "format": "date-time"
+                            },
+                            {
+                                "$ref": "#/components/schemas/TimeDelta"
                             },
                             {
                                 "type": "null"
@@ -8760,16 +8814,20 @@
                     }
                 },
                 "type": "object",
-                "required": [
-                    "expires_at"
-                ],
                 "title": "InvitationCreate"
             },
             "InvitationPublic": {
                 "properties": {
                     "expires_at": {
-                        "type": "string",
-                        "format": "date-time",
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
                         "title": "Expires At"
                     },
                     "reuseable": {
@@ -8786,6 +8844,9 @@
                             {
                                 "type": "string",
                                 "format": "date-time"
+                            },
+                            {
+                                "$ref": "#/components/schemas/TimeDelta"
                             },
                             {
                                 "type": "null"
@@ -8817,11 +8878,27 @@
                 },
                 "type": "object",
                 "required": [
-                    "expires_at",
                     "id",
                     "invitation_link"
                 ],
                 "title": "InvitationPublic"
+            },
+            "InvitationsDeleteRequest": {
+                "properties": {
+                    "ids": {
+                        "items": {
+                            "type": "string",
+                            "format": "uuid4"
+                        },
+                        "type": "array",
+                        "title": "Ids"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "ids"
+                ],
+                "title": "InvitationsDeleteRequest"
             },
             "LanguageCode": {
                 "type": "string",
@@ -10771,6 +10848,47 @@
                 ],
                 "title": "TestType"
             },
+            "TimeDelta": {
+                "properties": {
+                    "days": {
+                        "type": "integer",
+                        "title": "Days",
+                        "default": 0
+                    },
+                    "seconds": {
+                        "type": "integer",
+                        "title": "Seconds",
+                        "default": 0
+                    },
+                    "microseconds": {
+                        "type": "integer",
+                        "title": "Microseconds",
+                        "default": 0
+                    },
+                    "milliseconds": {
+                        "type": "integer",
+                        "title": "Milliseconds",
+                        "default": 0
+                    },
+                    "minutes": {
+                        "type": "integer",
+                        "title": "Minutes",
+                        "default": 0
+                    },
+                    "hours": {
+                        "type": "integer",
+                        "title": "Hours",
+                        "default": 0
+                    },
+                    "weeks": {
+                        "type": "integer",
+                        "title": "Weeks",
+                        "default": 0
+                    }
+                },
+                "type": "object",
+                "title": "TimeDelta"
+            },
             "TimeItem": {
                 "additionalProperties": false,
                 "properties": {
@@ -11007,7 +11125,7 @@
                         "format": "uuid4",
                         "title": "Id"
                     },
-                    "invite_token": {
+                    "invite_title": {
                         "anyOf": [
                             {
                                 "type": "string"
@@ -11016,7 +11134,7 @@
                                 "type": "null"
                             }
                         ],
-                        "title": "Invite Token"
+                        "title": "Invite Title"
                     }
                 },
                 "type": "object",
@@ -11026,8 +11144,7 @@
                     "created_at",
                     "last_active",
                     "last_login",
-                    "id",
-                    "invite_token"
+                    "id"
                 ],
                 "title": "UserPublic"
             },
