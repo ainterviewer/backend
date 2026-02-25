@@ -67,7 +67,7 @@ class InvitationBase(_BaseModel):
     reuseable: bool = False
     user_scope: Scope = Scope.USER
     user_expires: datetime | None = None
-    name: str | None = None
+    title: str | None = None
 
 
 class InvitationCreate(InvitationBase): ...
@@ -79,13 +79,7 @@ class InvitationPublic(InvitationBase):
 
     @computed_field()
     def invitation_link(self) -> str:
-        token = InviteToken(
-            timedelta=TimeDelta.parse_timedelta(self.expires_at - now()),
-            id=self.id,
-            name=self.name,
-        ).encode()
-
-        return f"{app_settings.app.app_endpoint}/sign-up?token={token}"
+        return f"{app_settings.app.app_endpoint}/sign-up?token={self.id}"
 
 
 class UserBase(_BaseModel):
@@ -99,22 +93,13 @@ class UserBase(_BaseModel):
 
 
 class UserCreate(UserBase):
-    invite_token: InviteToken | None = None
+    invite_token: UUID4 | None = None
 
     created_at: datetime = Field(default_factory=now)
     last_active: datetime = Field(default_factory=now)
     last_login: datetime = Field(default_factory=now)
     research_consent: bool = False
     password: str
-
-    @field_validator("invite_token", mode="before")
-    def validate_invite_token(cls, v: str | None) -> Optional[InviteToken]:
-        """Validates the encoded invite_token from a str and returns it as an
-        InviteToken object"""
-        if v is None:
-            return v
-
-        return InviteToken.decode(v)
 
 
 class UserPublic(UserBase):

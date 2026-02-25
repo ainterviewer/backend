@@ -158,12 +158,12 @@ class UserRepository(BaseRepository):
 
     def create_invitation(
         self,
-        email: str,
+        email: str | None = None,
         access_request_id: UUID4 | None = None,
         reuseable: bool = False,
         user_scope: Scope = Scope.USER,
         user_expires: datetime.datetime | None = None,
-        name: str | None = None,
+        title: str | None = None,
     ) -> InvitationPublic:
         expires_at = now() + timedelta(days=1)
 
@@ -174,7 +174,7 @@ class UserRepository(BaseRepository):
             reuseable=reuseable,
             user_scope=user_scope,
             user_expires=user_expires,
-            name=name,
+            title=title,
         )
 
         self.session.add(invitation)
@@ -197,3 +197,11 @@ class UserRepository(BaseRepository):
         statement = delete(InvitationTable).where(InvitationTable.id == id)
         self.session.execute(statement)
         self.session.commit()
+
+    def get_invitations(self) -> list[InvitationPublic]:
+        statement = select(InvitationTable)
+        invitations = self.session.execute(statement).scalars().all()
+
+        return [
+            InvitationPublic.model_validate(invitation) for invitation in invitations
+        ]

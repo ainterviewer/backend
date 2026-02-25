@@ -70,7 +70,7 @@ async def register(
             return JSONResponse({"detail": "Invite token required"}, status_code=406)
         else:
             try:
-                invitation = db.users.check_invite_token(user.invite_token.id)
+                invitation = db.users.check_invite_token(user.invite_token)
                 if not invitation.reuseable:
                     db.users.delete_invitation(invitation.id)
 

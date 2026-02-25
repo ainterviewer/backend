@@ -1,3 +1,4 @@
+from app.db.models import InvitationCreate
 from typing import Literal
 
 from fastapi import APIRouter
@@ -47,3 +48,20 @@ async def delete_access_requests(
     jwt: AdminToken,
 ):
     db.users.delete_access_requests(request.ids)
+
+
+@router.get("/invitations/")
+async def get_invitations(
+    db: DBSession,
+    jwt: AdminToken,
+):
+    db.users.get_invitations()
+
+
+@router.post("/invitations/")
+async def create_invitation(
+    request: InvitationCreate,
+    db: DBSession,
+    jwt: AdminToken,
+):
+    db.users.create_invitation(**request.model_dump())
