@@ -201,7 +201,7 @@ class UserRepository(BaseRepository):
         self.session.commit()
 
     def delete_invitations(self, ids: list[UUID4]):
-        statement = delete(InvitationTable).where(InvitationTable.id._in(ids))
+        statement = delete(InvitationTable).where(InvitationTable.id.in_(ids))
         self.session.execute(statement)
         self.session.commit()
 
