@@ -27,6 +27,15 @@ target_metadata = Base.metadata
 # ... etc.
 
 
+EXCLUDED_TABLES = {"_sqliteai_vector"}
+
+
+def include_object(object, name, type_, reflected, compare_to):
+    if type_ == "table" and name in EXCLUDED_TABLES:
+        return False
+    return True
+
+
 def render_item(type_, obj, autogen_context):
     """Apply custom rendering for PydanticType."""
     if type_ == "type" and isinstance(obj, PydanticJSONB):
@@ -46,6 +55,7 @@ def run_migrations_offline() -> None:
         compare_type=True,
         compare_server_default=True,
         render_item=render_item,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -68,6 +78,7 @@ def run_migrations_online() -> None:
             compare_type=True,
             compare_server_default=True,
             render_item=render_item,
+            include_object=include_object,
         )
 
         with context.begin_transaction():
