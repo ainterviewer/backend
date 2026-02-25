@@ -126,6 +126,26 @@ class Settings(BaseSettings):
     )
 
     @property
+    def sveltekit_platform_public_addr(self) -> str:
+        match self.app_env:
+            case "development":
+                return "http://localhost:5173"
+            case "staging":
+                return "https://app.staging.ainterviewer.dk"
+            case "production":
+                return "https://app.ainterviewer.dk"
+
+    @property
+    def sveltekit_website_public_addr(self) -> str:
+        match self.app_env:
+            case "development":
+                return "http://localhost:5174"
+            case "staging":
+                return "https://staging.ainterviewer.dk"
+            case "production":
+                return "https://ainterviewer.dk"
+
+    @property
     def sveltekit_platform_addr(self) -> str:
         match self.app_env:
             case "development":
