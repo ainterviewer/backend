@@ -1,11 +1,10 @@
 import logging
-from datetime import datetime
 from typing import Any, Self
 from uuid import UUID, uuid4
 
 from jose import jwt
 from passlib.context import CryptContext
-from pydantic import UUID4, BaseModel, Field, PrivateAttr
+from pydantic import UUID4, BaseModel, PrivateAttr
 
 from ainterviewer.types import Interviewer, InterviewRole, TimeDelta
 from ainterviewer.utils import now
@@ -66,14 +65,6 @@ class AuthToken(_Token):
     scope: Scope
 
     _timedelta: TimeDelta = app_settings.app.jwt_auth_token_expiration
-
-
-class InviteToken(_Token):
-    id: UUID4
-    title: str | None = None
-    user_expires: TimeDelta | datetime | None = Field(None)
-
-    _timedelta: TimeDelta = app_settings.app.jwt_invite_token_expiration
 
 
 class AssistanceSessionToken(BaseModel):
