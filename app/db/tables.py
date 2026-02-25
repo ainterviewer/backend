@@ -291,8 +291,12 @@ class CollaboratorTable(Base):
         Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
     )
     folder_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projectfolder.id"))
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"))
-    added_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("user.id", ondelete="SET NULL"))
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE")
+    )
+    added_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL")
+    )
     added_at: Mapped[datetime.datetime] = mapped_column(default=now)
     role: Mapped[CollaboratorRole] = mapped_column(SQLEnum(CollaboratorRole))
 
