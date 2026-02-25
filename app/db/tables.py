@@ -93,7 +93,7 @@ class InvitationTable(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
     )
-    email: Mapped[str] = mapped_column(unique=True)
+    email: Mapped[str | None] = mapped_column(unique=True, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     expires_at: Mapped[datetime.datetime] = mapped_column()
     redeemed_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
