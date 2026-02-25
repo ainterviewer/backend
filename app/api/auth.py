@@ -61,9 +61,10 @@ async def register(
     user: UserCreate,
     db: DBSession,
 ) -> JSONResponse:
-    # NOTE: Overwrite user scope to user when created through the API.
+    # NOTE: Validate user scope to user when created through the API.
     # - should this be done at the model level?
-    user.scope = Scope.USER
+    if not Scope.USER.includes(user.scope):
+        raise ValueError("Invalid scope for user creation")
 
     if app_settings.app.registration_requires_token is True:
         if not user.invite_token:
@@ -73,7 +74,7 @@ async def register(
                 invitation = db.users.check_invite_token(user.invite_token)
                 if not invitation.reuseable:
                     db.users.delete_invitation(invitation.id)
-
+                user.scope = invitation.user_scope
             except sqlalchemy.exc.NoResultFound:
                 return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
             if invitation.expires_at and invitation.expires_at < now():
