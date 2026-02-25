@@ -118,7 +118,6 @@ def replay_history(
             message_id=message.message_id,
             feedback=message.feedback,
             image=message.image,
-            include_in_history=message.include_in_history,
         )
 
         messages.append(data)
@@ -128,7 +127,6 @@ def replay_history(
             content=last_message.content,
             role=last_message.role,
             message_id=last_message.message_id,
-            include_in_history=last_message.include_in_history,
         )
         messages.append(data)
     else:
@@ -150,7 +148,6 @@ def replay_history(
                 message_id=last_message.message_id,
                 feedback=last_message.feedback,
                 image=last_message.image,
-                include_in_history=last_message.include_in_history,
             )
             messages.append(data)
 
@@ -206,6 +203,7 @@ def extend_openapi_schema(
         # 3. Add the main model to schemas
         # Use the model's title as the key
         model_title = extra_model_schema["title"]
+
         openapi["components"]["schemas"][model_title] = extra_model_schema
 
     return openapi
