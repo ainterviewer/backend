@@ -59,7 +59,7 @@ wheels = [
 
 [[package]]
 name = "ainterviewer"
-version = "0.0.11"
+version = "0.0.12"
 source = { editable = "../lib" }
 dependencies = [
     { name = "fastapi", extra = ["standard"] },
@@ -135,7 +135,7 @@ dev = [
 
 [[package]]
 name = "ainterviewer-backend"
-version = "0.0.25"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "adbc-driver-postgresql" },
