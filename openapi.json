@@ -6175,7 +6175,13 @@
                         "description": "Successful Response",
                         "content": {
                             "application/json": {
-                                "schema": {}
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/InvitationPublic"
+                                    },
+                                    "type": "array",
+                                    "title": "Response Get Reuseable Invitations"
+                                }
                             }
                         }
                     }
@@ -6230,7 +6236,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "get": {
+            "put": {
                 "tags": [
                     "admin"
                 ],
@@ -6274,7 +6280,7 @@
                     }
                 }
             },
-            "put": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -6406,7 +6412,7 @@
                     }
                 }
             },
-            "delete": {
+            "get": {
                 "tags": [
                     "admin"
                 ],
@@ -8758,6 +8764,64 @@
                     "expires_at"
                 ],
                 "title": "InvitationCreate"
+            },
+            "InvitationPublic": {
+                "properties": {
+                    "expires_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Expires At"
+                    },
+                    "reuseable": {
+                        "type": "boolean",
+                        "title": "Reuseable",
+                        "default": false
+                    },
+                    "user_scope": {
+                        "$ref": "#/components/schemas/Scope",
+                        "default": "user"
+                    },
+                    "user_expires": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "User Expires"
+                    },
+                    "title": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Title"
+                    },
+                    "id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Id"
+                    },
+                    "invitation_link": {
+                        "type": "string",
+                        "title": "Invitation Link",
+                        "readOnly": true
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "expires_at",
+                    "id",
+                    "invitation_link"
+                ],
+                "title": "InvitationPublic"
             },
             "LanguageCode": {
                 "type": "string",
