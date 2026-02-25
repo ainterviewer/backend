@@ -50,15 +50,15 @@ async def delete_access_requests(
     db.users.delete_access_requests(request.ids)
 
 
-@router.get("/invitations/")
-async def get_invitations(
+@router.get("/invitations")
+async def get_reuseable_invitations(
     db: DBSession,
     jwt: AdminToken,
 ):
-    db.users.get_invitations()
+    db.users.get_reuseable_invitations()
 
 
-@router.post("/invitations/")
+@router.post("/invitations")
 async def create_invitation(
     request: InvitationCreate,
     db: DBSession,
