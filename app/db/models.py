@@ -63,10 +63,10 @@ class AccessRequestPublic(AccessRequestBase):
 
 
 class InvitationBase(_BaseModel):
-    expires_at: datetime
+    expires_at: datetime | None = None
     reuseable: bool = False
     user_scope: Scope = Scope.USER
-    user_expires: datetime | None = None
+    user_expires: datetime | TimeDelta | None = None
     title: str | None = None
 
 
@@ -75,7 +75,6 @@ class InvitationCreate(InvitationBase): ...
 
 class InvitationPublic(InvitationBase):
     id: UUID4
-    expires_at: datetime
 
     @computed_field()
     def invitation_link(self) -> str:

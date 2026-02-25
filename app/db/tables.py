@@ -95,7 +95,7 @@ class InvitationTable(Base):
     )
     email: Mapped[str | None] = mapped_column(unique=True, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
-    expires_at: Mapped[datetime.datetime] = mapped_column()
+    expires_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
     redeemed_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
 
     reuseable: Mapped[bool] = mapped_column(default=False)
