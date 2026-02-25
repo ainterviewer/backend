@@ -18,10 +18,10 @@ class AppSettings(BaseModel):
     api_host: str = "127.0.0.1"
     api_port: int = 8666
 
-    app_host: str = "127.0.0.1"
+    app_host: str = "localhost"
     app_port: int = 5173
 
-    web_host: str = "127.0.0.1"
+    web_host: str = "localhost"
     web_port: int = 5174
 
     jwt_interview_token_expiration: TimeDelta = Field(
