@@ -20,6 +20,10 @@ class AccessRequestsDeleteRequest(BaseModel):
     ids: list[UUID4]
 
 
+class InvitationsDeleteRequest(BaseModel):
+    ids: list[UUID4]
+
+
 @router.get("/access-requests")
 async def get_access_requests(
     db: DBSession,
@@ -65,3 +69,12 @@ async def create_invitation(
     jwt: AdminToken,
 ):
     db.users.create_invitation(**request.model_dump())
+
+
+@router.post("/invitations/delete")
+async def delete_invitations(
+    request: InvitationsDeleteRequest,
+    db: DBSession,
+    jwt: AdminToken,
+):
+    db.users.delete_invitations(ids=request.ids)

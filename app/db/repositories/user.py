@@ -198,6 +198,11 @@ class UserRepository(BaseRepository):
         self.session.execute(statement)
         self.session.commit()
 
+    def delete_invitations(self, ids: list[UUID4]):
+        statement = delete(InvitationTable).where(InvitationTable.id._in(ids))
+        self.session.execute(statement)
+        self.session.commit()
+
     def get_reuseable_invitations(self) -> list[InvitationPublic]:
         statement = select(InvitationTable).where(InvitationTable.reuseable)
         invitations = self.session.execute(statement).scalars().all()
