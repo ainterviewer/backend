@@ -1,4 +1,4 @@
-from app.db.models import InvitationCreate
+from app.db.models import InvitationCreate, InvitationPublic
 from typing import Literal
 
 from fastapi import APIRouter
@@ -54,8 +54,8 @@ async def delete_access_requests(
 async def get_reuseable_invitations(
     db: DBSession,
     jwt: AdminToken,
-):
-    db.users.get_reuseable_invitations()
+) -> list[InvitationPublic]:
+    return db.users.get_reuseable_invitations()
 
 
 @router.post("/invitations")
