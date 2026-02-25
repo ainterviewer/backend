@@ -27,6 +27,7 @@ from ainterviewer.types import (
     MessageRole,
     MessageType,
     TestType,
+    TimeDelta,
 )
 from ainterviewer.utils import now
 
@@ -100,7 +101,9 @@ class InvitationTable(Base):
 
     reuseable: Mapped[bool] = mapped_column(default=False)
     user_scope: Mapped[Scope] = mapped_column(default=Scope.USER)
-    user_expires: Mapped[datetime.datetime | None] = mapped_column(default=None)
+    user_expires: Mapped[datetime.datetime | TimeDelta | None] = mapped_column(
+        PydanticJSONB(datetime.datetime | TimeDelta | None), default=None
+    )
     title: Mapped[str | None] = mapped_column(default=None)
 
     access_request_id: Mapped[uuid.UUID | None] = mapped_column(
