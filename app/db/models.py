@@ -11,7 +11,6 @@ from pydantic import (
     EmailStr,
     Field,
     computed_field,
-    field_validator,
 )
 
 from ainterviewer.agents.prompts.models import Prompts
@@ -33,7 +32,6 @@ from ainterviewer.types import (
 )
 from ainterviewer.utils import now
 
-from ..auth import InviteToken
 from ..settings import app_settings
 from ..types import CollaboratorRole, ProjectStatus, Scope, TestRunStatus
 from ._extra import CustomEmailStr
@@ -103,21 +101,12 @@ class UserCreate(UserBase):
 
 class UserPublic(UserBase):
     id: UUID4
-    invite_token: str | None = Field()
-
-    @field_validator("invite_token", mode="before")
-    def transform_invite_token(cls, v: str | None) -> str | None:
-        if v is not None:
-            if len(v.split(":::")) == 2:
-                return v.split(":::")[0]
-
-        return None
+    invite_title: str | None = Field(None)
 
 
 class UserPrivate(UserBase):
     id: UUID4
     password: str
-    invite_token: str | None = Field()
 
 
 class Collaborator(_BaseModel):
