@@ -949,17 +949,10 @@
                         "in": "query",
                         "required": false,
                         "schema": {
-                            "anyOf": [
-                                {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/InterviewType"
-                                    }
-                                },
-                                {
-                                    "type": "null"
-                                }
-                            ],
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/components/schemas/InterviewType"
+                            },
                             "title": "Interview Types"
                         }
                     },
@@ -4588,16 +4581,6 @@
                         }
                     }
                 ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/ExportMessagesRequest"
-                            }
-                        }
-                    }
-                },
                 "responses": {
                     "200": {
                         "description": "Successful Response",
@@ -6180,7 +6163,117 @@
                 ]
             }
         },
+        "/api/admin/admin/invitations": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Get Invitations",
+                "operationId": "get_invitations",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Create Invitation",
+                "operationId": "create_invitation",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/InvitationCreate"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ]
+            }
+        },
         "/api/admin/aws/ec2/{full_path}": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "put": {
                 "tags": [
                     "admin"
@@ -6314,50 +6407,6 @@
                 }
             },
             "patch": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -8664,6 +8713,52 @@
                 "title": "Interviewer",
                 "type": "string"
             },
+            "InvitationCreate": {
+                "properties": {
+                    "expires_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Expires At"
+                    },
+                    "reuseable": {
+                        "type": "boolean",
+                        "title": "Reuseable",
+                        "default": false
+                    },
+                    "user_scope": {
+                        "$ref": "#/components/schemas/Scope",
+                        "default": "user"
+                    },
+                    "user_expires": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "User Expires"
+                    },
+                    "title": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Title"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "expires_at"
+                ],
+                "title": "InvitationCreate"
+            },
             "LanguageCode": {
                 "type": "string",
                 "maxLength": 2,
@@ -9538,6 +9633,9 @@
                             }
                         ],
                         "title": "Tests"
+                    },
+                    "owner": {
+                        "$ref": "#/components/schemas/UserPublic"
                     }
                 },
                 "additionalProperties": false,
@@ -9547,7 +9645,8 @@
                     "title",
                     "created_at",
                     "config",
-                    "owner_id"
+                    "owner_id",
+                    "owner"
                 ],
                 "title": "ProjectPublic"
             },
@@ -10843,6 +10942,17 @@
                         "type": "string",
                         "format": "uuid4",
                         "title": "Id"
+                    },
+                    "invite_token": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Invite Token"
                     }
                 },
                 "type": "object",
@@ -10852,7 +10962,8 @@
                     "created_at",
                     "last_active",
                     "last_login",
-                    "id"
+                    "id",
+                    "invite_token"
                 ],
                 "title": "UserPublic"
             },
