@@ -1,10 +1,11 @@
-from app.db.models import InvitationCreate, InvitationPublic
 from typing import Literal
 
 from fastapi import APIRouter
-from pydantic import UUID4, BaseModel
+from pydantic import UUID4, BaseModel, model_validator
 
+from ...db.models import InvitationCreate, InvitationPublic
 from ...dependencies import AdminToken, DBSession
+from ...types import Scope
 
 router = APIRouter(
     prefix="/admin",
@@ -13,7 +14,12 @@ router = APIRouter(
 
 class AccessRequestsProcessRequest(BaseModel):
     ids: list[UUID4]
+    scopes: list[Scope]
     action: Literal["approve", "deny"]
+
+    @model_validator(mode="after")
+    def validate_data(self):
+        assert len(self.ids) == len(self.scopes)
 
 
 class AccessRequestsDeleteRequest(BaseModel):
@@ -39,9 +45,12 @@ async def process_access_requests(
     jwt: AdminToken,
     requests: AccessRequestsProcessRequest,
 ):
-    for id_ in requests.ids:
+    for id_, scope in zip(requests.ids, requests.scopes):
         await db.users.process_access_request(
-            id_, requests.action, approver_id=jwt.user_id
+            id_,
+            scope=scope,
+            action=requests.action,
+            approver_id=jwt.user_id,
         )
 
 

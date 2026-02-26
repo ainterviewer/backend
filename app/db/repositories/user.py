@@ -137,6 +137,7 @@ class UserRepository(BaseRepository):
     async def process_access_request(
         self,
         access_request_id: UUID4,
+        scope: Scope,
         action: Literal["approve", "deny"],
         approver_id: UUID4,
     ):
@@ -151,7 +152,9 @@ class UserRepository(BaseRepository):
             # the potential to create a race condition where the invite is
             # created but the email has not been send to the user.
             invite = self.create_invitation(
-                access_request.email, access_request_id=access_request.id
+                access_request.email,
+                access_request_id=access_request.id,
+                user_scope=scope,
             )
 
             try:
