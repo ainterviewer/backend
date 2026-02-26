@@ -235,8 +235,12 @@ class UserRepository(BaseRepository):
         self.session.execute(statement)
         self.session.commit()
 
-    def get_reuseable_invitations(self) -> list[InvitationPublic]:
-        statement = select(InvitationTable).where(InvitationTable.reuseable)
+    def get_invitations(self, reuseable=False) -> list[InvitationPublic]:
+        statement = select(InvitationTable)
+
+        if reuseable:
+            statement = statement.where(InvitationTable.reuseable)
+
         invitations = self.session.execute(statement).scalars().all()
 
         return [

@@ -74,6 +74,7 @@ class InvitationCreate(InvitationBase): ...
 
 class InvitationPublic(InvitationBase):
     id: UUID4
+    email: str | None
 
     @computed_field()
     def invitation_link(self) -> str:

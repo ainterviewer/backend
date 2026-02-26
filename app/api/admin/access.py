@@ -21,6 +21,8 @@ class AccessRequestsProcessRequest(BaseModel):
     def validate_data(self):
         assert len(self.ids) == len(self.scopes)
 
+        return self
+
 
 class AccessRequestsDeleteRequest(BaseModel):
     ids: list[UUID4]
@@ -64,11 +66,11 @@ async def delete_access_requests(
 
 
 @router.get("/invitations")
-async def get_reuseable_invitations(
+async def get_invitations(
     db: DBSession,
     jwt: AdminToken,
 ) -> list[InvitationPublic]:
-    return db.users.get_reuseable_invitations()
+    return db.users.get_invitations()
 
 
 @router.post("/invitations")
