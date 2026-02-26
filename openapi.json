@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.0.25"
+        "version": "0.1.5"
     },
     "paths": {
         "/api/projects/{project_id}/analysis/categories": {
@@ -5920,7 +5920,7 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/UserCreate"
+                                "$ref": "#/components/schemas/UserCreateRequest"
                             }
                         }
                     },
@@ -6280,7 +6280,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "post": {
+            "patch": {
                 "tags": [
                     "admin"
                 ],
@@ -6368,7 +6368,7 @@
                     }
                 }
             },
-            "get": {
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -6456,7 +6456,7 @@
                     }
                 }
             },
-            "patch": {
+            "get": {
                 "tags": [
                     "admin"
                 ],
@@ -6518,7 +6518,13 @@
                         "description": "Successful Response",
                         "content": {
                             "application/json": {
-                                "schema": {}
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/UserAdmin"
+                                    },
+                                    "title": "Response Get Users"
+                                }
                             }
                         }
                     }
@@ -6553,6 +6559,64 @@
                         "content": {
                             "application/json": {
                                 "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/users/{user_id}/note": {
+            "patch": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Update Admin Note",
+                "operationId": "update_admin_note",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid4",
+                            "title": "User Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminNoteUpdate"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserAdmin"
+                                }
                             }
                         }
                     },
@@ -6849,6 +6913,23 @@
                     "action"
                 ],
                 "title": "AccessRequestsProcessRequest"
+            },
+            "AdminNoteUpdate": {
+                "properties": {
+                    "note": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Note"
+                    }
+                },
+                "type": "object",
+                "title": "AdminNoteUpdate"
             },
             "AgentConfig": {
                 "properties": {
@@ -8811,6 +8892,18 @@
                             }
                         ],
                         "title": "Title"
+                    },
+                    "access_request_id": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "uuid4"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Access Request Id"
                     }
                 },
                 "type": "object",
@@ -8864,6 +8957,18 @@
                             }
                         ],
                         "title": "Title"
+                    },
+                    "access_request_id": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "uuid4"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Access Request Id"
                     },
                     "id": {
                         "type": "string",
@@ -11008,7 +11113,133 @@
                 ],
                 "title": "UpdateFixedPersonasRequest"
             },
-            "UserCreate": {
+            "UserAdmin": {
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "Email"
+                    },
+                    "first_name": {
+                        "type": "string",
+                        "title": "First Name"
+                    },
+                    "last_name": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Last Name"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Created At"
+                    },
+                    "last_active": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Last Active"
+                    },
+                    "last_login": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Last Login"
+                    },
+                    "scope": {
+                        "$ref": "#/components/schemas/Scope",
+                        "default": "user"
+                    },
+                    "id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Id"
+                    },
+                    "invitation_title": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Invitation Title"
+                    },
+                    "expires_at": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Expires At"
+                    },
+                    "access_request_message": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Access Request Message"
+                    },
+                    "organization": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Organization"
+                    },
+                    "admin_note": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Admin Note"
+                    },
+                    "admin_note_updated_at": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Admin Note Updated At"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "email",
+                    "first_name",
+                    "created_at",
+                    "last_active",
+                    "last_login",
+                    "id"
+                ],
+                "title": "UserAdmin"
+            },
+            "UserCreateRequest": {
                 "properties": {
                     "email": {
                         "type": "string",
@@ -11077,7 +11308,8 @@
                     "first_name",
                     "password"
                 ],
-                "title": "UserCreate"
+                "title": "UserCreateRequest",
+                "description": "API request model for user registration."
             },
             "UserPublic": {
                 "properties": {
@@ -11125,7 +11357,7 @@
                         "format": "uuid4",
                         "title": "Id"
                     },
-                    "invite_title": {
+                    "invitation_title": {
                         "anyOf": [
                             {
                                 "type": "string"
@@ -11134,7 +11366,19 @@
                                 "type": "null"
                             }
                         ],
-                        "title": "Invite Title"
+                        "title": "Invitation Title"
+                    },
+                    "expires_at": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Expires At"
                     }
                 },
                 "type": "object",

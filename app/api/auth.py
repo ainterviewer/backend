@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import sqlalchemy.exc
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -6,7 +8,7 @@ from jose import JWTError
 from ainterviewer.utils import now
 
 from ..auth import create_auth_token, decode_auth_token, verify_password
-from ..db.models import AccessRequestCreate, UserCreate, UserPublic
+from ..db.models import AccessRequestCreate, UserCreate, UserCreateRequest, UserPublic
 from ..dependencies import DBSession, DemoToken, auth_cookie_scheme
 from ..services.email.mail import send_email
 from ..settings import app_settings
@@ -58,13 +60,15 @@ async def me(db: DBSession, jwt: DemoToken) -> UserPublic:
 
 @router.post("/register")
 async def register(
-    user: UserCreate,
+    user: UserCreateRequest,
     db: DBSession,
 ) -> JSONResponse:
     # NOTE: Validate user scope to user when created through the API.
     # - should this be done at the model level?
     if not Scope.USER.includes(user.scope):
         raise ValueError("Invalid scope for user creation")
+
+    snapshot: dict = {}
 
     if app_settings.app.registration_requires_token is True:
         if not user.invite_token:
@@ -80,8 +84,22 @@ async def register(
             if invitation.expires_at and invitation.expires_at < now():
                 return JSONResponse({"detail": "Invite token expired"}, status_code=406)
 
+            # Snapshot invitation data
+            snapshot["invitation_title"] = invitation.title
+            if invitation.user_expires is not None:
+                if isinstance(invitation.user_expires, datetime):
+                    snapshot["expires_at"] = invitation.user_expires
+                else:
+                    snapshot["expires_at"] = now() + invitation.user_expires.to_timedelta()
+
+            # Snapshot access request data
+            if invitation.access_request_id:
+                access_request = db.users.get_access_request(invitation.access_request_id)
+                snapshot["access_request_message"] = access_request.message
+                snapshot["organization"] = access_request.organization
+
     # NOTE: Password hashing happens in the users.create_user method
-    new_user = db.users.create_user(UserCreate(**user.model_dump()))
+    new_user = db.users.create_user(UserCreate(**user.model_dump(), **snapshot))
 
     token = create_auth_token(user_id=new_user.id)
 

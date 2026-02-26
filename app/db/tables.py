@@ -137,6 +137,12 @@ class UserTable(Base):
     scope: Mapped[Scope] = mapped_column(SQLEnum(Scope), default=Scope.USER)
     invite_token: Mapped[uuid.UUID | None] = mapped_column()
     research_consent: Mapped[bool] = mapped_column(default=False)
+    invitation_title: Mapped[str | None] = mapped_column(default=None)
+    expires_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
+    access_request_message: Mapped[str | None] = mapped_column(Text, default=None)
+    organization: Mapped[str | None] = mapped_column(default=None)
+    admin_note: Mapped[str | None] = mapped_column(Text, default=None)
+    admin_note_updated_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
 
     # Relationships
     processed_requests: Mapped[list["AccessRequestTable"]] = relationship(

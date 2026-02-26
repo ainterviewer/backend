@@ -66,6 +66,7 @@ class InvitationBase(_BaseModel):
     user_scope: Scope = Scope.USER
     user_expires: datetime | TimeDelta | None = None
     title: str | None = None
+    access_request_id: UUID4 | None = None
 
 
 class InvitationCreate(InvitationBase): ...
@@ -89,7 +90,9 @@ class UserBase(_BaseModel):
     scope: Scope = Scope.USER
 
 
-class UserCreate(UserBase):
+class UserCreateRequest(UserBase):
+    """API request model for user registration."""
+
     invite_token: UUID4 | None = None
 
     created_at: datetime = Field(default_factory=now)
@@ -99,9 +102,26 @@ class UserCreate(UserBase):
     password: str
 
 
+class UserCreate(UserCreateRequest):
+    """Internal model for creating a user, includes snapshot fields."""
+
+    invitation_title: str | None = None
+    expires_at: datetime | None = None
+    access_request_message: str | None = None
+    organization: str | None = None
+
+
 class UserPublic(UserBase):
     id: UUID4
-    invite_title: str | None = Field(None)
+    invitation_title: str | None = None
+    expires_at: datetime | None = None
+
+
+class UserAdmin(UserPublic):
+    access_request_message: str | None = None
+    organization: str | None = None
+    admin_note: str | None = None
+    admin_note_updated_at: datetime | None = None
 
 
 class UserPrivate(UserBase):

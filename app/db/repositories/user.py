@@ -16,6 +16,7 @@ from ..models import (
     AccessRequestCreate,
     AccessRequestPublic,
     InvitationPublic,
+    UserAdmin,
     UserCreate,
     UserPrivate,
     UserPublic,
@@ -89,12 +90,38 @@ class UserRepository(BaseRepository):
 
         return [UserPublic.model_validate(user) for user in users]
 
+    def get_users_admin(self) -> list[UserAdmin]:
+        statement = select(UserTable)
+        users = self.session.execute(statement).scalars().all()
+        return [UserAdmin.model_validate(user) for user in users]
+
+    def update_admin_note(self, user_id: UUID4, note: str | None) -> UserAdmin:
+        statement = (
+            update(UserTable)
+            .where(UserTable.id == user_id)
+            .values(admin_note=note, admin_note_updated_at=now())
+        )
+        self.session.execute(statement)
+        self.session.commit()
+
+        user = self.session.execute(
+            select(UserTable).where(UserTable.id == user_id)
+        ).scalar_one()
+        return UserAdmin.model_validate(user)
+
     # ==================== Access Request Methods ====================
 
     def create_access_request(self, access_request: AccessRequestCreate):
         request = AccessRequestTable(**access_request.model_dump())
         self.session.add(request)
         self.session.commit()
+
+    def get_access_request(self, access_request_id: UUID4) -> AccessRequestPublic:
+        statement = select(AccessRequestTable).where(
+            AccessRequestTable.id == access_request_id
+        )
+        request = self.session.execute(statement).scalar_one()
+        return AccessRequestPublic.model_validate(request)
 
     def get_access_requests(self) -> Sequence[AccessRequestPublic]:
         statement = select(AccessRequestTable)
