@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
@@ -38,6 +39,14 @@ from ._extra import CustomEmailStr
 from .types import AccessRequestStatus, AnnotationType, InterviewType
 
 
+# TODO: Implement across more endpoints
+class _Unset(Enum):
+    UNSET = "UNSET"
+
+
+UNSET = _Unset.UNSET
+
+
 class _BaseModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -70,6 +79,15 @@ class InvitationBase(_BaseModel):
 
 
 class InvitationCreate(InvitationBase): ...
+
+
+class InvitationUpdate(BaseModel):
+    email: str | None | _Unset = UNSET
+    expires_at: datetime | None | _Unset = UNSET
+    reuseable: bool | _Unset = UNSET
+    user_scope: Scope | _Unset = UNSET
+    user_expires: datetime | TimeDelta | None | _Unset = UNSET
+    title: str | None | _Unset = UNSET
 
 
 class InvitationPublic(InvitationBase):

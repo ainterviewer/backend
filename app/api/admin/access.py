@@ -3,7 +3,7 @@ from typing import Literal
 from fastapi import APIRouter
 from pydantic import UUID4, BaseModel, model_validator
 
-from ...db.models import InvitationCreate, InvitationPublic
+from ...db.models import InvitationCreate, InvitationPublic, InvitationUpdate
 from ...dependencies import AdminToken, DBSession
 from ...types import Scope
 
@@ -71,6 +71,16 @@ async def get_invitations(
     jwt: AdminToken,
 ) -> list[InvitationPublic]:
     return db.users.get_invitations()
+
+
+@router.put("/invitations/{invitation_id}")
+async def update_invitation(
+    invitation_id: UUID4,
+    request: InvitationUpdate,
+    db: DBSession,
+    jwt: AdminToken,
+) -> InvitationPublic:
+    return db.users.update_invitation(invitation_id, request)
 
 
 @router.post("/invitations")

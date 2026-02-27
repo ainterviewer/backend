@@ -13,9 +13,11 @@ from ...auth import get_password_hash
 from ...services.email.mail import email_templates, send_email
 from ...types import Scope
 from ..models import (
+    UNSET,
     AccessRequestCreate,
     AccessRequestPublic,
     InvitationPublic,
+    InvitationUpdate,
     UserAdmin,
     UserCreate,
     UserPrivate,
@@ -196,7 +198,8 @@ class UserRepository(BaseRepository):
         user_expires: datetime.datetime | None = None,
         title: str | None = None,
     ) -> InvitationPublic:
-        expires_at = now() + timedelta(days=1)
+        if expires_at is None:
+            expires_at = now() + timedelta(days=1)
 
         invitation = InvitationTable(
             email=email,
@@ -213,6 +216,25 @@ class UserRepository(BaseRepository):
         self.session.refresh(invitation)
 
         return InvitationPublic.model_validate(invitation)
+
+    def update_invitation(
+        self,
+        id: UUID4,
+        data: InvitationUpdate,
+    ) -> InvitationPublic:
+        values = {k: v for k, v in data.model_dump().items() if v is not UNSET}
+
+        if not values:
+            return self.check_invite_token(id)
+
+        statement = (
+            update(InvitationTable).where(InvitationTable.id == id).values(**values)
+        )
+
+        self.session.execute(statement)
+        self.session.commit()
+
+        return self.check_invite_token(id)
 
     def check_invite_token(self, token: UUID4) -> InvitationPublic:
         statement = select(InvitationTable).where(InvitationTable.id == token)
