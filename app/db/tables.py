@@ -142,7 +142,9 @@ class UserTable(Base):
     access_request_message: Mapped[str | None] = mapped_column(Text, default=None)
     organization: Mapped[str | None] = mapped_column(default=None)
     admin_note: Mapped[str | None] = mapped_column(Text, default=None)
-    admin_note_updated_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
+    admin_note_updated_at: Mapped[datetime.datetime | None] = mapped_column(
+        default=None
+    )
 
     # Relationships
     processed_requests: Mapped[list["AccessRequestTable"]] = relationship(

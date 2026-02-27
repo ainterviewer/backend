@@ -90,11 +90,15 @@ async def register(
                 if isinstance(invitation.user_expires, datetime):
                     snapshot["expires_at"] = invitation.user_expires
                 else:
-                    snapshot["expires_at"] = now() + invitation.user_expires.to_timedelta()
+                    snapshot["expires_at"] = (
+                        now() + invitation.user_expires.to_timedelta()
+                    )
 
             # Snapshot access request data
             if invitation.access_request_id:
-                access_request = db.users.get_access_request(invitation.access_request_id)
+                access_request = db.users.get_access_request(
+                    invitation.access_request_id
+                )
                 snapshot["access_request_message"] = access_request.message
                 snapshot["organization"] = access_request.organization
 
