@@ -6168,8 +6168,8 @@
                 "tags": [
                     "admin"
                 ],
-                "summary": "Get Reuseable Invitations",
-                "operationId": "get_reuseable_invitations",
+                "summary": "Get Invitations",
+                "operationId": "get_invitations",
                 "responses": {
                     "200": {
                         "description": "Successful Response",
@@ -6180,7 +6180,7 @@
                                         "$ref": "#/components/schemas/InvitationPublic"
                                     },
                                     "type": "array",
-                                    "title": "Response Get Reuseable Invitations"
+                                    "title": "Response Get Invitations"
                                 }
                             }
                         }
@@ -6280,50 +6280,6 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "patch": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
             "delete": {
                 "tags": [
                     "admin"
@@ -6368,7 +6324,7 @@
                     }
                 }
             },
-            "post": {
+            "get": {
                 "tags": [
                     "admin"
                 ],
@@ -6456,7 +6412,51 @@
                     }
                 }
             },
-            "get": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
                 "tags": [
                     "admin"
                 ],
@@ -6898,6 +6898,13 @@
                         "type": "array",
                         "title": "Ids"
                     },
+                    "scopes": {
+                        "items": {
+                            "$ref": "#/components/schemas/Scope"
+                        },
+                        "type": "array",
+                        "title": "Scopes"
+                    },
                     "action": {
                         "type": "string",
                         "enum": [
@@ -6910,6 +6917,7 @@
                 "type": "object",
                 "required": [
                     "ids",
+                    "scopes",
                     "action"
                 ],
                 "title": "AccessRequestsProcessRequest"
