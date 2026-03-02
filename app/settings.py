@@ -182,6 +182,7 @@ class Settings(BaseSettings):
         )
 
 
+# TODO: Read/write to/from database or config file to get persistent changes?
 app_settings = Settings()  # ty: ignore[missing-argument]
 
 if __name__ == "__main__":
