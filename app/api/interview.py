@@ -1,16 +1,7 @@
 import shutil
 from typing import Annotated
 
-from fastapi import (
-    APIRouter,
-    Cookie,
-    File,
-    Form,
-    Header,
-    Request,
-    Response,
-    UploadFile,
-)
+from fastapi import APIRouter, File, Form, Header, Request, Response, UploadFile
 from fastapi import Path as URLPath
 from pydantic import UUID4
 
@@ -45,8 +36,6 @@ async def create_interview(
     lang: Annotated[LanguageCode, URLPath],
     user_agent: Annotated[str | None, Header()] = None,
     ip_address: Annotated[str | None, Header(alias="X-Real-IP")] = None,
-    referer: Annotated[str | None, Cookie()] = None,
-    forward_params: Annotated[str | None, Cookie()] = None,
 ) -> str:
     project = db.projects.get_project(project_id)
 
@@ -100,8 +89,8 @@ async def create_interview(
         interviewer=new_interview.interviewer,
         test_run_id=new_interview.test_run_id,
         user_agent=user_agent,
-        referer=referer,
-        external_params=forward_params,
+        referer=new_interview.referer,
+        external_params=new_interview.external_params,
         ip_address=ip_address,
     )
 

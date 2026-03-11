@@ -29,11 +29,7 @@ from ainterviewer.settings import settings
 from ainterviewer.types import Interviewer, MessageRole
 
 from ...auth import create_interview_token, decode_interview_token, decode_jwt
-from ...dependencies import (
-    AdminToken,
-    DBSession,
-    get_ws_manager,
-)
+from ...dependencies import AdminToken, DBSession, get_ws_manager
 from ...utils import replay_history
 from ...websockets import WebSocketConnectionManager, WebsocketMessageHandler
 from ..request_models import BroadcastRequest

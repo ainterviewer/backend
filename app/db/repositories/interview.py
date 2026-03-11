@@ -52,8 +52,8 @@ class InterviewRepository(BaseRepository):
         interview_guide: InterviewGuide,
         interview_type: InterviewType,
         interviewer: Interviewer = Interviewer.AI,
-        synthetic=False,
-        test=False,
+        synthetic: bool = False,
+        test: bool = False,
         **kwargs,
     ) -> InterviewPublic:
         interview = InterviewTable(

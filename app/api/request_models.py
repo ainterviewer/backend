@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import Query
 from pydantic import UUID4, BaseModel, Field, field_validator
@@ -75,6 +75,13 @@ class CreateInterviewRequest(BaseModel):
     test_run_id: UUID4 | None = None
     experiment_id: UUID4 | None = None
     synthetic_test_type: TestType | None = None
+
+    # Extra context
+    external_params: dict[str, Any] | None = Field(
+        None,
+        description="Extra query parameters, can include external user-id or the like.",
+    )
+    referer: str | None = Field(None, description="The referer of original request")
 
 
 class SynthesizeRequest(BaseModel):
