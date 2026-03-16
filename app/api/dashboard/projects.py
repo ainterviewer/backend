@@ -36,6 +36,7 @@ from ...utils import generate_qr_img
 from ..request_models import (
     DeleteInterviewRequest,
     ExportMessagesRequest,
+    ExternalParamsRequest,
     InterviewGuideGenerationRequest,
     PaginatedQueryParams,
     ProjectStatusChangeRequest,
@@ -310,6 +311,17 @@ async def create_interview_config(
     _: ProjectEditor,
 ):
     db.projects.update_interview_config(project_id, config)
+
+
+@router.patch("/projects/{project_id}/external_params")
+async def update_external_params(
+    project_id: UUID4,
+    request: ExternalParamsRequest,
+    db: DBSession,
+    jwt: DemoToken,
+    _: ProjectEditor,
+):
+    db.projects.update_external_params(project_id, request.params)
 
 
 @router.get("/projects/{project_id}/{lang}/prompts")

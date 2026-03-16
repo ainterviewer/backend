@@ -19,9 +19,9 @@ from ainterviewer.utils import now
 
 from ..models import (
     IntervieweeCreate,
+    IntervieweePublic,
     InterviewPublic,
     MessagePublic,
-    IntervieweePublic,
 )
 from ..tables import (
     IntervieweeTable,

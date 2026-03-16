@@ -9,7 +9,7 @@ from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
 from ainterviewer.types import Interviewer, LanguageCode, TestType
 
 from ..db.types import InterviewType
-from ..types import ProjectStatus
+from ..types import ExternalParam, ProjectStatus
 
 
 class PaginatedQueryParams(BaseModel):
@@ -116,3 +116,14 @@ class TestSetupRequest(BaseModel):
 class AssistanceChatRequest(BaseModel):
     prompt: str
     guide: InterviewGuide
+
+
+class ExternalParamsRequest(BaseModel):
+    params: list[ExternalParam]
+
+    @field_validator("params")
+    @classmethod
+    def validate_params(cls, values: list[ExternalParam]):
+        if len(values) != len(set(x.name for x in values)):
+            raise ValueError("External parameter names must be unique")
+        return values

@@ -31,7 +31,7 @@ from ainterviewer.types import (
 )
 from ainterviewer.utils import now
 
-from ..types import CollaboratorRole, ProjectStatus, Scope, TestRunStatus
+from ..types import CollaboratorRole, ExternalParam, ProjectStatus, Scope, TestRunStatus
 from ._extra import PydanticJSONB
 from .types import (
     AccessRequestStatus,
@@ -219,6 +219,9 @@ class ProjectTable(Base):
     config: Mapped[InterviewConfig] = mapped_column(
         PydanticJSONB(InterviewConfig),
         default=InterviewConfig,
+    )
+    external_params: Mapped[list[ExternalParam] | None] = mapped_column(
+        PydanticJSONB(list[ExternalParam]), default=None
     )
     owner_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE")
@@ -408,7 +411,7 @@ class InterviewTable(Base):
     user_agent: Mapped[str | None] = mapped_column()
     ip_address: Mapped[str | None] = mapped_column()
     referer: Mapped[str | None] = mapped_column()
-    external_params: Mapped[str | None] = mapped_column()
+    external_params: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
     experiment_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("experiment.id", ondelete="SET NULL")

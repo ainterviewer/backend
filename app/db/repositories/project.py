@@ -1,5 +1,5 @@
 import uuid
-from typing import Literal, Optional, overload
+from typing import Any, Literal, Optional, overload
 
 from pydantic import UUID4
 from sqlalchemy import delete, func, select, update
@@ -14,7 +14,7 @@ from ainterviewer.types import LanguageCode, LanguageDict
 from ainterviewer.utils import get_language_dict
 
 from ...api.request_models import PromptsUpdateRequest
-from ...types import CollaboratorRole, ProjectStatus, Scope
+from ...types import CollaboratorRole, ExternalParam, ProjectStatus, Scope
 from ..models import (
     Collaborator,
     CollaboratorPublic,
@@ -602,6 +602,28 @@ class ProjectRepository(BaseRepository):
             update(ProjectTable)
             .where(ProjectTable.id == project_id)
             .values(config=interview_config)
+        )
+        self.session.execute(statement)
+        self.session.commit()
+
+    def get_external_param_values_for_interview(
+        self,
+        interview_id: UUID4,
+    ) -> dict[str, Any] | None:
+        statement = select(InterviewTable).where(InterviewTable.id == interview_id)
+        interview = self.session.execute(statement).scalar_one()
+
+        return interview.external_params
+
+    def update_external_params(
+        self,
+        project_id: UUID4,
+        external_params: list[ExternalParam],
+    ):
+        statement = (
+            update(ProjectTable)
+            .where(ProjectTable.id == project_id)
+            .values(external_params=external_params)
         )
         self.session.execute(statement)
         self.session.commit()

@@ -16,6 +16,8 @@ from pydantic import (
 
 from ainterviewer.agents.prompts.models import Prompts
 from ainterviewer.config import AgentConfigs, InterviewConfig
+
+from ..types import ExternalParam
 from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
 from ainterviewer.interview_guides.extra import Consent, Welcome
 from ainterviewer.settings import settings as lib_settings
@@ -223,6 +225,7 @@ class ProjectBase(_BaseModel):
     last_updated: Optional[datetime] = None
     status: ProjectStatus = ProjectStatus.ACTIVE
     config: InterviewConfig
+    external_params: list[ExternalParam] | None = None
     owner_id: UUID4
 
 

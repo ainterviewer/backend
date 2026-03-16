@@ -1,9 +1,18 @@
 import shutil
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, Header, Request, Response, UploadFile
+from fastapi import (
+    APIRouter,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi import Path as URLPath
-from pydantic import UUID4
+from pydantic import UUID4, ValidationError
 
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode, TestType
@@ -18,7 +27,7 @@ from ..dependencies import (
     ResourceRoleChecker,
     ScopeChecker,
 )
-from ..types import CollaboratorRole, Scope
+from ..types import CollaboratorRole, Scope, build_external_params_model
 from ..utils import generate_random_filename
 from .request_models import CreateInterviewRequest
 from .response_models import MediaUploadResponse, MessageFeedbackResponse
@@ -71,6 +80,18 @@ async def create_interview(
         ResourceRoleChecker(CollaboratorRole.VIEWER, "project")(
             project_id=project_id, token=auth_token, db=db
         )
+
+    # Validate external params against project schema
+    try:
+        if project.external_params and new_interview.external_params:
+            params_model = build_external_params_model(project.external_params)
+            params_model.model_validate(new_interview.external_params)
+        elif project.external_params:
+            # Check if any required params are missing
+            params_model = build_external_params_model(project.external_params)
+            params_model.model_validate({})
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors())
 
     if not (interview_guide := project_localization.interview_guide):
         raise ValueError("Interview guide is not set")

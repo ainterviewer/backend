@@ -6,8 +6,6 @@
 # - Consider changing to server side events instead of websockets if it
 # improves unstable connections
 
-import json
-
 from fastapi import (
     APIRouter,
     Depends,
@@ -99,9 +97,6 @@ async def ai_interview_websocket_endpoint(
 ):
     # FIXME: Handle errors, e.g. when security agent raises an error
     token = websocket.cookies.get("interview_token")
-    referer = websocket.cookies.get("referer")
-    forward_params = websocket.cookies.get("forward_params")
-    forward_params = json.loads(forward_params) if forward_params else {}
 
     if token is None:
         raise WebSocketException(401, "Unauthorized")
@@ -171,6 +166,8 @@ async def ai_interview_websocket_endpoint(
         pass
         # agent_prompts.print_prompts()
 
+    external_params = db.projects.get_external_param_values_for_interview(interview_id)
+
     wmh = WebsocketMessageHandler(websocket, project_id, interview_id)
 
     try:
@@ -185,29 +182,23 @@ async def ai_interview_websocket_endpoint(
             interview_id=interview_id,
             previous_time_spent=interview.total_time_spent,
             frontend_language=language,
-            referable_values={
-                "referer": referer,
-                "test": forward_params.get("test"),
-                "user1": forward_params.get("user1"),
-            },
+            referable_values=external_params,
         ) as interviewer:
             try:
                 await interviewer.interview(
                     probing="restricted",
                     interview_history=interview_history,
                 )
+            except WebSocketDisconnect:
+                pass
             except Exception as e:
                 # FIXME: Since the endpoint is now fetched via proxy, we need
                 # to move this check somewhere else before the interview is
                 # initialized.
-                # TODO: Add more errors or handle it in a different
-                # way.
-                if isinstance(e, WebSocketDisconnect):
-                    pass
-                else:
-                    await websocket.send_json(
-                        OutgoingData(error="InstanceInitializing").model_dump()
-                    )
+                # TODO: Add more errors or handle it in a different way.
+                await websocket.send_json(
+                    OutgoingData(error="InstanceInitializing").model_dump()
+                )
                 raise e
     except WebSocketDisconnect:
         pass
