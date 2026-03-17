@@ -69,6 +69,24 @@ class InterviewRepository(BaseRepository):
         self.session.refresh(interview)
         return InterviewPublic.model_validate(interview)
 
+    def update_interview_guide(
+        self,
+        project_id: UUID4,
+        interview_id: UUID4,
+        interview_guide: InterviewGuide,
+    ):
+        statement = (
+            update(InterviewTable)
+            .where(
+                InterviewTable.project_id == project_id,
+                InterviewTable.id == interview_id,
+            )
+            .values(interview_guide=interview_guide)
+        )
+
+        self.session.execute(statement)
+        self.session.commit()
+
     def delete_interviews(
         self,
         project_id: UUID4,

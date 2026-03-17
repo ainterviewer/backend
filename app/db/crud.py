@@ -102,6 +102,9 @@ class InterviewDataBase(PersistenceProtocol):
     def update_interview_status(self, *args, **kwargs):
         return self.interviews.update_interview_status(*args, **kwargs)
 
+    def update_interview_guide(self, *args, **kwargs):
+        return self.interviews.update_interview_guide(*args, **kwargs)
+
     def insert_message(self, *args, **kwargs):
         return self.interviews.insert_message(*args, **kwargs)
 

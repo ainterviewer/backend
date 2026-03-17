@@ -185,10 +185,7 @@ async def ai_interview_websocket_endpoint(
             referable_values=external_params,
         ) as interviewer:
             try:
-                await interviewer.interview(
-                    probing="restricted",
-                    interview_history=interview_history,
-                )
+                await interviewer.interview(interview_history=interview_history)
             except WebSocketDisconnect:
                 pass
             except Exception as e:

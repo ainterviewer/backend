@@ -74,7 +74,9 @@ assistance_agent = Agent(
 @assistance_agent.tool()
 async def create_new_section(
     ctx: RunContext[AssistanceDependencies],
-    prompt: str = Field(description="The prompt used to generate the question."),
+    instructions: str = Field(
+        description="The instructions used to generate the question."
+    ),
 ) -> QuestionSection:
     """Generates an new section with grouped interview questions based on the
     existing interview guide and the users prompt.
@@ -82,14 +84,16 @@ async def create_new_section(
     You should not reiterate the output, it will be shown to the user in another interface.
     """
     return await generate_section(
-        prompt, DEFAULT_MODEL.replace(":", "/"), ctx.deps.guide
+        instructions, DEFAULT_MODEL.replace(":", "/"), ctx.deps.guide
     )
 
 
 @assistance_agent.tool()
 async def create_new_question(
     ctx: RunContext[AssistanceDependencies],
-    prompt: str = Field(description="The prompt used to generate the question."),
+    instructions: str = Field(
+        description="The instructions used to generate the question."
+    ),
     section: QuestionSection | None = Field(
         None, description="The existing section the generated question belongs to."
     ),
@@ -101,7 +105,7 @@ async def create_new_question(
     You should not reiterate the output, it will be shown to the user in another interface.
     """
     return await generate_question(
-        prompt, DEFAULT_MODEL.replace(":", "/"), ctx.deps.guide, section=section
+        instructions, DEFAULT_MODEL.replace(":", "/"), ctx.deps.guide, section=section
     )
 
 
