@@ -91,6 +91,8 @@ class EmailAccount(BaseModel):
 
 
 class ServiceSettings(BaseSettings):
+    """Different extra services required to run the app"""
+
     email: EmailSettings
 
     model_config = BaseSettingsConfigDict(env_prefix="APP_SERVICE__")
@@ -188,4 +190,5 @@ app_settings = Settings()  # ty: ignore[missing-argument]
 if __name__ == "__main__":
     # print(app_settings.secrets)
     # print(lib_settings.secrets)
-    print(app_settings.services)
+    # print(app_settings.services)
+    pass

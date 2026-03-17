@@ -19,7 +19,7 @@ from qrcode.image.styles.colormasks import (
 )
 from qrcode.image.styles.moduledrawers.pil import RoundedModuleDrawer
 from typer import Context, Typer
-from typing_extensions import is_typeddict, TypedDict
+from typing_extensions import TypedDict, is_typeddict
 
 from ainterviewer.interfaces import (
     OutgoingData,
@@ -207,6 +207,24 @@ def extend_openapi_schema(
         openapi["components"]["schemas"][model_title] = extra_model_schema
 
     return openapi
+
+
+def clean_schema(obj):
+    """Remove defaults containing SecretStr masked values and add $schema."""
+    if isinstance(obj, dict):
+        # Remove 'default' if it contains masked secret values
+        if "default" in obj:
+            default = obj["default"]
+            if isinstance(default, dict) and any(
+                v == "**********" for v in default.values()
+            ):
+                del obj["default"]
+            elif default == "**********":
+                del obj["default"]
+        return {k: clean_schema(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_schema(i) for i in obj]
+    return obj
 
 
 if __name__ == "__main__":

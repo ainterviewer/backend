@@ -6,7 +6,8 @@ from typer import Typer
 
 from . import __version__
 from .main import app
-from .utils import extend_openapi_schema
+from .settings import Settings
+from .utils import clean_schema, extend_openapi_schema
 
 cli = Typer(
     pretty_exceptions_enable=False,
@@ -71,6 +72,18 @@ def generate_openapi_scheme(output: str = "openapi.json"):
 
     with open(output, "w") as f:
         f.write(json.dumps(openapi, indent=4))
+
+
+@cli.command()
+def export_config_schema():
+    schema = Settings.model_json_schema()
+    schema = clean_schema(schema)
+
+    # Add the $schema declaration for JSON Schema draft-07 (what SchemaStore uses)
+    schema["$schema"] = "http://json-schema.org/draft-07/schema#"
+
+    with open("config.schema.json", "w") as f:
+        json.dump(schema, f, indent=2)
 
 
 if __name__ == "__main__":
