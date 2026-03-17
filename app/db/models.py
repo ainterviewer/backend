@@ -504,7 +504,7 @@ class AnnotationValuePublic(AnnotationValueBase):
 class MessageAnnotationBase(_BaseModel):
     message_id: UUID4
     user_id: UUID4
-    comment: Optional[str] = None
+    comment: str | None = None
 
 
 class MessageAnnotationCreate(MessageAnnotationBase):

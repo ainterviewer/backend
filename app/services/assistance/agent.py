@@ -26,6 +26,8 @@ from ...services.assistance.models import AssistanceDependencies, ChatMessage
 
 _GREETING_TRIGGER = "[system:new_session_greeting]"
 
+DEFAULT_MODEL = "openrouter:openai/gpt-oss-120b"
+
 
 def agent_instruction(ctx: RunContext[AssistanceDependencies]) -> str:
     return f"""\
@@ -63,7 +65,7 @@ GREETING_TEMPLATE = (
 )
 
 assistance_agent = Agent(
-    "openrouter:openai/gpt-oss-120b",
+    DEFAULT_MODEL,
     instructions=agent_instruction,
     deps_type=AssistanceDependencies,
 )
@@ -79,7 +81,9 @@ async def create_new_section(
 
     You should not reiterate the output, it will be shown to the user in another interface.
     """
-    return await generate_section(prompt, ctx.deps.guide)
+    return await generate_section(
+        prompt, DEFAULT_MODEL.replace(":", "/"), ctx.deps.guide
+    )
 
 
 @assistance_agent.tool()
@@ -96,7 +100,9 @@ async def create_new_question(
 
     You should not reiterate the output, it will be shown to the user in another interface.
     """
-    return await generate_question(prompt, ctx.deps.guide, section=section)
+    return await generate_question(
+        prompt, DEFAULT_MODEL.replace(":", "/"), ctx.deps.guide, section=section
+    )
 
 
 async def stream_messages(
