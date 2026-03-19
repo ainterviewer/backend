@@ -1,0 +1,290 @@
+{
+  "$defs": {
+    "AppSecrets": {
+      "properties": {
+        "jwt_secret_key": {
+          "format": "password",
+          "title": "Jwt Secret Key",
+          "type": "string",
+          "writeOnly": true
+        },
+        "session_secret_key": {
+          "format": "password",
+          "title": "Session Secret Key",
+          "type": "string",
+          "writeOnly": true
+        },
+        "db_username": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Db Username"
+        },
+        "db_password": {
+          "anyOf": [
+            {
+              "format": "password",
+              "type": "string",
+              "writeOnly": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Db Password"
+        }
+      },
+      "required": [
+        "jwt_secret_key",
+        "session_secret_key"
+      ],
+      "title": "AppSecrets",
+      "type": "object"
+    },
+    "AppSettings": {
+      "properties": {
+        "api_host": {
+          "default": "127.0.0.1",
+          "title": "Api Host",
+          "type": "string"
+        },
+        "api_port": {
+          "default": 8666,
+          "title": "Api Port",
+          "type": "integer"
+        },
+        "app_host": {
+          "default": "localhost",
+          "title": "App Host",
+          "type": "string"
+        },
+        "app_port": {
+          "default": 5173,
+          "title": "App Port",
+          "type": "integer"
+        },
+        "web_host": {
+          "default": "localhost",
+          "title": "Web Host",
+          "type": "string"
+        },
+        "web_port": {
+          "default": 5174,
+          "title": "Web Port",
+          "type": "integer"
+        },
+        "jwt_interview_token_expiration": {
+          "$ref": "#/$defs/TimeDelta"
+        },
+        "jwt_auth_token_expiration": {
+          "$ref": "#/$defs/TimeDelta"
+        },
+        "jwt_invite_token_expiration": {
+          "$ref": "#/$defs/TimeDelta"
+        },
+        "registration_requires_token": {
+          "default": true,
+          "title": "Registration Requires Token",
+          "type": "boolean"
+        }
+      },
+      "title": "AppSettings",
+      "type": "object"
+    },
+    "DatabaseSettings": {
+      "properties": {
+        "db": {
+          "$ref": "#/$defs/DatabaseType",
+          "default": "sqlite"
+        },
+        "db_path": {
+          "default": "storage",
+          "title": "Db Path",
+          "type": "string"
+        },
+        "db_url": {
+          "default": "localhost",
+          "title": "Db Url",
+          "type": "string"
+        },
+        "db_port": {
+          "default": "5432",
+          "title": "Db Port",
+          "type": "string"
+        },
+        "db_name": {
+          "default": "ainterviewer",
+          "title": "Db Name",
+          "type": "string"
+        },
+        "default_team_id": {
+          "format": "uuid4",
+          "title": "Default Team Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "default_team_id"
+      ],
+      "title": "DatabaseSettings",
+      "type": "object"
+    },
+    "DatabaseType": {
+      "enum": [
+        "sqlite",
+        "postgresql"
+      ],
+      "title": "DatabaseType",
+      "type": "string"
+    },
+    "EmailAccount": {
+      "properties": {
+        "email": {
+          "title": "Email",
+          "type": "string"
+        },
+        "password": {
+          "format": "password",
+          "title": "Password",
+          "type": "string",
+          "writeOnly": true
+        }
+      },
+      "required": [
+        "email",
+        "password"
+      ],
+      "title": "EmailAccount",
+      "type": "object"
+    },
+    "EmailSettings": {
+      "properties": {
+        "smtp_server": {
+          "title": "Smtp Server",
+          "type": "string"
+        },
+        "smtp_port": {
+          "default": 587,
+          "title": "Smtp Port",
+          "type": "integer"
+        },
+        "smtp_use_ssl": {
+          "default": false,
+          "title": "Smtp Use Ssl",
+          "type": "boolean"
+        },
+        "sender": {
+          "$ref": "#/$defs/EmailAccount"
+        },
+        "recipient": {
+          "$ref": "#/$defs/EmailAccount"
+        }
+      },
+      "required": [
+        "smtp_server",
+        "sender",
+        "recipient"
+      ],
+      "title": "EmailSettings",
+      "type": "object"
+    },
+    "ServiceSettings": {
+      "description": "Different extra services required to run the app",
+      "properties": {
+        "email": {
+          "$ref": "#/$defs/EmailSettings"
+        }
+      },
+      "required": [
+        "email"
+      ],
+      "title": "ServiceSettings",
+      "type": "object"
+    },
+    "TimeDelta": {
+      "properties": {
+        "days": {
+          "default": 0,
+          "title": "Days",
+          "type": "integer"
+        },
+        "seconds": {
+          "default": 0,
+          "title": "Seconds",
+          "type": "integer"
+        },
+        "microseconds": {
+          "default": 0,
+          "title": "Microseconds",
+          "type": "integer"
+        },
+        "milliseconds": {
+          "default": 0,
+          "title": "Milliseconds",
+          "type": "integer"
+        },
+        "minutes": {
+          "default": 0,
+          "title": "Minutes",
+          "type": "integer"
+        },
+        "hours": {
+          "default": 0,
+          "title": "Hours",
+          "type": "integer"
+        },
+        "weeks": {
+          "default": 0,
+          "title": "Weeks",
+          "type": "integer"
+        }
+      },
+      "title": "TimeDelta",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "debug": {
+      "default": false,
+      "title": "Debug",
+      "type": "boolean"
+    },
+    "app_env": {
+      "default": "development",
+      "enum": [
+        "production",
+        "staging",
+        "development"
+      ],
+      "title": "App Env",
+      "type": "string"
+    },
+    "app": {
+      "$ref": "#/$defs/AppSettings"
+    },
+    "database": {
+      "$ref": "#/$defs/DatabaseSettings"
+    },
+    "services": {
+      "$ref": "#/$defs/ServiceSettings"
+    },
+    "secrets": {
+      "$ref": "#/$defs/AppSecrets"
+    }
+  },
+  "required": [
+    "app",
+    "database",
+    "services"
+  ],
+  "title": "Settings",
+  "type": "object",
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

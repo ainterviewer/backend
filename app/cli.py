@@ -1,10 +1,20 @@
 import json
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Any
 
 import typer
 from typer import Typer
 
+from ainterviewer.interfaces import (
+    OutgoingData,
+    OutgoingHistoryMessage,
+    OutgoingMessage,
+    ReceivedData,
+)
+from ainterviewer.lpm.types import CustomTokens
+
 from . import __version__
+from .api.dashboard.assistance import ChatMessage
+from .auth import AuthToken, InterviewToken
 from .main import app
 from .settings import Settings
 from .utils import clean_schema, extend_openapi_schema
@@ -35,17 +45,6 @@ def callback(
 
 @cli.command()
 def generate_openapi_scheme(output: str = "openapi.json"):
-    from ainterviewer.interfaces import (
-        OutgoingData,
-        OutgoingHistoryMessage,
-        OutgoingMessage,
-        ReceivedData,
-    )
-    from ainterviewer.lpm.types import CustomTokens
-
-    from .api.dashboard.assistance import ChatMessage
-    from .auth import AuthToken, InterviewToken
-
     openapi = app.openapi()
 
     openapi["paths"] = {
