@@ -216,7 +216,11 @@ async def generate_guide_section(
 ):
     project = db.projects.get_project_localization(project_id, lang)
 
-    section = await generate_section(data.prompt, guide=project.interview_guide)
+    section = await generate_section(
+        data.prompt,
+        model=lib_settings.llm.default_model,
+        guide=project.interview_guide,
+    )
 
     return section
 
@@ -234,6 +238,7 @@ async def generate_section_question(
 
     question = await generate_question(
         data.prompt,
+        model=lib_settings.llm.default_model,
         guide=project.interview_guide,
         section=project.interview_guide.question_sections[data.section_idx],
     )
