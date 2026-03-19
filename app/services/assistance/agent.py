@@ -105,7 +105,10 @@ async def create_new_question(
     You should not reiterate the output, it will be shown to the user in another interface.
     """
     return await generate_question(
-        instructions, DEFAULT_MODEL.replace(":", "/"), ctx.deps.guide, section=section
+        instructions,
+        DEFAULT_MODEL.replace(":", "/"),
+        ctx.deps.guide,
+        section=section,
     )
 
 
