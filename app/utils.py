@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 import fastapi.openapi.constants
 import qrcode
 from pydantic import UUID4, BaseModel, TypeAdapter
+from pydantic_settings import BaseSettings
 from qrcode.constants import ERROR_CORRECT_H
 from qrcode.image.styledpil import StyledPilImage
 from qrcode.image.styles.colormasks import (
@@ -211,20 +212,57 @@ def extend_openapi_schema(
 
 def clean_schema(obj):
     """Remove defaults containing SecretStr masked values and add $schema."""
+
+    _MASKED_SECRET = "**********"
+
     if isinstance(obj, dict):
         # Remove 'default' if it contains masked secret values
         if "default" in obj:
             default = obj["default"]
             if isinstance(default, dict) and any(
-                v == "**********" for v in default.values()
+                v == _MASKED_SECRET for v in default.values()
             ):
                 del obj["default"]
-            elif default == "**********":
+            elif default == _MASKED_SECRET:
                 del obj["default"]
         return {k: clean_schema(v) for k, v in obj.items()}
     elif isinstance(obj, list):
         return [clean_schema(i) for i in obj]
     return obj
+
+
+def merge_config_schemas(models: list[type[BaseSettings]]) -> dict[str, Any]:
+    """Merge JSON schemas from multiple Pydantic BaseSettings models.
+
+    Deep-merges `properties`, `$defs`, and `required`. Overlapping keys in
+    `properties` or `$defs` are combined using `allOf`.
+    """
+    merged: dict[str, Any] = {}
+
+    for model in models:
+        schema = clean_schema(model.model_json_schema())
+
+        if not merged:
+            merged = schema
+            continue
+
+        for key in ("properties", "$defs"):
+            if key not in schema:
+                continue
+            merged.setdefault(key, {})
+            for prop, value in schema[key].items():
+                if prop in merged[key]:
+                    merged[key][prop] = {"allOf": [merged[key][prop], value]}
+                else:
+                    merged[key][prop] = value
+
+        if "required" in schema:
+            existing = set(merged.get("required", []))
+            merged["required"] = merged.get("required", []) + [
+                r for r in schema["required"] if r not in existing
+            ]
+
+    return merged
 
 
 if __name__ == "__main__":

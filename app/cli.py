@@ -1,5 +1,5 @@
 import json
-from typing import Annotated, Optional, Any
+from typing import Annotated, Optional
 
 import typer
 from typer import Typer
@@ -11,13 +11,14 @@ from ainterviewer.interfaces import (
     ReceivedData,
 )
 from ainterviewer.lpm.types import CustomTokens
+from ainterviewer.settings import Settings as LibSettings
 
 from . import __version__
 from .api.dashboard.assistance import ChatMessage
 from .auth import AuthToken, InterviewToken
 from .main import app
 from .settings import Settings
-from .utils import clean_schema, extend_openapi_schema
+from .utils import extend_openapi_schema, merge_config_schemas
 
 cli = Typer(
     pretty_exceptions_enable=False,
@@ -75,8 +76,7 @@ def generate_openapi_scheme(output: str = "openapi.json"):
 
 @cli.command()
 def export_config_schema():
-    schema = Settings.model_json_schema()
-    schema = clean_schema(schema)
+    schema = merge_config_schemas([Settings, LibSettings])
 
     # Add the $schema declaration for JSON Schema draft-07 (what SchemaStore uses)
     schema["$schema"] = "http://json-schema.org/draft-07/schema#"
