@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.1.6"
+        "version": "0.1.7"
     },
     "paths": {
         "/api/projects/{project_id}/analysis/categories": {
@@ -3516,6 +3516,86 @@
                 }
             }
         },
+        "/api/projects/{project_id}/external_params": {
+            "patch": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "Update External Params",
+                "operationId": "update_external_params",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ExternalParamsRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/projects/{project_id}/{lang}/prompts": {
             "get": {
                 "tags": [
@@ -5637,38 +5717,6 @@
                             ],
                             "title": "X-Real-Ip"
                         }
-                    },
-                    {
-                        "name": "referer",
-                        "in": "cookie",
-                        "required": false,
-                        "schema": {
-                            "anyOf": [
-                                {
-                                    "type": "string"
-                                },
-                                {
-                                    "type": "null"
-                                }
-                            ],
-                            "title": "Referer"
-                        }
-                    },
-                    {
-                        "name": "forward_params",
-                        "in": "cookie",
-                        "required": false,
-                        "schema": {
-                            "anyOf": [
-                                {
-                                    "type": "string"
-                                },
-                                {
-                                    "type": "null"
-                                }
-                            ],
-                            "title": "Forward Params"
-                        }
                     }
                 ],
                 "requestBody": {
@@ -6338,50 +6386,6 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "put": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
             "post": {
                 "tags": [
                     "admin"
@@ -6426,7 +6430,51 @@
                     }
                 }
             },
-            "delete": {
+            "put": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "get": {
                 "tags": [
                     "admin"
                 ],
@@ -6514,7 +6562,7 @@
                     }
                 }
             },
-            "get": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -8004,6 +8052,31 @@
                                 "type": "null"
                             }
                         ]
+                    },
+                    "external_params": {
+                        "anyOf": [
+                            {
+                                "additionalProperties": true,
+                                "type": "object"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "External Params",
+                        "description": "Extra query parameters, can include external user-id or the like."
+                    },
+                    "referer": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Referer",
+                        "description": "The referer of original request"
                     }
                 },
                 "type": "object",
@@ -8276,6 +8349,103 @@
                 ],
                 "title": "ExportMessagesRequest"
             },
+            "ExternalParam": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
+                        "title": "Name",
+                        "description": "Query parameter name (valid identifier)"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "str",
+                            "int",
+                            "float",
+                            "bool",
+                            "enum"
+                        ],
+                        "title": "Type",
+                        "description": "Value type for the parameter"
+                    },
+                    "required": {
+                        "type": "boolean",
+                        "title": "Required",
+                        "default": true
+                    },
+                    "default": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "boolean"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Default"
+                    },
+                    "options": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Options",
+                        "description": "Allowed values (required when type='enum')"
+                    },
+                    "description": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Description",
+                        "description": "Human-readable description of the parameter's purpose"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name",
+                    "type"
+                ],
+                "title": "ExternalParam",
+                "description": "Definition of a single external URL query parameter."
+            },
+            "ExternalParamsRequest": {
+                "properties": {
+                    "params": {
+                        "items": {
+                            "$ref": "#/components/schemas/ExternalParam"
+                        },
+                        "type": "array",
+                        "title": "Params"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "params"
+                ],
+                "title": "ExternalParamsRequest"
+            },
             "Feedback": {
                 "enum": [
                     "positive",
@@ -8481,18 +8651,6 @@
                         "title": "With Audio",
                         "description": "Allows the respondents to record their answers as audio messages which are transcribed before send as answers to the AInterviewer.",
                         "default": true
-                    },
-                    "referer_id_key": {
-                        "anyOf": [
-                            {
-                                "type": "string"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Referer Id Key",
-                        "description": "Key for the value of the id sent in the referer header"
                     }
                 },
                 "additionalProperties": false,
@@ -8588,6 +8746,11 @@
                         ],
                         "title": "Timed Messages",
                         "description": "Messages that are displayed to the interviewee after a certain amount of time"
+                    },
+                    "ai_generated_sections": {
+                        "type": "integer",
+                        "title": "Ai Generated Sections",
+                        "default": 0
                     }
                 },
                 "type": "object",
@@ -8653,6 +8816,11 @@
                         ],
                         "title": "Timed Messages",
                         "description": "Messages that are displayed to the interviewee after a certain amount of time"
+                    },
+                    "ai_generated_sections": {
+                        "type": "integer",
+                        "title": "Ai Generated Sections",
+                        "default": 0
                     }
                 },
                 "type": "object",
@@ -10009,6 +10177,20 @@
                     "config": {
                         "$ref": "#/components/schemas/InterviewConfig"
                     },
+                    "external_params": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "$ref": "#/components/schemas/ExternalParam"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "External Params"
+                    },
                     "owner_id": {
                         "type": "string",
                         "format": "uuid4",
@@ -10643,6 +10825,11 @@
                         "title": "Shuffle",
                         "description": "Should the section be included in shuffling?",
                         "default": false
+                    },
+                    "ai_generated_questions": {
+                        "type": "integer",
+                        "title": "Ai Generated Questions",
+                        "default": 0
                     }
                 },
                 "type": "object",
@@ -10671,6 +10858,11 @@
                         "title": "Shuffle",
                         "description": "Should the section be included in shuffling?",
                         "default": false
+                    },
+                    "ai_generated_questions": {
+                        "type": "integer",
+                        "title": "Ai Generated Questions",
+                        "default": 0
                     }
                 },
                 "type": "object",
