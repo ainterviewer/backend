@@ -1,21 +1,93 @@
 from datetime import datetime
+from uuid import uuid4
 
 import sqlalchemy.exc
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from jose import JWTError
+from fastapi.security import APIKeyCookie
 
 from ainterviewer.utils import now
 
-from ..auth import create_auth_token, decode_auth_token, verify_password
+from ..auth import (
+    create_auth_token,
+    generate_refresh_token,
+    hash_token,
+    verify_password,
+)
 from ..db.models import AccessRequestCreate, UserCreate, UserCreateRequest, UserPublic
-from ..dependencies import DBSession, DemoToken, auth_cookie_scheme
+from ..dependencies import DBSession, DemoToken
 from ..services.email.mail import send_email
 from ..settings import app_settings
 from ..types import Scope
 from .request_models import LoginData
 
 router = APIRouter(tags=["auth"])
+
+refresh_cookie_scheme = APIKeyCookie(name="refresh_token", auto_error=False)
+
+
+def _set_auth_cookies(
+    response: JSONResponse,
+    access_token: str,
+    refresh_token: str,
+) -> None:
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        secure=True,
+        httponly=True,
+        samesite="lax",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        secure=True,
+        httponly=True,
+        samesite="lax",
+        path="/api",
+    )
+
+
+def _delete_auth_cookies(response: JSONResponse) -> None:
+    response.delete_cookie(
+        key="access_token",
+        secure=True,
+        httponly=True,
+        samesite="lax",
+    )
+    response.delete_cookie(
+        key="refresh_token",
+        secure=True,
+        httponly=True,
+        samesite="lax",
+        path="/api",
+    )
+
+
+def _create_and_store_refresh_token(
+    db,
+    user_id,
+    extended: bool = False,
+    family_id=None,
+) -> str:
+    """Generate a refresh token, store its hash in the DB, and return the raw token."""
+    if family_id is None:
+        family_id = uuid4()
+
+    if extended:
+        expiry_delta = app_settings.app.jwt_refresh_token_extended_expiration
+    else:
+        expiry_delta = app_settings.app.jwt_refresh_token_expiration
+
+    raw_refresh = generate_refresh_token()
+    db.auth.create_refresh_token(
+        user_id=user_id,
+        token_hash=hash_token(raw_refresh),
+        family_id=family_id,
+        expires_at=now() + expiry_delta.to_timedelta(),
+        extended=extended,
+    )
+    return raw_refresh
 
 
 @router.post("/login")
@@ -31,25 +103,16 @@ async def login(login_request: LoginData, db: DBSession):
 
     db.users.update_user_status(user.id, last_login=True)
 
-    token = create_auth_token(
-        user_id=user.id,
-        scope=user.scope,
+    access_token = create_auth_token(user_id=user.id, scope=user.scope)
+    raw_refresh = _create_and_store_refresh_token(
+        db, user_id=user.id, extended=login_request.extended
     )
+
+    # Opportunistically clean up expired refresh tokens
+    db.auth.cleanup_expired()
 
     response = JSONResponse({"detail": "Successfully logged in"})
-
-    # TODO:
-    # - rename token -> access_token
-    # - Add refresh token
-    #   - login_request.extended sets an expire time for the refresh cookie
-
-    response.set_cookie(
-        key="token",
-        value=token,
-        secure=True,
-        httponly=True,
-    )
-
+    _set_auth_cookies(response, access_token, raw_refresh)
     return response
 
 
@@ -105,17 +168,11 @@ async def register(
     # NOTE: Password hashing happens in the users.create_user method
     new_user = db.users.create_user(UserCreate(**user.model_dump(), **snapshot))
 
-    token = create_auth_token(user_id=new_user.id)
+    access_token = create_auth_token(user_id=new_user.id)
+    raw_refresh = _create_and_store_refresh_token(db, user_id=new_user.id)
 
     response = JSONResponse({"detail": "Successfully registered user"})
-
-    response.set_cookie(
-        key="token",
-        value=token,
-        secure=True,
-        httponly=True,
-    )
-
+    _set_auth_cookies(response, access_token, raw_refresh)
     return response
 
 
@@ -139,18 +196,27 @@ async def request_access(access_request: AccessRequestCreate, db: DBSession):
 
 
 @router.post("/logout")
-async def logout():
-    # TODO:
-    # - Should this be different for guests vs users?
-    # - Delete the token from the database?
-    # - For guests, this should be recorded in the database.
+async def logout(
+    db: DBSession,
+    raw_refresh: str | None = Depends(refresh_cookie_scheme),
+):
+    if raw_refresh:
+        stored = db.auth.get_by_token_hash(hash_token(raw_refresh))
+        if stored:
+            db.auth.revoke_token(stored.id)
+
     response = JSONResponse({"detail": "Successfully logged out"})
-    response.delete_cookie(
-        key="token",
-        secure=True,
-        httponly=True,
-        samesite="none",
-    )
+    _delete_auth_cookies(response)
+    return response
+
+
+@router.post("/logout-everywhere")
+async def logout_everywhere(db: DBSession, jwt: DemoToken):
+    """Revoke ALL refresh tokens for the authenticated user."""
+    db.auth.revoke_all_for_user(jwt.user_id)
+
+    response = JSONResponse({"detail": "All sessions revoked"})
+    _delete_auth_cookies(response)
     return response
 
 
@@ -170,34 +236,48 @@ async def exit():
 
 
 @router.post("/refresh")
-async def refresh_token(
+async def refresh(
     db: DBSession,
-    current_token: str = Depends(auth_cookie_scheme),
+    raw_refresh: str | None = Depends(refresh_cookie_scheme),
 ):
-    """Validate the current token and issue a new one if valid."""
-    if not current_token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    """Rotate the refresh token and issue a new access token."""
+    if not raw_refresh:
+        raise HTTPException(status_code=401, detail="No refresh token")
 
-    try:
-        # Decode and validate the token
-        payload = decode_auth_token(current_token)
+    stored = db.auth.get_by_token_hash(hash_token(raw_refresh))
 
-        user = db.users.get_user_by_id(payload.user_id)
+    if stored is None:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
 
-        # Create a new token
-        new_token = create_auth_token(
-            user_id=user.id,
-            scope=user.scope,
+    # Reuse detection: token was already consumed — possible theft
+    if stored.is_used:
+        db.auth.revoke_family(stored.family_id)
+        raise HTTPException(
+            status_code=401,
+            detail="Refresh token reuse detected, all sessions in this family have been revoked",
         )
 
-        response = JSONResponse({"detail": "Token refreshed successfully"})
-        response.set_cookie(
-            key="token",
-            value=new_token,
-            secure=True,
-            httponly=True,
-        )
-        return response
+    if stored.is_revoked:
+        raise HTTPException(status_code=401, detail="Refresh token revoked")
 
-    except (JWTError, sqlalchemy.exc.NoResultFound):
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    if stored.expires_at < now():
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+
+    # Mark current token as consumed
+    db.auth.mark_as_used(stored.id)
+
+    # Look up user for fresh scope (in case it changed since last login)
+    user = db.users.get_user_by_id(stored.user_id)
+
+    # Issue new token pair, same family
+    new_access = create_auth_token(user_id=user.id, scope=user.scope)
+    new_raw_refresh = _create_and_store_refresh_token(
+        db,
+        user_id=user.id,
+        extended=stored.extended,
+        family_id=stored.family_id,
+    )
+
+    response = JSONResponse({"detail": "Token refreshed successfully"})
+    _set_auth_cookies(response, new_access, new_raw_refresh)
+    return response

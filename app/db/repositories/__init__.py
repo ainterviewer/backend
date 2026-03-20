@@ -1,3 +1,4 @@
+from .auth import AuthRepository
 from .base import BaseRepository
 from .user import UserRepository
 from .project import ProjectRepository
@@ -7,6 +8,7 @@ from .analysis import AnalysisRepository
 from .assistance import AssistanceRepository
 
 __all__ = [
+    "AuthRepository",
     "BaseRepository",
     "UserRepository",
     "ProjectRepository",

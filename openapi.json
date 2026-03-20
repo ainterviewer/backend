@@ -6051,7 +6051,37 @@
                             }
                         }
                     }
-                }
+                },
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ]
+            }
+        },
+        "/api/logout-everywhere": {
+            "post": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Logout Everywhere",
+                "description": "Revoke ALL refresh tokens for the authenticated user.",
+                "operationId": "logout_everywhere",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ]
             }
         },
         "/api/exit": {
@@ -6079,9 +6109,9 @@
                 "tags": [
                     "auth"
                 ],
-                "summary": "Refresh Token",
-                "description": "Validate the current token and issue a new one if valid.",
-                "operationId": "refresh_token",
+                "summary": "Refresh",
+                "description": "Rotate the refresh token and issue a new access token.",
+                "operationId": "refresh",
                 "responses": {
                     "200": {
                         "description": "Successful Response",
@@ -6386,7 +6416,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "post": {
+            "put": {
                 "tags": [
                     "admin"
                 ],
@@ -6430,7 +6460,7 @@
                     }
                 }
             },
-            "put": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -6518,7 +6548,7 @@
                     }
                 }
             },
-            "patch": {
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -6562,7 +6592,7 @@
                     }
                 }
             },
-            "delete": {
+            "patch": {
                 "tags": [
                     "admin"
                 ],
@@ -7081,6 +7111,9 @@
                     "classification": {
                         "$ref": "#/components/schemas/AgentConfig"
                     },
+                    "guide": {
+                        "$ref": "#/components/schemas/AgentConfig"
+                    },
                     "history": {
                         "$ref": "#/components/schemas/AgentConfig"
                     },
@@ -7107,6 +7140,9 @@
                         "$ref": "#/components/schemas/ProbingAgentConfig"
                     },
                     "classification": {
+                        "$ref": "#/components/schemas/AgentConfig"
+                    },
+                    "guide": {
                         "$ref": "#/components/schemas/AgentConfig"
                     },
                     "history": {
@@ -10413,11 +10449,20 @@
                         "description": "Should the user be able to answer the question? Disable this to make the question into a message",
                         "default": true
                     },
-                    "exclude_from_history": {
-                        "type": "boolean",
-                        "title": "Exclude From History",
-                        "description": "Exclude from the interview history. This means that the model will not use this question or the response as a context when it asks further questions.",
-                        "default": false
+                    "alternative_main_questions": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Alternative Main Questions",
+                        "description": "List of alternative formulations of the main question, will be chosen at random."
                     },
                     "check_if_answered": {
                         "type": "boolean",
@@ -10448,6 +10493,12 @@
                         "title": "Create Segue",
                         "description": "Create a segue from the previous question, to possibly improve the flow of the interview.",
                         "default": true
+                    },
+                    "exclude_from_history": {
+                        "type": "boolean",
+                        "title": "Exclude From History",
+                        "description": "Exclude from the interview history. This means that the model will not use this question or the response as a context when it asks further questions.",
+                        "default": false
                     },
                     "variables": {
                         "anyOf": [
@@ -10513,6 +10564,28 @@
                                 "type": "null"
                             }
                         ]
+                    },
+                    "index": {
+                        "anyOf": [
+                            {
+                                "prefixItems": [
+                                    {
+                                        "type": "integer"
+                                    },
+                                    {
+                                        "type": "integer"
+                                    }
+                                ],
+                                "type": "array",
+                                "maxItems": 2,
+                                "minItems": 2
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Index",
+                        "description": "The index of the question in the interview, ie (section, question) = (2, 2) (for 3rd section 3rd question). Used to keep track of questions initial position after shuffling."
                     }
                 },
                 "type": "object",
@@ -10621,11 +10694,20 @@
                         "description": "Should the user be able to answer the question? Disable this to make the question into a message",
                         "default": true
                     },
-                    "exclude_from_history": {
-                        "type": "boolean",
-                        "title": "Exclude From History",
-                        "description": "Exclude from the interview history. This means that the model will not use this question or the response as a context when it asks further questions.",
-                        "default": false
+                    "alternative_main_questions": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Alternative Main Questions",
+                        "description": "List of alternative formulations of the main question, will be chosen at random."
                     },
                     "check_if_answered": {
                         "type": "boolean",
@@ -10656,6 +10738,12 @@
                         "title": "Create Segue",
                         "description": "Create a segue from the previous question, to possibly improve the flow of the interview.",
                         "default": true
+                    },
+                    "exclude_from_history": {
+                        "type": "boolean",
+                        "title": "Exclude From History",
+                        "description": "Exclude from the interview history. This means that the model will not use this question or the response as a context when it asks further questions.",
+                        "default": false
                     },
                     "variables": {
                         "anyOf": [
@@ -10721,6 +10809,28 @@
                                 "type": "null"
                             }
                         ]
+                    },
+                    "index": {
+                        "anyOf": [
+                            {
+                                "prefixItems": [
+                                    {
+                                        "type": "integer"
+                                    },
+                                    {
+                                        "type": "integer"
+                                    }
+                                ],
+                                "type": "array",
+                                "maxItems": 2,
+                                "minItems": 2
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Index",
+                        "description": "The index of the question in the interview, ie (section, question) = (2, 2) (for 3rd section 3rd question). Used to keep track of questions initial position after shuffling."
                     }
                 },
                 "type": "object",
@@ -12339,7 +12449,7 @@
             "APIKeyCookie": {
                 "type": "apiKey",
                 "in": "cookie",
-                "name": "token"
+                "name": "access_token"
             }
         }
     }

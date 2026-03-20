@@ -42,7 +42,7 @@ async def fetch_token(
 ) -> InterviewToken:
     url = f"http://{app_settings.app.api_endpoint}/api/projects/{project_id}/{language}/interviews"
 
-    cookies = {"language": language, "token": auth_token}
+    cookies = {"language": language, "access_token": auth_token}
 
     headers = {
         "User-Agent": f"ainterviewer/{ainterviewer.__version__} ({platform.system()} {platform.release()}; Python/{platform.python_version()})"
@@ -206,7 +206,7 @@ async def add_interviewee(
                 "interview_id": str(interview_id),
                 "interview_subject": interviewee,
             },
-            cookies={"token": user_token},
+            cookies={"access_token": user_token},
         ) as response:
             response.raise_for_status()
 

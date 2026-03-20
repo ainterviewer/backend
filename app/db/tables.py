@@ -116,6 +116,32 @@ class InvitationTable(Base):
     )
 
 
+################
+# Refresh Token #
+################
+
+
+class RefreshTokenTable(Base):
+    __tablename__ = "refresh_token"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), index=True
+    )
+    token_hash: Mapped[str] = mapped_column(unique=True, index=True)
+    family_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), index=True)
+    is_revoked: Mapped[bool] = mapped_column(default=False)
+    is_used: Mapped[bool] = mapped_column(default=False)
+    extended: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(default=now)
+    expires_at: Mapped[datetime.datetime] = mapped_column()
+
+    # Relationships
+    user: Mapped["UserTable"] = relationship(back_populates="refresh_tokens")
+
+
 ########
 # User #
 ########
@@ -170,6 +196,9 @@ class UserTable(Base):
         back_populates="owner",
         foreign_keys="ProjectTable.owner_id",
         cascade="all, delete-orphan",
+    )
+    refresh_tokens: Mapped[list["RefreshTokenTable"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
     )
 
 

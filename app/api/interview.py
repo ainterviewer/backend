@@ -69,7 +69,7 @@ async def create_interview(
                 detail="Forbidden, scope required: " + Scope.USER,
             )
     else:
-        if not (token := request.cookies.get("token")):
+        if not (token := request.cookies.get("access_token")):
             raise AuthError(
                 status_code=403,
                 detail="Forbidden, scope required: " + Scope.GUEST,

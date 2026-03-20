@@ -28,10 +28,16 @@ class AppSettings(BaseModel):
         default_factory=lambda: TimeDelta(days=3)
     )
     jwt_auth_token_expiration: TimeDelta = Field(
-        default_factory=lambda: TimeDelta(days=1)
+        default_factory=lambda: TimeDelta(minutes=15)
     )
     jwt_invite_token_expiration: TimeDelta = Field(
         default_factory=lambda: TimeDelta(days=1)
+    )
+    jwt_refresh_token_expiration: TimeDelta = Field(
+        default_factory=lambda: TimeDelta(days=1)
+    )
+    jwt_refresh_token_extended_expiration: TimeDelta = Field(
+        default_factory=lambda: TimeDelta(days=3)
     )
     registration_requires_token: bool = True
 

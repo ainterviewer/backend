@@ -11,6 +11,7 @@ from ..paths import APP_DIR
 from .repositories import (
     AnalysisRepository,
     AssistanceRepository,
+    AuthRepository,
     InterviewRepository,
     ProjectRepository,
     TestRepository,
@@ -45,6 +46,7 @@ class InterviewDataBase(PersistenceProtocol):
         )
 
         # Initialize all repositories with the shared session
+        self.auth: AuthRepository = AuthRepository(session)
         self.users: UserRepository = UserRepository(session)
         self.projects: ProjectRepository = ProjectRepository(session)
         self.interviews: InterviewRepository = InterviewRepository(session)

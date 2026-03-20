@@ -1,4 +1,6 @@
+import hashlib
 import logging
+import secrets
 from typing import Any, Self
 from uuid import UUID, uuid4
 
@@ -21,7 +23,6 @@ logging.getLogger("passlib").setLevel(logging.ERROR)
 
 
 class _Token(BaseModel):
-    # FIXME: These should be way shorter for authentication at least
     _timedelta: TimeDelta = PrivateAttr()
 
     def encode(self) -> str:
@@ -78,6 +79,16 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
+
+
+def generate_refresh_token() -> str:
+    """Generate a cryptographically secure random refresh token."""
+    return secrets.token_urlsafe(64)
+
+
+def hash_token(raw_token: str) -> str:
+    """SHA-256 hash a raw refresh token for DB storage."""
+    return hashlib.sha256(raw_token.encode()).hexdigest()
 
 
 def create_interview_token(

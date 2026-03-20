@@ -24,7 +24,7 @@ fronted_dir = Path(__file__).parent.absolute() / "frontend"
 templates_dir = fronted_dir / "templates"
 templates = Jinja2Templates(directory=templates_dir)
 
-auth_cookie_scheme = APIKeyCookie(name="token", auto_error=False)
+auth_cookie_scheme = APIKeyCookie(name="access_token", auto_error=False)
 
 # oauth2_scheme = OAuth2PasswordBearer(
 #     tokenUrl="token",

@@ -1,6 +1,7 @@
 from .crud import InterviewDataBase
 from .repositories import (
     AnalysisRepository,
+    AuthRepository,
     BaseRepository,
     InterviewRepository,
     ProjectRepository,
@@ -10,6 +11,7 @@ from .repositories import (
 
 __all__ = [
     "InterviewDataBase",
+    "AuthRepository",
     "BaseRepository",
     "UserRepository",
     "ProjectRepository",
