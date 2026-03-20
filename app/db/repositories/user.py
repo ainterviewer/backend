@@ -247,10 +247,12 @@ class UserRepository(BaseRepository):
 
         return InvitationPublic.model_validate(invitation)
 
-    def delete_invitation(self, id: UUID4):
+    def delete_invitation(self, id: UUID4) -> bool:
+        """Delete an invitation. Returns True if a row was actually deleted."""
         statement = delete(InvitationTable).where(InvitationTable.id == id)
-        self.session.execute(statement)
+        result = self.session.execute(statement)
         self.session.commit()
+        return result.rowcount > 0
 
     def delete_invitations(self, ids: list[UUID4]):
         statement = delete(InvitationTable).where(InvitationTable.id.in_(ids))

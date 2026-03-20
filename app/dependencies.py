@@ -74,7 +74,7 @@ def _decode_token(
     try:
         return decode_auth_token(token)
     except (JWTError, ValidationError):
-        raise AuthError(status_code=403, detail="Could not validate credentials")
+        raise AuthError(status_code=401, detail="Could not validate credentials")
 
 
 class ScopeChecker:
@@ -97,7 +97,7 @@ class ScopeChecker:
         if not self.has_required_scope(user_scopes):
             raise AuthError(
                 status_code=403,
-                detail="Forbidden, scope required: " + self.required_scope,
+                detail="Insufficient permissions",
             )
         return auth_token
 
@@ -141,8 +141,6 @@ class ResourceRoleChecker:
         elif self.resource_type == "folder" and folder_id:
             user_role = db.projects.get_user_role_on_folder(token.user_id, folder_id)
         else:
-            print(self.required_role, self.resource_type)
-            print(project_id, folder_id)
             raise HTTPException(400, "Missing resource identifier")
 
         if user_role is None:

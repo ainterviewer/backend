@@ -137,6 +137,9 @@ class InterviewRepository(BaseRepository):
         created_at: datetime.datetime | None = None,
         completed: bool | None = None,
     ) -> tuple[Sequence[InterviewPublic], int]:
+        SORTABLE_COLUMNS = {"created_at", "last_updated", "status", "language", "type"}
+        if sorting_column not in SORTABLE_COLUMNS:
+            raise ValueError(f"Invalid sort column: {sorting_column}")
         _sorting_col = getattr(InterviewTable, sorting_column)
 
         table = InterviewTable

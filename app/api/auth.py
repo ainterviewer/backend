@@ -6,11 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyCookie
 
+from ainterviewer.settings import settings as lib_settings
 from ainterviewer.utils import now
 
 from ..auth import (
     create_auth_token,
     generate_refresh_token,
+    get_password_hash,
     hash_token,
     verify_password,
 )
@@ -24,6 +26,9 @@ from .request_models import LoginData
 router = APIRouter(tags=["auth"])
 
 refresh_cookie_scheme = APIKeyCookie(name="refresh_token", auto_error=False)
+
+# Pre-computed dummy hash for constant-time login failure (prevents timing attacks)
+_DUMMY_HASH = get_password_hash("timing-attack-dummy-password")
 
 
 def _set_auth_cookies(
@@ -44,7 +49,6 @@ def _set_auth_cookies(
         secure=True,
         httponly=True,
         samesite="lax",
-        path="/api",
     )
 
 
@@ -96,6 +100,7 @@ async def login(login_request: LoginData, db: DBSession):
     try:
         user = db.users.get_user_private(login_request.email)
     except sqlalchemy.exc.NoResultFound:
+        verify_password(login_request.password, _DUMMY_HASH)
         raise exception
 
     if not verify_password(login_request.password, user.password):
@@ -140,7 +145,11 @@ async def register(
             try:
                 invitation = db.users.check_invite_token(user.invite_token)
                 if not invitation.reuseable:
-                    db.users.delete_invitation(invitation.id)
+                    if not db.users.delete_invitation(invitation.id):
+                        # Another request already claimed this token
+                        return JSONResponse(
+                            {"detail": "Invalid invite token"}, status_code=406
+                        )
                 user.scope = invitation.user_scope
             except sqlalchemy.exc.NoResultFound:
                 return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
@@ -168,7 +177,7 @@ async def register(
     # NOTE: Password hashing happens in the users.create_user method
     new_user = db.users.create_user(UserCreate(**user.model_dump(), **snapshot))
 
-    access_token = create_auth_token(user_id=new_user.id)
+    access_token = create_auth_token(user_id=new_user.id, scope=new_user.scope)
     raw_refresh = _create_and_store_refresh_token(db, user_id=new_user.id)
 
     response = JSONResponse({"detail": "Successfully registered user"})
@@ -260,7 +269,7 @@ async def refresh(
     if stored.is_revoked:
         raise HTTPException(status_code=401, detail="Refresh token revoked")
 
-    if stored.expires_at < now():
+    if stored.expires_at.astimezone(lib_settings.tzinfo) < now():
         raise HTTPException(status_code=401, detail="Refresh token expired")
 
     # Mark current token as consumed

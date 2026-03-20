@@ -107,7 +107,7 @@ def create_interview_token(
 
 def create_auth_token(
     user_id: UUID4,
-    scope: Scope = Scope.USER,
+    scope: Scope,
 ) -> str:
     token = AuthToken(
         user_id=user_id,
