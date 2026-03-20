@@ -248,13 +248,159 @@
       },
       "title": "TimeDelta",
       "type": "object"
+    },
+    "LLMSettings": {
+      "properties": {
+        "llm_host": {
+          "default": "0.0.0.0",
+          "title": "Llm Host",
+          "type": "string"
+        },
+        "llm_port": {
+          "default": 8880,
+          "title": "Llm Port",
+          "type": "integer"
+        },
+        "model_storage": {
+          "default": "local",
+          "enum": [
+            "local",
+            "s3_bucket"
+          ],
+          "title": "Model Storage",
+          "type": "string"
+        },
+        "available_models": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Available Models",
+          "type": "array"
+        },
+        "default_model": {
+          "default": "gpt-5-mini",
+          "title": "Default Model",
+          "type": "string"
+        },
+        "demo_models": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Demo Models"
+        },
+        "default_demo_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default Demo Model"
+        },
+        "seed": {
+          "default": 4268,
+          "title": "Seed",
+          "type": "integer"
+        }
+      },
+      "title": "LLMSettings",
+      "type": "object"
+    },
+    "MediaStorageSettings": {
+      "description": "Central configuration for all media storage.",
+      "properties": {
+        "base_path": {
+          "default": "storage",
+          "format": "path",
+          "title": "Base Path",
+          "type": "string"
+        }
+      },
+      "title": "MediaStorageSettings",
+      "type": "object"
+    },
+    "Secrets": {
+      "properties": {
+        "openai_api_key": {
+          "anyOf": [
+            {
+              "format": "password",
+              "type": "string",
+              "writeOnly": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Openai Api Key"
+        },
+        "google_ai_api_key": {
+          "anyOf": [
+            {
+              "format": "password",
+              "type": "string",
+              "writeOnly": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Google Ai Api Key"
+        },
+        "openrouter_api_key": {
+          "anyOf": [
+            {
+              "format": "password",
+              "type": "string",
+              "writeOnly": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Openrouter Api Key"
+        },
+        "vllm_api_key": {
+          "default": "",
+          "format": "password",
+          "title": "Vllm Api Key",
+          "type": "string",
+          "writeOnly": true
+        }
+      },
+      "title": "Secrets",
+      "type": "object"
     }
   },
   "properties": {
     "debug": {
-      "default": false,
-      "title": "Debug",
-      "type": "boolean"
+      "allOf": [
+        {
+          "default": false,
+          "title": "Debug",
+          "type": "boolean"
+        },
+        {
+          "default": false,
+          "title": "Debug",
+          "type": "boolean"
+        }
+      ]
     },
     "app_env": {
       "default": "development",
@@ -276,7 +422,44 @@
       "$ref": "#/$defs/ServiceSettings"
     },
     "secrets": {
-      "$ref": "#/$defs/AppSecrets"
+      "allOf": [
+        {
+          "$ref": "#/$defs/AppSecrets"
+        },
+        {
+          "$ref": "#/$defs/Secrets"
+        }
+      ]
+    },
+    "tzinfo": {
+      "default": "Europe/Copenhagen",
+      "format": "zoneinfo",
+      "title": "Tzinfo",
+      "type": "string"
+    },
+    "llm": {
+      "$ref": "#/$defs/LLMSettings",
+      "default": {
+        "llm_host": "0.0.0.0",
+        "llm_port": 8880,
+        "model_storage": "local",
+        "available_models": [
+          "gpt-5-mini"
+        ],
+        "default_model": "gpt-5-mini",
+        "demo_models": [
+          "gpt-5-mini"
+        ],
+        "default_demo_model": "gpt-5-mini",
+        "seed": 4268,
+        "llm_endpoint": "http://0.0.0.0:8880"
+      }
+    },
+    "storage": {
+      "$ref": "#/$defs/MediaStorageSettings",
+      "default": {
+        "base_path": "storage"
+      }
     }
   },
   "required": [
