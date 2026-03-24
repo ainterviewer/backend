@@ -39,55 +39,6 @@ class RestartInterview(Exception):
     pass
 
 
-@router.get("/connections")
-async def active_websockets(
-    jwt: AdminToken,
-    manager: WebSocketConnectionManager = Depends(get_ws_manager),
-) -> dict:
-    return {
-        project_id: {
-            interview_id: [
-                interview["message_count"],
-                list(interview["users"]),
-            ]
-            for interview_id, interview in interviews.items()
-        }
-        for project_id, interviews in manager.active_connections.items()
-    }
-
-
-@router.get("/connect/{project_id}/{interview_id}")
-async def connect(
-    project_id: UUID4,
-    interview_id: UUID4,
-    db: DBSession,
-    jwt: AdminToken,
-):
-    token = create_interview_token(
-        project_id=project_id,
-        interview_id=interview_id,
-        interviewer=Interviewer.HUMAN,
-    )
-    url = f"/interview?token={token}"
-    return RedirectResponse(url=url)
-
-
-@router.post("/broadcast")
-async def broadcast(
-    jwt: AdminToken,
-    broadcast: BroadcastRequest,
-    manager: WebSocketConnectionManager = Depends(get_ws_manager),
-):
-    payload = {
-        "type": "message",
-        "content": broadcast.message,
-        "message_id": None,
-        "interview_id": None,
-        "role": "interviewer",
-    }
-    await manager.broadcast_message(payload)
-
-
 @router.websocket("/ai")
 async def ai_interview_websocket_endpoint(
     *,
@@ -199,6 +150,55 @@ async def ai_interview_websocket_endpoint(
                 raise e
     except WebSocketDisconnect:
         pass
+
+
+@router.get("/connections")
+async def active_websockets(
+    jwt: AdminToken,
+    manager: WebSocketConnectionManager = Depends(get_ws_manager),
+) -> dict:
+    return {
+        project_id: {
+            interview_id: [
+                interview["message_count"],
+                list(interview["users"]),
+            ]
+            for interview_id, interview in interviews.items()
+        }
+        for project_id, interviews in manager.active_connections.items()
+    }
+
+
+@router.get("/connect/{project_id}/{interview_id}")
+async def connect(
+    project_id: UUID4,
+    interview_id: UUID4,
+    db: DBSession,
+    jwt: AdminToken,
+):
+    token = create_interview_token(
+        project_id=project_id,
+        interview_id=interview_id,
+        interviewer=Interviewer.HUMAN,
+    )
+    url = f"/interview?token={token}"
+    return RedirectResponse(url=url)
+
+
+@router.post("/broadcast")
+async def broadcast(
+    jwt: AdminToken,
+    broadcast: BroadcastRequest,
+    manager: WebSocketConnectionManager = Depends(get_ws_manager),
+):
+    payload = {
+        "type": "message",
+        "content": broadcast.message,
+        "message_id": None,
+        "interview_id": None,
+        "role": "interviewer",
+    }
+    await manager.broadcast_message(payload)
 
 
 @router.websocket("/chat")
