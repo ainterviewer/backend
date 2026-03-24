@@ -1,3 +1,4 @@
+from ainterviewer.utils import get_language_dict
 import datetime
 import io
 import json
@@ -198,7 +199,15 @@ async def generate_guide(
     jwt: DemoToken,
     _: ProjectEditor,
 ):
-    guide = await generate_interview_guide(data.prompt, output_path=None)
+    language = get_language_dict(language_code=lang)["name"]
+
+    data.prompt += f"\n\nYou must generate the interview guide in the following language: {language}"
+
+    guide = await generate_interview_guide(
+        data.prompt,
+        model=lib_settings.llm.default_model,
+        output_path=None,
+    )
 
     db.projects.update_interview_guide(project_id, guide, language=lang)
 
