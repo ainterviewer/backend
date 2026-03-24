@@ -1,4 +1,3 @@
-from ainterviewer.utils import get_language_dict
 import datetime
 import io
 import json
@@ -22,6 +21,7 @@ from ainterviewer.interview_guides.generate import (
 )
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode, LanguageDict
+from ainterviewer.utils import get_language_dict
 
 from ...db.models import InterviewSummaryPublic, MessagePublic, ProjectPublic
 from ...db.types import InterviewType
