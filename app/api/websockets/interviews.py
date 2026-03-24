@@ -181,7 +181,7 @@ async def ai_interview_websocket_endpoint(
             project_id=project_id,
             interview_id=interview_id,
             previous_time_spent=interview.total_time_spent,
-            frontend_language=language,
+            language=language,
             referable_values=external_params,
         ) as interviewer:
             try:
