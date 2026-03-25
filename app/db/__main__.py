@@ -110,12 +110,6 @@ def parse_args():
         action="store_true",
         help="create an invitation",
     )
-    parser.add_argument(
-        "--team-id",
-        type=UUID,
-        default=app_settings.database.default_team_id,
-        help="team id which owns the resources",
-    )
 
     args = parser.parse_args()
 
@@ -219,7 +213,6 @@ if __name__ == "__main__":
                 project_id = None
 
             project_id = db.create_project(
-                team_id=app_settings.database.default_team_id,
                 title=project_title,
                 interview_config=interview_config,
                 project_id=project_id,

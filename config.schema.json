@@ -89,6 +89,12 @@
         "jwt_invite_token_expiration": {
           "$ref": "#/$defs/TimeDelta"
         },
+        "jwt_refresh_token_expiration": {
+          "$ref": "#/$defs/TimeDelta"
+        },
+        "jwt_refresh_token_extended_expiration": {
+          "$ref": "#/$defs/TimeDelta"
+        },
         "registration_requires_token": {
           "default": true,
           "title": "Registration Requires Token",
@@ -123,16 +129,8 @@
           "default": "ainterviewer",
           "title": "Db Name",
           "type": "string"
-        },
-        "default_team_id": {
-          "format": "uuid4",
-          "title": "Default Team Id",
-          "type": "string"
         }
       },
-      "required": [
-        "default_team_id"
-      ],
       "title": "DatabaseSettings",
       "type": "object"
     },

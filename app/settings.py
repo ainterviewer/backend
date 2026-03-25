@@ -61,7 +61,6 @@ class DatabaseSettings(BaseModel):
     db_url: str = "localhost"
     db_port: str = "5432"
     db_name: str = "ainterviewer"
-    default_team_id: UUID4
 
     @computed_field
     def database_file(self) -> str | None:
