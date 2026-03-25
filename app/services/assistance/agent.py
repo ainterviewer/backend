@@ -15,18 +15,26 @@ from pydantic_ai import (
 )
 from pydantic_ai._agent_graph import CallToolsNode, ModelRequestNode
 from pydantic_ai.messages import FunctionToolResultEvent
+from pydantic_ai.models.openrouter import OpenRouterModel
+from pydantic_ai.providers.openrouter import OpenRouterProvider
 from pydantic_graph import End
 
 from ainterviewer.interview_guides import InterviewGuide, Question
 from ainterviewer.interview_guides.generate import generate_question, generate_section
 from ainterviewer.interview_guides.interview_guide import QuestionSection
+from ainterviewer.settings import settings as lib_settings
 
 from ...dependencies import DBSession
 from ...services.assistance.models import AssistanceDependencies, ChatMessage
 
 _GREETING_TRIGGER = "[system:new_session_greeting]"
 
-DEFAULT_MODEL = "openrouter:openai/gpt-oss-120b"
+DEFAULT_MODEL = OpenRouterModel(
+    "openai/gpt-oss-120b",
+    provider=OpenRouterProvider(
+        api_key=lib_settings.secrets.openrouter_api_key.get_secret_value()
+    ),
+)
 
 
 def agent_instruction(ctx: RunContext[AssistanceDependencies]) -> str:
@@ -84,7 +92,9 @@ async def create_new_section(
     You should not reiterate the output, it will be shown to the user in another interface.
     """
     return await generate_section(
-        instructions, DEFAULT_MODEL.replace(":", "/"), ctx.deps.guide
+        instructions,
+        "openrouter/" + DEFAULT_MODEL.model_name,
+        ctx.deps.guide,
     )
 
 
@@ -106,7 +116,7 @@ async def create_new_question(
     """
     return await generate_question(
         instructions,
-        DEFAULT_MODEL.replace(":", "/"),
+        "openrouter/" + DEFAULT_MODEL.model_name,
         ctx.deps.guide,
         section=section,
     )
@@ -250,3 +260,7 @@ def to_chat_message(m: ModelMessage) -> bytes | None:
                     .model_dump_json()
                     .encode("utf-8")
                 )
+
+
+if __name__ == "__main__":
+    print(DEFAULT_MODEL.model_name)
