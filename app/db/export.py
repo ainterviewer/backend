@@ -4,7 +4,7 @@ import polars as pl
 from typer import Typer
 from xlsxwriter import Workbook
 
-from ainterviewer.settings import settings
+from ..settings import app_settings
 
 app = Typer()
 
@@ -15,10 +15,10 @@ def save_interviews_to_excel(
     output_dir: Path = Path("data/dumps"),
 ) -> Workbook:
     query = "SELECT * FROM message"
-    print(settings.database.connection_string)
+    print(app_settings.database.connection_string)
     exit()
     messages = pl.read_database_uri(
-        uri=settings.database.connection_string,
+        uri=app_settings.database.connection_string,
         query=query,
         engine="adbc",
     )
@@ -47,7 +47,7 @@ def save_interviews_to_excel(
                     "methodological_notes": 300,
                     "analytical_notes": 300,
                 },
-                column_formats={  # type: ignore
+                column_formats={
                     "content": text_format,
                     "methodological_notes": text_format,
                     "analyitical_notes": text_format,
