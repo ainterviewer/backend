@@ -3288,7 +3288,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/AgentConfigs-Output"
+                                    "$ref": "#/components/schemas/AgentConfigs"
                                 }
                             }
                         }
@@ -3368,7 +3368,7 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/AgentConfigs-Input"
+                                "$ref": "#/components/schemas/AgentConfigs"
                             }
                         }
                     }
@@ -6416,7 +6416,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "put": {
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -6548,7 +6548,7 @@
                     }
                 }
             },
-            "post": {
+            "put": {
                 "tags": [
                     "admin"
                 ],
@@ -7080,7 +7080,7 @@
                     "model": {
                         "type": "string",
                         "title": "Model",
-                        "default": "openrouter/openai/gpt-oss-120b"
+                        "default": "openrouter:openai/gpt-oss-120b"
                     },
                     "temperature": {
                         "type": "number",
@@ -7088,10 +7088,6 @@
                         "minimum": 0.0,
                         "title": "Temperature",
                         "default": 0.7
-                    },
-                    "lang": {
-                        "$ref": "#/components/schemas/LanguageCode",
-                        "default": "EN"
                     },
                     "include": {
                         "type": "boolean",
@@ -7103,38 +7099,7 @@
                 "type": "object",
                 "title": "AgentConfig"
             },
-            "AgentConfigs-Input": {
-                "properties": {
-                    "probing": {
-                        "$ref": "#/components/schemas/ProbingAgentConfig"
-                    },
-                    "classification": {
-                        "$ref": "#/components/schemas/AgentConfig"
-                    },
-                    "guide": {
-                        "$ref": "#/components/schemas/AgentConfig"
-                    },
-                    "history": {
-                        "$ref": "#/components/schemas/AgentConfig"
-                    },
-                    "security": {
-                        "$ref": "#/components/schemas/SecurityConfig"
-                    },
-                    "visual": {
-                        "$ref": "#/components/schemas/VisualConfig"
-                    },
-                    "answering": {
-                        "$ref": "#/components/schemas/AgentConfig"
-                    },
-                    "reformulation": {
-                        "$ref": "#/components/schemas/AgentConfig"
-                    }
-                },
-                "additionalProperties": false,
-                "type": "object",
-                "title": "AgentConfigs"
-            },
-            "AgentConfigs-Output": {
+            "AgentConfigs": {
                 "properties": {
                     "probing": {
                         "$ref": "#/components/schemas/ProbingAgentConfig"
@@ -10045,7 +10010,7 @@
                     "model": {
                         "type": "string",
                         "title": "Model",
-                        "default": "openrouter/openai/gpt-oss-120b"
+                        "default": "openrouter:openai/gpt-oss-120b"
                     },
                     "temperature": {
                         "type": "number",
@@ -10053,10 +10018,6 @@
                         "minimum": 0.0,
                         "title": "Temperature",
                         "default": 0.7
-                    },
-                    "lang": {
-                        "$ref": "#/components/schemas/LanguageCode",
-                        "default": "EN"
                     },
                     "include": {
                         "type": "boolean",
@@ -10331,6 +10292,7 @@
                         "title": "Instruction Prompt"
                     }
                 },
+                "additionalProperties": true,
                 "type": "object",
                 "required": [
                     "system_prompt",
@@ -10568,23 +10530,12 @@
                     "index": {
                         "anyOf": [
                             {
-                                "prefixItems": [
-                                    {
-                                        "type": "integer"
-                                    },
-                                    {
-                                        "type": "integer"
-                                    }
-                                ],
-                                "type": "array",
-                                "maxItems": 2,
-                                "minItems": 2
+                                "$ref": "#/components/schemas/QuestionIndex"
                             },
                             {
                                 "type": "null"
                             }
                         ],
-                        "title": "Index",
                         "description": "The index of the question in the interview, ie (section, question) = (2, 2) (for 3rd section 3rd question). Used to keep track of questions initial position after shuffling."
                     }
                 },
@@ -10813,23 +10764,12 @@
                     "index": {
                         "anyOf": [
                             {
-                                "prefixItems": [
-                                    {
-                                        "type": "integer"
-                                    },
-                                    {
-                                        "type": "integer"
-                                    }
-                                ],
-                                "type": "array",
-                                "maxItems": 2,
-                                "minItems": 2
+                                "$ref": "#/components/schemas/QuestionIndex"
                             },
                             {
                                 "type": "null"
                             }
                         ],
-                        "title": "Index",
                         "description": "The index of the question in the interview, ie (section, question) = (2, 2) (for 3rd section 3rd question). Used to keep track of questions initial position after shuffling."
                     }
                 },
@@ -11043,7 +10983,7 @@
                     "model": {
                         "type": "string",
                         "title": "Model",
-                        "default": "openrouter/openai/gpt-oss-120b"
+                        "default": "openrouter:openai/gpt-oss-120b"
                     },
                     "temperature": {
                         "type": "number",
@@ -11051,10 +10991,6 @@
                         "minimum": 0.0,
                         "title": "Temperature",
                         "default": 0.7
-                    },
-                    "lang": {
-                        "$ref": "#/components/schemas/LanguageCode",
-                        "default": "EN"
                     },
                     "include": {
                         "type": "boolean",
@@ -11236,7 +11172,7 @@
                     "answering_model": {
                         "type": "string",
                         "title": "Answering Model",
-                        "default": "openrouter/openai/gpt-oss-120b"
+                        "default": "openrouter:openai/gpt-oss-120b"
                     },
                     "last_updated": {
                         "anyOf": [
@@ -11312,7 +11248,7 @@
                     "answering_model": {
                         "type": "string",
                         "title": "Answering Model",
-                        "default": "openrouter/openai/gpt-oss-120b"
+                        "default": "openrouter:openai/gpt-oss-120b"
                     },
                     "last_updated": {
                         "anyOf": [
@@ -11920,10 +11856,6 @@
                         "minimum": 0.0,
                         "title": "Temperature",
                         "default": 0.7
-                    },
-                    "lang": {
-                        "$ref": "#/components/schemas/LanguageCode",
-                        "default": "EN"
                     },
                     "include": {
                         "type": "boolean",
