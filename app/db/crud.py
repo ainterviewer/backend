@@ -67,6 +67,7 @@ class InterviewDataBase(PersistenceProtocol):
 
         self.session.execute(text("PRAGMA foreign_keys=ON"))
         self.session.execute(text("PRAGMA journal_mode=WAL"))
+        self.session.execute(text("PRAGMA wal_autocheckpoint=100"))
         self.session.execute(text("PRAGMA busy_timeout=60000"))
         self.session.execute(text("PRAGMA cache_size=-65536"))
         self.session.execute(text("PRAGMA temp_store=MEMORY"))
