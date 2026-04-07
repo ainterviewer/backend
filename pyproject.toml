@@ -9,6 +9,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
   "adbc-driver-postgresql>=1.6.0",
   "ainterviewer",
+  "aiohttp>=3.13.5",
   "aiosmtplib>=4.0.1",
   "alembic>=1.16.1",
   "bcrypt==4.3.0",
