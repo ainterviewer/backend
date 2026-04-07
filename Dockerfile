@@ -53,4 +53,4 @@ COPY --from=build /app /app
 VOLUME ["/app/storage"]
 EXPOSE 8666
 HEALTHCHECK CMD curl -fsS http://127.0.0.1:8666/api/health || exit 1
-CMD ["fastapi", "run", "app/main.py", "--port=8666"]
+ENTRYPOINT ["./entrypoint.sh"]
