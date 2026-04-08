@@ -2365,13 +2365,59 @@
             }
         },
         "/api/projects/{project_id}/available_languages": {
+            "get": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "Get Project Languages",
+                "description": "Adds a new localization to the project",
+                "operationId": "get_project_languages",
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid4",
+                            "title": "Project Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/LanguageDict"
+                                    },
+                                    "title": "Response Get Project Languages"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "post": {
                 "tags": [
                     "projects"
                 ],
-                "summary": "Add Project Languages",
+                "summary": "Add Project Language",
                 "description": "Adds a new localization to the project",
-                "operationId": "add_project_languages",
+                "operationId": "add_project_language",
                 "security": [
                     {
                         "APIKeyCookie": []
@@ -2433,7 +2479,7 @@
                                     "items": {
                                         "$ref": "#/components/schemas/LanguageDict"
                                     },
-                                    "title": "Response Add Project Languages"
+                                    "title": "Response Add Project Language"
                                 }
                             }
                         }
@@ -2454,9 +2500,9 @@
                 "tags": [
                     "projects"
                 ],
-                "summary": "Remove Project Languages",
+                "summary": "Remove Project Language",
                 "description": "Remove project language",
-                "operationId": "remove_project_languages",
+                "operationId": "remove_project_language",
                 "security": [
                     {
                         "APIKeyCookie": []
@@ -2518,7 +2564,7 @@
                                     "items": {
                                         "$ref": "#/components/schemas/LanguageDict"
                                     },
-                                    "title": "Response Remove Project Languages"
+                                    "title": "Response Remove Project Language"
                                 }
                             }
                         }
@@ -6416,50 +6462,6 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "put": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
             "post": {
                 "tags": [
                     "admin"
@@ -6504,7 +6506,7 @@
                     }
                 }
             },
-            "get": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -6592,7 +6594,51 @@
                     }
                 }
             },
-            "delete": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
                 "tags": [
                     "admin"
                 ],
