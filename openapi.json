@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.1.7"
+        "version": "0.1.10"
     },
     "paths": {
         "/api/projects/{project_id}/analysis/categories": {
@@ -2370,7 +2370,7 @@
                     "projects"
                 ],
                 "summary": "Add Project Languages",
-                "description": "Set project language",
+                "description": "Adds a new localization to the project",
                 "operationId": "add_project_languages",
                 "security": [
                     {
@@ -6416,7 +6416,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "post": {
+            "put": {
                 "tags": [
                     "admin"
                 ],
@@ -6460,7 +6460,7 @@
                     }
                 }
             },
-            "delete": {
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -6548,7 +6548,7 @@
                     }
                 }
             },
-            "put": {
+            "patch": {
                 "tags": [
                     "admin"
                 ],
@@ -6592,7 +6592,7 @@
                     }
                 }
             },
-            "patch": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -7887,7 +7887,7 @@
                     "end_interview",
                     "skip_section",
                     "skip_question",
-                    "ask_question"
+                    "skip_probes"
                 ],
                 "title": "ConditionAction"
             },
