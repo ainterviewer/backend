@@ -490,7 +490,7 @@ class ProjectRepository(BaseRepository):
         project = self.session.execute(statement).scalar_one()
         self.session.commit()
 
-        return project.available_languages
+        return self.get_available_languages_optimized(project.id)
 
     def _add_localization(self, project: ProjectTable, language: LanguageCode):
         """Add a new localization to the project"""

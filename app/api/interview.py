@@ -1,3 +1,4 @@
+from jose.exceptions import JWTError
 import shutil
 from typing import Annotated
 
@@ -75,7 +76,10 @@ async def create_interview(
                 detail="Forbidden, scope required: " + Scope.GUEST,
             )
 
-        auth_token = decode_auth_token(token)
+        try:
+            auth_token = decode_auth_token(token)
+        except (JWTError, ValidationError):
+            raise AuthError(status_code=401, detail="Could not validate credentials")
         ScopeChecker(Scope.DEMO)(auth_token=auth_token)
         ResourceRoleChecker(CollaboratorRole.VIEWER, "project")(
             project_id=project_id, token=auth_token, db=db

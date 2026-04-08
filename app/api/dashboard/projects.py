@@ -73,12 +73,24 @@ async def clone_project(
     return db.projects.clone_project(project_id, owner_id=jwt.user_id)
 
 
+@router.get(
+    "/projects/{project_id}/available_languages",
+    description="Adds a new localization to the project",
+    response_model=list[LanguageDict],
+)
+async def get_project_languages(
+    project_id: UUID4,
+    db: DBSession,
+):
+    return db.projects.get_available_languages_optimized(project_id)
+
+
 @router.post(
     "/projects/{project_id}/available_languages",
     description="Adds a new localization to the project",
     response_model=list[LanguageDict],
 )
-async def add_project_languages(
+async def add_project_language(
     project_id: UUID4,
     language: Annotated[LanguageCode, Body()],
     db: DBSession,
@@ -98,7 +110,7 @@ async def add_project_languages(
     description="Remove project language",
     response_model=list[LanguageDict],
 )
-async def remove_project_languages(
+async def remove_project_language(
     project_id: UUID4,
     language: Annotated[LanguageCode, Body()],
     db: DBSession,
