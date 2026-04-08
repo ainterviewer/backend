@@ -75,7 +75,7 @@ async def clone_project(
 
 @router.post(
     "/projects/{project_id}/available_languages",
-    description="Set project language",
+    description="Adds a new localization to the project",
     response_model=list[LanguageDict],
 )
 async def add_project_languages(
