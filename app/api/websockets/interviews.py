@@ -19,6 +19,7 @@ from jinja2 import DictLoader
 from jose import JWTError
 from pydantic import UUID4
 from sqlalchemy.exc import NoResultFound
+from uvicorn.config import logger
 
 from ainterviewer.interfaces import OutgoingData
 from ainterviewer.interview import AInterviewer
@@ -46,7 +47,6 @@ async def ai_interview_websocket_endpoint(
     db: DBSession,
     initialized: bool = Query(False),
 ):
-    # FIXME: Handle errors, e.g. when security agent raises an error
     token = websocket.cookies.get("interview_token")
 
     if token is None:
@@ -68,6 +68,9 @@ async def ai_interview_websocket_endpoint(
             interview_id=interview_id,
             full=True,
         )
+
+        if interview.interview_guide is None:
+            raise ValueError("interview guide is not set")
 
         interview_history = interview.messages
 
@@ -93,8 +96,8 @@ async def ai_interview_websocket_endpoint(
         if initialized:
             last_message = interview_history[-1]
             continue_from_history = (
-                last_message.role == "assistant"
-                and last_message.content == CustomTokens.end_of_interview
+                last_message.role != "assistant"
+                and last_message.content != CustomTokens.end_of_interview
             )
         else:
             messages, continue_from_history = replay_history(
@@ -106,9 +109,9 @@ async def ai_interview_websocket_endpoint(
             for messages in messages:
                 await websocket.send_json(messages.model_dump())
 
-            if not continue_from_history:
-                await websocket.close()
-                return
+        if not continue_from_history:
+            await websocket.close()
+            return
 
     agent_prompts = project_localization.prompts
     prompt_loader = DictLoader(agent_prompts.dump_templates())
@@ -125,7 +128,7 @@ async def ai_interview_websocket_endpoint(
         async with AInterviewer(
             io=wmh,
             db=db,
-            interview_guide=project_localization.interview_guide,
+            interview_guide=interview.interview_guide,
             config=interview_config,
             agent_configs=project_localization.agent_configs,
             template_loader=prompt_loader,
@@ -140,14 +143,25 @@ async def ai_interview_websocket_endpoint(
             except WebSocketDisconnect:
                 pass
             except Exception as e:
-                # FIXME: Since the endpoint is now fetched via proxy, we need
-                # to move this check somewhere else before the interview is
-                # initialized.
                 # TODO: Add more errors or handle it in a different way.
-                await websocket.send_json(
-                    OutgoingData(error="InstanceInitializing").model_dump()
-                )
-                raise e
+                if "EC2 instance initializing" in str(e):
+                    logger.warning(
+                        "Interview started with local LLM as model, but inference server is not available."
+                    )
+
+                    await websocket.send_json(
+                        OutgoingData(error="InstanceInitializing").model_dump()
+                    )
+                else:
+                    if str(e) == "Internal Server Error":
+                        logger.error(
+                            "Error fetching VLLM provider from inference proxy."
+                        )
+                        await websocket.send_json(
+                            OutgoingData(error="InferenceError").model_dump()
+                        )
+                    else:
+                        raise e
     except WebSocketDisconnect:
         pass
 
