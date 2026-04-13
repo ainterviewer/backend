@@ -1,3 +1,4 @@
+from app.platform_release import PlatformManifest
 import datetime
 import uuid
 from typing import Any, Optional
@@ -53,6 +54,25 @@ metadata_obj = MetaData(naming_convention=naming_convention)
 
 class Base(DeclarativeBase):
     metadata = metadata_obj
+
+
+############
+# Metadata #
+############
+
+
+class PlatformReleaseTable(Base):
+    __tablename__ = "platform_release"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
+    )
+
+    platform_release_version: Mapped[str] = mapped_column(unique=True)
+    platform_manifest: Mapped[PlatformManifest] = mapped_column(
+        PydanticJSONB(PlatformManifest)
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(default=now)
 
 
 ##########

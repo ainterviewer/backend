@@ -28,7 +28,7 @@ class AppSettings(BaseModel):
         default_factory=lambda: TimeDelta(days=3)
     )
     jwt_auth_token_expiration: TimeDelta = Field(
-        default_factory=lambda: TimeDelta(minutes=15)
+        default_factory=lambda: TimeDelta(minutes=1)
     )
     jwt_invite_token_expiration: TimeDelta = Field(
         default_factory=lambda: TimeDelta(days=1)
@@ -193,7 +193,12 @@ class Settings(BaseSettings):
 app_settings = Settings()  # ty: ignore[missing-argument]
 
 if __name__ == "__main__":
+    import os
+
+    from ainterviewer.settings import settings as lib_settings
+
     # print(app_settings.secrets)
-    # print(lib_settings.secrets)
+    print(lib_settings.secrets)
     # print(app_settings.services)
+    print(os.environ.get("OPENROUTER_API_KEY"))
     pass

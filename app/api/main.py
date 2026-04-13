@@ -3,6 +3,8 @@ import json
 from fastapi import APIRouter, FastAPI
 from fastapi.routing import APIRoute
 
+from ..dependencies import DBSession
+from ..platform_release import PlatformManifest
 from . import auth, interview, misc
 from .admin import main as admin
 from .dashboard import main as dashboard
@@ -21,6 +23,16 @@ router.include_router(misc.router)
 @router.get("/health")
 def health():
     return "success"
+
+
+@router.get("/version")
+def version(db: DBSession) -> PlatformManifest:
+    return db.get_platform_release()
+
+
+@router.get("/version/{platform_version}")
+def platform_version(db: DBSession, platform_version: str):
+    return db.get_platform_release(platform_version=platform_version)
 
 
 def use_route_names_as_operation_ids(router: APIRouter) -> None:

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Generator
 
 from fastapi import Cookie, Depends, HTTPException
 from fastapi.security import APIKeyCookie
@@ -50,7 +50,7 @@ engine = create_engine(
 register_vector_extension(engine)
 
 
-def get_db():
+def get_db() -> Generator[InterviewDataBase, None, None]:
     with Session(engine) as session:
         db = InterviewDataBase(session)
         yield db

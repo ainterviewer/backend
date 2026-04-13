@@ -6462,94 +6462,6 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "post": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
             "patch": {
                 "tags": [
                     "admin"
@@ -6639,6 +6551,94 @@
                 }
             },
             "put": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -6875,6 +6875,61 @@
                         "content": {
                             "application/json": {
                                 "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/version": {
+            "get": {
+                "summary": "Version",
+                "operationId": "version",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PlatformManifest"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/version/{platform_version}": {
+            "get": {
+                "summary": "Platform Version",
+                "operationId": "platform_version",
+                "parameters": [
+                    {
+                        "name": "platform_version",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Platform Version"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
                             }
                         }
                     }
@@ -8572,6 +8627,29 @@
                 "type": "object",
                 "title": "FilteredMessagesRequest"
             },
+            "GitHashes": {
+                "properties": {
+                    "core_lib": {
+                        "type": "string",
+                        "title": "Core Lib"
+                    },
+                    "backend": {
+                        "type": "string",
+                        "title": "Backend"
+                    },
+                    "frontend": {
+                        "type": "string",
+                        "title": "Frontend"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "core_lib",
+                    "backend",
+                    "frontend"
+                ],
+                "title": "GitHashes"
+            },
             "HTTPValidationError": {
                 "properties": {
                     "detail": {
@@ -10050,6 +10128,44 @@
                     "items"
                 ],
                 "title": "PaginatedResponse[InterviewSummaryPublic]"
+            },
+            "PlatformManifest": {
+                "properties": {
+                    "platform_version": {
+                        "type": "string",
+                        "title": "Platform Version"
+                    },
+                    "core_lib": {
+                        "type": "string",
+                        "title": "Core Lib"
+                    },
+                    "backend": {
+                        "type": "string",
+                        "title": "Backend"
+                    },
+                    "frontend": {
+                        "type": "string",
+                        "title": "Frontend"
+                    },
+                    "build_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Build Time"
+                    },
+                    "git": {
+                        "$ref": "#/components/schemas/GitHashes"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "platform_version",
+                    "core_lib",
+                    "backend",
+                    "frontend",
+                    "build_time",
+                    "git"
+                ],
+                "title": "PlatformManifest"
             },
             "ProbingAgentConfig": {
                 "properties": {
@@ -12157,7 +12273,10 @@
                     "error": {
                         "anyOf": [
                             {
-                                "const": "InstanceInitializing",
+                                "enum": [
+                                    "InstanceInitializing",
+                                    "InferenceError"
+                                ],
                                 "type": "string"
                             },
                             {

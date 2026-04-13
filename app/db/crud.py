@@ -1,8 +1,9 @@
+from app.platform_release import PlatformManifest
 from pathlib import Path
 
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
 
 from ainterviewer.interfaces import PersistenceProtocol
@@ -17,7 +18,7 @@ from .repositories import (
     TestRepository,
     UserRepository,
 )
-from .tables import Base
+from .tables import Base, PlatformReleaseTable
 
 ALEMBIC_BASE_RIVISON_ID = "fbcbd179bfba"
 
@@ -72,7 +73,7 @@ class InterviewDataBase(PersistenceProtocol):
         self.session.execute(text("PRAGMA cache_size=-65536"))
         self.session.execute(text("PRAGMA temp_store=MEMORY"))
 
-        Base.metadata.create_all(self.session.bind)
+        Base.metadata.create_all(self.session.connection())
 
         if alembic_init_head_migration:
             alembic_command.stamp(self._alembic_config, ALEMBIC_BASE_RIVISON_ID)
@@ -86,12 +87,40 @@ class InterviewDataBase(PersistenceProtocol):
 
     def drop_all_tables(self):
         """Drops all tables - useful for testing or complete reset"""
-        Base.metadata.drop_all(self.session.bind)
+        Base.metadata.drop_all(self.session.connection())
 
     def on_startup(self):
         self.interviews.change_active_to_inactive()
 
     def on_shutdown(self): ...
+
+    # ==================== Database Metadata ====================
+
+    def get_platform_release(
+        self, platform_version: str | None = None
+    ) -> PlatformManifest:
+        statement = select(PlatformReleaseTable)
+
+        if platform_version is not None:
+            statement = statement.where(
+                PlatformReleaseTable.platform_release_version == platform_version
+            )
+            platform_release_entry = self.session.execute(statement).scalar_one()
+        else:
+            statement = statement.order_by(PlatformReleaseTable.created_at).limit(1)
+            platform_release_entry = self.session.execute(statement).scalar_one()
+
+        return platform_release_entry.platform_manifest
+
+    def set_platform_release(self, platform_manifest: PlatformManifest):
+        platform_release_entry = PlatformReleaseTable(
+            platform_release_version=platform_manifest.platform_version,
+            platform_manifest=platform_manifest,
+        )
+        self.session.add(platform_release_entry)
+        self.session.commit()
+        self.session.refresh(platform_release_entry)
+        return platform_manifest
 
     # ==================== PersistenceProtocol Implementation ====================
     # These methods delegate to the InterviewRepository to satisfy the protocol

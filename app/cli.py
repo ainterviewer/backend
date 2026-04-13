@@ -1,3 +1,4 @@
+from app.platform_release import PlatformManifest
 import json
 from typing import Annotated, Optional
 
@@ -82,6 +83,17 @@ def export_config_schema():
     schema["$schema"] = "http://json-schema.org/draft-07/schema#"
 
     with open("config.schema.json", "w") as f:
+        json.dump(schema, f, indent=2)
+
+
+@cli.command()
+def export_manifest_schema():
+    schema = PlatformManifest.model_json_schema()
+
+    # Add the $schema declaration for JSON Schema draft-07 (what SchemaStore uses)
+    schema["$schema"] = "http://json-schema.org/draft-07/schema#"
+
+    with open("manifest.schema.json", "w") as f:
         json.dump(schema, f, indent=2)
 
 
