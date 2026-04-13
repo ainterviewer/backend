@@ -289,6 +289,7 @@ class InterviewBase(_BaseModel):
     user_agent: Optional[str] = None
     ip_address: Optional[str] = None
     referer: Optional[str] = None
+    platform_version: Optional[str] = None
 
 
 class InterviewCreate(_BaseModel):

@@ -27,6 +27,7 @@ from ..tables import (
     IntervieweeTable,
     InterviewTable,
     MessageTable,
+    PlatformReleaseTable,
     ProjectTable,
     TaskTable,
 )
@@ -56,11 +57,18 @@ class InterviewRepository(BaseRepository):
         test: bool = False,
         **kwargs,
     ) -> InterviewPublic:
+        platform_version = self.session.execute(
+            select(PlatformReleaseTable.platform_release_version)
+            .order_by(PlatformReleaseTable.created_at.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+
         interview = InterviewTable(
             project_id=project_id,
             interview_guide=interview_guide,
             type=interview_type,
             interviewer=interviewer,
+            platform_version=platform_version,
             **kwargs,
         )
 

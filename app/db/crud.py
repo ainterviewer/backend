@@ -94,7 +94,7 @@ class InterviewDataBase(PersistenceProtocol):
 
     def on_shutdown(self): ...
 
-    # ==================== Database Metadata ====================
+    # ==================== Metadata ====================
 
     def get_platform_release(
         self, platform_version: str | None = None
@@ -107,7 +107,9 @@ class InterviewDataBase(PersistenceProtocol):
             )
             platform_release_entry = self.session.execute(statement).scalar_one()
         else:
-            statement = statement.order_by(PlatformReleaseTable.created_at).limit(1)
+            statement = statement.order_by(
+                PlatformReleaseTable.created_at.desc()
+            ).limit(1)
             platform_release_entry = self.session.execute(statement).scalar_one()
 
         return platform_release_entry.platform_manifest

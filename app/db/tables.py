@@ -460,6 +460,7 @@ class InterviewTable(Base):
     user_agent: Mapped[str | None] = mapped_column()
     ip_address: Mapped[str | None] = mapped_column()
     referer: Mapped[str | None] = mapped_column()
+    platform_version: Mapped[str | None] = mapped_column(default=None)
     external_params: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
     experiment_id: Mapped[uuid.UUID | None] = mapped_column(
