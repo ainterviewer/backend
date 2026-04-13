@@ -68,7 +68,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-ainterviewer = { git = "https://github.com/gaardhus/ainterviewer-lib.git", tag = "v0.0.14" }
+ainterviewer = { git = "https://github.com/gaardhus/ainterviewer-lib.git", tag = "v0.0.15" }
 # ainterviewer = { git = "https://github.com/gaardhus/ainterviewer-lib.git", tag = "latest" }
 # ainterviewer = { git = "https://github.com/gaardhus/ainterviewer-lib.git" }
 # ainterviewer = { path = "../lib", editable = true }
