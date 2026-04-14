@@ -15,8 +15,8 @@ from pydantic_ai import (
 )
 from pydantic_ai._agent_graph import CallToolsNode, ModelRequestNode
 from pydantic_ai.messages import FunctionToolResultEvent
-from pydantic_ai.models.openrouter import OpenRouterModel
-from pydantic_ai.providers.openrouter import OpenRouterProvider
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_graph import End
 
 from ainterviewer.interview_guides import InterviewGuide, Question
@@ -29,10 +29,10 @@ from ...services.assistance.models import AssistanceDependencies, ChatMessage
 
 _GREETING_TRIGGER = "[system:new_session_greeting]"
 
-DEFAULT_MODEL = OpenRouterModel(
-    "openai/gpt-oss-120b",
-    provider=OpenRouterProvider(
-        api_key=lib_settings.secrets.openrouter_api_key.get_secret_value()
+DEFAULT_MODEL = OpenAIChatModel(
+    "gpt-5.4-mini",
+    provider=OpenAIProvider(
+        api_key=lib_settings.secrets.openai_api_key.get_secret_value()
     ),
 )
 
@@ -93,7 +93,7 @@ async def create_new_section(
     """
     return await generate_section(
         instructions,
-        "openrouter/" + DEFAULT_MODEL.model_name,
+        "openai:" + DEFAULT_MODEL.model_name,
         ctx.deps.guide,
     )
 
@@ -116,7 +116,7 @@ async def create_new_question(
     """
     return await generate_question(
         instructions,
-        "openrouter/" + DEFAULT_MODEL.model_name,
+        "openai:" + DEFAULT_MODEL.model_name,
         ctx.deps.guide,
         section=section,
     )
@@ -263,4 +263,4 @@ def to_chat_message(m: ModelMessage) -> bytes | None:
 
 
 if __name__ == "__main__":
-    print(DEFAULT_MODEL.model_name)
+    print("openai:" + DEFAULT_MODEL.model_name)
