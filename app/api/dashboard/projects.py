@@ -92,15 +92,18 @@ async def get_project_languages(
 )
 async def add_project_language(
     project_id: UUID4,
-    language: Annotated[LanguageCode, Body()],
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
+    language: Annotated[LanguageCode, Body()],
+    translate: Annotated[bool, Body()] = True,
 ):
     if isinstance(jwt, RedirectResponse):
         return jwt
 
-    available_languages = db.projects.add_project_language(project_id, language)
+    available_languages = await db.projects.add_project_language(
+        project_id, language, translate
+    )
 
     return available_languages
 

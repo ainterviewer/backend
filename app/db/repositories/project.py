@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from typing import Any, Literal, Optional, overload
 
@@ -10,6 +11,11 @@ from ainterviewer.agents.prompts.models import Prompts
 from ainterviewer.config import AgentConfigs, InterviewConfig
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.interview_guides.extra import Consent, Welcome
+from ainterviewer.interview_guides.translate import (
+    translate_consent,
+    translate_interview_guide,
+    translate_welcome,
+)
 from ainterviewer.types import LanguageCode, LanguageDict
 from ainterviewer.utils import get_language_dict
 
@@ -33,6 +39,8 @@ from ..tables import (
     UserTable,
 )
 from .base import BaseRepository
+
+TRANSLATION_MODEL = "openai:gpt-5.4-mini"
 
 
 class ProjectRepository(BaseRepository):
@@ -470,10 +478,12 @@ class ProjectRepository(BaseRepository):
 
         return ProjectLocalizationPublic.model_validate(project_localization)
 
-    def add_project_language(self, project_id: UUID4, language: LanguageCode):
+    async def add_project_language(
+        self, project_id: UUID4, language: LanguageCode, translate: bool
+    ):
         statement = select(ProjectTable).where(ProjectTable.id == project_id)
         project = self.session.execute(statement).scalar_one()
-        self._add_localization(project, language)
+        await self._add_localization(project, language, translate)
         self.session.add(project)
         self.session.commit()
 
@@ -492,17 +502,63 @@ class ProjectRepository(BaseRepository):
 
         return self.get_available_languages_optimized(project.id)
 
-    def _add_localization(self, project: ProjectTable, language: LanguageCode):
+    async def _add_localization(
+        self, project: ProjectTable, language: LanguageCode, translate: bool
+    ):
         """Add a new localization to the project"""
         # Check if localization already exists
         if any(loc.language == language for loc in project.localizations):
             return
 
         default_loc = self._get_default_localization(project)
+
+        consent, welcome, interview_guide = (
+            default_loc.consent,
+            default_loc.welcome,
+            default_loc.interview_guide,
+        )
+
+        if translate:
+
+            async def _none():
+                return None
+
+            target_language = get_language_dict(language)["name"]
+            tasks = []
+            if interview_guide is not None:
+                tasks.append(
+                    translate_interview_guide(
+                        interview_guide,
+                        target_language=target_language,
+                        model=TRANSLATION_MODEL,
+                    )
+                )
+            if consent is not None:
+                tasks.append(
+                    translate_consent(
+                        consent,
+                        target_language=target_language,
+                        model=TRANSLATION_MODEL,
+                    )
+                )
+            if welcome is not None:
+                tasks.append(
+                    translate_welcome(
+                        welcome,
+                        target_language=target_language,
+                        model=TRANSLATION_MODEL,
+                    )
+                )
+            tasks += [_none(), _none(), _none()]
+
+            interview_guide, consent, welcome, *_ = await asyncio.gather(*tasks)
+
         new_loc = ProjectLocalizationTable(
             project_id=project.id,
             language=language,
-            interview_guide=default_loc.interview_guide,
+            consent=consent,
+            welcome=welcome,
+            interview_guide=interview_guide,
             prompts=default_loc.prompts,
             agent_configs=default_loc.agent_configs,
         )
