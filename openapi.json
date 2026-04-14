@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.1.12"
+        "version": "0.1.13"
     },
     "paths": {
         "/api/projects/{project_id}/analysis/categories": {
@@ -2464,7 +2464,7 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/LanguageCode"
+                                "$ref": "#/components/schemas/Body_add_project_language"
                             }
                         }
                     }
@@ -6462,6 +6462,94 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
+            "patch": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "get": {
                 "tags": [
                     "admin"
@@ -6551,94 +6639,6 @@
                 }
             },
             "post": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "put": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "patch": {
                 "tags": [
                     "admin"
                 ],
@@ -7692,6 +7692,23 @@
                 ],
                 "title": "BackgroundInfoOptions",
                 "description": "Dataclass representing the possible values for the background info of the synthetic agents"
+            },
+            "Body_add_project_language": {
+                "properties": {
+                    "language": {
+                        "$ref": "#/components/schemas/LanguageCode"
+                    },
+                    "translate": {
+                        "type": "boolean",
+                        "title": "Translate",
+                        "default": true
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "language"
+                ],
+                "title": "Body_add_project_language"
             },
             "Body_create_welcome": {
                 "properties": {
@@ -10491,7 +10508,7 @@
                     "main_question": {
                         "type": "string",
                         "title": "Main Question",
-                        "description": "The question to ask the interviewee"
+                        "description": "The question to ask the interviewee."
                     },
                     "probes": {
                         "anyOf": [
@@ -10506,7 +10523,7 @@
                             }
                         ],
                         "title": "Probes",
-                        "description": "A list of possible follow-up questions to ask after the main question"
+                        "description": "A list of possible follow-up questions to ask after the main question. If provided set max_probes_n or max_probes_time to greater than 0."
                     },
                     "max_probes_n": {
                         "anyOf": [
@@ -10519,7 +10536,7 @@
                             }
                         ],
                         "title": "Max Probes N",
-                        "description": "Max number of probes",
+                        "description": "Max number of probes.",
                         "default": 4
                     },
                     "max_probes_time": {
@@ -10533,7 +10550,7 @@
                             }
                         ],
                         "title": "Max Probes Time",
-                        "description": "Max time to spend on probing, in seconds"
+                        "description": "Max time to spend on probing, in seconds."
                     },
                     "survey_item": {
                         "anyOf": [
@@ -10725,7 +10742,7 @@
                     "main_question": {
                         "type": "string",
                         "title": "Main Question",
-                        "description": "The question to ask the interviewee"
+                        "description": "The question to ask the interviewee."
                     },
                     "probes": {
                         "anyOf": [
@@ -10740,7 +10757,7 @@
                             }
                         ],
                         "title": "Probes",
-                        "description": "A list of possible follow-up questions to ask after the main question"
+                        "description": "A list of possible follow-up questions to ask after the main question. If provided set max_probes_n or max_probes_time to greater than 0."
                     },
                     "max_probes_n": {
                         "anyOf": [
@@ -10753,7 +10770,7 @@
                             }
                         ],
                         "title": "Max Probes N",
-                        "description": "Max number of probes",
+                        "description": "Max number of probes.",
                         "default": 4
                     },
                     "max_probes_time": {
@@ -10767,7 +10784,7 @@
                             }
                         ],
                         "title": "Max Probes Time",
-                        "description": "Max time to spend on probing, in seconds"
+                        "description": "Max time to spend on probing, in seconds."
                     },
                     "survey_item": {
                         "anyOf": [
