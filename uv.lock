@@ -80,7 +80,7 @@ dependencies = [
 
 [[package]]
 name = "ainterviewer-backend"
-version = "0.1.14"
+version = "0.1.15"
 source = { editable = "." }
 dependencies = [
     { name = "adbc-driver-postgresql" },
