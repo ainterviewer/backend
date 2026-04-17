@@ -283,7 +283,7 @@ if __name__ == "__main__":
             # Update interview config if the file exists
             if (config_file := project / "config.yaml").exists():
                 interview_config = read_interview_config(config_file)
-                db.update_interview_config(project_id, interview_config)
+                db.projects.update_interview_config(project_id, interview_config)
                 print(f"  - Interview config updated for project {project_id}")
                 updated = True
 
@@ -305,14 +305,15 @@ if __name__ == "__main__":
                         project_id=project_id,
                         interview_guide_content=interview_guide,
                         language=lang_code,
-                        with_fallback=False,
                     )
                     updated = True
 
                 # Update agent configs if they exist
                 if (agents_config_file := lang / "agents.yaml").exists():
                     agents_config = read_agent_configs(agents_config_file)
-                    db.update_agent_configs(project_id, None, lang_code, agents_config)
+                    db.projects.update_agent_configs(
+                        project_id, lang_code, agents_config
+                    )
                     print(
                         f"  - Agent configs updated for {lang_code} in project {project_id}"
                     )
@@ -330,16 +331,14 @@ if __name__ == "__main__":
                         agent = getattr(prompts, f"{_parts[0]}_{_parts[1]}")
                         setattr(agent, f"{_parts[2]}_{_parts[3]}", prompt)
 
-                    db.set_prompts(
+                    db.projects.set_prompts(
                         project_id,
-                        team_id=None,
                         language=lang_code,
                         prompts=prompts,
                     )
                 else:
-                    db.set_prompts(
+                    db.projects.set_prompts(
                         project_id,
-                        team_id=None,
                         language=lang_code,
                         prompts=prompts,
                     )
