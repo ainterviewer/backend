@@ -193,12 +193,8 @@ class Settings(BaseSettings):
 app_settings = Settings()  # ty: ignore[missing-argument]
 
 if __name__ == "__main__":
-    import os
-
     from ainterviewer.settings import settings as lib_settings
 
     # print(app_settings.secrets)
-    print(lib_settings.secrets)
-    # print(app_settings.services)
-    print(os.environ.get("OPENROUTER_API_KEY"))
+    print(lib_settings)
     pass
