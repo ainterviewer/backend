@@ -95,9 +95,9 @@ async def ai_interview_websocket_endpoint(
     if interview_history:
         if initialized:
             last_message = interview_history[-1]
-            continue_from_history = (
-                last_message.role != "assistant"
-                and last_message.content != CustomTokens.end_of_interview
+            continue_from_history = not (
+                last_message.role == "assistant"
+                and last_message.content == CustomTokens.end_of_interview
             )
         else:
             messages, continue_from_history = replay_history(
