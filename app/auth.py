@@ -2,7 +2,7 @@ import hashlib
 import logging
 import secrets
 from typing import Any, Self
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from jose import jwt
 from passlib.context import CryptContext
@@ -134,26 +134,3 @@ def decode_interview_token(token: str) -> InterviewToken:
 
 def decode_auth_token(token: str) -> AuthToken:
     return AuthToken(**decode_jwt(token))
-
-
-def parse_args():
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--interview_id", type=str, default=None)
-    parser.add_argument("-i", "--project_id", type=str, default=None)
-
-    return parser.parse_args()
-
-
-if __name__ == "__main__":
-    args = parse_args()
-    if project_id := args.project_id is None:
-        project_id = uuid4()
-    if interview_id := args.interview_id is None:
-        interview_id = uuid4()
-
-    token = create_interview_token(
-        project_id=project_id,
-        interview_id=interview_id,
-    )

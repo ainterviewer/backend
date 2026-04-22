@@ -1,4 +1,3 @@
-from app.platform_release import PlatformManifest
 import datetime
 import uuid
 from typing import Any, Optional
@@ -31,6 +30,7 @@ from ainterviewer.types import (
     TimeDelta,
 )
 from ainterviewer.utils import now
+from app.platform_release import PlatformManifest
 
 from ..types import CollaboratorRole, ExternalParam, ProjectStatus, Scope, TestRunStatus
 from ._extra import PydanticJSONB

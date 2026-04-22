@@ -1,8 +1,6 @@
 from fastapi import APIRouter
 
-from . import access
-from . import aws
-from . import users
+from . import access, aws, users
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 

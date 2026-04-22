@@ -150,7 +150,7 @@ def build_external_params_model(
     fields: dict[str, Any] = {}
     for param in params:
         if param.type == "enum":
-            enum_cls = PyEnum(param.name, {v: v for v in param.options})  # type: ignore[arg-type]
+            enum_cls = PyEnum(param.name, {v: v for v in param.options})  # ty:ignore[mismatched-type-name, not-iterable]
             field_type = enum_cls
         else:
             field_type = type_map[param.type]

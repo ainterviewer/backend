@@ -1,10 +1,11 @@
 import copy
 import enum
+import secrets
 import sys
 import uuid
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 from urllib.parse import parse_qs, urlparse
 
 import fastapi.openapi.constants
@@ -111,7 +112,7 @@ def replay_history(
             continue
 
         if message.image:
-            message.image.encode(project_id)
+            message.image.encode(project_id)  # ty:ignore[unresolved-attribute]
 
         data = OutgoingHistoryMessage(
             content=message.content,
@@ -137,11 +138,11 @@ def replay_history(
             )
             messages.append(data)
             continue_from_history = False
-        elif last_message.content in CustomTokens.all:
+        elif last_message.content in CustomTokens.all:  # ty:ignore[unsupported-operator]
             pass
         else:
             if last_message.image:
-                last_message.image.encode(project_id)
+                last_message.image.encode(project_id)  # ty:ignore[unresolved-attribute]
 
             data = OutgoingMessage(
                 content=last_message.content,
@@ -263,6 +264,17 @@ def merge_config_schemas(models: list[type[BaseSettings]]) -> dict[str, Any]:
             ]
 
     return merged
+
+
+def ensure_filename(filename: Optional[str], fallback_ext: str = ".bin") -> str:
+    """
+    Return the original filename if present, otherwise generate a random one.
+    """
+    if filename and filename.strip():
+        return Path(filename).name  # strips any path components
+
+    random_name = secrets.token_hex(16)
+    return f"{random_name}{fallback_ext}"
 
 
 if __name__ == "__main__":

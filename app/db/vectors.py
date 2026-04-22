@@ -48,7 +48,7 @@ from sqlalchemy import Engine, Row, event, text
 from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute, Session
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Mapped
+    pass
 
 
 # Type variable for table classes
@@ -869,7 +869,7 @@ class VectorExtension:
         scan_func = "vector_quantize_scan" if use_quantization else "vector_full_scan"
 
         # Get primary key column(s)
-        pk_cols = [c.name for c in table.__table__.primary_key.columns]
+        pk_cols = [c.name for c in table.__table__.primary_key.columns]  # ty:ignore[unresolved-attribute]
         if not pk_cols:
             raise ValueError(f"Table {table_name} has no primary key defined")
 

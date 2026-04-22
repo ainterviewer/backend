@@ -1,6 +1,6 @@
 import datetime
 import math
-from typing import Annotated
+from typing import Annotated, Sequence
 
 from fastapi import APIRouter, Query
 from pydantic import UUID4, BaseModel
@@ -62,7 +62,7 @@ class HistogramBucket(BaseModel):
 
 
 def _compute_histogram_buckets(
-    data_rows: list, num_bins: int = 20
+    data_rows: Sequence, num_bins: int = 20
 ) -> list[HistogramBucket]:
     """Helper to bin grouped data into a fixed number of buckets."""
     if not data_rows:
@@ -239,7 +239,7 @@ async def get_project_monitoring_stats(
     interviews_over_time = [
         DailyInterviewCount(
             date=row.date,
-            count=row.count,
+            count=row.count,  # ty:ignore[invalid-argument-type]
             completed_count=row.completed_count or 0,
         )
         for row in daily_results
@@ -261,7 +261,7 @@ async def get_project_monitoring_stats(
     interviews_by_time_of_day = [
         InterviewTimeOfDayCount(
             time=datetime.time(hour=h).strftime("%H"),
-            count=hour_counts.get(h, 0),
+            count=hour_counts.get(h, 0),  # ty:ignore[invalid-argument-type]
         )
         for h in range(24)
     ]
@@ -418,7 +418,7 @@ async def get_project_monitoring_stats(
         DropoutPoint(
             main_question=row.main_question,
             sub_question=row.sub_question,
-            count=row.count,
+            count=row.count,  # ty:ignore[invalid-argument-type]
         )
         for row in dropout_results
     ]

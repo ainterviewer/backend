@@ -1,4 +1,3 @@
-from app.platform_release import PlatformManifest
 import json
 from typing import Annotated, Optional
 
@@ -13,6 +12,7 @@ from ainterviewer.interfaces import (
 )
 from ainterviewer.lpm.types import CustomTokens
 from ainterviewer.settings import Settings as LibSettings
+from app.platform_release import PlatformManifest
 
 from . import __version__
 from .api.dashboard.assistance import ChatMessage

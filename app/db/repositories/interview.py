@@ -150,7 +150,6 @@ class InterviewRepository(BaseRepository):
             raise ValueError(f"Invalid sort column: {sorting_column}")
         _sorting_col = getattr(InterviewTable, sorting_column)
 
-        table = InterviewTable
         conditions = [InterviewTable.project_id == project_id]
 
         if interview_types:
@@ -160,10 +159,10 @@ class InterviewRepository(BaseRepository):
             conditions.append(InterviewTable.created_at == created_at)
 
         if completed is not None:
-            conditions.append(InterviewTable.is_complete == completed)
+            conditions.append(InterviewTable.status == InterviewStatus.COMPLETED)
 
         statement = (
-            select(table)
+            select(InterviewTable)
             .where(*conditions)
             .order_by(
                 _sorting_col.desc() if sorting_order == "desc" else _sorting_col.asc()
@@ -172,7 +171,7 @@ class InterviewRepository(BaseRepository):
             .limit(limit)
         )
 
-        total = self._get_total_count(table, *conditions)
+        total = self._get_total_count(InterviewTable, *conditions)
 
         interviews = self.session.execute(statement).scalars().all()
 
@@ -218,7 +217,7 @@ class InterviewRepository(BaseRepository):
         status: InterviewStatus | None = None,
         time_spent: int = 0,
     ):
-        values = {
+        values: dict = {
             "last_updated": now(),
             "total_time_spent": InterviewTable.total_time_spent + time_spent,
         }

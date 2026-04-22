@@ -16,8 +16,6 @@ from pydantic import (
 
 from ainterviewer.agents.prompts.models import Prompts
 from ainterviewer.config import AgentConfigs, InterviewConfig
-
-from ..types import ExternalParam
 from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
 from ainterviewer.interview_guides.extra import Consent, Welcome
 from ainterviewer.settings import settings as lib_settings
@@ -36,7 +34,7 @@ from ainterviewer.types import (
 from ainterviewer.utils import now
 
 from ..settings import app_settings
-from ..types import CollaboratorRole, ProjectStatus, Scope, TestRunStatus
+from ..types import CollaboratorRole, ExternalParam, ProjectStatus, Scope, TestRunStatus
 from ._extra import CustomEmailStr
 from .types import AccessRequestStatus, AnnotationType, InterviewType
 

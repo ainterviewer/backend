@@ -10,8 +10,8 @@ import json
 import logging
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from pydantic import TypeAdapter, ValidationError
 
 from ainterviewer.interview_guides import SurveyItem

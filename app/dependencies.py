@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Annotated, Literal, Generator
+from typing import Annotated, Generator, Literal
 
 from fastapi import Cookie, Depends, HTTPException
 from fastapi.security import APIKeyCookie
@@ -16,6 +16,7 @@ from .db import InterviewDataBase
 from .db.vectors import register_vector_extension
 from .settings import app_settings
 from .types import CollaboratorRole, Scope
+
 # from .websockets import WebSocketConnectionManager
 
 # Templating

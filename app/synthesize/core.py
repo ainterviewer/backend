@@ -42,7 +42,9 @@ async def fetch_token(
 ) -> InterviewToken:
     url = f"http://{app_settings.app.api_endpoint}/api/projects/{project_id}/{language}/interviews"
 
-    cookies = {"language": language, "access_token": auth_token}
+    cookies = {"access_token": auth_token}
+    if language:
+        cookies["language"] = language
 
     headers = {
         "User-Agent": f"ainterviewer/{ainterviewer.__version__} ({platform.system()} {platform.release()}; Python/{platform.python_version()})"

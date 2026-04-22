@@ -13,9 +13,9 @@ from ...db.models import (
 )
 from ...dependencies import DBSession, ProjectEditor, ProjectViewer, UserToken
 from ...synthesize.core import (
+    run_synthesis_job_fixed_ai,
     run_synthesis_job_fixed_answers,
     run_synthesis_job_shuffled_ai,
-    run_synthesis_job_fixed_ai,
 )
 from ...types import TestRunStatus
 from ..request_models import (
@@ -58,7 +58,7 @@ async def get_fixed_personas(
     test_id: UUID4,
     db: DBSession,
     jwt: ProjectViewer,
-) -> list[str]:
+) -> list[str] | None:
     return db.tests.get_fixed_personas(project_id, test_id)
 
 

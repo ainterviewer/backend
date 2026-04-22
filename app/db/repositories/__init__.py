@@ -1,11 +1,11 @@
-from .auth import AuthRepository
-from .base import BaseRepository
-from .user import UserRepository
-from .project import ProjectRepository
-from .interview import InterviewRepository
-from .test import TestRepository
 from .analysis import AnalysisRepository
 from .assistance import AssistanceRepository
+from .auth import AuthRepository
+from .base import BaseRepository
+from .interview import InterviewRepository
+from .project import ProjectRepository
+from .test import TestRepository
+from .user import UserRepository
 
 __all__ = [
     "AuthRepository",

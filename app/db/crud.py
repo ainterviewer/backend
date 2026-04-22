@@ -1,12 +1,12 @@
-from app.platform_release import PlatformManifest
 from pathlib import Path
 
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
-from sqlalchemy import text, select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from ainterviewer.interfaces import PersistenceProtocol
+from app.platform_release import PlatformManifest
 
 from ..paths import APP_DIR
 from .repositories import (

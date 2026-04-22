@@ -252,7 +252,7 @@ class UserRepository(BaseRepository):
         statement = delete(InvitationTable).where(InvitationTable.id == id)
         result = self.session.execute(statement)
         self.session.commit()
-        return result.rowcount > 0
+        return result.rowcount > 0  # ty:ignore[unresolved-attribute]
 
     def delete_invitations(self, ids: list[UUID4]):
         statement = delete(InvitationTable).where(InvitationTable.id.in_(ids))

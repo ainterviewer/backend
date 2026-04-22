@@ -99,7 +99,7 @@ class TestRepository(BaseRepository):
         self.session.execute(statement)
         self.session.commit()
 
-    def get_fixed_personas(self, project_id: UUID4, test_id: UUID4) -> list[str]:
+    def get_fixed_personas(self, project_id: UUID4, test_id: UUID4) -> list[str] | None:
         statement = select(TestSetupTable).where(
             TestSetupTable.project_id == project_id,
             TestSetupTable.id == test_id,
@@ -118,7 +118,7 @@ class TestRepository(BaseRepository):
         self.session.execute(statement)
         self.session.commit()
 
-    def get_fixed_answers(self, test_id: UUID4) -> list[str]:
+    def get_fixed_answers(self, test_id: UUID4) -> list[str] | None:
         statement = select(TestSetupTable).where(TestSetupTable.id == test_id)
         test = self.session.execute(statement).scalar_one()
         return test.fixed_answers

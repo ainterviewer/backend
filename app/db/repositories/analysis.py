@@ -1,5 +1,5 @@
 from pydantic import UUID4
-from sqlalchemy import delete, distinct, exists, func, select, update, or_
+from sqlalchemy import delete, distinct, exists, func, or_, select, update
 from sqlalchemy.orm import selectinload
 
 from ainterviewer.types import MessageRole
@@ -126,7 +126,7 @@ class AnalysisRepository(BaseRepository):
         matched_messages = statement.subquery("matched")
 
         # Build conditions for the expanded query
-        conditions = [
+        conditions: list = [
             # Include all originally matched messages
             MessageTable.id.in_(select(matched_messages.c.id))
         ]

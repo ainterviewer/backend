@@ -5,6 +5,7 @@ from base64 import b64decode
 from pathlib import Path
 from typing import Annotated
 
+import aiofiles
 import polars as pl
 from fastapi import APIRouter, Body, Depends, Form, Query, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
@@ -33,7 +34,7 @@ from ...dependencies import (
     ProjectEditor,
     ProjectViewer,
 )
-from ...utils import generate_qr_img
+from ...utils import ensure_filename, generate_qr_img
 from ..request_models import (
     DeleteInterviewRequest,
     ExportMessagesRequest,
@@ -281,12 +282,15 @@ async def upload_image(
     jwt: DemoToken,
     _: ProjectEditor,
 ):
+    filename = ensure_filename(file.filename)
+
     filepath: Path = (
-        lib_settings.storage.project_storage.image_path(project_id) / file.filename
+        lib_settings.storage.project_storage.image_path(project_id) / filename
     )
 
-    with open(filepath, "wb") as f:
-        f.write(file.file)
+    async with aiofiles.open(filepath, "wb") as f:
+        contents = await file.read()
+        await f.write(contents)
 
 
 @router.get("/projects/{project_id}/{lang}/agents")

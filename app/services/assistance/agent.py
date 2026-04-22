@@ -32,7 +32,7 @@ _GREETING_TRIGGER = "[system:new_session_greeting]"
 DEFAULT_MODEL = OpenAIChatModel(
     "gpt-5.4-mini",
     provider=OpenAIProvider(
-        api_key=lib_settings.secrets.openai_api_key.get_secret_value()
+        api_key=lib_settings.secrets.openai_api_key.get_secret_value()  # ty:ignore[unresolved-attribute]
     ),
 )
 
@@ -242,7 +242,7 @@ def to_chat_message(m: ModelMessage) -> bytes | None:
                 return (
                     ChatMessage(
                         role="model",
-                        timestamp=m.timestamp.isoformat(),
+                        timestamp=m.timestamp.isoformat(),  # ty:ignore[unresolved-attribute]
                         content=json.dumps(part.content),
                         type="section",
                     )
@@ -253,7 +253,7 @@ def to_chat_message(m: ModelMessage) -> bytes | None:
                 return (
                     ChatMessage(
                         role="model",
-                        timestamp=m.timestamp.isoformat(),
+                        timestamp=m.timestamp.isoformat(),  # ty:ignore[unresolved-attribute]
                         content=json.dumps(part.content),
                         type="question",
                     )

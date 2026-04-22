@@ -20,8 +20,9 @@ Architecture Components:
 import asyncio
 import random
 import time
-from datetime import datetime
 from typing import Dict, List
+
+from ainterviewer.utils import now
 
 
 class EmbeddingTask:
@@ -32,7 +33,7 @@ class EmbeddingTask:
         self.content = content
         self.priority = priority
         self.retry_count = 0
-        self.created_at = datetime.utcnow()
+        self.created_at = now()
 
     def __lt__(self, other):
         # Higher priority (lower number) first

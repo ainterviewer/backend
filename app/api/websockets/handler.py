@@ -7,7 +7,6 @@ from ainterviewer.interfaces import (
     OutgoingMessage,
     ReceivedData,
 )
-from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import MessageType
 
 from ...embed.main import EmbeddingTask, message_queue
@@ -73,4 +72,4 @@ class WebsocketMessageHandler(IOProtocol):
             #     + image_description
             # )
 
-        return text, message_type or data.type
+        return text, message_type or data.type  # ty:ignore[invalid-return-type]

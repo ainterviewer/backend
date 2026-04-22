@@ -75,4 +75,4 @@ class AuthRepository(BaseRepository):
             delete(RefreshTokenTable).where(RefreshTokenTable.expires_at < now())
         )
         self.session.commit()
-        return result.rowcount
+        return result.rowcount  # ty:ignore[unresolved-attribute]

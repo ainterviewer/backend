@@ -199,6 +199,7 @@ if __name__ == "__main__":
         print("Database and tables recreated")
 
     if args.setup_db:
+        raise NotImplementedError
         for project in Path.cwd().glob("data/projects/*"):
             project_title = project.name.replace("_", " ").title()
 
@@ -212,7 +213,7 @@ if __name__ == "__main__":
             else:
                 project_id = None
 
-            project_id = db.create_project(
+            project_id = db.projects.create_project(
                 title=project_title,
                 interview_config=interview_config,
                 project_id=project_id,
@@ -369,6 +370,7 @@ if __name__ == "__main__":
         print(f"created {n} user{'s' if n > 1 else ''}")
 
     if args.create_project:
+        raise NotImplementedError
         with open(args.interview_guide_path) as f:
             interview_guide = InterviewGuide(**json.load(f))
 
@@ -390,6 +392,7 @@ if __name__ == "__main__":
         print(f"Interview guide updated for project {args.project_id}")
 
     if args.update_interview_config:
+        raise NotImplementedError
         models_config = read_configs(args.interview_config_path)
         db.update_interview_config(args.project_id, models_config)
         print(f"Interview config updated for project {args.project_id}")
@@ -410,6 +413,7 @@ if __name__ == "__main__":
             print(f"Interview created with id {interview.id}")
 
     if args.create_invite:
+        raise NotImplementedError
         invite = db.create_invitation()
         print(f"Invite created with token {invite.token}")
         print(f"Invite link: {invite.invitation_link}")

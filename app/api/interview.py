@@ -1,4 +1,3 @@
-from jose.exceptions import JWTError
 import shutil
 from typing import Annotated
 
@@ -13,7 +12,9 @@ from fastapi import (
     UploadFile,
 )
 from fastapi import Path as URLPath
+from jose.exceptions import JWTError
 from pydantic import UUID4, ValidationError
+from sqlalchemy.exc import NoResultFound
 
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode, TestType
@@ -54,7 +55,7 @@ async def create_interview(
             project_id,
             language=lang,
         )
-    except:
+    except NoResultFound:
         # FIXME: This should probably trigger an error allowing the user to pick
         # a language instead of just returning the default
         default_lang = project.config.default_language
