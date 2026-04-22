@@ -18,11 +18,7 @@
     "Mailman",
     "Policeman"
   ],
-  "locations": [
-    "a large city",
-    "a small town",
-    "a rural area"
-  ],
+  "locations": ["a large city", "a small town", "a rural area"],
   "communication_traits": {
     "length": ["short", "medium", "long"],
     "style": ["concise", "vague", "elaborate", "detailed"],
@@ -32,11 +28,11 @@
     "confident",
     "humble",
     "shy",
-    "anlytical",
+    "analytical",
     "creative",
     "emotional",
     "enthusiastic",
     "provocative"
   ],
-  "refusal_rate": [0,0.7]
+  "refusal_rate": [0, 0.7]
 }
