@@ -20,7 +20,7 @@ from uvicorn.config import logger
 
 from ainterviewer.interfaces import OutgoingData
 from ainterviewer.interview import AInterviewer
-from ainterviewer.lpm.types import CustomTokens
+from ainterviewer.lpm.types import CustomToken
 from ainterviewer.settings import settings
 
 from ....auth import decode_interview_token
@@ -73,7 +73,7 @@ async def ai_interview_websocket_endpoint(
         print("creating new interview")
         await websocket.send_json(
             OutgoingData(
-                content=CustomTokens.restart_interview,
+                content=CustomToken.restart_interview,
             ).model_dump()
         )
         exit()
@@ -92,7 +92,7 @@ async def ai_interview_websocket_endpoint(
             last_message = interview_history[-1]
             continue_from_history = not (
                 last_message.role == "assistant"
-                and last_message.content == CustomTokens.end_of_interview
+                and last_message.content == CustomToken.end_of_interview
             )
         else:
             messages, continue_from_history = replay_history(

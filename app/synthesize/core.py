@@ -20,7 +20,7 @@ from websockets.exceptions import ConnectionClosedOK
 import ainterviewer
 from ainterviewer.agents import AnsweringAgent
 from ainterviewer.interfaces import OutgoingData, OutgoingMessage, ReceivedData
-from ainterviewer.lpm.types import CustomTokens
+from ainterviewer.lpm.types import CustomToken
 from ainterviewer.synthesize.interviewees import (
     BackgroundInfoOptions,
     InterviewSubject,
@@ -170,7 +170,7 @@ async def run_synthetic_fixed_answers(
                         response_text = fixed_answers.pop(0)
                         delay = delay_before_answer
                     else:
-                        response_text = CustomTokens.skip_question
+                        response_text = CustomToken.skip_question
                         delay = None
 
                     await _send_response(websocket, response_text, delay)

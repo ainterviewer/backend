@@ -28,7 +28,7 @@ from ainterviewer.interfaces import (
     OutgoingHistoryMessage,
     OutgoingMessage,
 )
-from ainterviewer.lpm.types import CustomTokens
+from ainterviewer.lpm.types import CustomToken
 
 from .db.models import MessagePublic
 from .paths import APP_DIR
@@ -132,13 +132,13 @@ def replay_history(
         )
         messages.append(data)
     else:
-        if last_message.content == CustomTokens.end_of_interview:
+        if last_message.content == CustomToken.end_of_interview:
             data = OutgoingData(
-                content=CustomTokens.end_of_interview,
+                content=CustomToken.end_of_interview,
             )
             messages.append(data)
             continue_from_history = False
-        elif last_message.content in CustomTokens:
+        elif last_message.content in CustomToken:
             pass
         else:
             if last_message.image:

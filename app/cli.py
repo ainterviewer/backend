@@ -10,7 +10,7 @@ from ainterviewer.interfaces import (
     OutgoingMessage,
     ReceivedData,
 )
-from ainterviewer.lpm.types import CustomTokens
+from ainterviewer.lpm.types import CustomToken
 from ainterviewer.settings import Settings as LibSettings
 from app.platform_release import PlatformManifest
 
@@ -62,7 +62,7 @@ def generate_openapi_scheme(output: str = "openapi.json"):
         models=[
             AuthToken,
             ChatMessage,
-            CustomTokens,
+            CustomToken,
             InterviewToken,
             OutgoingData,
             OutgoingHistoryMessage,
