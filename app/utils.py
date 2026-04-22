@@ -105,7 +105,7 @@ def replay_history(
 
     for message in interview_history[:-1]:
         # NOTE: Why did we skip these in the first place?
-        # if message.content in CustomTokens.all:
+        # if message.content in CustomTokens:
         #     continue
 
         if message.skipped_by_condition:
@@ -138,7 +138,7 @@ def replay_history(
             )
             messages.append(data)
             continue_from_history = False
-        elif last_message.content in CustomTokens.all:  # ty:ignore[unsupported-operator]
+        elif last_message.content in CustomTokens:
             pass
         else:
             if last_message.image:
