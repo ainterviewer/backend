@@ -38,6 +38,7 @@ from ..tables import (
     ProjectTable,
     UserTable,
 )
+from ..types import InterviewType
 from .base import BaseRepository
 
 TRANSLATION_MODEL = "openai:gpt-5.4-mini"
@@ -619,16 +620,24 @@ class ProjectRepository(BaseRepository):
             )
         )
 
-    def get_interview_count_optimized(self, project_id: uuid.UUID) -> int:
+    def get_interview_count_optimized(
+        self, project_id: uuid.UUID, exclude_tests: bool = True
+    ) -> int:
         """
         Get interview count without loading the full project.
         Optimized query that only counts interviews.
         """
-        return (
-            self.session.query(func.count(InterviewTable.id))
-            .filter(InterviewTable.project_id == project_id)
-            .scalar()
-        ) or 0
+
+        statement = self.session.query(func.count(InterviewTable.id)).filter(
+            InterviewTable.project_id == project_id
+        )
+
+        if exclude_tests:
+            statement = statement.filter(
+                InterviewTable.type == InterviewType.DISTRIBUTED
+            )
+
+        return statement.scalar() or 0
 
     # ==================== Interview Guide / Config Methods ====================
 
