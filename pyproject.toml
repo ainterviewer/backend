@@ -1,6 +1,6 @@
 [project]
 name = "ainterviewer-backend"
-version = "0.2.0"
+version = "0.2.1"
 description = "AInterviewer API used to setup and conduct automated interviews at scale."
 readme = "README.md"
 authors = [{ name = "Tobias Gårdhus", email = "tobias_gaardhus@hotmail.com" }]
@@ -71,7 +71,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-ainterviewer = { git = "https://github.com/ainterviewer/lib.git", tag = "v0.1.2" }
+ainterviewer = { git = "https://github.com/ainterviewer/lib.git", tag = "v0.1.3" }
 # ainterviewer = { git = "https://github.com/ainterviewer/lib.git", tag = "latest" }
 # ainterviewer = { git = "https://github.com/ainterviewer/lib.git" }
 # ainterviewer = { path = "../lib", editable = true }
