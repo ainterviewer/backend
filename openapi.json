@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.1.13"
+        "version": "0.2.0"
     },
     "paths": {
         "/api/projects/{project_id}/analysis/categories": {
@@ -821,97 +821,6 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/messages/search": {
-            "get": {
-                "tags": [
-                    "analysis"
-                ],
-                "summary": "Semantic Search",
-                "description": "Semantic search endpoint\n\nFlow:\n1. Generate embedding for query\n2. Search vector store\n3. Return similar messages",
-                "operationId": "semantic_search",
-                "parameters": [
-                    {
-                        "name": "query",
-                        "in": "query",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Query"
-                        }
-                    },
-                    {
-                        "name": "limit",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "integer",
-                            "default": 10,
-                            "title": "Limit"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/emebeddings/queue/status": {
-            "get": {
-                "tags": [
-                    "analysis"
-                ],
-                "summary": "Queue Status",
-                "description": "Monitor queue health for scaling decisions",
-                "operationId": "queue_status",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorResponse"
                                 }
                             }
                         }
@@ -4966,10 +4875,17 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    },
+                                    "anyOf": [
+                                        {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        {
+                                            "type": "null"
+                                        }
+                                    ],
                                     "title": "Response Get Fixed Personas"
                                 }
                             }
@@ -6462,6 +6378,50 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "patch": {
                 "tags": [
                     "admin"
@@ -6550,7 +6510,7 @@
                     }
                 }
             },
-            "get": {
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -6595,50 +6555,6 @@
                 }
             },
             "delete": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -6934,134 +6850,6 @@
                         }
                     }
                 }
-            }
-        },
-        "/ws/connections": {
-            "get": {
-                "tags": [
-                    "interviews"
-                ],
-                "summary": "Active Websockets",
-                "operationId": "active_websockets_ws_connections_get",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response Active Websockets Ws Connections Get"
-                                }
-                            }
-                        }
-                    }
-                },
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ]
-            }
-        },
-        "/ws/connect/{project_id}/{interview_id}": {
-            "get": {
-                "tags": [
-                    "interviews"
-                ],
-                "summary": "Connect",
-                "operationId": "connect_ws_connect__project_id___interview_id__get",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "project_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid4",
-                            "title": "Project Id"
-                        }
-                    },
-                    {
-                        "name": "interview_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid4",
-                            "title": "Interview Id"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/ws/broadcast": {
-            "post": {
-                "tags": [
-                    "interviews"
-                ],
-                "summary": "Broadcast",
-                "operationId": "broadcast_ws_broadcast_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/BroadcastRequest"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                },
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ]
             }
         }
     },
@@ -7771,19 +7559,6 @@
                     "file"
                 ],
                 "title": "Body_upload_audio"
-            },
-            "BroadcastRequest": {
-                "properties": {
-                    "message": {
-                        "type": "string",
-                        "title": "Message"
-                    }
-                },
-                "type": "object",
-                "required": [
-                    "message"
-                ],
-                "title": "BroadcastRequest"
             },
             "CheckboxItem": {
                 "additionalProperties": false,
@@ -8831,28 +8606,16 @@
             "InterviewGuide-Input": {
                 "properties": {
                     "framing": {
-                        "anyOf": [
-                            {
-                                "type": "string"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
+                        "type": "string",
                         "title": "Framing",
-                        "description": "A description of the interview and its purpose. Only used by the model."
+                        "description": "A description of the interview and its purpose. Only used by the model.",
+                        "default": ""
                     },
                     "introduction": {
-                        "anyOf": [
-                            {
-                                "type": "string"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
+                        "type": "string",
                         "title": "Introduction",
-                        "description": "An introduction to the interview. Displayed to the interviewee as the first message. They whon't be able to respond to this message."
+                        "description": "An introduction to the interview. Displayed to the interviewee as the first message. They whon't be able to respond to this message.",
+                        "default": ""
                     },
                     "question_sections": {
                         "items": {
@@ -8901,28 +8664,16 @@
             "InterviewGuide-Output": {
                 "properties": {
                     "framing": {
-                        "anyOf": [
-                            {
-                                "type": "string"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
+                        "type": "string",
                         "title": "Framing",
-                        "description": "A description of the interview and its purpose. Only used by the model."
+                        "description": "A description of the interview and its purpose. Only used by the model.",
+                        "default": ""
                     },
                     "introduction": {
-                        "anyOf": [
-                            {
-                                "type": "string"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
+                        "type": "string",
                         "title": "Introduction",
-                        "description": "An introduction to the interview. Displayed to the interviewee as the first message. They whon't be able to respond to this message."
+                        "description": "An introduction to the interview. Displayed to the interviewee as the first message. They whon't be able to respond to this message.",
+                        "default": ""
                     },
                     "question_sections": {
                         "items": {
@@ -11581,6 +11332,7 @@
                         "default": 0
                     }
                 },
+                "additionalProperties": false,
                 "type": "object",
                 "title": "TimeDelta"
             },
@@ -12204,8 +11956,8 @@
                 "title": "ChatMessage",
                 "type": "object"
             },
-            "CustomTokens": {
-                "title": "CustomTokens",
+            "CustomToken": {
+                "title": "CustomToken",
                 "type": "string",
                 "enum": [
                     "<|endofprobe|>",
