@@ -400,12 +400,15 @@ if __name__ == "__main__":
     if args.update_prompts:
         for user in db.users.get_users():
             for folder in db.projects.get_folders(user_id=user.id):
-                for project in db.projects.get_projects(folder_id=folder.id):
-                    db.projects.set_prompts(
-                        project.id,
-                        language=project.config.default_language,
-                        prompts=DEFAULT_PROMPTS,
-                    )
+                for project in db.projects.get_projects(
+                    folder_id=folder.id, include_available_languages=True
+                ):
+                    for language in project.available_languages:  # ty:ignore[not-iterable]
+                        db.projects.set_prompts(
+                            project.id,
+                            language=language["code"],
+                            prompts=DEFAULT_PROMPTS,
+                        )
 
     if args.create_interviews:
         for i in range(args.n_interviews):
