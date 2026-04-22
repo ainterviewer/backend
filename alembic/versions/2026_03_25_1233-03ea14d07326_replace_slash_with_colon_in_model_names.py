@@ -5,17 +5,25 @@ Revises: 4d693d77718b
 Create Date: 2026-03-25 12:33:03.357113
 
 """
+
 import json
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
 
-AGENT_CONFIG_KEYS = ["probing", "classification", "history", "security", "visual", "answering"]
+AGENT_CONFIG_KEYS = [
+    "probing",
+    "classification",
+    "history",
+    "security",
+    "visual",
+    "answering",
+]
 
 # revision identifiers, used by Alembic.
-revision: str = '03ea14d07326'
-down_revision: Union[str, None] = '4d693d77718b'
+revision: str = "03ea14d07326"
+down_revision: Union[str, None] = "4d693d77718b"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -33,22 +41,35 @@ def upgrade() -> None:
 
     # --- projectlocalization.agent_configs ---
     rows = conn.execute(
-        sa.text("SELECT id, agent_configs FROM projectlocalization WHERE agent_configs IS NOT NULL")
+        sa.text(
+            "SELECT id, agent_configs FROM projectlocalization WHERE agent_configs IS NOT NULL"
+        )
     ).fetchall()
 
     for row_id, agent_configs_raw in rows:
-        agent_configs = json.loads(agent_configs_raw) if isinstance(agent_configs_raw, str) else agent_configs_raw
+        agent_configs = (
+            json.loads(agent_configs_raw)
+            if isinstance(agent_configs_raw, str)
+            else agent_configs_raw
+        )
 
         changed = False
         for key in AGENT_CONFIG_KEYS:
             config = agent_configs.get(key)
-            if isinstance(config, dict) and "model" in config and "/" in config["model"] and ":" not in config["model"]:
+            if (
+                isinstance(config, dict)
+                and "model" in config
+                and "/" in config["model"]
+                and ":" not in config["model"]
+            ):
                 config["model"] = _replace_first_slash(config["model"])
                 changed = True
 
         if changed:
             conn.execute(
-                sa.text("UPDATE projectlocalization SET agent_configs = :configs WHERE id = :id"),
+                sa.text(
+                    "UPDATE projectlocalization SET agent_configs = :configs WHERE id = :id"
+                ),
                 {"configs": json.dumps(agent_configs), "id": row_id},
             )
 
@@ -76,22 +97,34 @@ def downgrade() -> None:
 
     # --- projectlocalization.agent_configs ---
     rows = conn.execute(
-        sa.text("SELECT id, agent_configs FROM projectlocalization WHERE agent_configs IS NOT NULL")
+        sa.text(
+            "SELECT id, agent_configs FROM projectlocalization WHERE agent_configs IS NOT NULL"
+        )
     ).fetchall()
 
     for row_id, agent_configs_raw in rows:
-        agent_configs = json.loads(agent_configs_raw) if isinstance(agent_configs_raw, str) else agent_configs_raw
+        agent_configs = (
+            json.loads(agent_configs_raw)
+            if isinstance(agent_configs_raw, str)
+            else agent_configs_raw
+        )
 
         changed = False
         for key in AGENT_CONFIG_KEYS:
             config = agent_configs.get(key)
-            if isinstance(config, dict) and "model" in config and ":" in config["model"]:
+            if (
+                isinstance(config, dict)
+                and "model" in config
+                and ":" in config["model"]
+            ):
                 config["model"] = _replace_first_colon(config["model"])
                 changed = True
 
         if changed:
             conn.execute(
-                sa.text("UPDATE projectlocalization SET agent_configs = :configs WHERE id = :id"),
+                sa.text(
+                    "UPDATE projectlocalization SET agent_configs = :configs WHERE id = :id"
+                ),
                 {"configs": json.dumps(agent_configs), "id": row_id},
             )
 

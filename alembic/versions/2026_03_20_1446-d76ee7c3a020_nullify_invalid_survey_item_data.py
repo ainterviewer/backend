@@ -5,6 +5,7 @@ Revises: 43df73dcae59
 Create Date: 2026-03-20 14:46:59.862397
 
 """
+
 import json
 import logging
 from typing import Sequence, Union
@@ -18,8 +19,8 @@ from ainterviewer.interview_guides import SurveyItem
 logger = logging.getLogger(__name__)
 
 # revision identifiers, used by Alembic.
-revision: str = 'd76ee7c3a020'
-down_revision: Union[str, None] = '43df73dcae59'
+revision: str = "d76ee7c3a020"
+down_revision: Union[str, None] = "43df73dcae59"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -34,7 +35,11 @@ def upgrade() -> None:
 
     nullified = 0
     for row_id, survey_item_raw in rows:
-        data = survey_item_raw if isinstance(survey_item_raw, dict) else json.loads(survey_item_raw)
+        data = (
+            survey_item_raw
+            if isinstance(survey_item_raw, dict)
+            else json.loads(survey_item_raw)
+        )
 
         if not isinstance(data, dict):
             continue
