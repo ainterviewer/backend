@@ -59,8 +59,8 @@ wheels = [
 
 [[package]]
 name = "ainterviewer"
-version = "0.1.0"
-source = { git = "https://github.com/ainterviewer/lib.git?tag=v0.1.0#3b4c5bb950db83e82a59638b04476d1feef2bf5c" }
+version = "0.1.2"
+source = { git = "https://github.com/ainterviewer/lib.git?tag=v0.1.2#758e60788992e457c422c22a8bb9df96176feb74" }
 dependencies = [
     { name = "any-llm-sdk", extra = ["gemini"] },
     { name = "fastapi", extra = ["standard"] },
@@ -150,7 +150,7 @@ dev = [
 requires-dist = [
     { name = "adbc-driver-postgresql", specifier = ">=1.6.0" },
     { name = "adbc-driver-sqlite", marker = "extra == 'analysis'", specifier = ">=1.6.0" },
-    { name = "ainterviewer", git = "https://github.com/ainterviewer/lib.git?tag=v0.1.0" },
+    { name = "ainterviewer", git = "https://github.com/ainterviewer/lib.git?tag=v0.1.2" },
     { name = "aiofiles", specifier = ">=25.1.0" },
     { name = "aiohttp", specifier = ">=3.13.5" },
     { name = "aiosmtplib", specifier = ">=4.0.1" },
