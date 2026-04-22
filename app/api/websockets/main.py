@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
-from . import interviews
+from .interviews import ai
 
 router = APIRouter()
 
-router.include_router(interviews.router)
+router.include_router(ai.router)

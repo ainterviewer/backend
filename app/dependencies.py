@@ -16,7 +16,7 @@ from .db import InterviewDataBase
 from .db.vectors import register_vector_extension
 from .settings import app_settings
 from .types import CollaboratorRole, Scope
-from .websockets import WebSocketConnectionManager
+# from .websockets import WebSocketConnectionManager
 
 # Templating
 fronted_dir = Path(__file__).parent.absolute() / "frontend"
@@ -25,15 +25,6 @@ templates_dir = fronted_dir / "templates"
 templates = Jinja2Templates(directory=templates_dir)
 
 auth_cookie_scheme = APIKeyCookie(name="access_token", auto_error=False)
-
-# oauth2_scheme = OAuth2PasswordBearer(
-#     tokenUrl="token",
-#     scopes={
-#         "me": "Read information about the current user.",
-#         "guest": "Browse the site as a guest.",
-#         "admin": "Perform administrative tasks.",
-#     },
-# )
 
 
 # TODO:
@@ -56,11 +47,11 @@ def get_db() -> Generator[InterviewDataBase, None, None]:
         yield db
 
 
-manager = WebSocketConnectionManager()
-
-
-def get_ws_manager():
-    return manager
+# manager = WebSocketConnectionManager()
+#
+#
+# def get_ws_manager():
+#     return manager
 
 
 class AuthError(HTTPException): ...
