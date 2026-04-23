@@ -5,6 +5,7 @@ Revises: 0aeedbbaa569
 Create Date: 2026-04-23 10:45:17.903978
 
 """
+
 import json
 from typing import Sequence, Union
 
@@ -13,8 +14,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '8804ba71199e'
-down_revision: Union[str, None] = '0aeedbbaa569'
+revision: str = "8804ba71199e"
+down_revision: Union[str, None] = "0aeedbbaa569"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -40,16 +41,12 @@ def upgrade() -> None:
         for row_id, guide_raw in rows:
             if guide_raw is None:
                 continue
-            guide = (
-                json.loads(guide_raw) if isinstance(guide_raw, str) else guide_raw
-            )
+            guide = json.loads(guide_raw) if isinstance(guide_raw, str) else guide_raw
             if not isinstance(guide, dict):
                 continue
             if _normalize(guide):
                 bind.execute(
-                    sa.text(
-                        f"UPDATE {table} SET interview_guide = :g WHERE id = :id"
-                    ),
+                    sa.text(f"UPDATE {table} SET interview_guide = :g WHERE id = :id"),
                     {"g": json.dumps(guide), "id": row_id},
                 )
 
