@@ -320,6 +320,8 @@ class ProjectRepository(BaseRepository):
                 interview_guide=loc.interview_guide,
                 prompts=loc.prompts,
                 agent_configs=loc.agent_configs,
+                consent=loc.consent,
+                welcome=loc.welcome,
             )
             self.session.add(new_loc)
 
