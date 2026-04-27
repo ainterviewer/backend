@@ -119,6 +119,7 @@ async def create_interview(
         referer=new_interview.referer,
         external_params=new_interview.external_params,
         ip_address=ip_address,
+        language=project_localization.language,
     )
 
     interview_token = create_interview_token(
