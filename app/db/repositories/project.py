@@ -492,18 +492,17 @@ class ProjectRepository(BaseRepository):
 
         return self.get_available_languages_optimized(project.id)
 
-    def remove_project_language(self, project_id: UUID4, language: LanguageCode):
+    def remove_project_language(
+        self, project_id: UUID4, language: LanguageCode
+    ) -> list[LanguageDict]:
         delete_statement = delete(ProjectLocalizationTable).where(
             ProjectLocalizationTable.project_id == project_id,
             ProjectLocalizationTable.language == language,
         )
         self.session.execute(delete_statement)
-
-        statement = select(ProjectTable).where(ProjectTable.id == project_id)
-        project = self.session.execute(statement).scalar_one()
         self.session.commit()
 
-        return self.get_available_languages_optimized(project.id)
+        return self.get_available_languages_optimized(project_id)
 
     async def _add_localization(
         self, project: ProjectTable, language: LanguageCode, translate: bool
