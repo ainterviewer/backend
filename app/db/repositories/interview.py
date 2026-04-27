@@ -1,11 +1,12 @@
 import datetime
+import logging
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal, Optional
 
 from pydantic import UUID4
 from sqlalchemy import delete, func, select, update
-from sqlalchemy.exc import NoResultFound
+from sqlalchemy.exc import IntegrityError, NoResultFound
 
 from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
 from ainterviewer.types import (
@@ -33,6 +34,8 @@ from ..tables import (
 )
 from ..types import InterviewType
 from .base import BaseRepository
+
+logger = logging.getLogger(__name__)
 
 
 class InterviewRepository(BaseRepository):
@@ -277,7 +280,21 @@ class InterviewRepository(BaseRepository):
             skipped_by_condition=skipped_by_condition,
         )
         self.session.add(message)
-        self.session.commit()
+        try:
+            self.session.commit()
+        except IntegrityError:
+            self.session.rollback()
+            logger.warning(
+                "Skipping duplicate message insert "
+                "(project_id=%s interview_id=%s message_id=%s role=%s); "
+                "an existing row with this (message_id, interview_id, project_id) "
+                "is already persisted.",
+                project_id,
+                interview_id,
+                message_id,
+                role,
+            )
+            return message_id
 
         return message.message_id
 

@@ -1,3 +1,90 @@
+import asyncio
+import logging
+from dataclasses import dataclass
+from uuid import UUID
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _Session:
+    task: asyncio.Task
+    done: asyncio.Event
+
+
+class InterviewSessionManager:
+    """Tracks one active WebSocket session per (project_id, interview_id).
+
+    When a new connection is claimed for an interview that already has a
+    live session, the previous session's task is cancelled and we wait for
+    it to finish teardown before the new session proceeds. This prevents
+    two AInterviewer instances from racing on writes to the same interview
+    (e.g. duplicate `message_id` inserts on a probe-in-flight reconnect).
+    """
+
+    _CANCEL_TIMEOUT_S = 10.0
+
+    def __init__(self) -> None:
+        self._sessions: dict[tuple[UUID, UUID], _Session] = {}
+        self._lock = asyncio.Lock()
+
+    async def claim(self, project_id: UUID, interview_id: UUID) -> asyncio.Event:
+        """Register the current task as the active session for this interview.
+
+        If another session is already registered, cancel it and wait for
+        its `done` event before returning. The caller MUST pass the
+        returned event to `release()` in a `finally` block.
+        """
+        key = (project_id, interview_id)
+        current = asyncio.current_task()
+        if current is None:
+            raise RuntimeError("claim() must be called from within a task")
+
+        async with self._lock:
+            existing = self._sessions.get(key)
+
+        if existing is not None:
+            logger.warning(
+                "Cancelling prior websocket session for project=%s interview=%s",
+                project_id,
+                interview_id,
+            )
+            existing.task.cancel()
+            try:
+                await asyncio.wait_for(
+                    existing.done.wait(), timeout=self._CANCEL_TIMEOUT_S
+                )
+            except asyncio.TimeoutError:
+                logger.error(
+                    "Prior session for project=%s interview=%s did not exit "
+                    "within %.1fs; proceeding anyway",
+                    project_id,
+                    interview_id,
+                    self._CANCEL_TIMEOUT_S,
+                )
+
+        done = asyncio.Event()
+        async with self._lock:
+            self._sessions[key] = _Session(task=current, done=done)
+        return done
+
+    def release(
+        self, project_id: UUID, interview_id: UUID, done: asyncio.Event
+    ) -> None:
+        """Remove this session from the registry and signal completion.
+
+        Only removes the entry if it still points at this session (a newer
+        connection may have already replaced it).
+        """
+        key = (project_id, interview_id)
+        existing = self._sessions.get(key)
+        if existing is not None and existing.done is done:
+            del self._sessions[key]
+        done.set()
+
+
+session_manager = InterviewSessionManager()
+
 # from collections import defaultdict
 #
 # from fastapi import WebSocket

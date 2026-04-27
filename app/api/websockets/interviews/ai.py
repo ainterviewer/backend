@@ -6,6 +6,8 @@
 # - Consider changing to server side events instead of websockets if it
 # improves unstable connections
 
+import asyncio
+
 from fastapi import (
     APIRouter,
     Query,
@@ -24,9 +26,11 @@ from ainterviewer.lpm.types import CustomToken
 from ainterviewer.settings import settings
 
 from ....auth import decode_interview_token
+from ....db import InterviewDataBase
 from ....dependencies import DBSession
 from ....utils import replay_history
 from ..handler import WebsocketMessageHandler
+from ..manager import session_manager
 
 router = APIRouter(prefix="/ws", tags=["interviews"])
 
@@ -56,6 +60,36 @@ async def ai_interview_websocket_endpoint(
     project_id = interview_token.project_id
     interview_id = interview_token.interview_id
 
+    session_done = await session_manager.claim(project_id, interview_id)
+
+    try:
+        await _run_interview(
+            websocket=websocket,
+            db=db,
+            project_id=project_id,
+            interview_id=interview_id,
+            initialized=initialized,
+        )
+    except asyncio.CancelledError:
+        # Deliberately cancelled by session_manager because a newer connection
+        # took over this interview. Close the socket and exit cleanly so
+        # uvicorn doesn't log it as an unhandled ASGI exception.
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+    finally:
+        session_manager.release(project_id, interview_id, session_done)
+
+
+async def _run_interview(
+    *,
+    websocket: WebSocket,
+    db: InterviewDataBase,
+    project_id,
+    interview_id,
+    initialized: bool,
+):
     # TODO: Implement a better way to handle interview restarts
     try:
         interview = db.interviews.get_interview(
