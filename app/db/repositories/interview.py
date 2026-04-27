@@ -56,8 +56,6 @@ class InterviewRepository(BaseRepository):
         interview_guide: InterviewGuide,
         interview_type: InterviewType,
         interviewer: Interviewer = Interviewer.AI,
-        synthetic: bool = False,
-        test: bool = False,
         **kwargs,
     ) -> InterviewPublic:
         platform_version = self.session.execute(
