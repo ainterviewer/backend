@@ -19,6 +19,7 @@ from .repositories import (
     UserRepository,
 )
 from .tables import Base, PlatformReleaseTable
+from .triggers import install_triggers
 
 ALEMBIC_BASE_RIVISON_ID = "fbcbd179bfba"
 
@@ -74,6 +75,7 @@ class InterviewDataBase(PersistenceProtocol):
         self.session.execute(text("PRAGMA temp_store=MEMORY"))
 
         Base.metadata.create_all(self.session.connection())
+        install_triggers(self.session.connection())
 
         if alembic_init_head_migration:
             alembic_command.stamp(self._alembic_config, ALEMBIC_BASE_RIVISON_ID)
@@ -83,6 +85,7 @@ class InterviewDataBase(PersistenceProtocol):
                 autogenerate=True,
                 rev_id=ALEMBIC_BASE_RIVISON_ID,
             )
+            alembic_command.upgrade(self._alembic_config, "head")
             alembic_command.upgrade(self._alembic_config, "head")
 
     def drop_all_tables(self):

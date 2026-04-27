@@ -1,5 +1,5 @@
-import datetime
 import uuid
+import datetime
 from typing import Any, Optional
 from uuid import uuid4
 
@@ -34,12 +34,7 @@ from app.platform_release import PlatformManifest
 
 from ..types import CollaboratorRole, ExternalParam, ProjectStatus, Scope, TestRunStatus
 from ._extra import PydanticJSONB
-from .types import (
-    AccessRequestStatus,
-    AnnotationType,
-    InterviewType,
-    LanguageType,
-)
+from .types import AccessRequestStatus, AnnotationType, InterviewType, LanguageType
 
 naming_convention = {
     "ix": "ix_%(column_0_label)s",
@@ -235,7 +230,9 @@ class ProjectFolderTable(Base):
     )
     title: Mapped[str] = mapped_column()
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
-    last_updated: Mapped[datetime.datetime | None] = mapped_column(default=now)
+    last_updated: Mapped[datetime.datetime | None] = mapped_column(
+        default=now, onupdate=now
+    )
 
     # Relationsiphs
     projects: Mapped[list["ProjectTable"]] = relationship(back_populates="folder")
@@ -261,7 +258,11 @@ class ProjectTable(Base):
     folder_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("projectfolder.id"))
     title: Mapped[str] = mapped_column()
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
-    last_updated: Mapped[datetime.datetime | None] = mapped_column(default=now)
+    # Also bumped by a DB trigger when any ProjectLocalization row changes;
+    # see app/db/triggers.py.
+    last_updated: Mapped[datetime.datetime | None] = mapped_column(
+        default=now, onupdate=now
+    )
     status: Mapped[ProjectStatus] = mapped_column(
         SQLEnum(ProjectStatus), default=ProjectStatus.ACTIVE
     )
@@ -332,7 +333,11 @@ class ProjectLocalizationTable(Base):
         default=lambda: AgentConfigs(),
     )
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
-    last_updated: Mapped[datetime.datetime | None] = mapped_column()
+    # Changes here also bump ProjectTable.last_updated via a DB trigger;
+    # see app/db/triggers.py.
+    last_updated: Mapped[datetime.datetime | None] = mapped_column(
+        default=now, onupdate=now
+    )
 
     # Relationships
     project: Mapped["ProjectTable"] = relationship(back_populates="localizations")
@@ -454,7 +459,7 @@ class InterviewTable(Base):
     )
 
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
-    last_updated: Mapped[datetime.datetime | None] = mapped_column()
+    last_updated: Mapped[datetime.datetime | None] = mapped_column(onupdate=now)
     total_time_spent: Mapped[int] = mapped_column(default=0)
     survey_token: Mapped[str | None] = mapped_column()
     user_agent: Mapped[str | None] = mapped_column()
@@ -620,7 +625,7 @@ class TestSetupTable(Base):
     type: Mapped[TestType] = mapped_column(SQLEnum(TestType))
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
-    last_updated: Mapped[datetime.datetime | None] = mapped_column()
+    last_updated: Mapped[datetime.datetime | None] = mapped_column(onupdate=now)
     language: Mapped[LanguageCode] = mapped_column(LanguageType, default="EN")
     n_interviews: Mapped[int] = mapped_column(default=5)
     answering_model: Mapped[str] = mapped_column()
@@ -656,7 +661,7 @@ class TestRunTable(Base):
     answering_model: Mapped[str | None] = mapped_column()
     delay_before_answers: Mapped[Any | None] = mapped_column(JSON)
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
-    last_updated: Mapped[datetime.datetime | None] = mapped_column()
+    last_updated: Mapped[datetime.datetime | None] = mapped_column(onupdate=now)
     status: Mapped[TestRunStatus] = mapped_column(
         SQLEnum(TestRunStatus), default=TestRunStatus.PENDING
     )
