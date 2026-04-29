@@ -147,8 +147,6 @@ async def run_synthetic_fixed_answers(
     # other places.
     fixed_answers = fixed_answers.copy()
 
-    i = 0
-
     interview_token = await fetch_token(
         auth_token=user_token,
         project_id=project_id,
