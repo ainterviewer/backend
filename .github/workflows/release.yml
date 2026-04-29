@@ -36,7 +36,6 @@ jobs:
       - name: Run pre-commit hooks
         run: uv run prek run --all-files
 
-      # - run: uv run ty check app
       # - run: uv run pytest -q
 
       - name: Minimize uv cache
