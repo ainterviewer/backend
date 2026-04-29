@@ -163,15 +163,12 @@ async def run_synthetic_fixed_answers(
             case "message":
                 message = OutgoingMessage(**json_data)
                 if message.can_answer:
-                    i += 1
-                    # every second question is a probe without any fixed
-                    # answer, so we automatically skip that
-                    if i % 2:
-                        response_text = fixed_answers.pop(0)
-                        delay = delay_before_answer
-                    else:
+                    if message.is_probe:
                         response_text = CustomToken.skip_question
                         delay = None
+                    else:
+                        response_text = fixed_answers.pop(0)
+                        delay = delay_before_answer
 
                     await _send_response(websocket, response_text, delay)
 
