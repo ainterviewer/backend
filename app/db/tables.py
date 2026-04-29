@@ -258,8 +258,8 @@ class ProjectTable(Base):
     folder_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("projectfolder.id"))
     title: Mapped[str] = mapped_column()
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
-    # Also bumped by a DB trigger when any ProjectLocalization row changes;
-    # see app/db/triggers.py.
+    # Also bumped by DB triggers when any ProjectLocalization, TestSetup, or
+    # TestRun row changes; see app/db/triggers.py.
     last_updated: Mapped[datetime.datetime | None] = mapped_column(
         default=now, onupdate=now
     )
@@ -625,6 +625,8 @@ class TestSetupTable(Base):
     type: Mapped[TestType] = mapped_column(SQLEnum(TestType))
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
+    # Also bumped by a DB trigger when any TestRun row for this setup changes,
+    # and changes here bump ProjectTable.last_updated; see app/db/triggers.py.
     last_updated: Mapped[datetime.datetime | None] = mapped_column(onupdate=now)
     language: Mapped[LanguageCode] = mapped_column(LanguageType, default="EN")
     n_interviews: Mapped[int] = mapped_column(default=5)
@@ -661,6 +663,8 @@ class TestRunTable(Base):
     answering_model: Mapped[str | None] = mapped_column()
     delay_before_answers: Mapped[Any | None] = mapped_column(JSON)
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
+    # Changes here also bump TestSetupTable.last_updated and
+    # ProjectTable.last_updated via DB triggers; see app/db/triggers.py.
     last_updated: Mapped[datetime.datetime | None] = mapped_column(onupdate=now)
     status: Mapped[TestRunStatus] = mapped_column(
         SQLEnum(TestRunStatus), default=TestRunStatus.PENDING
