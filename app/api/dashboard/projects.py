@@ -488,7 +488,6 @@ async def get_interviews(
     response = [
         InterviewSummaryPublic(**interview.model_dump()) for interview in interviews
     ]
-    print(response)
 
     return PaginatedResponse(total=total, items=response)
 
