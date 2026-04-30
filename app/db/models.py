@@ -288,6 +288,7 @@ class InterviewBase(_BaseModel):
     ip_address: Optional[str] = None
     referer: Optional[str] = None
     platform_version: Optional[str] = None
+    test_name: str | None = None
 
 
 class InterviewCreate(_BaseModel):
@@ -314,6 +315,7 @@ class InterviewSummaryPublic(_BaseModel):
     total_time_spent: int = 0
     n_messages: int
     messages: list["MessagePublic"]
+    test_name: str | None = None
 
 
 class MessageBase(_BaseModel):

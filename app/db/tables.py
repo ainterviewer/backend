@@ -505,6 +505,12 @@ class InterviewTable(Base):
             .scalar_subquery()
         )
 
+    @property
+    def test_name(self) -> str | None:
+        if self.type != InterviewType.SYNTHETIC_TEST or self.test_run is None:
+            return None
+        return self.test_run.test_setup.name if self.test_run.test_setup else None
+
 
 class InterviewService:
     """Service class to handle Interview business logic"""
