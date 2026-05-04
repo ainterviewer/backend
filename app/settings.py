@@ -99,7 +99,7 @@ class EmailAccount(BaseModel):
 class ServiceSettings(BaseSettings):
     """Different extra services required to run the app"""
 
-    email: EmailSettings
+    email: EmailSettings | None = None
 
     model_config = BaseSettingsConfigDict(env_prefix="APP_SERVICE__")
 
@@ -118,9 +118,9 @@ class Settings(BaseSettings):
     debug: bool = False
     app_env: Literal["production", "staging", "development"] = "development"
 
-    app: AppSettings
-    database: DatabaseSettings
-    services: ServiceSettings
+    app: AppSettings = AppSettings()
+    database: DatabaseSettings = DatabaseSettings()
+    services: ServiceSettings = ServiceSettings()  # ty: ignore[missing-argument]
 
     # TODO:
     # - Should the secrets be a standalone class so they cant be read
