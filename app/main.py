@@ -64,6 +64,7 @@ async def lifespan(app: FastAPI):
     with Session(engine) as session:
         db = InterviewDataBase(session)
         db.on_shutdown()
+    engine.dispose()
 
 
 app = FastAPI(
