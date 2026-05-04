@@ -3,18 +3,15 @@ from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import create_engine
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ainterviewer.agents.config import read_agent_configs
 from ainterviewer.agents.prompts.models import DEFAULT_PROMPTS
-from ainterviewer.config import read_configs, read_interview_config
+from ainterviewer.config import read_interview_config
 from ainterviewer.interview_guides import InterviewGuide
-from ainterviewer.types import DatabaseType
 
 from ..settings import app_settings
 from .crud import InterviewDataBase
-from .models import UserCreate
 from .vectors import register_vector_extension
 
 
@@ -173,31 +170,6 @@ if __name__ == "__main__":
     session = Session(engine)
     db = InterviewDataBase(session)
 
-    if args.update_models:
-        db.create_db_and_tables()
-        print("Models updated")
-
-    if args.recreate_db:
-        DB_FILE = Path(
-            f"{app_settings.database.db_path}/{app_settings.database.database_file}"
-        )
-        if DB_FILE.exists():
-            while (
-                answer := input(
-                    "Are you sure you want to delete the database and all data? y/n\n"
-                ).lower()
-            ) not in ["y", "n"]:
-                print("Invalid input")
-            if answer == "y":
-                if app_settings.database.db == DatabaseType.SQLITE:
-                    DB_FILE.unlink(missing_ok=True)
-            else:
-                print("Abort. Database not deleted.")
-                exit()
-
-        db.create_db_and_tables()
-        print("Database and tables recreated")
-
     if args.setup_db:
         raise NotImplementedError
         for project in Path.cwd().glob("data/projects/*"):
@@ -349,74 +321,3 @@ if __name__ == "__main__":
                 print(f"  - No update files found for '{project_title}'.")
 
         print("Finished updating projects.")
-
-    if args.create_users:
-        file = args.users_file
-        if not file.exists():
-            print(f"{args.users_file} file not found")
-            exit()
-
-        with file.open() as f:
-            users = json.load(f)
-
-        n = 0
-        for user in users:
-            try:
-                db.users.create_user(UserCreate(**user))
-                n += 1
-            except IntegrityError:
-                print(f"User {user['email']} already exists")
-
-        print(f"created {n} user{'s' if n > 1 else ''}")
-
-    if args.create_project:
-        raise NotImplementedError
-        with open(args.interview_guide_path) as f:
-            interview_guide = InterviewGuide(**json.load(f))
-
-        interview_config, agents_config = read_configs(args.interview_config_path)
-
-        project_id = db.create_project(
-            title=args.interview_title,
-            interview_config=interview_config,
-            interview_guide_content=interview_guide,
-            agent_configs=agents_config,
-        )
-        print(f"Project created with id {project_id}")
-
-    if args.update_interview_guide:
-        with open(args.interview_guide_path) as f:
-            interview_guide = InterviewGuide(**json.load(f))
-
-        db.update_interview_guide(args.project_id, interview_guide)
-        print(f"Interview guide updated for project {args.project_id}")
-
-    if args.update_interview_config:
-        raise NotImplementedError
-        models_config = read_configs(args.interview_config_path)
-        db.update_interview_config(args.project_id, models_config)
-        print(f"Interview config updated for project {args.project_id}")
-
-    if args.update_prompts:
-        for user in db.users.get_users():
-            for folder in db.projects.get_folders(user_id=user.id):
-                for project in db.projects.get_projects(
-                    folder_id=folder.id, include_available_languages=True
-                ):
-                    for language in project.available_languages:  # ty:ignore[not-iterable]
-                        db.projects.set_prompts(
-                            project.id,
-                            language=language["code"],
-                            prompts=DEFAULT_PROMPTS,
-                        )
-
-    if args.create_interviews:
-        for i in range(args.n_interviews):
-            interview = db.create_interview(args.project_id)
-            print(f"Interview created with id {interview.id}")
-
-    if args.create_invite:
-        raise NotImplementedError
-        invite = db.create_invitation()
-        print(f"Invite created with token {invite.token}")
-        print(f"Invite link: {invite.invitation_link}")

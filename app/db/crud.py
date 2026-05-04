@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
 from sqlalchemy import select, text
@@ -20,9 +18,6 @@ from .repositories import (
 )
 from .tables import Base, PlatformReleaseTable
 from .triggers import install_triggers
-
-ALEMBIC_BASE_RIVISON_ID = "fbcbd179bfba"
-
 
 class InterviewDataBase(PersistenceProtocol):
     """
@@ -60,13 +55,6 @@ class InterviewDataBase(PersistenceProtocol):
 
     def create_db_and_tables(self):
         """Creates the db and all the required tables based on the SQLAlchemy models"""
-
-        alembic_init_head_migration = list(
-            Path(APP_DIR.parent / "alembic" / "versions").glob(
-                "*" + ALEMBIC_BASE_RIVISON_ID + "*.py"
-            )
-        )
-
         self.session.execute(text("PRAGMA foreign_keys=ON"))
         self.session.execute(text("PRAGMA journal_mode=WAL"))
         self.session.execute(text("PRAGMA wal_autocheckpoint=100"))
@@ -76,17 +64,7 @@ class InterviewDataBase(PersistenceProtocol):
 
         Base.metadata.create_all(self.session.connection())
         install_triggers(self.session.connection())
-
-        if alembic_init_head_migration:
-            alembic_command.stamp(self._alembic_config, ALEMBIC_BASE_RIVISON_ID)
-        else:
-            alembic_command.revision(
-                self._alembic_config,
-                autogenerate=True,
-                rev_id=ALEMBIC_BASE_RIVISON_ID,
-            )
-            alembic_command.upgrade(self._alembic_config, "head")
-            alembic_command.upgrade(self._alembic_config, "head")
+        alembic_command.stamp(self._alembic_config, "head")
 
     def drop_all_tables(self):
         """Drops all tables - useful for testing or complete reset"""
@@ -95,7 +73,10 @@ class InterviewDataBase(PersistenceProtocol):
     def on_startup(self):
         self.interviews.change_active_to_inactive()
 
-    def on_shutdown(self): ...
+    def on_shutdown(self):
+        if self.session.bind.dialect.name == "sqlite":
+            self.session.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))
+            self.session.commit()
 
     # ==================== Metadata ====================
 

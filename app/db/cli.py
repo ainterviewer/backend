@@ -1,21 +1,90 @@
+from ainterviewer.agents.prompts.models import DEFAULT_PROMPTS
 import json
+from pathlib import Path
 
 import typer
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typer import Typer
 
 from ainterviewer.agents.config import AgentConfigs
 from ainterviewer.settings import settings as lib_settings
+from ainterviewer.types import DatabaseType
 
 from ..dependencies import engine, get_db
 from ..platform_release import PlatformManifest
+from ..settings import app_settings
+from .models import UserCreate
 
 cli = Typer()
 
 
 @cli.command(hidden=True)
 def _(): ...
+
+
+@cli.command()
+def setup_db(
+    fresh: bool = typer.Option(
+        False, "--fresh", help="Delete existing database before setup"
+    ),
+    users_file: Path = typer.Option(
+        Path("storage/users/default.json"),
+        "--users-file",
+        help="Path to users JSON file to seed on creation",
+    ),
+):
+    """Create database tables and seed initial users."""
+    if app_settings.database.db == DatabaseType.SQLITE:
+        db_dir = Path(app_settings.database.db_path)
+        db_dir.mkdir(parents=True, exist_ok=True)
+
+        if fresh:
+            db_file = db_dir / app_settings.database.database_file
+            if db_file.exists():
+                typer.confirm(f"Delete {db_file} and all its data?", abort=True)
+                db_file.unlink()
+                typer.echo(f"Deleted {db_file}.")
+
+    db = next(get_db())
+    db.create_db_and_tables()
+    typer.echo("Database and tables created.")
+
+    if users_file.exists():
+        with users_file.open() as f:
+            users = json.load(f)
+        n = 0
+        for user in users:
+            try:
+                db.users.create_user(UserCreate(**user))
+                n += 1
+            except IntegrityError:
+                typer.echo(f"User {user['email']} already exists, skipping.")
+        typer.echo(f"Created {n} user{'s' if n != 1 else ''}.")
+    else:
+        typer.echo(
+            typer.style(
+                f"No users file at {users_file}, skipping user creation.",
+                fg=typer.colors.RED,
+            )
+        )
+
+
+@cli.command()
+def update_prompts():
+    db = next(get_db())
+    for user in db.users.get_users():
+        for folder in db.projects.get_folders(user_id=user.id):
+            for project in db.projects.get_projects(
+                folder_id=folder.id, include_available_languages=True
+            ):
+                for language in project.available_languages:  # ty:ignore[not-iterable]
+                    db.projects.set_prompts(
+                        project.id,
+                        language=language["code"],
+                        prompts=DEFAULT_PROMPTS,
+                    )
 
 
 @cli.command()
