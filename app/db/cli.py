@@ -41,7 +41,7 @@ def setup_db(
         db_dir.mkdir(parents=True, exist_ok=True)
 
         if fresh:
-            db_file = db_dir / app_settings.database.database_file
+            db_file = db_dir / app_settings.database.database_file  # ty:ignore[unsupported-operator]
             if db_file.exists():
                 typer.confirm(f"Delete {db_file} and all its data?", abort=True)
                 db_file.unlink()

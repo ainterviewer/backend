@@ -1,6 +1,6 @@
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
-from sqlalchemy import select, text
+from sqlalchemy import select, text, Engine
 from sqlalchemy.orm import Session
 
 from ainterviewer.interfaces import PersistenceProtocol
@@ -18,6 +18,7 @@ from .repositories import (
 )
 from .tables import Base, PlatformReleaseTable
 from .triggers import install_triggers
+
 
 class InterviewDataBase(PersistenceProtocol):
     """
@@ -73,8 +74,11 @@ class InterviewDataBase(PersistenceProtocol):
     def on_startup(self):
         self.interviews.change_active_to_inactive()
 
-    def on_shutdown(self):
-        if self.session.bind.dialect.name == "sqlite":
+    def on_shutdown(self) -> None:
+        if (
+            isinstance(self.session.bind, Engine)
+            and self.session.bind.dialect.name == "sqlite"
+        ):
             self.session.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))
             self.session.commit()
 

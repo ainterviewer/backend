@@ -190,7 +190,7 @@ async def request_access(access_request: AccessRequestCreate, db: DBSession):
     try:
         db.users.create_access_request(access_request)
         await send_email(
-            app_settings.services.email.recipient.email,
+            app_settings.services.email.recipient.email,  # ty:ignore[unresolved-attribute]
             "New access request",
             body=f"New access request from {access_request.email}\n\nOrganization: {access_request.organization}\nMessage:\n{access_request.message}",
         )
