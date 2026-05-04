@@ -120,7 +120,7 @@ class Settings(BaseSettings):
 
     app: AppSettings = AppSettings()
     database: DatabaseSettings = DatabaseSettings()
-    services: ServiceSettings = ServiceSettings()
+    services: ServiceSettings
 
     # TODO:
     # - Should the secrets be a standalone class so they cant be read
@@ -191,7 +191,7 @@ class Settings(BaseSettings):
 
 
 # TODO: Read/write to/from database or config file to get persistent changes?
-app_settings = Settings()
+app_settings = Settings()  # ty: ignore[missing-argument]
 
 if __name__ == "__main__":
     from ainterviewer.settings import settings as lib_settings
