@@ -1,8 +1,9 @@
-import uuid
 import datetime
+import uuid
 from typing import Any, Optional
 from uuid import uuid4
 
+import sqlalchemy as sa
 from sqlalchemy import JSON, ForeignKey, MetaData, Text, UniqueConstraint, Uuid, select
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.ext.associationproxy import association_proxy
@@ -50,6 +51,10 @@ metadata_obj = MetaData(naming_convention=naming_convention)
 class Base(DeclarativeBase):
     metadata = metadata_obj
 
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
+    )
+
 
 ############
 # Metadata #
@@ -58,10 +63,6 @@ class Base(DeclarativeBase):
 
 class PlatformReleaseTable(Base):
     __tablename__ = "platform_release"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
 
     platform_release_version: Mapped[str] = mapped_column(unique=True)
     platform_manifest: Mapped[PlatformManifest] = mapped_column(
@@ -78,9 +79,6 @@ class PlatformReleaseTable(Base):
 class AccessRequestTable(Base):
     __tablename__ = "access_requests"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     name: Mapped[str] = mapped_column()
     email: Mapped[str] = mapped_column(unique=True)
     organization: Mapped[str | None] = mapped_column()
@@ -106,9 +104,6 @@ class AccessRequestTable(Base):
 class InvitationTable(Base):
     __tablename__ = "invitation"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     email: Mapped[str | None] = mapped_column(unique=True, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     expires_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
@@ -139,9 +134,6 @@ class InvitationTable(Base):
 class RefreshTokenTable(Base):
     __tablename__ = "refresh_token"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE"), index=True
     )
@@ -165,9 +157,6 @@ class RefreshTokenTable(Base):
 class UserTable(Base):
     __tablename__ = "user"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     email: Mapped[str] = mapped_column(unique=True)
     password: Mapped[str] = mapped_column()
     first_name: Mapped[str] = mapped_column()
@@ -185,6 +174,9 @@ class UserTable(Base):
     admin_note: Mapped[str | None] = mapped_column(Text, default=None)
     admin_note_updated_at: Mapped[datetime.datetime | None] = mapped_column(
         default=None
+    )
+    with_demo_features: Mapped[bool] = mapped_column(
+        default=False, server_default=sa.false()
     )
 
     # Relationships
@@ -225,9 +217,6 @@ class UserTable(Base):
 class ProjectFolderTable(Base):
     __tablename__ = "projectfolder"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     title: Mapped[str] = mapped_column()
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     last_updated: Mapped[datetime.datetime | None] = mapped_column(
@@ -252,9 +241,6 @@ class ProjectTable(Base):
     __tablename__ = "project"
     __table_args__ = (UniqueConstraint("title", "folder_id", name="title"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     folder_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("projectfolder.id"))
     title: Mapped[str] = mapped_column()
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
@@ -314,9 +300,6 @@ class ProjectLocalizationTable(Base):
         UniqueConstraint("project_id", "language", name="unique_project_language"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
     language: Mapped[LanguageCode] = mapped_column(LanguageType, index=True)
     consent: Mapped[Consent | None] = mapped_column(PydanticJSONB(Consent))
@@ -352,9 +335,6 @@ class CollaboratorTable(Base):
     __tablename__ = "collaborator"
     __table_args__ = (UniqueConstraint("folder_id", "user_id", name="uq_collaborator"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     folder_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projectfolder.id"))
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE")
@@ -389,9 +369,6 @@ class ExperimentProjectTable(Base):
         UniqueConstraint("experiment_id", "project_id", name="uq_experiment_project"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     experiment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("experiment.id"))
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
     weight: Mapped[float | None] = mapped_column(default=None)
@@ -407,9 +384,6 @@ class ExperimentProjectTable(Base):
 class ExperimentTable(Base):
     __tablename__ = "experiment"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     title: Mapped[str] = mapped_column()
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     status: Mapped[ProjectStatus] = mapped_column(
@@ -443,9 +417,6 @@ class InterviewTable(Base):
         UniqueConstraint("id", "project_id", name="_unique_interview_ids"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     interview_guide: Mapped[InterviewGuide] = mapped_column(
         PydanticJSONB(InterviewGuide)
     )
@@ -536,9 +507,6 @@ class MessageTable(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     message_id: Mapped[int] = mapped_column()
     content: Mapped[str] = mapped_column(Text)
     role: Mapped[MessageRole] = mapped_column(SQLEnum(MessageRole))
@@ -593,9 +561,6 @@ class MessageTable(Base):
 class TaskTable(Base):
     __tablename__ = "task"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     message_id: Mapped[int] = mapped_column()
     interview_id: Mapped[uuid.UUID] = mapped_column(
@@ -624,9 +589,6 @@ class TaskTable(Base):
 class TestSetupTable(Base):
     __tablename__ = "testsetup"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     name: Mapped[str | None] = mapped_column()
     type: Mapped[TestType] = mapped_column(SQLEnum(TestType))
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
@@ -660,9 +622,6 @@ class TestSetupTable(Base):
 class TestRunTable(Base):
     __tablename__ = "testrun"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     test_setup_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("testsetup.id"))
     language: Mapped[LanguageCode] = mapped_column(LanguageType, default="EN")
     n_interviews: Mapped[int] = mapped_column()
@@ -686,9 +645,6 @@ class TestRunTable(Base):
 class IntervieweeTable(Base):
     __tablename__ = "interviewee"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     interview_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("interview.id", ondelete="CASCADE")
     )
@@ -714,9 +670,6 @@ class AnalysisCategoryTable(Base):
         UniqueConstraint("project_id", "name", name="unique_project_category_name"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
     name: Mapped[str] = mapped_column()
     description: Mapped[str | None] = mapped_column(Text)
@@ -736,9 +689,6 @@ class AnalysisCategoryTable(Base):
 class MessageAnnotationTable(Base):
     __tablename__ = "message_annotation"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     message_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("message.id", ondelete="CASCADE")
     )
@@ -763,9 +713,6 @@ class AnnotationValueTable(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     annotation_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("message_annotation.id")
     )
@@ -785,9 +732,6 @@ class AnnotationValueTable(Base):
 class AssistanceSessionTable(Base):
     __tablename__ = "assistance_session"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     project_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("project.id", ondelete="CASCADE")
     )
@@ -807,9 +751,6 @@ class AssistanceMessageChunkTable(Base):
 
     __tablename__ = "assistance_message_chunk"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True
-    )
     session_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("assistance_session.id", ondelete="CASCADE")
     )

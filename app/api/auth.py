@@ -123,7 +123,9 @@ async def login(login_request: LoginData, db: DBSession):
 
 @router.get("/me")
 async def me(db: DBSession, jwt: DemoToken) -> UserPublic:
-    return UserPublic.model_validate(db.users.get_user_private(user_id=jwt.user_id))
+    current_user = db.users.get_user_private(user_id=jwt.user_id)
+
+    return UserPublic.model_validate(current_user)
 
 
 @router.post("/register")
