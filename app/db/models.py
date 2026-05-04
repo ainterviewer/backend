@@ -118,7 +118,7 @@ class UserCreateRequest(UserBase):
     last_active: datetime = Field(default_factory=now)
     last_login: datetime = Field(default_factory=now)
     research_consent: bool = False
-    password: str
+    password: str = Field(min_length=8)
 
 
 class UserCreate(UserCreateRequest):
