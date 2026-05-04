@@ -1,3 +1,4 @@
+from sqlalchemy.exc import NoResultFound
 import json
 
 from fastapi import APIRouter, FastAPI
@@ -26,8 +27,11 @@ def health():
 
 
 @router.get("/version")
-def version(db: DBSession) -> PlatformManifest:
-    return db.get_platform_release()
+def version(db: DBSession) -> PlatformManifest | None:
+    try:
+        return db.get_platform_release()
+    except NoResultFound:
+        return None
 
 
 @router.get("/version/{platform_version}")
