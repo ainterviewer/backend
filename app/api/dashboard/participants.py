@@ -1,5 +1,6 @@
-from fastapi import APIRouter, UploadFile
+from typing import Annotated
 
+from fastapi import APIRouter, Body, HTTPException, UploadFile
 from pydantic import UUID4
 
 from ...db.models import (
@@ -40,15 +41,13 @@ async def get_participant(
     return db.participants.get_participant(participant_id)
 
 
-@router.post("/projects/{project_id}/participants/{participant_id}")
+@router.post("/participants/{participant_pid}")
 async def opt_out(
-    project_id: UUID4,
-    participant_id: UUID4,
+    participant_pid: str,
     db: DBSession,
+    reason: Annotated[str | None, Body()] = None,
 ) -> ParticipantPublic:
-    return db.participants.update_participant(
-        participant_id, ParticipantUpdate(participating=False)
-    )
+    return db.participants.opt_out(participant_pid, reason)
 
 
 @router.post("/projects/{project_id}/participants")

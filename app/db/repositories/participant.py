@@ -6,6 +6,7 @@ from sqlalchemy import delete, select, update
 
 from ..models import UNSET, ParticipantCreate, ParticipantPublic, ParticipantUpdate
 from ..tables import InterviewTable, ParticipantTable
+from ..utils import uuid_to_urlid
 from .base import BaseRepository
 
 
@@ -22,6 +23,9 @@ class ParticipantRepository(BaseRepository):
             **participant.model_dump(),
         )
         self.session.add(row)
+        self.session.flush()
+        if row.pid is None:
+            row.pid = uuid_to_urlid(row.id)
         self.session.commit()
         self.session.refresh(row)
 
@@ -37,6 +41,10 @@ class ParticipantRepository(BaseRepository):
             for p in participants
         ]
         self.session.add_all(rows)
+        self.session.flush()
+        for row in rows:
+            if row.pid is None:
+                row.pid = uuid_to_urlid(row.id)
         self.session.commit()
         for row in rows:
             self.session.refresh(row)
@@ -103,6 +111,20 @@ class ParticipantRepository(BaseRepository):
             self.session.commit()
 
         return self.get_participant(participant_id)
+
+    def opt_out(
+        self, participant_pid: str, reason: str | None = None
+    ) -> ParticipantPublic:
+        statement = (
+            update(ParticipantTable)
+            .where(ParticipantTable.pid == participant_pid)
+            .values(participating=False, opt_out_reason=reason)
+            .returning(ParticipantTable)
+        )
+        participant = self.session.execute(statement).scalar_one()
+        self.session.commit()
+
+        return ParticipantPublic.model_validate(participant)
 
     def remove_participant(self, participant_id: UUID4) -> None:
         self.session.execute(

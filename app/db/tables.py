@@ -348,6 +348,7 @@ class ParticipantTable(Base):
     pid: Mapped[str | None] = mapped_column(default=None)
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     participating: Mapped[bool] = mapped_column(default=True, server_default=sa.true())
+    opt_out_reason: Mapped[str | None] = mapped_column(default=None)
 
     # Relationships
     project: Mapped["ProjectTable"] = relationship(back_populates="participants")
