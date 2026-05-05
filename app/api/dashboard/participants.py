@@ -1,9 +1,12 @@
+import mimetypes
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Body, HTTPException, Request, UploadFile
 from jinja2 import TemplateError
 from pydantic import UUID4
 
+from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode
 
 from ...db.models import (
@@ -31,7 +34,10 @@ from ..request_models import (
     ParticipantEmailTemplateRequest,
     SendParticipantEmailRequest,
 )
-from ..response_models import SendParticipantEmailResponse
+from ..response_models import (
+    ParticipantEmailAttachment,
+    SendParticipantEmailResponse,
+)
 
 router = APIRouter(tags=["participants"])
 
@@ -176,25 +182,165 @@ async def set_participant_email_template(
     )
 
 
+MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024  # 10MB per file
+MAX_TOTAL_ATTACHMENT_BYTES = 25 * 1024 * 1024  # 25MB per language
+
+
+def _attachments_dir(project_id: UUID4, language: LanguageCode) -> Path:
+    base = lib_settings.storage.project_storage.email_attachments_path(project_id)
+    path = base / language
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _safe_filename(filename: str | None) -> str:
+    if not filename:
+        raise HTTPException(status_code=422, detail="Filename is required.")
+    name = Path(filename).name
+    if (
+        not name
+        or name in {".", ".."}
+        or name != filename.replace("\\", "/").split("/")[-1]
+    ):
+        raise HTTPException(status_code=422, detail="Invalid filename.")
+    if len(name) > 255:
+        raise HTTPException(status_code=422, detail="Filename is too long.")
+    return name
+
+
+def _list_attachments(directory: Path) -> list[ParticipantEmailAttachment]:
+    if not directory.exists():
+        return []
+    items: list[ParticipantEmailAttachment] = []
+    for entry in sorted(directory.iterdir()):
+        if not entry.is_file():
+            continue
+        mime, _ = mimetypes.guess_type(entry.name)
+        items.append(
+            ParticipantEmailAttachment(
+                filename=entry.name,
+                size=entry.stat().st_size,
+                content_type=mime,
+            )
+        )
+    return items
+
+
+@router.get("/projects/{project_id}/{language}/participant-email-attachments")
+async def list_participant_email_attachments(
+    project_id: UUID4,
+    language: LanguageCode,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectViewer,
+) -> list[ParticipantEmailAttachment]:
+    return _list_attachments(_attachments_dir(project_id, language))
+
+
+@router.post("/projects/{project_id}/{language}/participant-email-attachments")
+async def upload_participant_email_attachments(
+    project_id: UUID4,
+    language: LanguageCode,
+    files: list[UploadFile],
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectEditor,
+) -> list[ParticipantEmailAttachment]:
+    if not files:
+        raise HTTPException(status_code=422, detail="No files provided.")
+
+    directory = _attachments_dir(project_id, language)
+
+    existing_total = sum(f.stat().st_size for f in directory.iterdir() if f.is_file())
+
+    new_payloads: list[tuple[str, bytes]] = []
+    incoming_total = 0
+    for upload in files:
+        name = _safe_filename(upload.filename)
+        content = await upload.read()
+        if len(content) > MAX_ATTACHMENT_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Attachment '{name}' exceeds the {MAX_ATTACHMENT_BYTES} byte limit.",
+            )
+        existing_file = directory / name
+        if existing_file.exists():
+            existing_total -= existing_file.stat().st_size
+        incoming_total += len(content)
+        new_payloads.append((name, content))
+
+    if existing_total + incoming_total > MAX_TOTAL_ATTACHMENT_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Total attachments would exceed the {MAX_TOTAL_ATTACHMENT_BYTES} byte limit.",
+        )
+
+    for name, content in new_payloads:
+        (directory / name).write_bytes(content)
+
+    return _list_attachments(directory)
+
+
+@router.delete(
+    "/projects/{project_id}/{language}/participant-email-attachments/{filename}"
+)
+async def delete_participant_email_attachment(
+    project_id: UUID4,
+    language: LanguageCode,
+    filename: str,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectEditor,
+) -> list[ParticipantEmailAttachment]:
+    name = _safe_filename(filename)
+    directory = _attachments_dir(project_id, language)
+    target = directory / name
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Attachment not found.")
+    target.unlink()
+    return _list_attachments(directory)
+
+
+def _read_attachments(
+    project_id: UUID4, languages: set[LanguageCode]
+) -> list[tuple[str, bytes]]:
+    """Load attachment files for the given languages, deduped by filename."""
+    seen: dict[str, bytes] = {}
+    base = lib_settings.storage.project_storage.email_attachments_path(project_id)
+    for lang in languages:
+        directory = base / lang
+        if not directory.exists():
+            continue
+        for entry in sorted(directory.iterdir()):
+            if entry.is_file() and entry.name not in seen:
+                seen[entry.name] = entry.read_bytes()
+    return list(seen.items())
+
+
 def _resolve_email_for_participant(
     participant_lang: LanguageCode | None,
     per_lang_template: tuple[str | None, str | None] | None,
     all_localizations: list[tuple[LanguageCode, str | None, str | None]],
-) -> tuple[str, str] | None:
-    """Pick (subject, template) for a participant.
+) -> tuple[str, str, set[LanguageCode]] | None:
+    """Pick (subject, template, contributing_languages) for a participant.
 
     Returns None if no usable template can be assembled.
     """
     if participant_lang is not None and per_lang_template is not None:
         subj, tmpl = per_lang_template
         if tmpl:
-            return subj or "", tmpl
+            return subj or "", tmpl, {participant_lang}
 
     subjects = [s for (_, s, t) in all_localizations if t and s]
     templates = [t for (_, _, t) in all_localizations if t]
+    langs = {lang for (lang, _, t) in all_localizations if t}
     if not templates:
         return None
-    return SUBJECT_SEPARATOR.join(subjects), SECTION_SEPARATOR.join(templates)
+    return (
+        SUBJECT_SEPARATOR.join(subjects),
+        SECTION_SEPARATOR.join(templates),
+        langs,
+    )
 
 
 @router.post("/projects/{project_id}/participants/send-email")
@@ -242,7 +388,8 @@ async def send_participant_emails(
         if resolved is None:
             skipped.append(participant.id)
             continue
-        subject, template = resolved
+        subject, template, langs = resolved
+        attachments = _read_attachments(project_id, langs)
 
         interview_url = f"{base_url}interview?id={project_id}&pid={participant.pid}"
         opt_out_url = f"{base_url}/opt-out/{participant.pid}"
@@ -268,6 +415,7 @@ async def send_participant_emails(
             participant.email,
             subject,
             html_content=html_content,
+            attachments=attachments or None,
         )
         sent.append(participant.id)
 

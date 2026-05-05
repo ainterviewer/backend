@@ -32,6 +32,12 @@ class SendParticipantEmailResponse(BaseModel):
     skipped: list[UUID4]
 
 
+class ParticipantEmailAttachment(BaseModel):
+    filename: str
+    size: int
+    content_type: str | None = None
+
+
 class MessageFeedbackResponse(BaseModel):
     interview_id: UUID4
     project_id: UUID4
