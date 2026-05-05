@@ -3,6 +3,7 @@ from .assistance import AssistanceRepository
 from .auth import AuthRepository
 from .base import BaseRepository
 from .interview import InterviewRepository
+from .participant import ParticipantRepository
 from .project import ProjectRepository
 from .test import TestRepository
 from .user import UserRepository
@@ -13,6 +14,7 @@ __all__ = [
     "UserRepository",
     "ProjectRepository",
     "InterviewRepository",
+    "ParticipantRepository",
     "TestRepository",
     "AnalysisRepository",
     "AssistanceRepository",

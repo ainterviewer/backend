@@ -118,6 +118,14 @@ class AssistanceChatRequest(BaseModel):
     guide: InterviewGuide
 
 
+class DeleteParticipantsRequest(BaseModel):
+    participant_ids: list[UUID4]
+
+
+class LinkParticipantRequest(BaseModel):
+    participant_id: UUID4 | None
+
+
 class ExternalParamsRequest(BaseModel):
     params: list[ExternalParam]
 

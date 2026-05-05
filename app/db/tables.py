@@ -288,6 +288,9 @@ class ProjectTable(Base):
         "experiment",
         creator=lambda experiment: ExperimentProjectTable(experiment=experiment),
     )
+    participants: Mapped[list["ParticipantTable"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
 
     @property
     def collaborators(self) -> list["UserTable"]:
@@ -324,6 +327,33 @@ class ProjectLocalizationTable(Base):
 
     # Relationships
     project: Mapped["ProjectTable"] = relationship(back_populates="localizations")
+
+
+################
+# Participants #
+################
+
+
+class ParticipantTable(Base):
+    __tablename__ = "participant"
+    __table_args__ = (
+        UniqueConstraint("project_id", "pid", name="uq_participant_project_pid"),
+    )
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str | None] = mapped_column(default=None)
+    email: Mapped[str | None] = mapped_column(default=None)
+    pid: Mapped[str | None] = mapped_column(default=None)
+    created_at: Mapped[datetime.datetime] = mapped_column(default=now)
+    participating: Mapped[bool] = mapped_column(default=True, server_default=sa.true())
+
+    # Relationships
+    project: Mapped["ProjectTable"] = relationship(back_populates="participants")
+    interviews: Mapped[list["InterviewTable"]] = relationship(
+        back_populates="participant"
+    )
 
 
 #################
@@ -445,6 +475,9 @@ class InterviewTable(Base):
     test_run_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("testrun.id", ondelete="CASCADE")
     )
+    participant_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("participant.id", ondelete="SET NULL"), default=None
+    )
 
     # Relationships
     project: Mapped["ProjectTable"] = relationship(back_populates="interviews")
@@ -452,6 +485,9 @@ class InterviewTable(Base):
         back_populates="interviews"
     )
     test_run: Mapped[Optional["TestRunTable"]] = relationship(
+        back_populates="interviews"
+    )
+    participant: Mapped[Optional["ParticipantTable"]] = relationship(
         back_populates="interviews"
     )
     messages: Mapped[list["MessageTable"]] = relationship(

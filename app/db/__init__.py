@@ -4,6 +4,7 @@ from .repositories import (
     AuthRepository,
     BaseRepository,
     InterviewRepository,
+    ParticipantRepository,
     ProjectRepository,
     TestRepository,
     UserRepository,
@@ -16,6 +17,7 @@ __all__ = [
     "UserRepository",
     "ProjectRepository",
     "InterviewRepository",
+    "ParticipantRepository",
     "TestRepository",
     "AnalysisRepository",
 ]

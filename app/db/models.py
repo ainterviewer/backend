@@ -444,6 +444,30 @@ class TestRunPublic(TestRunBase):
     status: TestRunStatus
 
 
+class ParticipantBase(_BaseModel):
+    name: str | None = None
+    email: EmailStr | None = None
+    pid: str | None = None
+    participating: bool = True
+
+
+class ParticipantCreate(ParticipantBase):
+    pass
+
+
+class ParticipantUpdate(BaseModel):
+    name: str | None | _Unset = UNSET
+    email: EmailStr | None | _Unset = UNSET
+    pid: str | None | _Unset = UNSET
+    participating: bool | _Unset = UNSET
+
+
+class ParticipantPublic(ParticipantBase):
+    id: UUID4
+    project_id: UUID4
+    created_at: datetime
+
+
 class IntervieweeBase(_BaseModel):
     interview_id: UUID4
     interview_subject: InterviewSubject | str

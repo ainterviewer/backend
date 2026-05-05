@@ -1,6 +1,6 @@
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
-from sqlalchemy import select, text, Engine
+from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
 from ainterviewer.interfaces import PersistenceProtocol
@@ -12,6 +12,7 @@ from .repositories import (
     AssistanceRepository,
     AuthRepository,
     InterviewRepository,
+    ParticipantRepository,
     ProjectRepository,
     TestRepository,
     UserRepository,
@@ -48,6 +49,7 @@ class InterviewDataBase(PersistenceProtocol):
         self.users: UserRepository = UserRepository(session)
         self.projects: ProjectRepository = ProjectRepository(session)
         self.interviews: InterviewRepository = InterviewRepository(session)
+        self.participants: ParticipantRepository = ParticipantRepository(session)
         self.tests: TestRepository = TestRepository(session)
         self.analysis: AnalysisRepository = AnalysisRepository(session)
         self.assistance: AssistanceRepository = AssistanceRepository(session)
