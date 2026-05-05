@@ -71,10 +71,10 @@ dev = [
 ]
 
 [tool.uv.sources]
-ainterviewer = { git = "https://github.com/ainterviewer/lib.git", tag = "v0.1.7" }
+# ainterviewer = { git = "https://github.com/ainterviewer/lib.git", tag = "v0.1.7" }
 # ainterviewer = { git = "https://github.com/ainterviewer/lib.git", tag = "latest" }
 # ainterviewer = { git = "https://github.com/ainterviewer/lib.git" }
-# ainterviewer = { path = "../lib", editable = true }
+ainterviewer = { path = "../lib", editable = true }
 
 [tool.basedpyright]
 reportExplicitAny = false
