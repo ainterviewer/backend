@@ -2375,57 +2375,6 @@
                     }
                 }
             },
-            "post": {
-                "tags": [
-                    "participants"
-                ],
-                "summary": "Opt Out",
-                "operationId": "opt_out",
-                "parameters": [
-                    {
-                        "name": "project_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid4",
-                            "title": "Project Id"
-                        }
-                    },
-                    {
-                        "name": "participant_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid4",
-                            "title": "Participant Id"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ParticipantPublic"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
             "patch": {
                 "tags": [
                     "participants"
@@ -2579,6 +2528,65 @@
                         "content": {
                             "application/json": {
                                 "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/participants/{participant_pid}": {
+            "post": {
+                "tags": [
+                    "participants"
+                ],
+                "summary": "Opt Out",
+                "operationId": "opt_out",
+                "parameters": [
+                    {
+                        "name": "participant_pid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Participant Pid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "anyOf": [
+                                    {
+                                        "type": "string"
+                                    },
+                                    {
+                                        "type": "null"
+                                    }
+                                ],
+                                "title": "Reason"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ParticipantPublic"
+                                }
                             }
                         }
                     },
@@ -7179,7 +7187,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "patch": {
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -7267,7 +7275,7 @@
                     }
                 }
             },
-            "post": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -7355,7 +7363,7 @@
                     }
                 }
             },
-            "delete": {
+            "patch": {
                 "tags": [
                     "admin"
                 ],
