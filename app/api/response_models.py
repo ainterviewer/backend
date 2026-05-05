@@ -27,6 +27,11 @@ class SynthesizeResponse(BaseModel):
     status: str
 
 
+class SendParticipantEmailResponse(BaseModel):
+    sent: list[UUID4]
+    skipped: list[UUID4]
+
+
 class MessageFeedbackResponse(BaseModel):
     interview_id: UUID4
     project_id: UUID4

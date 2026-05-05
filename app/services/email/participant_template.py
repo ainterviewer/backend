@@ -21,6 +21,7 @@ ALLOWED_TEMPLATE_VARIABLES: tuple[str, ...] = (
     "participant_pid",
     "interview_url",
     "project_title",
+    "opt_out_url",
 )
 
 
@@ -45,18 +46,20 @@ def validate_participant_email_template(template: str) -> None:
 
 def build_template_context(
     *,
-    participant_name: str | None,
-    participant_email: str | None,
-    participant_pid: str | None,
+    name: str | None,
+    email: str | None,
+    pid: str | None,
     interview_url: str | None = None,
     project_title: str | None = None,
+    opt_out_url: str | None = None,
 ) -> dict[str, Any]:
     return {
-        "participant_name": participant_name or "",
-        "participant_email": participant_email or "",
-        "participant_pid": participant_pid or "",
+        "name": name or "",
+        "email": email or "",
+        "pid": pid or "",
         "interview_url": interview_url or "",
         "project_title": project_title or "",
+        "opt_out_url": opt_out_url or "",
     }
 
 

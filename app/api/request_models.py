@@ -127,7 +127,13 @@ class LinkParticipantRequest(BaseModel):
 
 
 class ParticipantEmailTemplateRequest(BaseModel):
-    template: str | None
+    subject: str | None = None
+    template: str | None = None
+
+
+class SendParticipantEmailRequest(BaseModel):
+    # If None, send to every participating participant with an email address.
+    participant_ids: list[UUID4] | None = None
 
 
 class ExternalParamsRequest(BaseModel):

@@ -459,7 +459,7 @@ class ParticipantCreate(ParticipantBase):
 class ParticipantUpdate(BaseModel):
     name: str | None | _Unset = UNSET
     email: EmailStr | None | _Unset = UNSET
-    pid: str | None | _Unset = UNSET
+    pid: str | _Unset = UNSET
     participating: bool | _Unset = UNSET
 
 
@@ -467,6 +467,7 @@ class ParticipantPublic(ParticipantBase):
     id: UUID4
     project_id: UUID4
     created_at: datetime
+    pid: str
 
 
 class IntervieweeBase(_BaseModel):
