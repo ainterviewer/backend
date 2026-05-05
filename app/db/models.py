@@ -449,6 +449,7 @@ class ParticipantBase(_BaseModel):
     email: EmailStr | None = None
     pid: str | None = None
     participating: bool = True
+    lang: LanguageCode | None = None
 
 
 class ParticipantCreate(ParticipantBase):

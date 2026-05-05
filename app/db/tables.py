@@ -347,6 +347,7 @@ class ParticipantTable(Base):
     name: Mapped[str | None] = mapped_column(default=None)
     email: Mapped[str | None] = mapped_column(default=None)
     pid: Mapped[str | None] = mapped_column(default=None)
+    lang: Mapped[LanguageCode | None] = mapped_column(None)
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     participating: Mapped[bool] = mapped_column(default=True, server_default=sa.true())
     opt_out_reason: Mapped[str | None] = mapped_column(default=None)
