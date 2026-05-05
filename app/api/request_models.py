@@ -126,6 +126,10 @@ class LinkParticipantRequest(BaseModel):
     participant_id: UUID4 | None
 
 
+class ParticipantEmailTemplateRequest(BaseModel):
+    template: str | None
+
+
 class ExternalParamsRequest(BaseModel):
     params: list[ExternalParam]
 

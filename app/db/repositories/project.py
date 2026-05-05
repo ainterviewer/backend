@@ -805,6 +805,34 @@ class ProjectRepository(BaseRepository):
         self.session.execute(statement)
         self.session.commit()
 
+    # ============ Participant Email Template Methods ============
+
+    def get_participant_email_template(
+        self, project_id: UUID4, language: LanguageCode
+    ) -> str | None:
+        statement = select(ProjectLocalizationTable.participant_email_template).where(
+            ProjectLocalizationTable.project_id == project_id,
+            ProjectLocalizationTable.language == language,
+        )
+        return self.session.execute(statement).scalar_one()
+
+    def set_participant_email_template(
+        self,
+        project_id: UUID4,
+        language: LanguageCode,
+        template: str | None,
+    ) -> None:
+        statement = (
+            update(ProjectLocalizationTable)
+            .where(
+                ProjectLocalizationTable.project_id == project_id,
+                ProjectLocalizationTable.language == language,
+            )
+            .values(participant_email_template=template)
+        )
+        self.session.execute(statement)
+        self.session.commit()
+
     # ==================== Authorization Methods ====================
 
     def get_user_role_on_folder(

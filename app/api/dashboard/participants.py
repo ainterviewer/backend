@@ -3,6 +3,8 @@ from typing import Annotated
 from fastapi import APIRouter, Body, HTTPException, UploadFile
 from pydantic import UUID4
 
+from ainterviewer.types import LanguageCode
+
 from ...db.models import (
     ParticipantCreate,
     ParticipantPublic,
@@ -10,12 +12,20 @@ from ...db.models import (
 )
 from ...dependencies import (
     DBSession,
-    UserToken,
     ProjectAdmin,
     ProjectEditor,
     ProjectViewer,
+    UserToken,
 )
-from ..request_models import DeleteParticipantsRequest, LinkParticipantRequest
+from ...services.email.participant_template import (
+    TemplateSyntaxError,
+    validate_participant_email_template,
+)
+from ..request_models import (
+    DeleteParticipantsRequest,
+    LinkParticipantRequest,
+    ParticipantEmailTemplateRequest,
+)
 
 router = APIRouter(tags=["participants"])
 
@@ -116,6 +126,40 @@ async def delete_participants(
     _: ProjectAdmin,
 ):
     db.participants.remove_participants(project_id, delete_request.participant_ids)
+
+
+@router.get("/projects/{project_id}/{language}/participant-email-template")
+async def get_participant_email_template(
+    project_id: UUID4,
+    language: LanguageCode,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectViewer,
+) -> ParticipantEmailTemplateRequest:
+    template = db.projects.get_participant_email_template(project_id, language)
+    return ParticipantEmailTemplateRequest(template=template)
+
+
+@router.put("/projects/{project_id}/{language}/participant-email-template")
+async def set_participant_email_template(
+    project_id: UUID4,
+    language: LanguageCode,
+    request: ParticipantEmailTemplateRequest,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectEditor,
+) -> ParticipantEmailTemplateRequest:
+    if request.template is not None:
+        try:
+            validate_participant_email_template(request.template)
+        except TemplateSyntaxError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid Jinja template: {exc.message}",
+            ) from exc
+
+    db.projects.set_participant_email_template(project_id, language, request.template)
+    return ParticipantEmailTemplateRequest(template=request.template)
 
 
 @router.put("/projects/{project_id}/interviews/{interview_id}/participant")

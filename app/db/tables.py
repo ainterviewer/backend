@@ -324,6 +324,7 @@ class ProjectLocalizationTable(Base):
     last_updated: Mapped[datetime.datetime | None] = mapped_column(
         default=now, onupdate=now
     )
+    participant_email_template: Mapped[str | None] = mapped_column(default=None)
 
     # Relationships
     project: Mapped["ProjectTable"] = relationship(back_populates="localizations")
