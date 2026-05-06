@@ -31,7 +31,6 @@ from ...services.email.participant_template import (
 )
 from ..request_models import (
     DeleteParticipantsRequest,
-    LinkParticipantRequest,
     ParticipantEmailTemplateRequest,
     SendParticipantEmailRequest,
 )
@@ -434,15 +433,3 @@ async def send_participant_emails(
         sent.append(participant.id)
 
     return SendParticipantEmailResponse(sent=sent, skipped=skipped)
-
-
-@router.put("/projects/{project_id}/interviews/{interview_id}/participant")
-async def link_participant_to_interview(
-    project_id: UUID4,
-    interview_id: UUID4,
-    link_request: LinkParticipantRequest,
-    db: DBSession,
-    jwt: UserToken,
-    _: ProjectEditor,
-):
-    db.participants.link_to_interview(interview_id, link_request.participant_id)

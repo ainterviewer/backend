@@ -75,6 +75,7 @@ class CreateInterviewRequest(BaseModel):
     test_run_id: UUID4 | None = None
     experiment_id: UUID4 | None = None
     synthetic_test_type: TestType | None = None
+    participant_id: UUID4 | None = None
 
     # Extra context
     external_params: dict[str, Any] | None = Field(
