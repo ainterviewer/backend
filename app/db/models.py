@@ -466,6 +466,8 @@ class ParticipantUpdate(BaseModel):
 class ParticipantPublic(ParticipantBase):
     id: UUID4
     project_id: UUID4
+    participant_id: UUID4
+    folder_id: UUID4
     created_at: datetime
     pid: str
     latest_interview_at: datetime | None = None

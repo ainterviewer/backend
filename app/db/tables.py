@@ -224,7 +224,9 @@ class ProjectFolderTable(Base):
     )
 
     # Relationsiphs
-    projects: Mapped[list["ProjectTable"]] = relationship(back_populates="folder")
+    projects: Mapped[list["ProjectTable"]] = relationship(
+        back_populates="folder", cascade="all, delete-orphan"
+    )
     folder_collaborations: Mapped[list["CollaboratorTable"]] = relationship(
         back_populates="folder",
         cascade="all, delete-orphan",
@@ -235,13 +237,18 @@ class ProjectFolderTable(Base):
         "user",
         creator=lambda user: CollaboratorTable(user=user),
     )
+    participants: Mapped[list["ParticipantTable"]] = relationship(
+        back_populates="folder", cascade="all, delete-orphan"
+    )
 
 
 class ProjectTable(Base):
     __tablename__ = "project"
     __table_args__ = (UniqueConstraint("title", "folder_id", name="title"),)
 
-    folder_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("projectfolder.id"))
+    folder_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projectfolder.id", ondelete="CASCADE")
+    )
     title: Mapped[str] = mapped_column()
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     # Also bumped by DB triggers when any ProjectLocalization, TestSetup, or
@@ -288,8 +295,13 @@ class ProjectTable(Base):
         "experiment",
         creator=lambda experiment: ExperimentProjectTable(experiment=experiment),
     )
-    participants: Mapped[list["ParticipantTable"]] = relationship(
+    project_participants: Mapped[list["ProjectParticipantTable"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
+    )
+    participants = association_proxy(
+        "project_participants",
+        "participant",
+        creator=lambda participant: ProjectParticipantTable(participant=participant),
     )
 
     @property
@@ -337,13 +349,18 @@ class ProjectLocalizationTable(Base):
 
 
 class ParticipantTable(Base):
+    """Folder-scoped participant. Holds shared profile/state; linked to projects
+    via ProjectParticipantTable so the same person can appear in multiple
+    projects within the same folder while sharing fields like email, name,
+    participating status, and opt-out reason."""
+
     __tablename__ = "participant"
     __table_args__ = (
-        UniqueConstraint("project_id", "pid", name="uq_participant_project_pid"),
+        UniqueConstraint("folder_id", "pid", name="uq_participant_folder_pid"),
     )
 
-    project_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("project.id", ondelete="CASCADE"), index=True
+    folder_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projectfolder.id", ondelete="CASCADE"), index=True
     )
     name: Mapped[str | None] = mapped_column(default=None)
     email: Mapped[str | None] = mapped_column(default=None)
@@ -352,11 +369,49 @@ class ParticipantTable(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     participating: Mapped[bool] = mapped_column(default=True, server_default=sa.true())
     opt_out_reason: Mapped[str | None] = mapped_column(default=None)
+    opt_out_token: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), unique=True, default=uuid4
+    )
 
     # Relationships
-    project: Mapped["ProjectTable"] = relationship(back_populates="participants")
+    folder: Mapped["ProjectFolderTable"] = relationship(back_populates="participants")
+    project_participants: Mapped[list["ProjectParticipantTable"]] = relationship(
+        back_populates="participant", cascade="all, delete-orphan"
+    )
+    projects = association_proxy(
+        "project_participants",
+        "project",
+        creator=lambda project: ProjectParticipantTable(project=project),
+    )
+
+
+class ProjectParticipantTable(Base):
+    """Join row linking a folder-scoped Participant to a specific Project.
+    Per-project state lives here; shared profile state lives on
+    ParticipantTable."""
+
+    __tablename__ = "project_participant"
+    __table_args__ = (
+        UniqueConstraint("project_id", "participant_id", name="uq_project_participant"),
+    )
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE"), index=True
+    )
+    participant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("participant.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(default=now)
+
+    # Relationships
+    project: Mapped["ProjectTable"] = relationship(
+        back_populates="project_participants"
+    )
+    participant: Mapped["ParticipantTable"] = relationship(
+        back_populates="project_participants"
+    )
     interviews: Mapped[list["InterviewTable"]] = relationship(
-        back_populates="participant"
+        back_populates="project_participant"
     )
 
     @hybrid_property
@@ -383,9 +438,7 @@ class ParticipantTable(Base):
     def latest_interview_status(self) -> InterviewStatus | None:
         if not self.interviews:
             return None
-        latest = max(
-            self.interviews, key=lambda i: i.last_updated or i.created_at
-        )
+        latest = max(self.interviews, key=lambda i: i.last_updated or i.created_at)
         return latest.status
 
     @latest_interview_status.expression
@@ -523,7 +576,7 @@ class InterviewTable(Base):
         ForeignKey("testrun.id", ondelete="CASCADE")
     )
     participant_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("participant.id", ondelete="SET NULL"), default=None
+        ForeignKey("project_participant.id", ondelete="SET NULL"), default=None
     )
 
     # Relationships
@@ -534,7 +587,7 @@ class InterviewTable(Base):
     test_run: Mapped[Optional["TestRunTable"]] = relationship(
         back_populates="interviews"
     )
-    participant: Mapped[Optional["ParticipantTable"]] = relationship(
+    project_participant: Mapped[Optional["ProjectParticipantTable"]] = relationship(
         back_populates="interviews"
     )
     messages: Mapped[list["MessageTable"]] = relationship(

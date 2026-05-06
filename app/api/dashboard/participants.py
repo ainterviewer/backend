@@ -87,13 +87,13 @@ async def export_participants(
     )
 
 
-@router.post("/participants/{participant_pid}")
+@router.post("/participants/opt-out/{opt_out_token}")
 async def opt_out(
-    participant_pid: str,
+    opt_out_token: str,
     db: DBSession,
     reason: Annotated[str | None, Body()] = None,
 ) -> ParticipantPublic:
-    return db.participants.opt_out(participant_pid, reason)
+    return db.participants.opt_out(opt_out_token, reason)
 
 
 @router.post("/projects/{project_id}/participants")
@@ -416,7 +416,8 @@ async def send_participant_emails(
         attachments = _read_attachments(project_id, langs)
 
         interview_url = f"{base_url}interview?id={project_id}&pid={participant.pid}"
-        opt_out_url = f"{base_url}/opt-out/{participant.pid}"
+        opt_out_token = db.participants.get_opt_out_urlid(participant.id)
+        opt_out_url = f"{base_url}opt-out/{opt_out_token}"
 
         context = build_template_context(
             name=participant.name,
