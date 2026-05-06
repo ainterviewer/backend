@@ -52,7 +52,7 @@ async def get_participants(
     return db.participants.get_participants(project_id)
 
 
-@router.get("/projects/{project_id}/participants/{participant_id}")
+@router.get("/projects/{project_id}/participants/{participant_id:uuid}")
 async def get_participant(
     project_id: UUID4,
     participant_id: UUID4,
