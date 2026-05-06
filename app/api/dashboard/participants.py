@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Annotated
 
 import polars as pl
-from fastapi import APIRouter, Body, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Body, HTTPException, Request, UploadFile, Response
 from jinja2 import TemplateError
 from pydantic import UUID4
 
@@ -52,17 +52,28 @@ async def get_participants(
     return db.participants.get_participants(project_id)
 
 
-@router.get("/projects/{project_id}/participants/export")
+@router.get(
+    "/projects/{project_id}/participants/export",
+    response_class=Response,
+    responses={200: {"content": {"text/csv": {}}}},
+)
 async def export_participants(
     project_id: UUID4,
     db: DBSession,
     jwt: UserToken,
     _: ProjectViewer,
-) -> str:
-    return pl.DataFrame(
+) -> Response:
+    csv = pl.DataFrame(
         participant.model_dump(mode="json")
         for participant in db.participants.get_participants(project_id)
     ).write_csv()
+    return Response(
+        content=csv,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="participants_{project_id}.csv"'
+        },
+    )
 
 
 @router.get("/projects/{project_id}/participants/{participant_id}")
