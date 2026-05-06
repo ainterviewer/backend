@@ -107,7 +107,6 @@ class UserBase(_BaseModel):
     last_active: datetime
     last_login: datetime
     scope: Scope = Scope.USER
-    with_demo_features: bool
 
 
 class UserCreateRequest(UserBase):
@@ -134,12 +133,14 @@ class UserCreate(UserCreateRequest):
 class UserPrivate(UserBase):
     id: UUID4
     password: str
+    with_demo_features: bool
 
 
 class UserPublic(UserBase):
     id: UUID4
     invitation_title: str | None = None
     expires_at: datetime | None = None
+    with_demo_features: bool
 
 
 class UserAdmin(UserPublic):
