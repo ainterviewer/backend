@@ -2,6 +2,7 @@ import mimetypes
 from pathlib import Path
 from typing import Annotated
 
+import polars as pl
 from fastapi import APIRouter, Body, HTTPException, Request, UploadFile
 from jinja2 import TemplateError
 from pydantic import UUID4
@@ -50,6 +51,19 @@ async def get_participants(
     _: ProjectViewer,
 ) -> list[ParticipantPublic]:
     return db.participants.get_participants(project_id)
+
+
+@router.get("/projects/{project_id}/participants/export")
+async def export_participants(
+    project_id: UUID4,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectViewer,
+) -> str:
+    return pl.DataFrame(
+        participant.model_dump(mode="json")
+        for participant in db.participants.get_participants(project_id)
+    ).write_csv()
 
 
 @router.get("/projects/{project_id}/participants/{participant_id}")
