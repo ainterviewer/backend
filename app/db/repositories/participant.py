@@ -59,7 +59,15 @@ class ParticipantRepository(BaseRepository):
         text = content.decode("utf-8-sig")
         reader = csv.DictReader(io.StringIO(text))
 
-        allowed = {"name", "email", "pid"}
+        allowed = {
+            "name",
+            "email",
+            "pid",
+            "participating",
+            "created",
+            "latest_interview_at",
+            "latest_interview_status",
+        }
         participants: list[ParticipantCreate] = []
 
         for row in reader:
