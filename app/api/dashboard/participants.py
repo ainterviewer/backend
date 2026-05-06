@@ -52,6 +52,17 @@ async def get_participants(
     return db.participants.get_participants(project_id)
 
 
+@router.get("/projects/{project_id}/participants/{participant_id}")
+async def get_participant(
+    project_id: UUID4,
+    participant_id: UUID4,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectViewer,
+) -> ParticipantPublic:
+    return db.participants.get_participant(participant_id)
+
+
 @router.get(
     "/projects/{project_id}/participants/export",
     response_class=Response,
@@ -74,17 +85,6 @@ async def export_participants(
             "Content-Disposition": f'attachment; filename="participants_{project_id}.csv"'
         },
     )
-
-
-@router.get("/projects/{project_id}/participants/{participant_id}")
-async def get_participant(
-    project_id: UUID4,
-    participant_id: UUID4,
-    db: DBSession,
-    jwt: UserToken,
-    _: ProjectViewer,
-) -> ParticipantPublic:
-    return db.participants.get_participant(participant_id)
 
 
 @router.post("/participants/{participant_pid}")
