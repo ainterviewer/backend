@@ -2346,12 +2346,7 @@
                     "200": {
                         "description": "Successful Response",
                         "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "string",
-                                    "title": "Response Export Participants"
-                                }
-                            }
+                            "text/csv": {}
                         }
                     },
                     "422": {
@@ -3370,96 +3365,6 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/SendParticipantEmailResponse"
                                 }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/projects/{project_id}/interviews/{interview_id}/participant": {
-            "put": {
-                "tags": [
-                    "participants"
-                ],
-                "summary": "Link Participant To Interview",
-                "operationId": "link_participant_to_interview",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "project_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "anyOf": [
-                                {
-                                    "type": "string",
-                                    "format": "uuid4"
-                                },
-                                {
-                                    "type": "null"
-                                }
-                            ],
-                            "title": "Project Id"
-                        }
-                    },
-                    {
-                        "name": "interview_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid4",
-                            "title": "Interview Id"
-                        }
-                    },
-                    {
-                        "name": "folder_id",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "anyOf": [
-                                {
-                                    "type": "string",
-                                    "format": "uuid4"
-                                },
-                                {
-                                    "type": "null"
-                                }
-                            ],
-                            "title": "Folder Id"
-                        }
-                    }
-                ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/LinkParticipantRequest"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
                             }
                         }
                     },
@@ -7838,7 +7743,7 @@
                     }
                 }
             },
-            "delete": {
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -7970,7 +7875,7 @@
                     }
                 }
             },
-            "post": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -9402,6 +9307,18 @@
                             }
                         ]
                     },
+                    "participant_id": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "uuid4"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Participant Id"
+                    },
                     "external_params": {
                         "anyOf": [
                             {
@@ -10782,27 +10699,6 @@
                 "title": "LikertItem",
                 "type": "object"
             },
-            "LinkParticipantRequest": {
-                "properties": {
-                    "participant_id": {
-                        "anyOf": [
-                            {
-                                "type": "string",
-                                "format": "uuid4"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Participant Id"
-                    }
-                },
-                "type": "object",
-                "required": [
-                    "participant_id"
-                ],
-                "title": "LinkParticipantRequest"
-            },
             "LoginData": {
                 "properties": {
                     "email": {
@@ -11571,6 +11467,28 @@
                         "type": "string",
                         "format": "date-time",
                         "title": "Created At"
+                    },
+                    "latest_interview_at": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Latest Interview At"
+                    },
+                    "latest_interview_status": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/InterviewStatus"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
                     }
                 },
                 "type": "object",
