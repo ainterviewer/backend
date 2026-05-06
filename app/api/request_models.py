@@ -123,10 +123,6 @@ class DeleteParticipantsRequest(BaseModel):
     participant_ids: list[UUID4]
 
 
-class LinkParticipantRequest(BaseModel):
-    participant_id: UUID4 | None
-
-
 class ParticipantEmailTemplateRequest(BaseModel):
     subject: str | None = None
     template: str | None = None
