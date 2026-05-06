@@ -468,6 +468,8 @@ class ParticipantPublic(ParticipantBase):
     project_id: UUID4
     created_at: datetime
     pid: str
+    latest_interview_at: datetime | None = None
+    latest_interview_status: InterviewStatus | None = None
 
 
 class IntervieweeBase(_BaseModel):

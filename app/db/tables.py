@@ -359,6 +359,49 @@ class ParticipantTable(Base):
         back_populates="participant"
     )
 
+    @hybrid_property
+    def latest_interview_at(self) -> datetime.datetime | None:
+        if not self.interviews:
+            return None
+        return max((i.last_updated or i.created_at) for i in self.interviews)
+
+    @latest_interview_at.expression
+    def latest_interview_at(cls):
+        return (
+            select(
+                func.max(
+                    func.coalesce(
+                        InterviewTable.last_updated, InterviewTable.created_at
+                    )
+                )
+            )
+            .where(InterviewTable.participant_id == cls.id)
+            .scalar_subquery()
+        )
+
+    @hybrid_property
+    def latest_interview_status(self) -> InterviewStatus | None:
+        if not self.interviews:
+            return None
+        latest = max(
+            self.interviews, key=lambda i: i.last_updated or i.created_at
+        )
+        return latest.status
+
+    @latest_interview_status.expression
+    def latest_interview_status(cls):
+        return (
+            select(InterviewTable.status)
+            .where(InterviewTable.participant_id == cls.id)
+            .order_by(
+                func.coalesce(
+                    InterviewTable.last_updated, InterviewTable.created_at
+                ).desc()
+            )
+            .limit(1)
+            .scalar_subquery()
+        )
+
 
 #################
 # Collaborators #
