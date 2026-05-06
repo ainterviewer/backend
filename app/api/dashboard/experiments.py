@@ -6,7 +6,7 @@ from pydantic import UUID4
 
 from ainterviewer.settings import settings as lib_settings
 
-from ...db.models import ExperimentCreate
+from ...db.models import ExperimentCreate, ExperimentPublic
 from ...dependencies import DBSession, UserToken
 from ...utils import generate_qr_img
 
@@ -17,7 +17,7 @@ router = APIRouter(tags=["experiments"])
 async def get_experiments(
     db: DBSession,
     jwt: UserToken,
-):
+) -> list[ExperimentPublic]:
     return db.tests.get_experiments(user_id=jwt.user_id)
 
 
@@ -26,7 +26,7 @@ async def create_experiment(
     experiment: ExperimentCreate,
     db: DBSession,
     jwt: UserToken,
-):
+) -> ExperimentPublic:
     return db.tests.create_experiment(experiment, user_id=jwt.user_id)
 
 
@@ -35,7 +35,7 @@ async def delete_experiment(
     experiment_id: UUID4,
     db: DBSession,
     jwt: UserToken,
-):
+) -> None:
     return db.tests.delete_experiment(experiment_id, user_id=jwt.user_id)
 
 
@@ -45,7 +45,7 @@ async def generate_experiment_qr(
     experiment_id: UUID4,
     jwt: UserToken,
     db: DBSession,
-):
+) -> FileResponse:
     file_path = (
         lib_settings.storage.experiment_storage.qr_code_path(experiment_id)
         / "distribute.png"

@@ -207,7 +207,7 @@ class TestRepository(BaseRepository):
 
         return self._to_experiment_public(experiment)
 
-    def delete_experiment(self, experiment_id: UUID4, user_id: UUID4):
+    def delete_experiment(self, experiment_id: UUID4, user_id: UUID4) -> None:
         statement = delete(ExperimentTable).where(
             ExperimentTable.id == experiment_id,
             ExperimentTable.user_id == user_id,
