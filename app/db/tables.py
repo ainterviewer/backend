@@ -384,6 +384,59 @@ class ParticipantTable(Base):
         creator=lambda project: ProjectParticipantTable(project=project),
     )
 
+    @hybrid_property
+    def latest_interview_at(self) -> datetime.datetime | None:
+        candidates = [
+            (i.last_updated or i.created_at)
+            for pp in self.project_participants
+            for i in pp.interviews
+        ]
+        return max(candidates) if candidates else None
+
+    @latest_interview_at.expression
+    def latest_interview_at(cls):
+        return (
+            select(
+                func.max(
+                    func.coalesce(
+                        InterviewTable.last_updated, InterviewTable.created_at
+                    )
+                )
+            )
+            .join(
+                ProjectParticipantTable,
+                InterviewTable.participant_id == ProjectParticipantTable.id,
+            )
+            .where(ProjectParticipantTable.participant_id == cls.id)
+            .scalar_subquery()
+        )
+
+    @hybrid_property
+    def latest_interview_status(self) -> InterviewStatus | None:
+        interviews = [i for pp in self.project_participants for i in pp.interviews]
+        if not interviews:
+            return None
+        latest = max(interviews, key=lambda i: i.last_updated or i.created_at)
+        return latest.status
+
+    @latest_interview_status.expression
+    def latest_interview_status(cls):
+        return (
+            select(InterviewTable.status)
+            .join(
+                ProjectParticipantTable,
+                InterviewTable.participant_id == ProjectParticipantTable.id,
+            )
+            .where(ProjectParticipantTable.participant_id == cls.id)
+            .order_by(
+                func.coalesce(
+                    InterviewTable.last_updated, InterviewTable.created_at
+                ).desc()
+            )
+            .limit(1)
+            .scalar_subquery()
+        )
+
 
 class ProjectParticipantTable(Base):
     """Join row linking a folder-scoped Participant to a specific Project.
@@ -413,47 +466,6 @@ class ProjectParticipantTable(Base):
     interviews: Mapped[list["InterviewTable"]] = relationship(
         back_populates="project_participant"
     )
-
-    @hybrid_property
-    def latest_interview_at(self) -> datetime.datetime | None:
-        if not self.interviews:
-            return None
-        return max((i.last_updated or i.created_at) for i in self.interviews)
-
-    @latest_interview_at.expression
-    def latest_interview_at(cls):
-        return (
-            select(
-                func.max(
-                    func.coalesce(
-                        InterviewTable.last_updated, InterviewTable.created_at
-                    )
-                )
-            )
-            .where(InterviewTable.participant_id == cls.id)
-            .scalar_subquery()
-        )
-
-    @hybrid_property
-    def latest_interview_status(self) -> InterviewStatus | None:
-        if not self.interviews:
-            return None
-        latest = max(self.interviews, key=lambda i: i.last_updated or i.created_at)
-        return latest.status
-
-    @latest_interview_status.expression
-    def latest_interview_status(cls):
-        return (
-            select(InterviewTable.status)
-            .where(InterviewTable.participant_id == cls.id)
-            .order_by(
-                func.coalesce(
-                    InterviewTable.last_updated, InterviewTable.created_at
-                ).desc()
-            )
-            .limit(1)
-            .scalar_subquery()
-        )
 
 
 #################
