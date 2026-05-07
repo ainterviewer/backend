@@ -32,7 +32,7 @@ async def update_admin_note(
 async def update_user(
     user_id: UUID4, body: UserAdminUpdate, db: DBSession, jwt: AdminToken
 ) -> UserAdmin:
-    if user_id == jwt.user_id and body.scope is not UNSET:
+    if user_id == jwt.user_id and jwt.scope != body.scope and body.scope is not UNSET:
         raise HTTPException(
             status_code=400, detail="Admins cannot change their own scope"
         )
