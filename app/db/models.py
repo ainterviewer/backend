@@ -150,6 +150,13 @@ class UserAdmin(UserPublic):
     admin_note_updated_at: datetime | None = None
 
 
+class UserAdminUpdate(BaseModel):
+    scope: Scope | _Unset = UNSET
+    with_demo_features: bool | _Unset = UNSET
+    organization: str | None | _Unset = UNSET
+    expires_at: datetime | None | _Unset = UNSET
+
+
 class Collaborator(_BaseModel):
     email: EmailStr
     role: CollaboratorRole

@@ -19,6 +19,7 @@ from ..models import (
     InvitationPublic,
     InvitationUpdate,
     UserAdmin,
+    UserAdminUpdate,
     UserCreate,
     UserPrivate,
     UserPublic,
@@ -96,6 +97,21 @@ class UserRepository(BaseRepository):
         statement = select(UserTable)
         users = self.session.execute(statement).scalars().all()
         return [UserAdmin.model_validate(user) for user in users]
+
+    def update_user_admin(self, user_id: UUID4, data: UserAdminUpdate) -> UserAdmin:
+        values = {k: v for k, v in data.model_dump().items() if v is not UNSET}
+
+        if values:
+            statement = (
+                update(UserTable).where(UserTable.id == user_id).values(**values)
+            )
+            self.session.execute(statement)
+            self.session.commit()
+
+        user = self.session.execute(
+            select(UserTable).where(UserTable.id == user_id)
+        ).scalar_one()
+        return UserAdmin.model_validate(user)
 
     def update_admin_note(self, user_id: UUID4, note: str | None) -> UserAdmin:
         statement = (
