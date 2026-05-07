@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.2.14"
+        "version": "0.3.1"
     },
     "paths": {
         "/api/projects/{project_id}/analysis/categories": {
@@ -1285,7 +1285,13 @@
                         "description": "Successful Response",
                         "content": {
                             "application/json": {
-                                "schema": {}
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/ExperimentPublic"
+                                    },
+                                    "type": "array",
+                                    "title": "Response Get Experiments"
+                                }
                             }
                         }
                     }
@@ -1317,7 +1323,9 @@
                         "description": "Successful Response",
                         "content": {
                             "application/json": {
-                                "schema": {}
+                                "schema": {
+                                    "$ref": "#/components/schemas/ExperimentPublic"
+                                }
                             }
                         }
                     },
@@ -2294,74 +2302,6 @@
                 }
             }
         },
-        "/api/projects/{project_id}/participants/export": {
-            "get": {
-                "tags": [
-                    "participants"
-                ],
-                "summary": "Export Participants",
-                "operationId": "export_participants",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "project_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "anyOf": [
-                                {
-                                    "type": "string",
-                                    "format": "uuid4"
-                                },
-                                {
-                                    "type": "null"
-                                }
-                            ],
-                            "title": "Project Id"
-                        }
-                    },
-                    {
-                        "name": "folder_id",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "anyOf": [
-                                {
-                                    "type": "string",
-                                    "format": "uuid4"
-                                },
-                                {
-                                    "type": "null"
-                                }
-                            ],
-                            "title": "Folder Id"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "text/csv": {}
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/api/projects/{project_id}/participants/{participant_id}": {
             "get": {
                 "tags": [
@@ -2612,7 +2552,75 @@
                 }
             }
         },
-        "/api/participants/{participant_pid}": {
+        "/api/projects/{project_id}/participants/export": {
+            "get": {
+                "tags": [
+                    "participants"
+                ],
+                "summary": "Export Participants",
+                "operationId": "export_participants",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "text/csv": {}
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/participants/opt-out/{opt_out_token}": {
             "post": {
                 "tags": [
                     "participants"
@@ -2621,12 +2629,12 @@
                 "operationId": "opt_out",
                 "parameters": [
                     {
-                        "name": "participant_pid",
+                        "name": "opt_out_token",
                         "in": "path",
                         "required": true,
                         "schema": {
                             "type": "string",
-                            "title": "Participant Pid"
+                            "title": "Opt Out Token"
                         }
                     }
                 ],
@@ -7699,7 +7707,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "patch": {
+            "put": {
                 "tags": [
                     "admin"
                 ],
@@ -7787,7 +7795,7 @@
                     }
                 }
             },
-            "put": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -7875,7 +7883,7 @@
                     }
                 }
             },
-            "delete": {
+            "patch": {
                 "tags": [
                     "admin"
                 ],
@@ -8024,6 +8032,64 @@
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/AdminNoteUpdate"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserAdmin"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/users/{user_id}": {
+            "patch": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Update User",
+                "operationId": "update_user",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid4",
+                            "title": "User Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserAdminUpdate"
                             }
                         }
                     }
@@ -9147,7 +9213,17 @@
             "ConditionEvaluation": {
                 "properties": {
                     "trigger_value": {
-                        "type": "string",
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "number"
+                            }
+                        ],
                         "title": "Trigger Value",
                         "description": "The pattern to match or value to compare against"
                     },
@@ -9606,6 +9682,87 @@
                 "title": "ExperimentProjectCreate",
                 "description": "Input model for adding a project to an experiment."
             },
+            "ExperimentProjectPublic": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Id"
+                    },
+                    "project_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Project Id"
+                    },
+                    "weight": {
+                        "anyOf": [
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Weight"
+                    },
+                    "added_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Added At"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "id",
+                    "project_id",
+                    "added_at"
+                ],
+                "title": "ExperimentProjectPublic",
+                "description": "Public model for experiment-project association."
+            },
+            "ExperimentPublic": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Id"
+                    },
+                    "title": {
+                        "type": "string",
+                        "title": "Title"
+                    },
+                    "user_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "User Id"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Created At"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/ProjectStatus",
+                        "default": "active"
+                    },
+                    "projects": {
+                        "items": {
+                            "$ref": "#/components/schemas/ExperimentProjectPublic"
+                        },
+                        "type": "array",
+                        "title": "Projects",
+                        "default": []
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "id",
+                    "title",
+                    "user_id",
+                    "created_at"
+                ],
+                "title": "ExperimentPublic"
+            },
             "ExportMessagesRequest": {
                 "properties": {
                     "interview_ids": {
@@ -10026,6 +10183,14 @@
                         "title": "Outro",
                         "description": "An outro message for the interview. Displayed to the interviewee as the last message they will see. They will not be able to answer this message."
                     },
+                    "extra_variables": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Extra Variables",
+                        "description": "Names of variables (beyond the built-in project_id and interview_id) that this guide expects to be supplied via referable_values at runtime. Every {{ placeholder }} in user-facing templates must appear here or be a built-in."
+                    },
                     "timed_messages": {
                         "anyOf": [
                             {
@@ -10083,6 +10248,14 @@
                         ],
                         "title": "Outro",
                         "description": "An outro message for the interview. Displayed to the interviewee as the last message they will see. They will not be able to answer this message."
+                    },
+                    "extra_variables": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Extra Variables",
+                        "description": "Names of variables (beyond the built-in project_id and interview_id) that this guide expects to be supplied via referable_values at runtime. Every {{ placeholder }} in user-facing templates must appear here or be a built-in."
                     },
                     "timed_messages": {
                         "anyOf": [
@@ -11463,6 +11636,16 @@
                         "format": "uuid4",
                         "title": "Project Id"
                     },
+                    "participant_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Participant Id"
+                    },
+                    "folder_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Folder Id"
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -11496,6 +11679,8 @@
                     "pid",
                     "id",
                     "project_id",
+                    "participant_id",
+                    "folder_id",
                     "created_at"
                 ],
                 "title": "ParticipantPublic"
@@ -12056,21 +12241,6 @@
                         "description": "Exclude from the interview history. This means that the model will not use this question or the response as a context when it asks further questions.",
                         "default": false
                     },
-                    "variables": {
-                        "anyOf": [
-                            {
-                                "items": {
-                                    "type": "string"
-                                },
-                                "type": "array"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Variables",
-                        "description": "Variables that can be used in the question, ie. uuid. In case they are supplied, they will be filled in before the question is asked. The question should be formatted with Jinja2 style templating."
-                    },
                     "references": {
                         "anyOf": [
                             {
@@ -12289,21 +12459,6 @@
                         "title": "Exclude From History",
                         "description": "Exclude from the interview history. This means that the model will not use this question or the response as a context when it asks further questions.",
                         "default": false
-                    },
-                    "variables": {
-                        "anyOf": [
-                            {
-                                "items": {
-                                    "type": "string"
-                                },
-                                "type": "array"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Variables",
-                        "description": "Variables that can be used in the question, ie. uuid. In case they are supplied, they will be filled in before the question is asked. The question should be formatted with Jinja2 style templating."
                     },
                     "references": {
                         "anyOf": [
@@ -13207,10 +13362,6 @@
                         "$ref": "#/components/schemas/Scope",
                         "default": "user"
                     },
-                    "with_demo_features": {
-                        "type": "boolean",
-                        "title": "With Demo Features"
-                    },
                     "id": {
                         "type": "string",
                         "format": "uuid4",
@@ -13238,6 +13389,10 @@
                             }
                         ],
                         "title": "Expires At"
+                    },
+                    "with_demo_features": {
+                        "type": "boolean",
+                        "title": "With Demo Features"
                     },
                     "access_request_message": {
                         "anyOf": [
@@ -13292,10 +13447,71 @@
                     "created_at",
                     "last_active",
                     "last_login",
-                    "with_demo_features",
-                    "id"
+                    "id",
+                    "with_demo_features"
                 ],
                 "title": "UserAdmin"
+            },
+            "UserAdminUpdate": {
+                "properties": {
+                    "scope": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/Scope"
+                            },
+                            {
+                                "$ref": "#/components/schemas/_Unset"
+                            }
+                        ],
+                        "title": "Scope",
+                        "default": "UNSET"
+                    },
+                    "with_demo_features": {
+                        "anyOf": [
+                            {
+                                "type": "boolean"
+                            },
+                            {
+                                "$ref": "#/components/schemas/_Unset"
+                            }
+                        ],
+                        "title": "With Demo Features",
+                        "default": "UNSET"
+                    },
+                    "organization": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "$ref": "#/components/schemas/_Unset"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Organization",
+                        "default": "UNSET"
+                    },
+                    "expires_at": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "$ref": "#/components/schemas/_Unset"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Expires At",
+                        "default": "UNSET"
+                    }
+                },
+                "type": "object",
+                "title": "UserAdminUpdate"
             },
             "UserCreateRequest": {
                 "properties": {
@@ -13338,10 +13554,6 @@
                         "$ref": "#/components/schemas/Scope",
                         "default": "user"
                     },
-                    "with_demo_features": {
-                        "type": "boolean",
-                        "title": "With Demo Features"
-                    },
                     "invite_token": {
                         "anyOf": [
                             {
@@ -13369,7 +13581,6 @@
                 "required": [
                     "email",
                     "first_name",
-                    "with_demo_features",
                     "password"
                 ],
                 "title": "UserCreateRequest",
@@ -13416,10 +13627,6 @@
                         "$ref": "#/components/schemas/Scope",
                         "default": "user"
                     },
-                    "with_demo_features": {
-                        "type": "boolean",
-                        "title": "With Demo Features"
-                    },
                     "id": {
                         "type": "string",
                         "format": "uuid4",
@@ -13447,6 +13654,10 @@
                             }
                         ],
                         "title": "Expires At"
+                    },
+                    "with_demo_features": {
+                        "type": "boolean",
+                        "title": "With Demo Features"
                     }
                 },
                 "type": "object",
@@ -13456,8 +13667,8 @@
                     "created_at",
                     "last_active",
                     "last_login",
-                    "with_demo_features",
-                    "id"
+                    "id",
+                    "with_demo_features"
                 ],
                 "title": "UserPublic"
             },
