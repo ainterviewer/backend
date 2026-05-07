@@ -109,6 +109,18 @@ async def create_interview(
     if new_interview.synthetic_test_type == TestType.FIXED_ANSWERS:
         interview_guide.reduce()
 
+    participant_id = new_interview.participant_id
+    if participant_id is None and new_interview.pid is not None:
+        try:
+            participant_id = db.participants.resolve_link_by_pid(
+                project_id, new_interview.pid
+            )
+        except NoResultFound:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No participant with pid '{new_interview.pid}' in this project",
+            )
+
     interview = db.interviews.create_interview(
         project_id,
         interview_guide=interview_guide,
@@ -120,7 +132,7 @@ async def create_interview(
         external_params=new_interview.external_params,
         ip_address=ip_address,
         language=project_localization.language,
-        participant_id=new_interview.participant_id,
+        participant_id=participant_id,
     )
 
     interview_token = create_interview_token(

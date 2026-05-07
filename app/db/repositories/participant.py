@@ -155,6 +155,25 @@ class ParticipantRepository(BaseRepository):
 
         return self.add_participants(project_id, participants)
 
+    def resolve_link_by_pid(self, project_id: UUID4, pid: str) -> UUID4:
+        """Resolve a public pid to its project_participant.id within the given
+        project. Raises NoResultFound if no folder-scoped Participant matches
+        the pid, or if that Participant is not attached to this project."""
+        folder_id = self._folder_id_for_project(project_id)
+        link_id = self.session.execute(
+            select(ProjectParticipantTable.id)
+            .join(
+                ParticipantTable,
+                ProjectParticipantTable.participant_id == ParticipantTable.id,
+            )
+            .where(
+                ProjectParticipantTable.project_id == project_id,
+                ParticipantTable.folder_id == folder_id,
+                ParticipantTable.pid == pid,
+            )
+        ).scalar_one()
+        return link_id
+
     def _get_link(self, project_participant_id: UUID4) -> ProjectParticipantTable:
         return self.session.execute(
             select(ProjectParticipantTable).where(

@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Annotated
 
 import polars as pl
-from fastapi import APIRouter, Body, HTTPException, Request, UploadFile, Response
+from fastapi import APIRouter, Body, HTTPException, Response, UploadFile
 from jinja2 import TemplateError
 from pydantic import UUID4
 
@@ -29,6 +29,7 @@ from ...services.email.participant_template import (
     render_participant_email_template,
     validate_participant_email_template,
 )
+from ...settings import app_settings
 from ..request_models import (
     DeleteParticipantsRequest,
     ParticipantEmailTemplateRequest,
@@ -371,7 +372,6 @@ def _resolve_email_for_participant(
 async def send_participant_emails(
     project_id: UUID4,
     payload: SendParticipantEmailRequest,
-    request: Request,
     db: DBSession,
     jwt: UserToken,
     _: ProjectEditor,
@@ -396,7 +396,7 @@ async def send_participant_emails(
         lang: (subj, tmpl) for (lang, subj, tmpl) in all_localizations
     }
 
-    base_url = str(request.base_url)
+    base_url = app_settings.sveltekit_platform_public_addr
     sent: list[UUID4] = []
     skipped: list[UUID4] = []
 
@@ -415,9 +415,9 @@ async def send_participant_emails(
         subject, template, langs = resolved
         attachments = _read_attachments(project_id, langs)
 
-        interview_url = f"{base_url}interview?id={project_id}&pid={participant.pid}"
+        interview_url = f"{base_url}/interview?id={project_id}&pid={participant.pid}"
         opt_out_token = db.participants.get_opt_out_urlid(participant.id)
-        opt_out_url = f"{base_url}opt-out/{opt_out_token}"
+        opt_out_url = f"{base_url}/opt-out/{opt_out_token}"
 
         context = build_template_context(
             name=participant.name,
