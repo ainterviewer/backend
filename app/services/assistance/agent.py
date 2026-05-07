@@ -32,7 +32,7 @@ _GREETING_TRIGGER = "[system:new_session_greeting]"
 DEFAULT_MODEL = OpenAIChatModel(
     "gpt-5.4-mini",
     provider=OpenAIProvider(
-        api_key=lib_settings.secrets.openai_api_key.get_secret_value()  # ty:ignore[unresolved-attribute]
+        api_key=lib_settings.secrets.openai_api_key.get_secret_value()
     ),
 )
 

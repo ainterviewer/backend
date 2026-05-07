@@ -45,7 +45,7 @@ async def generate_experiment_qr(
     experiment_id: UUID4,
     jwt: UserToken,
     db: DBSession,
-) -> FileResponse:
+):
     file_path = (
         lib_settings.storage.experiment_storage.qr_code_path(experiment_id)
         / "distribute.png"
