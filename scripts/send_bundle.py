@@ -2,6 +2,7 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #     "jinja2>=3.1.6",
+#     "rich>=15.0.0",
 #     "typer>=0.25.1",
 # ]
 # ///
@@ -50,6 +51,7 @@ from typing import Annotated
 import typer
 from jinja2 import StrictUndefined, TemplateError, select_autoescape
 from jinja2.sandbox import SandboxedEnvironment
+from rich.progress import track
 
 SMTP_HOST = "exchange.ku.dk"
 SMTP_PORT = 587
@@ -381,7 +383,7 @@ def send(
         sender = from_addr or user
 
         sent_count = 0
-        for p in filtered:
+        for p in track(filtered):
             resolved = _resolve_template(
                 p.get("lang") or None, templates, default_language
             )
