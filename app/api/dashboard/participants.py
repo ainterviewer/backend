@@ -1,4 +1,7 @@
+import io
+import json
 import mimetypes
+import zipfile
 from pathlib import Path
 from typing import Annotated
 
@@ -84,6 +87,77 @@ async def export_participants(
         media_type="text/csv",
         headers={
             "Content-Disposition": f'attachment; filename="participants_{project_id}.csv"'
+        },
+    )
+
+
+@router.get(
+    "/projects/{project_id}/email-bundle",
+    response_class=Response,
+    responses={200: {"content": {"application/zip": {}}}},
+)
+async def export_email_bundle(
+    project_id: UUID4,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectEditor,
+) -> Response:
+    """Export a self-contained zip with participants, templates and attachments.
+
+    Intended for offline sending via the KU mail script when the server can't
+    reach the KU SMTP gateway directly.
+    """
+    project = db.projects.get_project(project_id)
+    participants = db.participants.get_participants(project_id)
+    localizations = db.projects.get_participant_email_templates_ordered(project_id)
+
+    rows = []
+    for p in participants:
+        row = p.model_dump(mode="json")
+        row["opt_out_token"] = (
+            db.participants.get_opt_out_urlid(p.id) if p.email else ""
+        )
+        rows.append(row)
+    csv_bytes = pl.DataFrame(rows).write_csv().encode("utf-8")
+
+    base_url = app_settings.sveltekit_platform_public_addr
+    manifest = {
+        "project_id": str(project_id),
+        "project_title": project.title,
+        "base_url": base_url,
+        "default_language": project.config.default_language,
+        "languages": [lang for (lang, _, _) in localizations],
+    }
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("participants.csv", csv_bytes)
+        zf.writestr("project.json", json.dumps(manifest, indent=2))
+
+        for lang, subject, template in localizations:
+            if subject:
+                zf.writestr(f"templates/{lang}.subject.txt", subject)
+            if template:
+                zf.writestr(f"templates/{lang}.html", template)
+
+        attachments_base = lib_settings.storage.project_storage.email_attachments_path(
+            project_id
+        )
+        if attachments_base.exists():
+            for lang_dir in sorted(attachments_base.iterdir()):
+                if not lang_dir.is_dir():
+                    continue
+                for entry in sorted(lang_dir.iterdir()):
+                    if entry.is_file():
+                        zf.write(
+                            entry, arcname=f"attachments/{lang_dir.name}/{entry.name}"
+                        )
+
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="email_bundle_{project_id}.zip"'
         },
     )
 
