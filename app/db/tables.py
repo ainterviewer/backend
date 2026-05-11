@@ -338,6 +338,10 @@ class ProjectLocalizationTable(Base):
     )
     participant_email_subject: Mapped[str | None] = mapped_column(default=None)
     participant_email_template: Mapped[str | None] = mapped_column(default=None)
+    participant_reminder_email_subject: Mapped[str | None] = mapped_column(default=None)
+    participant_reminder_email_template: Mapped[str | None] = mapped_column(
+        default=None
+    )
 
     # Relationships
     project: Mapped["ProjectTable"] = relationship(back_populates="localizations")

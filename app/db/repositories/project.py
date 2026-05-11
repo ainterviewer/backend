@@ -865,6 +865,66 @@ class ProjectRepository(BaseRepository):
         )
         return [(lang, subj, tmpl) for (lang, subj, tmpl) in ordered]
 
+    # ====== Participant Reminder Email Template Methods ======
+
+    def get_participant_reminder_email_template(
+        self, project_id: UUID4, language: LanguageCode
+    ) -> tuple[str | None, str | None]:
+        """Return (subject, template) of the reminder email for the given localization."""
+        statement = select(
+            ProjectLocalizationTable.participant_reminder_email_subject,
+            ProjectLocalizationTable.participant_reminder_email_template,
+        ).where(
+            ProjectLocalizationTable.project_id == project_id,
+            ProjectLocalizationTable.language == language,
+        )
+        row = self.session.execute(statement).one()
+        return row[0], row[1]
+
+    def set_participant_reminder_email_template(
+        self,
+        project_id: UUID4,
+        language: LanguageCode,
+        subject: str | None,
+        template: str | None,
+    ) -> None:
+        statement = (
+            update(ProjectLocalizationTable)
+            .where(
+                ProjectLocalizationTable.project_id == project_id,
+                ProjectLocalizationTable.language == language,
+            )
+            .values(
+                participant_reminder_email_subject=subject,
+                participant_reminder_email_template=template,
+            )
+        )
+        self.session.execute(statement)
+        self.session.commit()
+
+    def get_participant_reminder_email_templates_ordered(
+        self, project_id: UUID4
+    ) -> list[tuple[LanguageCode, str | None, str | None]]:
+        """Return (language, subject, template) of the reminder email for every
+        localization, with the project's default language first."""
+        project = self.session.execute(
+            select(ProjectTable).where(ProjectTable.id == project_id)
+        ).scalar_one()
+        default_lang = project.config.default_language
+
+        rows = self.session.execute(
+            select(
+                ProjectLocalizationTable.language,
+                ProjectLocalizationTable.participant_reminder_email_subject,
+                ProjectLocalizationTable.participant_reminder_email_template,
+            ).where(ProjectLocalizationTable.project_id == project_id)
+        ).all()
+        ordered = sorted(
+            (tuple(r) for r in rows),
+            key=lambda r: (r[0] != default_lang, r[0]),
+        )
+        return [(lang, subj, tmpl) for (lang, subj, tmpl) in ordered]
+
     # ==================== Authorization Methods ====================
 
     def get_user_role_on_folder(

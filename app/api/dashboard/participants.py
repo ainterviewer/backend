@@ -43,6 +43,13 @@ from ..response_models import (
     SendParticipantEmailResponse,
 )
 
+SECTION_SEPARATOR = "\n<hr/>\n"
+SUBJECT_SEPARATOR = " / "
+REMINDER_ATTACHMENT_SUBDIR = "_reminders"
+
+MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024  # 10MB per file
+MAX_TOTAL_ATTACHMENT_BYTES = 25 * 1024 * 1024  # 25MB per language
+
 router = APIRouter(tags=["participants"])
 
 
@@ -140,18 +147,39 @@ async def export_email_bundle(
             if template:
                 zf.writestr(f"templates/{lang}.html", template)
 
+        reminder_localizations = (
+            db.projects.get_participant_reminder_email_templates_ordered(project_id)
+        )
+        for lang, subject, template in reminder_localizations:
+            if subject:
+                zf.writestr(f"templates/{lang}.reminder.subject.txt", subject)
+            if template:
+                zf.writestr(f"templates/{lang}.reminder.html", template)
+
         attachments_base = lib_settings.storage.project_storage.email_attachments_path(
             project_id
         )
         if attachments_base.exists():
             for lang_dir in sorted(attachments_base.iterdir()):
-                if not lang_dir.is_dir():
+                if not lang_dir.is_dir() or lang_dir.name == REMINDER_ATTACHMENT_SUBDIR:
                     continue
                 for entry in sorted(lang_dir.iterdir()):
                     if entry.is_file():
                         zf.write(
                             entry, arcname=f"attachments/{lang_dir.name}/{entry.name}"
                         )
+
+            reminder_base = attachments_base / REMINDER_ATTACHMENT_SUBDIR
+            if reminder_base.exists():
+                for lang_dir in sorted(reminder_base.iterdir()):
+                    if not lang_dir.is_dir():
+                        continue
+                    for entry in sorted(lang_dir.iterdir()):
+                        if entry.is_file():
+                            zf.write(
+                                entry,
+                                arcname=f"attachments/reminders/{lang_dir.name}/{entry.name}",
+                            )
 
     return Response(
         content=buf.getvalue(),
@@ -239,10 +267,6 @@ async def delete_participants(
     db.participants.remove_participants(project_id, delete_request.participant_ids)
 
 
-SECTION_SEPARATOR = "\n<hr/>\n"
-SUBJECT_SEPARATOR = " / "
-
-
 @router.get("/projects/{project_id}/{language}/participant-email-template")
 async def get_participant_email_template(
     project_id: UUID4,
@@ -281,13 +305,16 @@ async def set_participant_email_template(
     )
 
 
-MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024  # 10MB per file
-MAX_TOTAL_ATTACHMENT_BYTES = 25 * 1024 * 1024  # 25MB per language
-
-
 def _attachments_dir(project_id: UUID4, language: LanguageCode) -> Path:
     base = lib_settings.storage.project_storage.email_attachments_path(project_id)
     path = base / language
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _reminder_attachments_dir(project_id: UUID4, language: LanguageCode) -> Path:
+    base = lib_settings.storage.project_storage.email_attachments_path(project_id)
+    path = base / REMINDER_ATTACHMENT_SUBDIR / language
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -401,11 +428,15 @@ async def delete_participant_email_attachment(
 
 
 def _read_attachments(
-    project_id: UUID4, languages: set[LanguageCode]
+    project_id: UUID4,
+    languages: set[LanguageCode],
+    reminder: bool = False,
 ) -> list[tuple[str, bytes]]:
     """Load attachment files for the given languages, deduped by filename."""
     seen: dict[str, bytes] = {}
     base = lib_settings.storage.project_storage.email_attachments_path(project_id)
+    if reminder:
+        base = base / REMINDER_ATTACHMENT_SUBDIR
     for lang in languages:
         directory = base / lang
         if not directory.exists():
@@ -442,20 +473,16 @@ def _resolve_email_for_participant(
     )
 
 
-@router.post("/projects/{project_id}/participants/send-email")
-async def send_participant_emails(
+async def _send_participant_emails(
     project_id: UUID4,
     payload: SendParticipantEmailRequest,
-    db: DBSession,
-    jwt: UserToken,
-    _: ProjectEditor,
+    db: "DBSession",
+    all_localizations: list[tuple[LanguageCode, str | None, str | None]],
+    reminder: bool,
+    missing_template_detail: str,
 ) -> SendParticipantEmailResponse:
-    all_localizations = db.projects.get_participant_email_templates_ordered(project_id)
     if not any(tmpl for (_, _, tmpl) in all_localizations):
-        raise HTTPException(
-            status_code=404,
-            detail="No participant email template configured for this project.",
-        )
+        raise HTTPException(status_code=404, detail=missing_template_detail)
 
     project = db.projects.get_project(project_id)
 
@@ -487,7 +514,7 @@ async def send_participant_emails(
             skipped.append(participant.id)
             continue
         subject, template, langs = resolved
-        attachments = _read_attachments(project_id, langs)
+        attachments = _read_attachments(project_id, langs, reminder=reminder)
 
         interview_url = f"{base_url}/interview?id={project_id}&pid={participant.pid}"
         opt_out_token = db.participants.get_opt_out_urlid(participant.id)
@@ -519,3 +546,161 @@ async def send_participant_emails(
         sent.append(participant.id)
 
     return SendParticipantEmailResponse(sent=sent, skipped=skipped)
+
+
+@router.post("/projects/{project_id}/participants/send-email")
+async def send_participant_emails(
+    project_id: UUID4,
+    payload: SendParticipantEmailRequest,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectEditor,
+) -> SendParticipantEmailResponse:
+    return await _send_participant_emails(
+        project_id,
+        payload,
+        db,
+        all_localizations=db.projects.get_participant_email_templates_ordered(
+            project_id
+        ),
+        reminder=False,
+        missing_template_detail="No participant email template configured for this project.",
+    )
+
+
+# ============ Participant Reminder Email Endpoints ============
+
+
+@router.get("/projects/{project_id}/{language}/participant-reminder-email-template")
+async def get_participant_reminder_email_template(
+    project_id: UUID4,
+    language: LanguageCode,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectViewer,
+) -> ParticipantEmailTemplateRequest:
+    subject, template = db.projects.get_participant_reminder_email_template(
+        project_id, language
+    )
+    return ParticipantEmailTemplateRequest(subject=subject, template=template)
+
+
+@router.put("/projects/{project_id}/{language}/participant-reminder-email-template")
+async def set_participant_reminder_email_template(
+    project_id: UUID4,
+    language: LanguageCode,
+    request: ParticipantEmailTemplateRequest,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectEditor,
+) -> ParticipantEmailTemplateRequest:
+    if request.template is not None:
+        try:
+            validate_participant_email_template(request.template)
+        except TemplateSyntaxError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid Jinja template: {exc.message}",
+            ) from exc
+
+    db.projects.set_participant_reminder_email_template(
+        project_id, language, request.subject, request.template
+    )
+    return ParticipantEmailTemplateRequest(
+        subject=request.subject, template=request.template
+    )
+
+
+@router.get("/projects/{project_id}/{language}/participant-reminder-email-attachments")
+async def list_participant_reminder_email_attachments(
+    project_id: UUID4,
+    language: LanguageCode,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectViewer,
+) -> list[ParticipantEmailAttachment]:
+    return _list_attachments(_reminder_attachments_dir(project_id, language))
+
+
+@router.post("/projects/{project_id}/{language}/participant-reminder-email-attachments")
+async def upload_participant_reminder_email_attachments(
+    project_id: UUID4,
+    language: LanguageCode,
+    files: list[UploadFile],
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectEditor,
+) -> list[ParticipantEmailAttachment]:
+    if not files:
+        raise HTTPException(status_code=422, detail="No files provided.")
+
+    directory = _reminder_attachments_dir(project_id, language)
+
+    existing_total = sum(f.stat().st_size for f in directory.iterdir() if f.is_file())
+
+    new_payloads: list[tuple[str, bytes]] = []
+    incoming_total = 0
+    for upload in files:
+        name = _safe_filename(upload.filename)
+        content = await upload.read()
+        if len(content) > MAX_ATTACHMENT_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Attachment '{name}' exceeds the {MAX_ATTACHMENT_BYTES} byte limit.",
+            )
+        existing_file = directory / name
+        if existing_file.exists():
+            existing_total -= existing_file.stat().st_size
+        incoming_total += len(content)
+        new_payloads.append((name, content))
+
+    if existing_total + incoming_total > MAX_TOTAL_ATTACHMENT_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Total attachments would exceed the {MAX_TOTAL_ATTACHMENT_BYTES} byte limit.",
+        )
+
+    for name, content in new_payloads:
+        (directory / name).write_bytes(content)
+
+    return _list_attachments(directory)
+
+
+@router.delete(
+    "/projects/{project_id}/{language}/participant-reminder-email-attachments/{filename}"
+)
+async def delete_participant_reminder_email_attachment(
+    project_id: UUID4,
+    language: LanguageCode,
+    filename: str,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectEditor,
+) -> list[ParticipantEmailAttachment]:
+    name = _safe_filename(filename)
+    directory = _reminder_attachments_dir(project_id, language)
+    target = directory / name
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Attachment not found.")
+    target.unlink()
+    return _list_attachments(directory)
+
+
+@router.post("/projects/{project_id}/participants/send-reminder-email")
+async def send_participant_reminder_emails(
+    project_id: UUID4,
+    payload: SendParticipantEmailRequest,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectEditor,
+) -> SendParticipantEmailResponse:
+    return await _send_participant_emails(
+        project_id,
+        payload,
+        db,
+        all_localizations=db.projects.get_participant_reminder_email_templates_ordered(
+            project_id
+        ),
+        reminder=True,
+        missing_template_detail="No participant reminder email template configured for this project.",
+    )
