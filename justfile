@@ -26,10 +26,9 @@ update-users:
     python -m app.db --create-users
 
 [group("Database")]
-fetch-backup:
+fetch-db:
     rm -f storage/db.sqlite*
-    latest=$(ssh aws-1 'ls -t /var/backups/sqlite/app-daily-*.db | head -n 1'); \
-    scp aws-1:"$latest" storage/db.sqlite
+    scp aws-1:/var/backups/sqlite/app-daily-latest.db storage/db.sqlite
 
 [group("Release & Publish")]
 bump TYPE: && publish
