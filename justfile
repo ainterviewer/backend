@@ -33,7 +33,10 @@ fetch-backup:
 
 [group("Release & Publish")]
 bump TYPE: && publish
-    uv version --bump {{ TYPE }} 
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv run prek -a
+    uv version --bump {{ TYPE }}
 
 [group("Release & Publish")]
 publish:
