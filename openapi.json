@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.3.5"
+        "version": "0.3.6"
     },
     "paths": {
         "/api/projects/{project_id}/analysis/categories": {
@@ -3383,6 +3383,540 @@
                 ],
                 "summary": "Send Participant Emails",
                 "operationId": "send_participant_emails",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SendParticipantEmailRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SendParticipantEmailResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/projects/{project_id}/{language}/participant-reminder-email-template": {
+            "get": {
+                "tags": [
+                    "participants"
+                ],
+                "summary": "Get Participant Reminder Email Template",
+                "operationId": "get_participant_reminder_email_template",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "language",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Language"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ParticipantEmailTemplateRequest"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "participants"
+                ],
+                "summary": "Set Participant Reminder Email Template",
+                "operationId": "set_participant_reminder_email_template",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "language",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Language"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ParticipantEmailTemplateRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ParticipantEmailTemplateRequest"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/projects/{project_id}/{language}/participant-reminder-email-attachments": {
+            "get": {
+                "tags": [
+                    "participants"
+                ],
+                "summary": "List Participant Reminder Email Attachments",
+                "operationId": "list_participant_reminder_email_attachments",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "language",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Language"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ParticipantEmailAttachment"
+                                    },
+                                    "title": "Response List Participant Reminder Email Attachments"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "participants"
+                ],
+                "summary": "Upload Participant Reminder Email Attachments",
+                "operationId": "upload_participant_reminder_email_attachments",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "language",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Language"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Body_upload_participant_reminder_email_attachments"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ParticipantEmailAttachment"
+                                    },
+                                    "title": "Response Upload Participant Reminder Email Attachments"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/projects/{project_id}/{language}/participant-reminder-email-attachments/{filename}": {
+            "delete": {
+                "tags": [
+                    "participants"
+                ],
+                "summary": "Delete Participant Reminder Email Attachment",
+                "operationId": "delete_participant_reminder_email_attachment",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "language",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Language"
+                        }
+                    },
+                    {
+                        "name": "filename",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Filename"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ParticipantEmailAttachment"
+                                    },
+                                    "title": "Response Delete Participant Reminder Email Attachment"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/projects/{project_id}/participants/send-reminder-email": {
+            "post": {
+                "tags": [
+                    "participants"
+                ],
+                "summary": "Send Participant Reminder Emails",
+                "operationId": "send_participant_reminder_emails",
                 "security": [
                     {
                         "APIKeyCookie": []
@@ -7776,51 +8310,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "get": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "delete": {
+            "patch": {
                 "tags": [
                     "admin"
                 ],
@@ -7908,7 +8398,7 @@
                     }
                 }
             },
-            "post": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -7952,7 +8442,51 @@
                     }
                 }
             },
-            "patch": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -9040,6 +9574,23 @@
                     "files"
                 ],
                 "title": "Body_upload_participant_email_attachments"
+            },
+            "Body_upload_participant_reminder_email_attachments": {
+                "properties": {
+                    "files": {
+                        "items": {
+                            "type": "string",
+                            "contentMediaType": "application/octet-stream"
+                        },
+                        "type": "array",
+                        "title": "Files"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "files"
+                ],
+                "title": "Body_upload_participant_reminder_email_attachments"
             },
             "Body_upload_participants": {
                 "properties": {
