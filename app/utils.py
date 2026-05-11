@@ -150,6 +150,7 @@ def replay_history(
                 message_id=last_message.message_id,
                 feedback=last_message.feedback,
                 image=last_message.image,
+                survey_item=last_message.survey_item,
             )
             messages.append(data)
 
