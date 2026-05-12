@@ -469,6 +469,7 @@ StatusOpt = Annotated[
         "--status",
         help="Only send to participants whose latest_interview_status matches "
         "(repeatable). Values: active, inactive, completed, none.",
+        default_factory=lambda: ["inactive", "none"],
     ),
 ]
 ActivityOpt = Annotated[
@@ -525,10 +526,10 @@ LimitOpt = Annotated[
 def invite(
     bundle: BundleArg,
     user: UserOpt,
+    status: StatusOpt,
     from_addr: FromAddrOpt = None,
     from_name: FromNameOpt = None,
     password: PasswordOpt = None,
-    status: StatusOpt = None,
     activity: ActivityOpt = None,
     only_participating: OnlyParticipatingOpt = True,
     lang: LangOpt = None,
@@ -566,10 +567,10 @@ def invite(
 def reminder(
     bundle: BundleArg,
     user: UserOpt,
+    status: StatusOpt,
     from_addr: FromAddrOpt = None,
     from_name: FromNameOpt = None,
     password: PasswordOpt = None,
-    status: StatusOpt = None,
     activity: ActivityOpt = None,
     only_participating: OnlyParticipatingOpt = True,
     lang: LangOpt = None,
