@@ -58,7 +58,7 @@ SMTP_PORT = 587
 
 SECTION_SEPARATOR = "\n<hr/>\n"
 SUBJECT_SEPARATOR = " / "
-SENT_LOG_NAME = "sent.csv"
+REMINDER_ATTACHMENT_SUBDIR = "reminders"
 
 cli = typer.Typer(
     help="Send participant emails from an exported bundle via KU Exchange.",
@@ -126,23 +126,36 @@ def _render(template: str, context: dict[str, str]) -> str:
     return env.from_string(template).render(**context)
 
 
-def _load_templates(extracted: Path) -> dict[str, tuple[str, str]]:
-    """Return {lang: (subject, html)} for every language with an html template."""
+def _load_templates(
+    extracted: Path, reminder: bool = False
+) -> dict[str, tuple[str, str]]:
+    """Return {lang: (subject, html)} for every language with an html template.
+
+    `templates/{lang}.html` / `templates/{lang}.subject.txt` are invite templates,
+    `templates/{lang}.reminder.html` / `templates/{lang}.reminder.subject.txt` are
+    reminders.
+    """
     tmpl_dir = extracted / "templates"
     out: dict[str, tuple[str, str]] = {}
     if not tmpl_dir.exists():
         return out
-    for html in sorted(tmpl_dir.glob("*.html")):
-        lang = html.stem
-        subj_file = tmpl_dir / f"{lang}.subject.txt"
+    html_glob = "*.reminder.html" if reminder else "*.html"
+    subj_suffix = ".reminder.subject.txt" if reminder else ".subject.txt"
+    for html in sorted(tmpl_dir.glob(html_glob)):
+        if not reminder and html.name.endswith(".reminder.html"):
+            continue
+        lang = html.name.removesuffix(".reminder.html" if reminder else ".html")
+        subj_file = tmpl_dir / f"{lang}{subj_suffix}"
         subject = subj_file.read_text("utf-8") if subj_file.exists() else ""
         out[lang] = (subject, html.read_text("utf-8"))
     return out
 
 
-def _load_attachments(extracted: Path) -> dict[str, list[Path]]:
+def _load_attachments(extracted: Path, reminder: bool = False) -> dict[str, list[Path]]:
     """Return {lang: [attachment_paths]}."""
     base = extracted / "attachments"
+    if reminder:
+        base = base / REMINDER_ATTACHMENT_SUBDIR
     out: dict[str, list[Path]] = {}
     if not base.exists():
         return out
@@ -206,90 +219,33 @@ def _append_sent_log(path: Path, participant_id: str, email: str, pid: str) -> N
         )
 
 
-@cli.command()
-def send(
-    bundle: Annotated[Path, typer.Argument(help="Path to the email bundle .zip")],
-    user: Annotated[
-        str, typer.Option("--user", "-u", help="KU username, e.g. abc123@ku.dk")
-    ],
-    from_addr: Annotated[
-        str | None,
-        typer.Option("--from-addr", "-f", help="Your KU email address alias if any"),
-    ] = None,
-    from_name: Annotated[
-        str | None,
-        typer.Option("--from-name", "-n", help='Display name, e.g. "Your Name"'),
-    ] = None,
-    password: Annotated[
-        str | None,
-        typer.Option("--password", "-p", help="KUnet password (prompted if omitted)"),
-    ] = None,
-    status: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--status",
-            help="Only send to participants whose latest_interview_status matches "
-            "(repeatable). Values: active, inactive, completed, none.",
-        ),
-    ] = None,
-    activity: Annotated[
-        datetime | None,
-        typer.Option(
-            "--activity",
-            help="Only send to participants whose latest_interview_activity is greater "
-            "than the specified date. Examples: `2026-05-12`, `2026-05-12 11:48`.",
-        ),
-    ] = None,
-    only_participating: Annotated[
-        bool,
-        typer.Option(
-            "--only-participating/--include-non-participating",
-            help="Restrict to participants with participating=true (default).",
-        ),
-    ] = True,
-    lang: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--lang", help="Restrict to these participant languages (repeatable)."
-        ),
-    ] = None,
-    pid: Annotated[
-        list[str] | None,
-        typer.Option("--pid", help="Restrict to these participant pids (repeatable)."),
-    ] = None,
-    email_filter: Annotated[
-        list[str] | None,
-        typer.Option("--email", help="Restrict to these email addresses (repeatable)."),
-    ] = None,
-    cc: Annotated[
-        list[str] | None, typer.Option("--cc", help="CC recipient(s)")
-    ] = None,
-    bcc: Annotated[
-        list[str] | None, typer.Option("--bcc", help="BCC recipient(s)")
-    ] = None,
-    skip_already_sent: Annotated[
-        bool,
-        typer.Option(
-            "--skip-already-sent",
-            help=f"Skip participants already recorded in {SENT_LOG_NAME} next to the bundle.",
-        ),
-    ] = False,
-    dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--dry-run",
-            help="Show who would be emailed and a rendered preview, don't send.",
-        ),
-    ] = False,
-    limit: Annotated[
-        int | None, typer.Option("--limit", help="Cap the number of recipients sent.")
-    ] = None,
+def _run_send(
+    *,
+    reminder: bool,
+    bundle: Path,
+    user: str,
+    from_addr: str | None,
+    from_name: str | None,
+    password: str | None,
+    status: list[str] | None,
+    activity: datetime | None,
+    only_participating: bool,
+    lang: list[str] | None,
+    pid: list[str] | None,
+    email_filter: list[str] | None,
+    cc: list[str] | None,
+    bcc: list[str] | None,
+    skip_already_sent: bool,
+    dry_run: bool,
+    limit: int | None,
 ):
-    """Send participant emails from BUNDLE."""
+    user_email = user + "@ku.dk"
+
     if not bundle.exists():
         raise typer.BadParameter(f"Bundle not found: {bundle}")
 
-    sent_log = bundle.with_suffix(".sent.csv")
+    log_suffix = ".reminder.sent.csv" if reminder else ".invite.sent.csv"
+    sent_log = bundle.with_suffix(log_suffix)
     already = _read_sent_log(sent_log) if skip_already_sent else set()
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -306,10 +262,11 @@ def send(
         project_title = manifest["project_title"]
         default_language = manifest.get("default_language", "")
 
-        templates = _load_templates(extracted)
+        templates = _load_templates(extracted, reminder=reminder)
         if not templates:
-            raise typer.BadParameter("Bundle has no templates/<lang>.html files")
-        attachments = _load_attachments(extracted)
+            kind = "reminder" if reminder else "invite"
+            raise typer.BadParameter(f"Bundle has no {kind} templates")
+        attachments = _load_attachments(extracted, reminder=reminder)
 
         csv_file = extracted / "participants.csv"
         if not csv_file.exists():
@@ -337,8 +294,20 @@ def send(
                 if p_status not in status_set:
                     continue
             if activity is not None:
-                p_acitivity = p.get("latest_interview_activity")
-                print(p_acitivity)
+                raw = p.get("latest_interview_activity")
+                if not raw:
+                    continue
+                try:
+                    p_activity = datetime.fromisoformat(raw)
+                except ValueError:
+                    continue
+                if p_activity.tzinfo is None:
+                    p_activity = p_activity.replace(tzinfo=timezone.utc)
+                cmp_activity = activity
+                if cmp_activity.tzinfo is None:
+                    cmp_activity = cmp_activity.replace(tzinfo=timezone.utc)
+                if p_activity <= cmp_activity:
+                    continue
             if lang_set is not None and (p.get("lang") or "") not in lang_set:
                 continue
             if pid_set is not None and p.get("pid", "") not in pid_set:
@@ -391,7 +360,7 @@ def send(
             return
 
         pwd = password or getpass.getpass(f"KUnet password for {user}: ")
-        sender = from_addr or user
+        sender = from_addr or user_email
 
         sent_count = 0
         for p in track(filtered):
@@ -404,11 +373,12 @@ def send(
             subj_tmpl, body_tmpl, langs = resolved
             ctx = _build_context(p, base_url, project_id, project_title)
             try:
-                subject = (
-                    _render(subj_tmpl, ctx)
-                    if subj_tmpl
+                default_subject = (
+                    f"Reminder: {project_title}"
+                    if reminder
                     else f"Invitation: {project_title}"
                 )
+                subject = _render(subj_tmpl, ctx) if subj_tmpl else default_subject
                 body_html = _render(body_tmpl, ctx)
             except TemplateError as exc:
                 typer.echo(f"  [skip] {p.get('email')}: render failed: {exc}")
@@ -417,7 +387,7 @@ def send(
             attached = _attachments_for(langs, attachments)
             try:
                 ku_send_email(
-                    ku_username=user,
+                    ku_username=user_email,
                     password=pwd,
                     from_addr=sender,
                     to_addrs=[p["email"]],
@@ -463,6 +433,174 @@ def _html_to_text(html: str) -> str:
     text = re.sub(r"</p\s*>", "\n\n", text, flags=re.IGNORECASE)
     text = re.sub(r"<[^>]+>", "", text)
     return text.strip()
+
+
+def parse_username(username: str) -> str:
+    if not username[:3].isalpha() or not username[3:].isdigit():
+        raise typer.BadParameter(
+            "username must match the standard UCPH username schema: abc123"
+        )
+    return username
+
+
+# Shared Typer option types — declared once, used by both `invite` and `reminder`.
+BundleArg = Annotated[Path, typer.Argument(help="Path to the email bundle .zip")]
+UserOpt = Annotated[
+    str,
+    typer.Option(
+        "--user", "-u", help="KU username, e.g. abc123", parser=parse_username
+    ),
+]
+FromAddrOpt = Annotated[
+    str | None,
+    typer.Option("--from-addr", "-f", help="Your KU email address alias if any"),
+]
+FromNameOpt = Annotated[
+    str | None,
+    typer.Option("--from-name", "-n", help='Display name, e.g. "Your Name"'),
+]
+PasswordOpt = Annotated[
+    str | None,
+    typer.Option("--password", "-p", help="KUnet password (prompted if omitted)"),
+]
+StatusOpt = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--status",
+        help="Only send to participants whose latest_interview_status matches "
+        "(repeatable). Values: active, inactive, completed, none.",
+    ),
+]
+ActivityOpt = Annotated[
+    datetime | None,
+    typer.Option(
+        "--activity",
+        help="Only send to participants whose latest_interview_activity is greater "
+        "than the specified date. Examples: `2026-05-12`, `2026-05-12 11:48`.",
+    ),
+]
+OnlyParticipatingOpt = Annotated[
+    bool,
+    typer.Option(
+        "--only-participating/--include-non-participating",
+        help="Restrict to participants with participating=true (default).",
+    ),
+]
+LangOpt = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--lang", help="Restrict to these participant languages (repeatable)."
+    ),
+]
+PidOpt = Annotated[
+    list[str] | None,
+    typer.Option("--pid", help="Restrict to these participant pids (repeatable)."),
+]
+EmailFilterOpt = Annotated[
+    list[str] | None,
+    typer.Option("--email", help="Restrict to these email addresses (repeatable)."),
+]
+CcOpt = Annotated[list[str] | None, typer.Option("--cc", help="CC recipient(s)")]
+BccOpt = Annotated[list[str] | None, typer.Option("--bcc", help="BCC recipient(s)")]
+SkipAlreadySentOpt = Annotated[
+    bool,
+    typer.Option(
+        "--skip-already-sent",
+        help="Skip participants already recorded in the sent-log next to the bundle.",
+    ),
+]
+DryRunOpt = Annotated[
+    bool,
+    typer.Option(
+        "--dry-run",
+        help="Show who would be emailed and a rendered preview, don't send.",
+    ),
+]
+LimitOpt = Annotated[
+    int | None, typer.Option("--limit", help="Cap the number of recipients sent.")
+]
+
+
+@cli.command()
+def invite(
+    bundle: BundleArg,
+    user: UserOpt,
+    from_addr: FromAddrOpt = None,
+    from_name: FromNameOpt = None,
+    password: PasswordOpt = None,
+    status: StatusOpt = None,
+    activity: ActivityOpt = None,
+    only_participating: OnlyParticipatingOpt = True,
+    lang: LangOpt = None,
+    pid: PidOpt = None,
+    email_filter: EmailFilterOpt = None,
+    cc: CcOpt = None,
+    bcc: BccOpt = None,
+    skip_already_sent: SkipAlreadySentOpt = False,
+    dry_run: DryRunOpt = False,
+    limit: LimitOpt = None,
+):
+    """Send invite emails from BUNDLE (templates/<lang>.html)."""
+    _run_send(
+        reminder=False,
+        bundle=bundle,
+        user=user,
+        from_addr=from_addr,
+        from_name=from_name,
+        password=password,
+        status=status,
+        activity=activity,
+        only_participating=only_participating,
+        lang=lang,
+        pid=pid,
+        email_filter=email_filter,
+        cc=cc,
+        bcc=bcc,
+        skip_already_sent=skip_already_sent,
+        dry_run=dry_run,
+        limit=limit,
+    )
+
+
+@cli.command()
+def reminder(
+    bundle: BundleArg,
+    user: UserOpt,
+    from_addr: FromAddrOpt = None,
+    from_name: FromNameOpt = None,
+    password: PasswordOpt = None,
+    status: StatusOpt = None,
+    activity: ActivityOpt = None,
+    only_participating: OnlyParticipatingOpt = True,
+    lang: LangOpt = None,
+    pid: PidOpt = None,
+    email_filter: EmailFilterOpt = None,
+    cc: CcOpt = None,
+    bcc: BccOpt = None,
+    skip_already_sent: SkipAlreadySentOpt = False,
+    dry_run: DryRunOpt = False,
+    limit: LimitOpt = None,
+):
+    """Send reminder emails from BUNDLE (templates/<lang>.reminder.html)."""
+    _run_send(
+        reminder=True,
+        bundle=bundle,
+        user=user,
+        from_addr=from_addr,
+        from_name=from_name,
+        password=password,
+        status=status,
+        activity=activity,
+        only_participating=only_participating,
+        lang=lang,
+        pid=pid,
+        email_filter=email_filter,
+        cc=cc,
+        bcc=bcc,
+        skip_already_sent=skip_already_sent,
+        dry_run=dry_run,
+        limit=limit,
+    )
 
 
 if __name__ == "__main__":
