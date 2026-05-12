@@ -12,6 +12,7 @@ from pydantic import UUID4
 
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode
+from ainterviewer.utils import now
 
 from ...db.models import (
     ParticipantCreate,
@@ -181,11 +182,15 @@ async def export_email_bundle(
                                 arcname=f"attachments/reminders/{lang_dir.name}/{entry.name}",
                             )
 
+    project_title = project.title.replace("-", "").replace("  ", " ").replace(" ", "-")
+    filename = f"email_bundle_{now().strftime('%Y-%m-%d_%H-%M')}_{project_title}_{project_id}.zip"
+
     return Response(
         content=buf.getvalue(),
         media_type="application/zip",
         headers={
-            "Content-Disposition": f'attachment; filename="email_bundle_{project_id}.zip"'
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Filename": filename,
         },
     )
 
