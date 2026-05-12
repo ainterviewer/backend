@@ -97,8 +97,8 @@ def ku_send_email(
 
     for path in attachments or []:
         if not os.path.isfile(path):
-            typer.echo(f"  [!] Attachment not found, skipping: {path}")
-            continue
+            typer.echo(f"  [!] Attachment not found: {path}")
+            raise typer.Exit
         with open(path, "rb") as f:
             part = MIMEBase("application", "octet-stream")
             part.set_payload(f.read())
@@ -232,6 +232,14 @@ def send(
             "(repeatable). Values: active, inactive, completed, none.",
         ),
     ] = None,
+    activity: Annotated[
+        datetime | None,
+        typer.Option(
+            "--activity",
+            help="Only send to participants whose latest_interview_activity is greater "
+            "than the specified date. Examples: `2026-05-12`, `2026-05-12 11:48`.",
+        ),
+    ] = None,
     only_participating: Annotated[
         bool,
         typer.Option(
@@ -328,6 +336,9 @@ def send(
                 p_status = (p.get("latest_interview_status") or "none").lower()
                 if p_status not in status_set:
                     continue
+            if activity is not None:
+                p_acitivity = p.get("latest_interview_activity")
+                print(p_acitivity)
             if lang_set is not None and (p.get("lang") or "") not in lang_set:
                 continue
             if pid_set is not None and p.get("pid", "") not in pid_set:
@@ -357,8 +368,8 @@ def send(
             typer.echo("\n=== DRY RUN ===")
             for p in filtered:
                 typer.echo(
-                    f"  {p.get('email')}  pid={p.get('pid')}  lang={p.get('lang') or '-'}  "
-                    f"status={p.get('latest_interview_status') or 'none'}"
+                    f"  {p.get('email')}  pid={p.get('pid')}  lang={p.get('lang') or '-'} "
+                    f"activity={p.get('latest_interview_activity') or 'none'} status={p.get('latest_interview_status') or 'none'}"
                 )
             if resolved:
                 subj, tmpl, langs = resolved
