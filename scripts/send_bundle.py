@@ -469,7 +469,7 @@ StatusOpt = Annotated[
         "--status",
         help="Only send to participants whose latest_interview_status matches "
         "(repeatable). Values: active, inactive, completed, none.",
-        default_factory=lambda: ["inactive", "none"],
+        default_factory=lambda: ["active", "inactive", "none"],
     ),
 ]
 ActivityOpt = Annotated[
