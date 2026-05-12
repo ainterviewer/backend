@@ -29,8 +29,8 @@ def _to_public(link: ProjectParticipantTable) -> ParticipantPublic:
         lang=p.lang,
         participating=p.participating,
         created_at=link.created_at,
-        latest_interview_at=p.latest_interview_at,
-        latest_interview_status=p.latest_interview_status,
+        latest_interview_at=link.latest_interview_at,
+        latest_interview_status=link.latest_interview_status,
     )
 
 
