@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.3.6"
+        "version": "0.3.12"
     },
     "paths": {
         "/api/projects/{project_id}/analysis/categories": {
@@ -2553,7 +2553,7 @@
             }
         },
         "/api/projects/{project_id}/participants/export": {
-            "get": {
+            "post": {
                 "tags": [
                     "participants"
                 ],
@@ -2600,6 +2600,16 @@
                         }
                     }
                 ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ExportParticipantsRequest"
+                            }
+                        }
+                    }
+                },
                 "responses": {
                     "200": {
                         "description": "Successful Response",
@@ -8354,51 +8364,7 @@
                     }
                 }
             },
-            "put": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "delete": {
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -8486,7 +8452,51 @@
                     }
                 }
             },
-            "post": {
+            "put": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -10419,6 +10429,27 @@
                     "interview_ids"
                 ],
                 "title": "ExportMessagesRequest"
+            },
+            "ExportParticipantsRequest": {
+                "properties": {
+                    "participant_ids": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Participant Ids"
+                    }
+                },
+                "type": "object",
+                "title": "ExportParticipantsRequest"
             },
             "ExternalParam": {
                 "properties": {
