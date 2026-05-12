@@ -161,7 +161,7 @@ async def get_project_monitoring_stats(
     jwt: DemoToken,
     interview_types: Annotated[
         list[InterviewType],
-        Query(default_factory=lambda: [t.value for t in InterviewType]),
+        Query(default_factory=lambda: [InterviewType.DISTRIBUTED]),
     ],
     start_date: Annotated[datetime.datetime | None, Query()] = None,
     end_date: Annotated[datetime.datetime | None, Query()] = None,
