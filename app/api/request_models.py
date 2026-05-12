@@ -124,6 +124,10 @@ class DeleteParticipantsRequest(BaseModel):
     participant_ids: list[UUID4]
 
 
+class ExportParticipantsRequest(BaseModel):
+    participant_ids: list[UUID4] | None = None
+
+
 class ParticipantEmailTemplateRequest(BaseModel):
     subject: str | None = None
     template: str | None = None

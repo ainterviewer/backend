@@ -36,6 +36,7 @@ from ...services.email.participant_template import (
 from ...settings import app_settings
 from ..request_models import (
     DeleteParticipantsRequest,
+    ExportParticipantsRequest,
     ParticipantEmailTemplateRequest,
     SendParticipantEmailRequest,
 )
@@ -75,21 +76,33 @@ async def get_participant(
     return db.participants.get_participant(participant_id)
 
 
-@router.get(
+@router.post(
     "/projects/{project_id}/participants/export",
     response_class=Response,
     responses={200: {"content": {"text/csv": {}}}},
 )
 async def export_participants(
     project_id: UUID4,
+    export_request: ExportParticipantsRequest,
     db: DBSession,
     jwt: UserToken,
     _: ProjectViewer,
 ) -> Response:
+    participants = [
+        participant for participant in db.participants.get_participants(project_id)
+    ]
+
+    if export_request.participant_ids:
+        participants = [
+            participant
+            for participant in participants
+            if participant.id in export_request.participant_ids
+        ]
+
     csv = pl.DataFrame(
-        participant.model_dump(mode="json")
-        for participant in db.participants.get_participants(project_id)
+        participant.model_dump(mode="json") for participant in participants
     ).write_csv()
+
     return Response(
         content=csv,
         media_type="text/csv",
