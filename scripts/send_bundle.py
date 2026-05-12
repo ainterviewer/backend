@@ -294,7 +294,7 @@ def _run_send(
                 if p_status not in status_set:
                     continue
             if activity is not None:
-                raw = p.get("latest_interview_activity")
+                raw = p.get("latest_interview_at")
                 if not raw:
                     continue
                 try:
@@ -338,7 +338,7 @@ def _run_send(
             for p in filtered:
                 typer.echo(
                     f"  {p.get('email')}  pid={p.get('pid')}  lang={p.get('lang') or '-'} "
-                    f"activity={p.get('latest_interview_activity') or 'none'} status={p.get('latest_interview_status') or 'none'}"
+                    f"activity={p.get('latest_interview_at') or 'none'} status={p.get('latest_interview_status') or 'none'}"
                 )
             if resolved:
                 subj, tmpl, langs = resolved
