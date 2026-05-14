@@ -126,6 +126,22 @@ class InvitationTable(Base):
     )
 
 
+##############
+# Newsletter #
+##############
+
+
+class NewsletterSubscriptionTable(Base):
+    __tablename__ = "newsletter_subscription"
+
+    email: Mapped[str] = mapped_column(unique=True, index=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(default=now)
+    unsubscribed_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
+    opt_out_token: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), unique=True, default=uuid4
+    )
+
+
 ################
 # Refresh Token #
 ################

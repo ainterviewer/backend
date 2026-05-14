@@ -12,6 +12,7 @@ from .repositories import (
     AssistanceRepository,
     AuthRepository,
     InterviewRepository,
+    NewsletterRepository,
     ParticipantRepository,
     ProjectRepository,
     TestRepository,
@@ -53,6 +54,7 @@ class InterviewDataBase(PersistenceProtocol):
         self.tests: TestRepository = TestRepository(session)
         self.analysis: AnalysisRepository = AnalysisRepository(session)
         self.assistance: AssistanceRepository = AssistanceRepository(session)
+        self.newsletter: NewsletterRepository = NewsletterRepository(session)
 
     # ==================== Database Management ====================
 
