@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.3.12"
+        "version": "0.3.15"
     },
     "paths": {
         "/api/projects/{project_id}/analysis/categories": {
@@ -8320,50 +8320,6 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "patch": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
             "post": {
                 "tags": [
                     "admin"
@@ -8452,7 +8408,7 @@
                     }
                 }
             },
-            "put": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -8496,7 +8452,51 @@
                     }
                 }
             },
-            "delete": {
+            "patch": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
                 "tags": [
                     "admin"
                 ],
@@ -8779,6 +8779,78 @@
                         "APIKeyCookie": []
                     }
                 ]
+            }
+        },
+        "/api/newsletter": {
+            "post": {
+                "summary": "Newsletter Subscribe",
+                "description": "Subscribe to our newsletter",
+                "operationId": "newsletter_subscribe",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NewsletterRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "summary": "Newsletter Unsubscribe",
+                "description": "Unsubscribe from our newsletter",
+                "operationId": "newsletter_unsubscribe",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NewsletterRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         "/api/health": {
@@ -10627,6 +10699,39 @@
                 "type": "object",
                 "title": "FilteredMessagesRequest"
             },
+            "GeneratedQuestions": {
+                "properties": {
+                    "n": {
+                        "type": "integer",
+                        "title": "N",
+                        "default": 0
+                    },
+                    "max_probes_n": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Max Probes N"
+                    },
+                    "max_probes_time": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Max Probes Time"
+                    }
+                },
+                "type": "object",
+                "title": "GeneratedQuestions"
+            },
             "GitHashes": {
                 "properties": {
                     "core_lib": {
@@ -12048,6 +12153,20 @@
                 "title": "MonitoringStats",
                 "description": "Aggregated monitoring statistics for a project."
             },
+            "NewsletterRequest": {
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "Email"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "email"
+                ],
+                "title": "NewsletterRequest"
+            },
             "NumberItem": {
                 "additionalProperties": false,
                 "properties": {
@@ -12799,7 +12918,7 @@
                         ],
                         "title": "Max Probes N",
                         "description": "Max number of probes.",
-                        "default": 4
+                        "default": 3
                     },
                     "max_probes_time": {
                         "anyOf": [
@@ -13018,7 +13137,7 @@
                         ],
                         "title": "Max Probes N",
                         "description": "Max number of probes.",
-                        "default": 4
+                        "default": 3
                     },
                     "max_probes_time": {
                         "anyOf": [
@@ -13232,6 +13351,28 @@
                     "section_idx": {
                         "type": "integer",
                         "title": "Section Idx"
+                    },
+                    "max_probes_n": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Max Probes N"
+                    },
+                    "max_probes_time": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Max Probes Time"
                     }
                 },
                 "type": "object",
@@ -13288,9 +13429,10 @@
                         "default": false
                     },
                     "ai_generated_questions": {
-                        "type": "integer",
-                        "title": "Ai Generated Questions",
-                        "default": 0
+                        "$ref": "#/components/schemas/GeneratedQuestions",
+                        "default": {
+                            "n": 0
+                        }
                     }
                 },
                 "type": "object",
@@ -13321,9 +13463,10 @@
                         "default": false
                     },
                     "ai_generated_questions": {
-                        "type": "integer",
-                        "title": "Ai Generated Questions",
-                        "default": 0
+                        "$ref": "#/components/schemas/GeneratedQuestions",
+                        "default": {
+                            "n": 0
+                        }
                     }
                 },
                 "type": "object",

@@ -266,6 +266,8 @@ async def generate_section_question(
         model=lib_settings.llm.default_model,
         guide=project.interview_guide,
         section=project.interview_guide.question_sections[data.section_idx],
+        max_probes_n=data.max_probes_n,
+        max_probes_time=data.max_probes_time,
     )
 
     return question

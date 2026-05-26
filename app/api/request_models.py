@@ -44,6 +44,8 @@ class QuestionSectionGenerationRequest(PromptRequest): ...
 
 class QuestionGenerationRequest(PromptRequest):
     section_idx: int
+    max_probes_n: int | None = None
+    max_probes_time: int | None = None
 
 
 class ProjectStatusChangeRequest(BaseModel):
