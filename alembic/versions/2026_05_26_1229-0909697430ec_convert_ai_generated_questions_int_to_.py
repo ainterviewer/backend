@@ -48,9 +48,7 @@ def _iter_guides(conn):
 
 def _save(conn, table, row_id, guide) -> None:
     conn.execute(
-        sa.text(
-            f"UPDATE {table} SET interview_guide = :guide WHERE id = :id"
-        ),
+        sa.text(f"UPDATE {table} SET interview_guide = :guide WHERE id = :id"),
         {"guide": json.dumps(guide), "id": row_id},
     )
 
