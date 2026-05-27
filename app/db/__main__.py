@@ -1,14 +1,9 @@
-import json
 from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from ainterviewer.agents.config import read_agent_configs
-from ainterviewer.agents.prompts.models import DEFAULT_PROMPTS
-from ainterviewer.config import read_interview_config
-from ainterviewer.interview_guides import InterviewGuide
 
 from ..settings import app_settings
 from .crud import InterviewDataBase
@@ -172,152 +167,153 @@ if __name__ == "__main__":
 
     if args.setup_db:
         raise NotImplementedError
-        for project in Path.cwd().glob("data/projects/*"):
-            project_title = project.name.replace("_", " ").title()
-
-            if (config_file := project / "config.yaml").exists():
-                interview_config = read_interview_config(config_file)
-            else:
-                interview_config = None
-
-            if (id_file := project / "id").exists():
-                project_id = UUID(id_file.read_text().strip())
-            else:
-                project_id = None
-
-            project_id = db.projects.create_project(
-                title=project_title,
-                interview_config=interview_config,
-                project_id=project_id,
-            )
-
-            for lang in project.glob("localizations/*"):
-                lang_code = lang.name.upper()
-                db.add_project_language(project_id, lang_code)
-
-                if (path := lang / "interview_guide.json").exists():
-                    with path.open() as f:
-                        interview_guide = InterviewGuide.model_validate(json.load(f))
-
-                    db.update_interview_guide(
-                        project_id=project_id,
-                        interview_guide_content=interview_guide,
-                        language=lang_code,
-                    )
-
-                if (agents_config_file := lang / "agents.yaml").exists():
-                    agents_config = read_agent_configs(agents_config_file)
-                    db.update_agent_configs(project_id, None, lang_code, agents_config)
-
-                # Update prompts
-                prompts = DEFAULT_PROMPTS.model_copy(deep=True)
-
-                if prompt_files := list((lang / "prompts").glob("*.jinja")):
-                    for prompt_file in prompt_files:
-                        with open(prompt_file, "r") as f:
-                            prompt = f.read()
-
-                        _parts = prompt_file.stem.split("_")
-                        agent = getattr(prompts, f"{_parts[0]}_{_parts[1]}")
-                        setattr(agent, f"{_parts[2]}_{_parts[3]}", prompt)
-
-                    db.set_prompts(
-                        project_id,
-                        team_id=None,
-                        language=lang_code,
-                        prompts=prompts,
-                    )
-                else:
-                    db.set_prompts(
-                        project_id,
-                        team_id=None,
-                        language=lang_code,
-                        prompts=prompts,
-                    )
+        # for project in Path.cwd().glob("data/projects/*"):
+        #     project_title = project.name.replace("_", " ").title()
+        #
+        #     if (config_file := project / "config.yaml").exists():
+        #         interview_config = read_interview_config(config_file)
+        #     else:
+        #         interview_config = None
+        #
+        #     if (id_file := project / "id").exists():
+        #         project_id = UUID(id_file.read_text().strip())
+        #     else:
+        #         project_id = None
+        #
+        #     project_id = db.projects.create_project(
+        #         title=project_title,
+        #         interview_config=interview_config,
+        #         project_id=project_id,
+        #     )
+        #
+        #     for lang in project.glob("localizations/*"):
+        #         lang_code = lang.name.upper()
+        #         db.add_project_language(project_id, lang_code)
+        #
+        #         if (path := lang / "interview_guide.json").exists():
+        #             with path.open() as f:
+        #                 interview_guide = InterviewGuide.model_validate(json.load(f))
+        #
+        #             db.update_interview_guide(
+        #                 project_id=project_id,
+        #                 interview_guide_content=interview_guide,
+        #                 language=lang_code,
+        #             )
+        #
+        #         if (agents_config_file := lang / "agents.yaml").exists():
+        #             agents_config = read_agent_configs(agents_config_file)
+        #             db.update_agent_configs(project_id, None, lang_code, agents_config)
+        #
+        #         # Update prompts
+        #         prompts = DEFAULT_PROMPTS.model_copy(deep=True)
+        #
+        #         if prompt_files := list((lang / "prompts").glob("*.jinja")):
+        #             for prompt_file in prompt_files:
+        #                 with open(prompt_file, "r") as f:
+        #                     prompt = f.read()
+        #
+        #                 _parts = prompt_file.stem.split("_")
+        #                 agent = getattr(prompts, f"{_parts[0]}_{_parts[1]}")
+        #                 setattr(agent, f"{_parts[2]}_{_parts[3]}", prompt)
+        #
+        #             db.set_prompts(
+        #                 project_id,
+        #                 team_id=None,
+        #                 language=lang_code,
+        #                 prompts=prompts,
+        #             )
+        #         else:
+        #             db.set_prompts(
+        #                 project_id,
+        #                 team_id=None,
+        #                 language=lang_code,
+        #                 prompts=prompts,
+        #             )
 
     if args.update_projects:
-        print("Updating projects from data/projects directory...")
-
-        for project in Path.cwd().glob("data/projects/*"):
-            project_title = project.name.replace("_", " ").title()
-
-            # Read project ID from id file
-            if (id_file := project / "id").exists():
-                project_id = UUID(id_file.read_text().strip())
-            else:
-                print(
-                    f"WARNING: No id file found for project '{project_title}'. Skipping update."
-                )
-                continue
-
-            print(f"Found project '{project_title}'. Updating... (ID: {project_id})")
-            updated = False
-
-            # Update interview config if the file exists
-            if (config_file := project / "config.yaml").exists():
-                interview_config = read_interview_config(config_file)
-                db.projects.update_interview_config(project_id, interview_config)
-                print(f"  - Interview config updated for project {project_id}")
-                updated = True
-
-            # Update localized content
-            for lang in project.glob("localizations/*"):
-                lang_code = lang.name.upper()
-
-                # Update interview guide if it exists
-                if (path := lang / "interview_guide.json").exists():
-                    with path.open() as f:
-                        interview_guide = json.load(f)
-
-                    interview_guide = InterviewGuide(**interview_guide)
-                    print(
-                        f"  - Updating interview guide for {lang_code} in project {project_id}"
-                    )
-
-                    db.update_interview_guide(
-                        project_id=project_id,
-                        interview_guide_content=interview_guide,
-                        language=lang_code,
-                    )
-                    updated = True
-
-                # Update agent configs if they exist
-                if (agents_config_file := lang / "agents.yaml").exists():
-                    agents_config = read_agent_configs(agents_config_file)
-                    db.projects.update_agent_configs(
-                        project_id, lang_code, agents_config
-                    )
-                    print(
-                        f"  - Agent configs updated for {lang_code} in project {project_id}"
-                    )
-                    updated = True
-
-                # Update prompts
-                prompts = DEFAULT_PROMPTS.model_copy(deep=True)
-
-                if prompt_files := list((lang / "prompts").glob("*.jinja")):
-                    for prompt_file in prompt_files:
-                        with open(prompt_file, "r") as f:
-                            prompt = f.read()
-
-                        _parts = prompt_file.stem.split("_")
-                        agent = getattr(prompts, f"{_parts[0]}_{_parts[1]}")
-                        setattr(agent, f"{_parts[2]}_{_parts[3]}", prompt)
-
-                    db.projects.set_prompts(
-                        project_id,
-                        language=lang_code,
-                        prompts=prompts,
-                    )
-                else:
-                    db.projects.set_prompts(
-                        project_id,
-                        language=lang_code,
-                        prompts=prompts,
-                    )
-                print(f"  - Prompts updated for {lang_code} in project {project_id}")
-
-            if not updated:
-                print(f"  - No update files found for '{project_title}'.")
-
-        print("Finished updating projects.")
+        raise NotImplementedError()
+        # print("Updating projects from data/projects directory...")
+        #
+        # for project in Path.cwd().glob("data/projects/*"):
+        #     project_title = project.name.replace("_", " ").title()
+        #
+        #     # Read project ID from id file
+        #     if (id_file := project / "id").exists():
+        #         project_id = UUID(id_file.read_text().strip())
+        #     else:
+        #         print(
+        #             f"WARNING: No id file found for project '{project_title}'. Skipping update."
+        #         )
+        #         continue
+        #
+        #     print(f"Found project '{project_title}'. Updating... (ID: {project_id})")
+        #     updated = False
+        #
+        #     # Update interview config if the file exists
+        #     if (config_file := project / "config.yaml").exists():
+        #         interview_config = read_interview_config(config_file)
+        #         db.projects.update_interview_config(project_id, interview_config)
+        #         print(f"  - Interview config updated for project {project_id}")
+        #         updated = True
+        #
+        #     # Update localized content
+        #     for lang in project.glob("localizations/*"):
+        #         lang_code = lang.name.upper()
+        #
+        #         # Update interview guide if it exists
+        #         if (path := lang / "interview_guide.json").exists():
+        #             with path.open() as f:
+        #                 interview_guide = json.load(f)
+        #
+        #             interview_guide = InterviewGuide(**interview_guide)
+        #             print(
+        #                 f"  - Updating interview guide for {lang_code} in project {project_id}"
+        #             )
+        #
+        #             db.update_interview_guide(
+        #                 project_id=project_id,
+        #                 interview_guide_content=interview_guide,
+        #                 language=lang_code,
+        #             )
+        #             updated = True
+        #
+        #         # Update agent configs if they exist
+        #         if (agents_config_file := lang / "agents.yaml").exists():
+        #             agents_config = read_agent_configs(agents_config_file)
+        #             db.projects.update_agent_configs(
+        #                 project_id, lang_code, agents_config
+        #             )
+        #             print(
+        #                 f"  - Agent configs updated for {lang_code} in project {project_id}"
+        #             )
+        #             updated = True
+        #
+        #         # Update prompts
+        #         prompts = DEFAULT_PROMPTS.model_copy(deep=True)
+        #
+        #         if prompt_files := list((lang / "prompts").glob("*.jinja")):
+        #             for prompt_file in prompt_files:
+        #                 with open(prompt_file, "r") as f:
+        #                     prompt = f.read()
+        #
+        #                 _parts = prompt_file.stem.split("_")
+        #                 agent = getattr(prompts, f"{_parts[0]}_{_parts[1]}")
+        #                 setattr(agent, f"{_parts[2]}_{_parts[3]}", prompt)
+        #
+        #             db.projects.set_prompts(
+        #                 project_id,
+        #                 language=lang_code,
+        #                 prompts=prompts,
+        #             )
+        #         else:
+        #             db.projects.set_prompts(
+        #                 project_id,
+        #                 language=lang_code,
+        #                 prompts=prompts,
+        #             )
+        #         print(f"  - Prompts updated for {lang_code} in project {project_id}")
+        #
+        #     if not updated:
+        #         print(f"  - No update files found for '{project_title}'.")
+        #
+        # print("Finished updating projects.")
