@@ -274,8 +274,12 @@ async def refresh(
     if stored.expires_at.astimezone(lib_settings.tzinfo) < now():
         raise HTTPException(status_code=401, detail="Refresh token expired")
 
-    # Mark current token as consumed
-    db.auth.mark_as_used(stored.id)
+    if not db.auth.mark_as_used(stored.id):
+        db.auth.revoke_family(stored.family_id)
+        raise HTTPException(
+            status_code=401,
+            detail="Refresh token reuse detected, all sessions in this family have been revoked",
+        )
 
     # Look up user for fresh scope (in case it changed since last login)
     user = db.users.get_user_by_id(stored.user_id)

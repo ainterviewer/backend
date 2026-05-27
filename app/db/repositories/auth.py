@@ -38,13 +38,19 @@ class AuthRepository(BaseRepository):
             .first()
         )
 
-    def mark_as_used(self, token_id: UUID4) -> None:
-        self.session.execute(
+    def mark_as_used(self, token_id: UUID4) -> bool:
+        """Atomically consume a token. Returns False if it was already used,
+        which signals a concurrent/replayed refresh (reuse)."""
+        result = self.session.execute(
             update(RefreshTokenTable)
-            .where(RefreshTokenTable.id == token_id)
+            .where(
+                RefreshTokenTable.id == token_id,
+                RefreshTokenTable.is_used == False,  # noqa: E712
+            )
             .values(is_used=True)
         )
         self.session.commit()
+        return result.rowcount == 1  # ty:ignore[unresolved-attribute]
 
     def revoke_family(self, family_id: UUID4) -> None:
         self.session.execute(
