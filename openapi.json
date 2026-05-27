@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.3.15"
+        "version": "0.3.18"
     },
     "paths": {
         "/api/projects/{project_id}/analysis/categories": {
@@ -8320,7 +8320,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "post": {
+            "get": {
                 "tags": [
                     "admin"
                 ],
@@ -8364,7 +8364,7 @@
                     }
                 }
             },
-            "get": {
+            "put": {
                 "tags": [
                     "admin"
                 ],
@@ -8452,7 +8452,7 @@
                     }
                 }
             },
-            "patch": {
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -8496,7 +8496,7 @@
                     }
                 }
             },
-            "put": {
+            "patch": {
                 "tags": [
                     "admin"
                 ],
@@ -10881,6 +10881,14 @@
                         "title": "With Audio",
                         "description": "Allows the respondents to record their answers as audio messages which are transcribed before send as answers to the AInterviewer.",
                         "default": true
+                    },
+                    "probing_strategy": {
+                        "items": {
+                            "$ref": "#/components/schemas/ProbingStrategy"
+                        },
+                        "type": "array",
+                        "uniqueItems": true,
+                        "title": "Probing Strategy"
                     }
                 },
                 "additionalProperties": false,
@@ -12602,6 +12610,16 @@
                 "additionalProperties": false,
                 "type": "object",
                 "title": "ProbingAgentConfig"
+            },
+            "ProbingStrategy": {
+                "type": "string",
+                "enum": [
+                    "standard",
+                    "dice_master_to_one_probe",
+                    "dice_ensemble_to_master_probe",
+                    "dice_master_to_ensemble_to_one_probe"
+                ],
+                "title": "ProbingStrategy"
             },
             "ProjectFolderCreate": {
                 "properties": {
