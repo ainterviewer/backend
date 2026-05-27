@@ -49,6 +49,7 @@ def _set_auth_cookies(
         secure=True,
         httponly=True,
         samesite="lax",
+        path="/api",
     )
 
 
