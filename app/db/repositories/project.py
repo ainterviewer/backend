@@ -322,6 +322,10 @@ class ProjectRepository(BaseRepository):
                 agent_configs=loc.agent_configs,
                 consent=loc.consent,
                 welcome=loc.welcome,
+                participant_email_subject=loc.participant_email_subject,
+                participant_email_template=loc.participant_email_template,
+                participant_reminder_email_subject=loc.participant_reminder_email_subject,
+                participant_reminder_email_template=loc.participant_reminder_email_template,
             )
             self.session.add(new_loc)
 
