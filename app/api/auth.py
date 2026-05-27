@@ -272,7 +272,7 @@ async def refresh(
     if stored.is_revoked:
         raise HTTPException(status_code=401, detail="Refresh token revoked")
 
-    if stored.expires_at.astimezone(lib_settings.tzinfo) < now():
+    if stored.expires_at.replace(tzinfo=lib_settings.tzinfo) < now():
         raise HTTPException(status_code=401, detail="Refresh token expired")
 
     if not db.auth.mark_as_used(stored.id):
