@@ -1,4 +1,3 @@
-from ainterviewer.agents.prompts.models import DEFAULT_PROMPTS
 import json
 from pathlib import Path
 
@@ -9,6 +8,7 @@ from sqlalchemy.orm import Session
 from typer import Typer
 
 from ainterviewer.agents.config import AgentConfigs
+from ainterviewer.agents.prompts.models import DEFAULT_PROMPTS
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import DatabaseType
 
