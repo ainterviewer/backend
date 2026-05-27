@@ -37,6 +37,7 @@ from ..tables import (
     ProjectFolderTable,
     ProjectLocalizationTable,
     ProjectTable,
+    TestSetupTable,
     UserTable,
 )
 from ..types import InterviewType
@@ -329,6 +330,30 @@ class ProjectRepository(BaseRepository):
                 participant_reminder_email_template=loc.participant_reminder_email_template,
             )
             self.session.add(new_loc)
+
+        # 4. Copy all test setups (configurations only, not their runs/interviews)
+        test_setups = (
+            self.session.execute(
+                select(TestSetupTable).where(TestSetupTable.project_id == project_id)
+            )
+            .scalars()
+            .all()
+        )
+
+        for setup in test_setups:
+            new_setup = TestSetupTable(
+                project_id=new_project.id,
+                name=setup.name,
+                type=setup.type,
+                language=setup.language,
+                n_interviews=setup.n_interviews,
+                answering_model=setup.answering_model,
+                delay_before_answers=setup.delay_before_answers,
+                background_info=setup.background_info,
+                fixed_answers=setup.fixed_answers,
+                fixed_personas=setup.fixed_personas,
+            )
+            self.session.add(new_setup)
 
         self.session.commit()
 
