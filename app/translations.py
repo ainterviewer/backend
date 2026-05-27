@@ -1,4 +1,4 @@
-# TODO: Move to jinja templates instead
+# TODO: Move to frontend
 MODALS = {
     "help": {
         "EN": {
