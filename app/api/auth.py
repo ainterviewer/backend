@@ -42,6 +42,7 @@ def _set_auth_cookies(
         secure=True,
         httponly=True,
         samesite="lax",
+        path="/",
     )
     response.set_cookie(
         key="refresh_token",
@@ -49,7 +50,7 @@ def _set_auth_cookies(
         secure=True,
         httponly=True,
         samesite="lax",
-        path="/api",
+        path="/",
     )
 
 
@@ -59,13 +60,14 @@ def _delete_auth_cookies(response: JSONResponse) -> None:
         secure=True,
         httponly=True,
         samesite="lax",
+        path="/",
     )
     response.delete_cookie(
         key="refresh_token",
         secure=True,
         httponly=True,
         samesite="lax",
-        path="/api",
+        path="/",
     )
 
 
