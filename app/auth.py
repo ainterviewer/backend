@@ -49,7 +49,6 @@ class _Token(BaseModel):
         return cls(**payload)
 
 
-# FIXME: Make sure this is validated in new setup
 class InterviewToken(_Token):
     project_id: UUID4
     interview_id: UUID4
