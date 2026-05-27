@@ -1,9 +1,7 @@
-from pathlib import Path
 from typing import Annotated, Generator, Literal
 
 from fastapi import Cookie, Depends, HTTPException
 from fastapi.security import APIKeyCookie
-from fastapi.templating import Jinja2Templates
 from jose import JWTError
 from pydantic import UUID4, ValidationError
 from sqlalchemy import create_engine
@@ -18,12 +16,6 @@ from .settings import app_settings
 from .types import CollaboratorRole, Scope
 
 # from .websockets import WebSocketConnectionManager
-
-# Templating
-fronted_dir = Path(__file__).parent.absolute() / "frontend"
-
-templates_dir = fronted_dir / "templates"
-templates = Jinja2Templates(directory=templates_dir)
 
 auth_cookie_scheme = APIKeyCookie(name="access_token", auto_error=False)
 
