@@ -78,7 +78,7 @@ class PydanticJSONB(types.TypeDecorator):
         if not self._is_plain_model:
             self._type_adapter: TypeAdapter[Any] = TypeAdapter(model_class)
 
-    def process_bind_param(self, value: Any, dialect: Any) -> JSONValue:  # noqa: ANN401, ARG002, ANN001
+    def process_bind_param(self, value: Any, dialect: Any) -> JSONValue:
         if value is None:
             return None
         if isinstance(value, BaseModel):
@@ -103,7 +103,7 @@ class PydanticJSONB(types.TypeDecorator):
 
     def process_result_value(
         self, value: Any, dialect: Any
-    ) -> Optional[Union[BaseModelType, List[BaseModelType], Dict[str, BaseModelType]]]:  # noqa: ANN401, ARG002, ANN001
+    ) -> Optional[Union[BaseModelType, List[BaseModelType], Dict[str, BaseModelType]]]:
         if value is None:
             return None
         if isinstance(value, dict):
