@@ -113,22 +113,3 @@ def create_auth_token(
     )
 
     return token.encode()
-
-
-def decode_jwt(
-    token: str,
-) -> dict[str, Any]:
-    payload = jwt.decode(
-        token,
-        app_settings.secrets.jwt_secret_key.get_secret_value(),
-        algorithms=["HS256"],
-    )
-    return payload
-
-
-def decode_interview_token(token: str) -> InterviewToken:
-    return InterviewToken(**decode_jwt(token))
-
-
-def decode_auth_token(token: str) -> AuthToken:
-    return AuthToken(**decode_jwt(token))

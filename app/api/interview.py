@@ -19,7 +19,7 @@ from sqlalchemy.exc import NoResultFound
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode, TestType
 
-from ..auth import create_interview_token, decode_auth_token
+from ..auth import create_interview_token, AuthToken
 from ..db.types import InterviewType
 from ..dependencies import (
     AdminToken,
@@ -78,7 +78,7 @@ async def create_interview(
             )
 
         try:
-            auth_token = decode_auth_token(token)
+            auth_token = AuthToken.decode(token)
         except (JWTError, ValidationError):
             raise AuthError(status_code=401, detail="Could not validate credentials")
 

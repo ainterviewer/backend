@@ -25,7 +25,7 @@ from ainterviewer.interview import AInterviewer
 from ainterviewer.lpm.types import CustomToken
 from ainterviewer.settings import settings
 
-from ....auth import decode_interview_token
+from ....auth import InterviewToken
 from ....db import InterviewDataBase
 from ....dependencies import DBSession
 from ....utils import replay_history
@@ -51,7 +51,7 @@ async def ai_interview_websocket_endpoint(
     if token is None:
         raise WebSocketException(401, "Unauthorized")
     try:
-        interview_token = decode_interview_token(token)
+        interview_token = InterviewToken.decode(token)
     except JWTError as e:
         raise WebSocketException(401, str(e))
 

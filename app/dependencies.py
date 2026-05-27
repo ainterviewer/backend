@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from ainterviewer.types import LanguageCode
 
-from .auth import AssistanceSessionToken, AuthToken, decode_auth_token
+from .auth import AssistanceSessionToken, AuthToken
 from .db import InterviewDataBase
 from .db.vectors import register_vector_extension
 from .settings import app_settings
@@ -64,7 +64,7 @@ def _decode_token(
     if token is None:
         raise AuthError(status_code=401, detail="Not authenticated")
     try:
-        return decode_auth_token(token)
+        return AuthToken.decode(token)
     except (JWTError, ValidationError):
         raise AuthError(status_code=401, detail="Could not validate credentials")
 
