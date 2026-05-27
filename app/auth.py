@@ -14,8 +14,6 @@ from ainterviewer.utils import now
 from .settings import app_settings
 from .types import Scope
 
-# FIXME:
-# https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/?h=oauth#hash-and-verify-the-passwords
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # NOTE: Supress warning raised from bcrypt
