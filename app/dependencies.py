@@ -17,6 +17,10 @@ from .types import CollaboratorRole, Scope
 
 # from .websockets import WebSocketConnectionManager
 
+
+class AuthError(HTTPException): ...
+
+
 auth_cookie_scheme = APIKeyCookie(name="access_token", auto_error=False)
 
 
@@ -45,9 +49,6 @@ def get_db() -> Generator[InterviewDataBase, None, None]:
 #
 # def get_ws_manager():
 #     return manager
-
-
-class AuthError(HTTPException): ...
 
 
 def _decode_token(
