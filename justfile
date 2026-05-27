@@ -1,3 +1,5 @@
+set dotenv-load := true
+
 [private]
 default:
     @just --list
@@ -47,3 +49,34 @@ publish:
     git commit -m "Release v${VERSION}"
     git tag -a "v${VERSION}" -m "Release v${VERSION}"
     git push --follow-tags
+
+# Manually build & push the Docker image to ghcr.io (fallback for when CI is down).
+# Reads GHCR_TOKEN, GITHUB_TOKEN and GITHUB_USERNAME from .env (auto-loaded).
+[group("Release & Publish")]
+publish-docker:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    : "${GHCR_TOKEN:?set GHCR_TOKEN in .env (PAT with write:packages)}"
+    : "${GITHUB_TOKEN:?set GITHUB_TOKEN in .env (PAT with repo, for the github_token build secret)}"
+    : "${GITHUB_USERNAME:?set GITHUB_USERNAME in .env}"
+
+    IMAGE="ghcr.io/ainterviewer/backend"
+    VERSION="$(uv version --short)"
+
+    TAGS=(-t "${IMAGE}:v${VERSION}")
+    case "${VERSION}" in
+      *rc*) ;;                          # pre-release: skip 'latest'
+      *) TAGS+=(-t "${IMAGE}:latest") ;;
+    esac
+
+    echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GITHUB_USERNAME}" --password-stdin
+
+    TOKEN_FILE="$(mktemp)"
+    trap 'rm -f "${TOKEN_FILE}"' EXIT
+    printf '%s' "${GITHUB_TOKEN}" > "${TOKEN_FILE}"
+
+    docker buildx build \
+      --secret id=github_token,src="${TOKEN_FILE}" \
+      "${TAGS[@]}" \
+      --push \
+      .
