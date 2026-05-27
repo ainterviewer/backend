@@ -242,7 +242,7 @@ async def exit():
             key=key,
             secure=True,
             httponly=True,
-            samesite="none",
+            samesite="lax",
         )
     return response
 
