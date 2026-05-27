@@ -12,6 +12,7 @@ from pydantic import (
     EmailStr,
     Field,
     computed_field,
+    field_validator,
 )
 
 from ainterviewer.agents.config import AgentConfigs
@@ -120,6 +121,15 @@ class UserCreateRequest(UserBase):
     last_login: datetime = Field(default_factory=now)
     research_consent: bool = False
     password: str = Field(min_length=8)
+
+    @field_validator("password")
+    @classmethod
+    def _password_within_bcrypt_limit(cls, value: str) -> str:
+        # bcrypt silently truncates input beyond 72 bytes (not chars), so
+        # reject anything longer to avoid surprising password equivalence.
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 bytes")
+        return value
 
 
 class UserCreate(UserCreateRequest):
