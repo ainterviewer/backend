@@ -7,8 +7,9 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ainterviewer.agents.config import AgentConfigs
 from ainterviewer.agents.prompts.models import Prompts
-from ainterviewer.config import AgentConfigs, InterviewConfig
+from ainterviewer.config import InterviewConfig
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.interview_guides.extra import Consent, Welcome
 from ainterviewer.interview_guides.translate import (

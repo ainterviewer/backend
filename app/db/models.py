@@ -14,8 +14,9 @@ from pydantic import (
     computed_field,
 )
 
+from ainterviewer.agents.config import AgentConfigs
 from ainterviewer.agents.prompts.models import Prompts
-from ainterviewer.config import AgentConfigs, InterviewConfig
+from ainterviewer.config import InterviewConfig
 from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
 from ainterviewer.interview_guides.extra import Consent, Welcome
 from ainterviewer.settings import settings as lib_settings

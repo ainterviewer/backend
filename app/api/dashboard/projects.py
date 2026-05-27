@@ -12,7 +12,8 @@ from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from pydantic import UUID4, EmailStr
 from xlsxwriter import Workbook
 
-from ainterviewer.config import AgentConfigs, InterviewConfig
+from ainterviewer.agents.config import AgentConfigs
+from ainterviewer.config import InterviewConfig
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.interview_guides.extra import Consent, Welcome
 from ainterviewer.interview_guides.generate import (
