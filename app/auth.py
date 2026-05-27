@@ -1,7 +1,7 @@
 import hashlib
 import logging
 import secrets
-from typing import Any, Self
+from typing import Self
 from uuid import UUID
 
 from jose import jwt
