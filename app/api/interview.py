@@ -141,7 +141,17 @@ async def create_interview(
         interview_id=interview.id,
     )
 
-    response.set_cookie("interview_token", interview_token)
+    # NOTE:
+    # if we need to support iframe set samesite='none' and reconsider frontend
+    # localstorage
+    response.set_cookie(
+        key="interview_token",
+        value=interview_token,
+        secure=True,
+        httponly=True,
+        samesite="lax",
+        path="/",
+    )
 
     return interview_token
 
