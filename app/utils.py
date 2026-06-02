@@ -39,6 +39,8 @@ cli = Typer(no_args_is_help=True)
 @cli.command()
 def generate_qr_img(
     payload: str,
+    icon_path: Path | None = None,
+    color_rgb: tuple[int, int, int] | None = None,
     file_path: Path = None,  # ty: ignore[invalid-parameter-default]
     ctx: Context = None,  # ty: ignore[invalid-parameter-default]
 ) -> bytes:
@@ -47,18 +49,23 @@ def generate_qr_img(
     qr = qrcode.QRCode(error_correction=ERROR_CORRECT_H)
     qr.add_data(payload)
 
-    icon_path = APP_DIR.resolve() / "assets" / "favicon.png"
+    if icon_path is None:
+        icon_path = APP_DIR.resolve() / "assets" / "favicon.png"
+
+    if color_rgb is None:
+        color_mask = RadialGradiantColorMask(
+            center_color=(28, 40, 38), edge_color=(25, 104, 88)
+        )
+        # HorizontalGradiantColorMask(
+        #     left_color=(28, 40, 38), right_color=(25, 104, 88)
+        # )
+    else:
+        color_mask = SolidFillColorMask(front_color=color_rgb)
 
     img = qr.make_image(
         image_factory=StyledPilImage,
         module_drawer=RoundedModuleDrawer(),
-        color_mask=RadialGradiantColorMask(
-            center_color=(28, 40, 38), edge_color=(25, 104, 88)
-        ),
-        # HorizontalGradiantColorMask(
-        #     left_color=(28, 40, 38), right_color=(25, 104, 88)
-        # ),
-        # SolidFillColorMask(front_color=(25, 104, 88)),
+        color_mask=color_mask,
         embeded_image_path=icon_path,
     )
     img.save(img_byte_array, format="PNG")
