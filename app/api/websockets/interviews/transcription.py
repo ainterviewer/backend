@@ -30,10 +30,10 @@ def _transcription_url() -> str | None:
     The model must NOT be a query parameter for transcription sessions; it is
     set via session.update in the handshake (see _init_transcript).
     """
-    speech = app_settings.services.speech
-    if speech is None or speech.stt_model is None:
+    speech_settings = app_settings.services.speech
+    if speech_settings.stt_model is None:
         return None
-    endpoint = (speech.stt_endpoint or DEFAULT_STT_ENDPOINT).rstrip("/")
+    endpoint = (speech_settings.stt_endpoint or DEFAULT_STT_ENDPOINT).rstrip("/")
     return f"{endpoint}/v1/realtime?intent=transcription"
 
 
@@ -94,7 +94,10 @@ async def _init_transcript(
     second, best-effort update: not all models support `prompt`, and a session
     update fails atomically, so it must not ride along with the core config.
     """
-    transcription: dict = {"model": stt_model}
+    transcription: dict = {
+        "model": stt_model,
+        "delay": app_settings.services.speech.sst_delay,
+    }
     if language is not None:
         transcription["language"] = language.lower()
 
@@ -144,8 +147,6 @@ async def transcription_websocket_endpoint(websocket: WebSocket, db: DBSession):
     relay_task = None
     transcription_up = False
 
-    speech = app_settings.services.speech
-    stt_model = speech.stt_model if speech is not None else None
     transcription_url = _transcription_url()
     headers = {
         "Authorization": "Bearer "
@@ -174,7 +175,10 @@ async def transcription_websocket_endpoint(websocket: WebSocket, db: DBSession):
         logger.error(f"Interview {interview_token.interview_id} not found")
 
     try:
-        if transcription_url is None or stt_model is None:
+        if (
+            transcription_url is None
+            or (stt_model := app_settings.services.speech.stt_model) is None
+        ):
             logger.error("Transcription not configured (services.speech)")
             await _notify(websocket, "transcription_unavailable")
         else:

@@ -99,6 +99,7 @@ class EmailAccount(BaseModel):
 class SpeechSettings(BaseModel):
     stt_model: str | None = None
     stt_endpoint: str | None = None
+    sst_delay: Literal["minimal", "low", "medium", "high", "xhigh"] = "medium"
 
     tts_model: str | None = None
     tts_endpoint: str | None = None
@@ -109,7 +110,7 @@ class ServiceSettings(BaseSettings):
     """Different extra services required to run the app"""
 
     email: EmailSettings | None = None
-    speech: SpeechSettings | None = None
+    speech: SpeechSettings = SpeechSettings()
 
     model_config = BaseSettingsConfigDict(env_prefix="APP_SERVICE__")
 

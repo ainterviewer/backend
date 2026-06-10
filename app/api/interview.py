@@ -262,8 +262,8 @@ async def synthesize_speech(
     except (JWTError, ValidationError):
         raise HTTPException(status_code=401, detail="Could not validate credentials")
 
-    speech = app_settings.services.speech
-    if speech is None or speech.tts_model is None:
+    speech_settings = app_settings.services.speech
+    if speech_settings.tts_model is None:
         raise HTTPException(status_code=503, detail="Text-to-speech not configured")
 
     try:
@@ -289,7 +289,7 @@ async def synthesize_speech(
     # OpenAI's /v1/audio/speech caps input at 4096 characters.
     text = message.content.strip()[:4096]
 
-    endpoint = (speech.tts_endpoint or DEFAULT_TTS_ENDPOINT).rstrip("/")
+    endpoint = (speech_settings.tts_endpoint or DEFAULT_TTS_ENDPOINT).rstrip("/")
 
     session = aiohttp.ClientSession()
     try:
@@ -300,8 +300,8 @@ async def synthesize_speech(
                 + lib_settings.secrets.openai_api_key.get_secret_value(),
             },
             json={
-                "model": speech.tts_model,
-                "voice": speech.tts_voice,
+                "model": speech_settings.tts_model,
+                "voice": speech_settings.tts_voice,
                 "input": text,
                 "response_format": "mp3",
                 "speed": TTS_SPEED,
