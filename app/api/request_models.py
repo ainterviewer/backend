@@ -152,5 +152,6 @@ class ExternalParamsRequest(BaseModel):
 
 
 class SpeechRequest(BaseModel):
-    # OpenAI's /v1/audio/speech caps input at 4096 characters.
-    text: str = Field(min_length=1, max_length=4096)
+    # The interview-scoped integer id of the message to synthesize. The text is
+    # looked up server-side so participants can't synthesize arbitrary text.
+    message_id: int

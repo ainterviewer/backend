@@ -7802,7 +7802,7 @@
                     "interviews"
                 ],
                 "summary": "Synthesize Speech",
-                "description": "Synthesize speech for interview text via the OpenAI-compatible TTS\nservice, streaming the MP3 back as it is generated.\n\nAuthenticated with the participant's interview token cookie, like the\ntranscription endpoint.",
+                "description": "Synthesize speech for an interviewer message via the OpenAI-compatible\nTTS service, streaming the MP3 back as it is generated.\n\nAuthenticated with the participant's interview token cookie, like the\ntranscription endpoint. The text is looked up by message id within the\ntoken's interview, so participants can't synthesize arbitrary text.",
                 "operationId": "synthesize_speech",
                 "requestBody": {
                     "content": {
@@ -8358,7 +8358,7 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "get": {
+            "post": {
                 "tags": [
                     "admin"
                 ],
@@ -8402,7 +8402,7 @@
                     }
                 }
             },
-            "post": {
+            "put": {
                 "tags": [
                     "admin"
                 ],
@@ -8490,7 +8490,7 @@
                     }
                 }
             },
-            "delete": {
+            "get": {
                 "tags": [
                     "admin"
                 ],
@@ -8534,7 +8534,7 @@
                     }
                 }
             },
-            "put": {
+            "delete": {
                 "tags": [
                     "admin"
                 ],
@@ -13755,16 +13755,14 @@
             },
             "SpeechRequest": {
                 "properties": {
-                    "text": {
-                        "type": "string",
-                        "maxLength": 4096,
-                        "minLength": 1,
-                        "title": "Text"
+                    "message_id": {
+                        "type": "integer",
+                        "title": "Message Id"
                     }
                 },
                 "type": "object",
                 "required": [
-                    "text"
+                    "message_id"
                 ],
                 "title": "SpeechRequest"
             },

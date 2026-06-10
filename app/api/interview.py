@@ -20,7 +20,7 @@ from sqlalchemy.exc import NoResultFound
 from uvicorn.config import logger
 
 from ainterviewer.settings import settings as lib_settings
-from ainterviewer.types import LanguageCode, TestType
+from ainterviewer.types import LanguageCode, MessageRole, TestType
 
 from ..auth import create_interview_token, AuthToken, InterviewToken
 from ..db.types import InterviewType
@@ -226,30 +226,68 @@ async def upload_audio(
 
 DEFAULT_TTS_ENDPOINT = "https://api.openai.com"
 
+# gpt-4o-mini-tts steers delivery via instructions; `speed` is only honored by
+# the older tts-1 models, so pacing is stated in both places.
+TTS_SPEED = 1.2
+TTS_INSTRUCTIONS = (
+    "You are the voice of a friendly, professional researcher reading "
+    "interview questions aloud to a participant. Tone: warm, engaged and "
+    "natural, never robotic or theatrical. Pacing: slightly faster than "
+    "normal conversation while staying clear and easy to follow; pause "
+    "briefly after a question. Language: the text is in the language with "
+    "ISO 639-1 code '{language}'; pronounce it like a native speaker."
+)
+
 
 @router.post(
     "/speech",
     response_class=StreamingResponse,
     responses={200: {"content": {"audio/mpeg": {}}}},
 )
-async def synthesize_speech(request: Request, speech_request: SpeechRequest):
-    """Synthesize speech for interview text via the OpenAI-compatible TTS
-    service, streaming the MP3 back as it is generated.
+async def synthesize_speech(
+    request: Request, speech_request: SpeechRequest, db: DBSession
+):
+    """Synthesize speech for an interviewer message via the OpenAI-compatible
+    TTS service, streaming the MP3 back as it is generated.
 
     Authenticated with the participant's interview token cookie, like the
-    transcription endpoint.
+    transcription endpoint. The text is looked up by message id within the
+    token's interview, so participants can't synthesize arbitrary text.
     """
     token = request.cookies.get("interview_token")
     if token is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
-        InterviewToken.decode(token)
+        interview_token = InterviewToken.decode(token)
     except (JWTError, ValidationError):
         raise HTTPException(status_code=401, detail="Could not validate credentials")
 
     speech = app_settings.services.speech
     if speech is None or speech.tts_model is None:
         raise HTTPException(status_code=503, detail="Text-to-speech not configured")
+
+    try:
+        message = db.interviews.get_message(
+            message_id=speech_request.message_id,
+            interview_id=interview_token.interview_id,
+            project_id=interview_token.project_id,
+        )
+        interview = db.interviews.get_interview(
+            project_id=interview_token.project_id,
+            interview_id=interview_token.interview_id,
+        )
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    if message.role == MessageRole.USER:
+        raise HTTPException(
+            status_code=403, detail="Only interviewer messages can be synthesized"
+        )
+    if not message.content.strip():
+        raise HTTPException(status_code=422, detail="Message has no text content")
+
+    # OpenAI's /v1/audio/speech caps input at 4096 characters.
+    text = message.content.strip()[:4096]
 
     endpoint = (speech.tts_endpoint or DEFAULT_TTS_ENDPOINT).rstrip("/")
 
@@ -264,8 +302,10 @@ async def synthesize_speech(request: Request, speech_request: SpeechRequest):
             json={
                 "model": speech.tts_model,
                 "voice": speech.tts_voice,
-                "input": speech_request.text,
+                "input": text,
                 "response_format": "mp3",
+                "speed": TTS_SPEED,
+                "instructions": TTS_INSTRUCTIONS.format(language=interview.language),
             },
         )
         if upstream.status != 200:

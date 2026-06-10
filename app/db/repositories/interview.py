@@ -315,6 +315,22 @@ class InterviewRepository(BaseRepository):
         self.session.execute(statement)
         self.session.commit()
 
+    def get_message(
+        self,
+        message_id: int,
+        interview_id: UUID4,
+        project_id: UUID4,
+    ) -> MessagePublic:
+        """Fetch a single message scoped to an interview. Raises NoResultFound."""
+        statement = (
+            select(MessageTable)
+            .where(MessageTable.message_id == message_id)
+            .where(MessageTable.interview_id == interview_id)
+            .where(MessageTable.project_id == project_id)
+        )
+        message = self.session.execute(statement).scalar_one()
+        return MessagePublic.model_validate(message)
+
     def get_messages(
         self,
         interview_id: UUID4,
