@@ -205,7 +205,7 @@ class Settings(BaseSettings):
 app_settings = Settings()  # ty: ignore[missing-argument]
 
 if __name__ == "__main__":
-    from ainterviewer.settings import settings as lib_settings
+    # from ainterviewer.settings import settings as lib_settings
 
     # print(app_settings.secrets)
     # print(lib_settings)
