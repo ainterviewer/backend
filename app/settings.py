@@ -96,10 +96,20 @@ class EmailAccount(BaseModel):
     password: SecretStr
 
 
+class SpeechSettings(BaseModel):
+    stt_model: str | None = None
+    stt_endpoint: str | None = None
+
+    tts_model: str | None = None
+    tts_endpoint: str | None = None
+    tts_voice: str = "alloy"
+
+
 class ServiceSettings(BaseSettings):
     """Different extra services required to run the app"""
 
     email: EmailSettings | None = None
+    speech: SpeechSettings | None = None
 
     model_config = BaseSettingsConfigDict(env_prefix="APP_SERVICE__")
 
@@ -197,5 +207,6 @@ if __name__ == "__main__":
     from ainterviewer.settings import settings as lib_settings
 
     # print(app_settings.secrets)
-    print(lib_settings)
+    # print(lib_settings)
+    print(app_settings.services)
     pass

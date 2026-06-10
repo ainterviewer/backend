@@ -149,3 +149,8 @@ class ExternalParamsRequest(BaseModel):
         if len(values) != len(set(x.name for x in values)):
             raise ValueError("External parameter names must be unique")
         return values
+
+
+class SpeechRequest(BaseModel):
+    # OpenAI's /v1/audio/speech caps input at 4096 characters.
+    text: str = Field(min_length=1, max_length=4096)

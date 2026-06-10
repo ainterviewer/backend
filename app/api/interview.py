@@ -1,6 +1,7 @@
 import shutil
 from typing import Annotated
 
+import aiohttp
 from fastapi import (
     APIRouter,
     File,
@@ -12,14 +13,16 @@ from fastapi import (
     UploadFile,
 )
 from fastapi import Path as URLPath
+from fastapi.responses import StreamingResponse
 from jose.exceptions import JWTError
 from pydantic import UUID4, ValidationError
 from sqlalchemy.exc import NoResultFound
+from uvicorn.config import logger
 
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode, TestType
 
-from ..auth import create_interview_token, AuthToken
+from ..auth import create_interview_token, AuthToken, InterviewToken
 from ..db.types import InterviewType
 from ..dependencies import (
     AdminToken,
@@ -29,9 +32,10 @@ from ..dependencies import (
     ResourceRoleChecker,
     ScopeChecker,
 )
+from ..settings import app_settings
 from ..types import CollaboratorRole, Scope, build_external_params_model
 from ..utils import generate_random_filename
-from .request_models import CreateInterviewRequest
+from .request_models import CreateInterviewRequest, SpeechRequest
 from .response_models import MediaUploadResponse, MessageFeedbackResponse
 
 router = APIRouter(tags=["interviews"])
@@ -218,3 +222,70 @@ async def upload_audio(
         shutil.copyfileobj(file.file, f)
 
     return MediaUploadResponse(message="Audio uploaded successfully", filename=filename)
+
+
+DEFAULT_TTS_ENDPOINT = "https://api.openai.com"
+
+
+@router.post(
+    "/speech",
+    response_class=StreamingResponse,
+    responses={200: {"content": {"audio/mpeg": {}}}},
+)
+async def synthesize_speech(request: Request, speech_request: SpeechRequest):
+    """Synthesize speech for interview text via the OpenAI-compatible TTS
+    service, streaming the MP3 back as it is generated.
+
+    Authenticated with the participant's interview token cookie, like the
+    transcription endpoint.
+    """
+    token = request.cookies.get("interview_token")
+    if token is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        InterviewToken.decode(token)
+    except (JWTError, ValidationError):
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+
+    speech = app_settings.services.speech
+    if speech is None or speech.tts_model is None:
+        raise HTTPException(status_code=503, detail="Text-to-speech not configured")
+
+    endpoint = (speech.tts_endpoint or DEFAULT_TTS_ENDPOINT).rstrip("/")
+
+    session = aiohttp.ClientSession()
+    try:
+        upstream = await session.post(
+            f"{endpoint}/v1/audio/speech",
+            headers={
+                "Authorization": "Bearer "
+                + lib_settings.secrets.openai_api_key.get_secret_value(),
+            },
+            json={
+                "model": speech.tts_model,
+                "voice": speech.tts_voice,
+                "input": speech_request.text,
+                "response_format": "mp3",
+            },
+        )
+        if upstream.status != 200:
+            detail = await upstream.text()
+            logger.error(f"TTS upstream error {upstream.status}: {detail}")
+            raise HTTPException(status_code=502, detail="Speech synthesis failed")
+    except aiohttp.ClientError as e:
+        await session.close()
+        logger.error(f"TTS upstream unavailable: {e!r}")
+        raise HTTPException(status_code=502, detail="Speech synthesis failed")
+    except HTTPException:
+        await session.close()
+        raise
+
+    async def stream():
+        try:
+            async for chunk in upstream.content.iter_chunked(8192):
+                yield chunk
+        finally:
+            upstream.release()
+            await session.close()
+
+    return StreamingResponse(stream(), media_type="audio/mpeg")
