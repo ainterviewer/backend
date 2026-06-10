@@ -315,6 +315,26 @@ class InterviewRepository(BaseRepository):
         self.session.execute(statement)
         self.session.commit()
 
+    def get_last_message(
+        self,
+        interview_id: UUID4,
+        project_id: UUID4,
+        role: Optional[MessageRole] = None,
+    ) -> Optional[MessagePublic]:
+        """Fetch the most recent message of an interview, optionally
+        restricted to a role. Returns None if there are no matches."""
+        statement = (
+            select(MessageTable)
+            .where(MessageTable.interview_id == interview_id)
+            .where(MessageTable.project_id == project_id)
+            .order_by(MessageTable.message_id.desc())
+            .limit(1)
+        )
+        if role is not None:
+            statement = statement.where(MessageTable.role == role)
+        message = self.session.execute(statement).scalars().first()
+        return MessagePublic.model_validate(message) if message else None
+
     def get_message(
         self,
         message_id: int,
