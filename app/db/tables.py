@@ -211,7 +211,7 @@ class UserTable(Base):
         creator=lambda folder: CollaboratorTable(folder=folder),
     )
     annotations: Mapped[list["MessageAnnotationTable"]] = relationship(
-        back_populates="user"
+        back_populates="user", cascade="all, delete-orphan"
     )
     experiments: Mapped[list["ExperimentTable"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"

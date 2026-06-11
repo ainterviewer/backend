@@ -16,12 +16,24 @@ from ..auth import (
     hash_token,
     verify_password,
 )
-from ..db.models import AccessRequestCreate, UserCreate, UserCreateRequest, UserPublic
+from ..db.models import (
+    AccessRequestCreate,
+    UserCreate,
+    UserCreateRequest,
+    UserPrivate,
+    UserPublic,
+    UserSelfUpdate,
+)
 from ..dependencies import DBSession, DemoToken
 from ..services.email.mail import send_email
 from ..settings import app_settings
 from ..types import Scope
-from .request_models import LoginData
+from .request_models import (
+    DeleteAccountRequest,
+    LoginData,
+    UpdateEmailRequest,
+    UpdatePasswordRequest,
+)
 
 router = APIRouter(tags=["auth"])
 
@@ -129,6 +141,61 @@ async def me(db: DBSession, jwt: DemoToken) -> UserPublic:
     current_user = db.users.get_user_private(user_id=jwt.user_id)
 
     return UserPublic.model_validate(current_user)
+
+
+def _verify_current_password(db: DBSession, user_id, password: str) -> UserPrivate:
+    """Re-authenticate the user for sensitive account operations."""
+    user = db.users.get_user_private(user_id=user_id)
+    if not verify_password(password, user.password):
+        raise HTTPException(status_code=403, detail="Invalid password")
+    return user
+
+
+@router.patch("/me")
+async def update_me(body: UserSelfUpdate, db: DBSession, jwt: DemoToken) -> UserPublic:
+    return db.users.update_user(jwt.user_id, body)
+
+
+@router.patch("/me/email")
+async def update_my_email(
+    body: UpdateEmailRequest, db: DBSession, jwt: DemoToken
+) -> UserPublic:
+    _verify_current_password(db, jwt.user_id, body.password)
+
+    try:
+        return db.users.update_user_email(jwt.user_id, body.new_email)
+    except sqlalchemy.exc.IntegrityError:
+        raise HTTPException(status_code=409, detail="Email already in use")
+
+
+@router.post("/me/password")
+async def update_my_password(
+    body: UpdatePasswordRequest, db: DBSession, jwt: DemoToken
+):
+    user = _verify_current_password(db, jwt.user_id, body.current_password)
+
+    db.users.update_user_password(jwt.user_id, body.new_password)
+
+    # A password change invalidates every existing session, then starts a
+    # fresh one so the current client stays logged in.
+    db.auth.revoke_all_for_user(jwt.user_id)
+    access_token = create_auth_token(user_id=user.id, scope=user.scope)
+    raw_refresh = _create_and_store_refresh_token(db, user_id=user.id)
+
+    response = JSONResponse({"detail": "Password updated"})
+    _set_auth_cookies(response, access_token, raw_refresh)
+    return response
+
+
+@router.delete("/me")
+async def delete_me(body: DeleteAccountRequest, db: DBSession, jwt: DemoToken):
+    _verify_current_password(db, jwt.user_id, body.password)
+
+    db.users.delete_user(jwt.user_id)
+
+    response = JSONResponse({"detail": "Account deleted"})
+    _delete_auth_cookies(response)
+    return response
 
 
 @router.post("/register")

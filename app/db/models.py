@@ -168,6 +168,14 @@ class UserAdminUpdate(BaseModel):
     expires_at: datetime | None | _Unset = UNSET
 
 
+class UserSelfUpdate(BaseModel):
+    """Profile fields a user may change on their own account."""
+
+    first_name: str | _Unset = UNSET
+    last_name: str | None | _Unset = UNSET
+    organization: str | None | _Unset = UNSET
+
+
 class Collaborator(_BaseModel):
     email: EmailStr
     role: CollaboratorRole

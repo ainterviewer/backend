@@ -23,6 +23,7 @@ from ..models import (
     UserCreate,
     UserPrivate,
     UserPublic,
+    UserSelfUpdate,
 )
 from ..tables import AccessRequestTable, InvitationTable, UserTable
 from ..types import AccessRequestStatus
@@ -45,7 +46,40 @@ class UserRepository(BaseRepository):
         return UserPublic.model_validate(new_user)
 
     def delete_user(self, id: UUID4):
-        statement = delete(UserTable).where(UserTable.id == id)
+        # ORM-level delete so relationship cascades fire (owned projects with
+        # their interviews/messages, annotations, experiments, refresh tokens);
+        # a bulk DELETE would hit FK constraints on dependent rows.
+        user = self.session.get(UserTable, id)
+        if user is None:
+            return
+        self.session.delete(user)
+        self.session.commit()
+
+    def update_user(self, user_id: UUID4, data: UserSelfUpdate) -> UserPublic:
+        values = {k: v for k, v in data.model_dump().items() if v is not UNSET}
+
+        if values:
+            statement = (
+                update(UserTable).where(UserTable.id == user_id).values(**values)
+            )
+            self.session.execute(statement)
+            self.session.commit()
+
+        return self.get_user_by_id(user_id)
+
+    def update_user_email(self, user_id: UUID4, email: str) -> UserPublic:
+        statement = update(UserTable).where(UserTable.id == user_id).values(email=email)
+        self.session.execute(statement)
+        self.session.commit()
+
+        return self.get_user_by_id(user_id)
+
+    def update_user_password(self, user_id: UUID4, new_password: str) -> None:
+        statement = (
+            update(UserTable)
+            .where(UserTable.id == user_id)
+            .values(password=get_password_hash(new_password))
+        )
         self.session.execute(statement)
         self.session.commit()
 

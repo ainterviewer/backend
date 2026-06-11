@@ -1,7 +1,7 @@
 from typing import Any, Literal
 
 from fastapi import Query
-from pydantic import UUID4, BaseModel, Field, field_validator
+from pydantic import UUID4, BaseModel, EmailStr, Field, field_validator
 
 from ainterviewer.agents.prompts.models import PromptTemplates
 from ainterviewer.interview_guides import InterviewGuide
@@ -69,6 +69,29 @@ class LoginData(BaseModel):
     email: str
     password: str
     extended: bool = False
+
+
+class UpdateEmailRequest(BaseModel):
+    password: str
+    new_email: EmailStr
+
+
+class UpdatePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8)
+
+    @field_validator("new_password")
+    @classmethod
+    def _password_within_bcrypt_limit(cls, value: str) -> str:
+        # bcrypt silently truncates input beyond 72 bytes (not chars), so
+        # reject anything longer to avoid surprising password equivalence.
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 bytes")
+        return value
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str
 
 
 class CreateInterviewRequest(BaseModel):
