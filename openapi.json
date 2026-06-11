@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.3.27"
+        "version": "0.3.28"
     },
     "paths": {
         "/api/projects/{project_id}/analysis/categories": {
@@ -5093,7 +5093,7 @@
                     "content": {
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image__1"
+                                "$ref": "#/components/schemas/Body_upload_image"
                             }
                         }
                     }
@@ -7799,13 +7799,13 @@
                 "tags": [
                     "interviews"
                 ],
-                "summary": "Upload Image",
-                "operationId": "upload_image",
+                "summary": "Upload Interview Image",
+                "operationId": "upload_interview_image",
                 "requestBody": {
                     "content": {
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/fastapi___compat__v2__Body_upload_image__2"
+                                "$ref": "#/components/schemas/Body_upload_interview_image"
                             }
                         }
                     },
@@ -8624,145 +8624,57 @@
             }
         },
         "/api/admin/aws/ec2/{full_path}": {
-            "post": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "patch": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Proxy To Ec2 Manager",
-                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "full_path",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Full Path"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
             "get": {
                 "tags": [
                     "admin"
                 ],
-                "summary": "Proxy To Ec2 Manager",
+                "summary": "Proxy To Ec2 Manager Get",
                 "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
+                "operationId": "proxy_to_ec2_manager_get",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager Post",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager_post",
                 "security": [
                     {
                         "APIKeyCookie": []
@@ -8804,9 +8716,97 @@
                 "tags": [
                     "admin"
                 ],
-                "summary": "Proxy To Ec2 Manager",
+                "summary": "Proxy To Ec2 Manager Put",
                 "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
-                "operationId": "proxy_to_ec2_manager",
+                "operationId": "proxy_to_ec2_manager_put",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager Patch",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager_patch",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "full_path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Full Path"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Proxy To Ec2 Manager Delete",
+                "description": "Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.\nThis allows admin users to control EC2 instances from the main app.",
+                "operationId": "proxy_to_ec2_manager_delete",
                 "security": [
                     {
                         "APIKeyCookie": []
@@ -9943,6 +9943,61 @@
                     "file"
                 ],
                 "title": "Body_upload_audio"
+            },
+            "Body_upload_image": {
+                "properties": {
+                    "primer": {
+                        "type": "string",
+                        "title": "Primer"
+                    },
+                    "description": {
+                        "type": "string",
+                        "title": "Description"
+                    },
+                    "alt": {
+                        "type": "string",
+                        "title": "Alt"
+                    },
+                    "file": {
+                        "type": "string",
+                        "contentMediaType": "application/octet-stream",
+                        "title": "File"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "primer",
+                    "description",
+                    "alt",
+                    "file"
+                ],
+                "title": "Body_upload_image"
+            },
+            "Body_upload_interview_image": {
+                "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Project Id"
+                    },
+                    "interview_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Interview Id"
+                    },
+                    "file": {
+                        "type": "string",
+                        "contentMediaType": "application/octet-stream",
+                        "title": "File"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "project_id",
+                    "interview_id",
+                    "file"
+                ],
+                "title": "Body_upload_interview_image"
             },
             "Body_upload_participant_email_attachments": {
                 "properties": {
@@ -15044,61 +15099,6 @@
                     "UNSET"
                 ],
                 "title": "_Unset"
-            },
-            "fastapi___compat__v2__Body_upload_image__1": {
-                "properties": {
-                    "primer": {
-                        "type": "string",
-                        "title": "Primer"
-                    },
-                    "description": {
-                        "type": "string",
-                        "title": "Description"
-                    },
-                    "alt": {
-                        "type": "string",
-                        "title": "Alt"
-                    },
-                    "file": {
-                        "type": "string",
-                        "contentMediaType": "application/octet-stream",
-                        "title": "File"
-                    }
-                },
-                "type": "object",
-                "required": [
-                    "primer",
-                    "description",
-                    "alt",
-                    "file"
-                ],
-                "title": "Body_upload_image"
-            },
-            "fastapi___compat__v2__Body_upload_image__2": {
-                "properties": {
-                    "project_id": {
-                        "type": "string",
-                        "format": "uuid4",
-                        "title": "Project Id"
-                    },
-                    "interview_id": {
-                        "type": "string",
-                        "format": "uuid4",
-                        "title": "Interview Id"
-                    },
-                    "file": {
-                        "type": "string",
-                        "contentMediaType": "application/octet-stream",
-                        "title": "File"
-                    }
-                },
-                "type": "object",
-                "required": [
-                    "project_id",
-                    "interview_id",
-                    "file"
-                ],
-                "title": "Body_upload_image"
             },
             "AuthToken": {
                 "properties": {
