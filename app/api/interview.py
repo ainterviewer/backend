@@ -175,7 +175,7 @@ async def put_feedback(
 
 
 @router.post("/image")
-async def upload_image(
+async def upload_interview_image(
     auth_token: AdminToken,
     project_id: Annotated[UUID4, Form()],
     interview_id: Annotated[UUID4, Form()],
