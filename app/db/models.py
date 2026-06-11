@@ -145,6 +145,7 @@ class UserPrivate(UserBase):
     id: UUID4
     password: str
     with_demo_features: bool
+    organization: str | None = None
 
 
 class UserPublic(UserBase):
@@ -152,11 +153,11 @@ class UserPublic(UserBase):
     invitation_title: str | None = None
     expires_at: datetime | None = None
     with_demo_features: bool
+    organization: str | None = None
 
 
 class UserAdmin(UserPublic):
     access_request_message: str | None = None
-    organization: str | None = None
     admin_note: str | None = None
     admin_note_updated_at: datetime | None = None
 
