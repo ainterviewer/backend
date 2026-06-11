@@ -16,9 +16,6 @@ router = APIRouter(
 )
 
 
-@router.api_route(
-    "/{full_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"]
-)
 async def proxy_to_ec2_manager(request: Request, full_path: str):
     """
     Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.
@@ -81,3 +78,14 @@ async def proxy_to_ec2_manager(request: Request, full_path: str):
             status_code=502,
             detail=f"Failed to reach EC2 manager service: {str(e)}",
         )
+
+
+# Register one route per method so each gets a unique operationId in the
+# OpenAPI schema (a single multi-method route would emit duplicates).
+for _method in ("GET", "POST", "PUT", "PATCH", "DELETE"):
+    router.add_api_route(
+        "/{full_path:path}",
+        proxy_to_ec2_manager,
+        methods=[_method],
+        name=f"proxy_to_ec2_manager_{_method.lower()}",
+    )
