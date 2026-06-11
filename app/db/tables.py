@@ -684,6 +684,9 @@ class MessageTable(Base):
     can_answer: Mapped[bool] = mapped_column(default=True)
     include_in_history: Mapped[bool] = mapped_column(default=True)
     attachment: Mapped[str | None] = mapped_column()  # Path stored as string
+    # Filename of the audio recording the message was transcribed from,
+    # relative to the interview's audio storage directory.
+    audio_file: Mapped[str | None] = mapped_column()
     feedback: Mapped[Feedback | None] = mapped_column(SQLEnum(Feedback))
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     image: Mapped[Image | None] = mapped_column(PydanticJSONB(Image))

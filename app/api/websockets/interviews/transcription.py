@@ -141,7 +141,12 @@ async def transcription_websocket_endpoint(websocket: WebSocket, db: DBSession):
     audio_dir = lib_settings.storage.interview_storage.audio_path(
         interview_token.interview_id
     )
-    sink = LocalWavSink(audio_dir / f"recording-{int(time.time())}.wav")
+    recording_filename = f"recording-{int(time.time())}.wav"
+    sink = LocalWavSink(audio_dir / recording_filename)
+
+    # Tell the client which file this session records to, so it can reference
+    # the recording when submitting the transcribed message.
+    await websocket.send_json({"type": "recording", "filename": recording_filename})
 
     upstream = None
     relay_task = None

@@ -354,6 +354,7 @@ class MessageBase(_BaseModel):
     can_answer: bool = True
     include_in_history: bool = True
     attachment: Optional[Path] = None
+    audio_file: Optional[str] = None
     feedback: Optional[Feedback] = None
     created_at: datetime
     image: Optional[Image | list[Image]] = None
@@ -377,6 +378,7 @@ class MessageCreate(_BaseModel):
     can_answer: bool = True
     include_in_history: bool = True
     attachment: Optional[Path] = None
+    audio_file: Optional[str] = None
     feedback: Optional[Feedback] = None
     image: Optional[Image | list[Image]] = None
     survey_item: Optional[SurveyItem] = None

@@ -7,9 +7,19 @@ from typing import Annotated
 
 import aiofiles
 import polars as pl
-from fastapi import APIRouter, Body, Depends, Form, Query, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from pydantic import UUID4, EmailStr
+from sqlalchemy.exc import NoResultFound
 from xlsxwriter import Workbook
 
 from ainterviewer.agents.config import AgentConfigs
@@ -531,6 +541,33 @@ async def get_interview_messages(
     _: ProjectViewer,
 ) -> list[MessagePublic]:
     return db.interviews.get_messages(interview_id, project_id)
+
+
+@router.get("/projects/{project_id}/interviews/{interview_id}/audio/{filename}")
+async def get_interview_audio(
+    project_id: UUID4,
+    interview_id: UUID4,
+    filename: str,
+    db: DBSession,
+    jwt: DemoToken,
+    _: ProjectViewer,
+) -> FileResponse:
+    """Serve a voice-message recording, referenced by a message's audio_file."""
+    try:
+        # The audio directory is keyed by interview only; this confirms the
+        # interview belongs to the project the caller has access to.
+        db.interviews.get_interview(project_id=project_id, interview_id=interview_id)
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail="Interview not found")
+
+    audio_path = (
+        lib_settings.storage.interview_storage.audio_path(interview_id)
+        / Path(filename).name  # strips any path components
+    )
+    if not audio_path.is_file():
+        raise HTTPException(status_code=404, detail="Recording not found")
+
+    return FileResponse(audio_path, media_type="audio/wav")
 
 
 @router.post("/projects/{project_id}/interviews/messages/export")

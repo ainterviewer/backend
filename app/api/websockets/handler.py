@@ -34,12 +34,15 @@ class WebsocketMessageHandler(IOProtocol):
         self,
         message_id: int,
         message_type: MessageType | None = None,
-    ) -> tuple[str, MessageType]:
+    ) -> tuple[str, MessageType, str | None]:
         data = ReceivedData(**await self.ws.receive_json())
 
         if data.type in ("message", "audio"):
             text = data.content
-            message_type = MessageType.TEXT if not message_type else message_type
+            if not message_type:
+                message_type = (
+                    MessageType.AUDIO if data.type == "audio" else MessageType.TEXT
+                )
 
             # Add to embedding queue
             embedding_task = EmbeddingTask(
@@ -72,4 +75,6 @@ class WebsocketMessageHandler(IOProtocol):
             #     + image_description
             # )
 
-        return text, message_type or data.type  # ty:ignore[invalid-return-type]
+        audio_file = data.filename if data.type == "audio" else None
+
+        return text, message_type or data.type, audio_file  # ty:ignore[invalid-return-type]
