@@ -228,7 +228,7 @@ DEFAULT_TTS_ENDPOINT = "https://api.openai.com"
 
 # gpt-4o-mini-tts steers delivery via instructions; `speed` is only honored by
 # the older tts-1 models, so pacing is stated in both places.
-TTS_SPEED = 1.2
+TTS_SPEED = 1.15
 TTS_INSTRUCTIONS = (
     "You are the voice of a friendly, professional researcher reading "
     "interview questions aloud to a participant. Tone: warm, engaged and "
