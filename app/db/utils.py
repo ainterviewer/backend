@@ -1,8 +1,12 @@
 import base64
 import json
 import uuid
+from typing import IO
 
 import polars as pl
+from xlsxwriter import Workbook
+
+from .models import MessagePublic
 
 
 def _json_serialize(x):
@@ -38,6 +42,62 @@ def fix_nested_columns(df: pl.DataFrame) -> pl.DataFrame:
         df = df.with_columns(stringified_cols)
 
     return df
+
+
+def messages_to_dataframe(messages: list[MessagePublic]) -> pl.DataFrame:
+    """Normalize interview messages into a flat DataFrame for export.
+
+    Nested/optional fields (feedback, attachment, image, survey_item,
+    annotations) are coerced to strings so the result can be written to
+    csv/xlsx without struct columns.
+    """
+    rows = []
+
+    for message in messages:
+        d = json.loads(message.model_dump_json())
+
+        if d.get("feedback") is None:
+            d["feedback"] = ""
+
+        if (attachment := d.get("attachment")) is not None:
+            d["attachment"] = str(attachment)
+        else:
+            d["attachment"] = ""
+
+        if (image := d.get("image")) is not None:
+            d["image"] = json.dumps(image)
+        else:
+            d["image"] = ""
+
+        if (survey_item := d.get("survey_item")) is not None:
+            d["survey_item"] = json.dumps(survey_item)
+        else:
+            d["survey_item"] = ""
+
+        if (annotations := d.get("annotations")) is not None:
+            d["annotations"] = json.dumps(annotations)
+        else:
+            d["annotations"] = ""
+
+        rows.append(d)
+
+    return pl.from_dicts(rows)
+
+
+def write_messages_xlsx(df: pl.DataFrame, target: "str | IO[bytes]") -> None:
+    """Write a messages DataFrame to xlsx, one worksheet per interview.
+
+    ``target`` may be a file path or a binary file-like object.
+    """
+    with Workbook(target) as workbook:
+        text_format = workbook.add_format({"text_wrap": True})
+        for interview_id, interview in df.group_by("interview_id", maintain_order=True):
+            interview.write_excel(
+                workbook,
+                column_formats={"backend_content": text_format},
+                column_widths={"backend_content": 400},
+                worksheet=interview_id[0][:31],
+            )
 
 
 def uuid_to_urlid(uuid_: uuid.UUID) -> str:

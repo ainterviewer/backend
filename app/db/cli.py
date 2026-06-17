@@ -1,3 +1,4 @@
+from uuid import UUID
 import json
 from pathlib import Path
 
@@ -194,6 +195,46 @@ def fix_invalid_models(dry_run: bool = False):
         else:
             session.commit()
             typer.echo(f"Updated {changes} model reference(s).")
+
+
+@cli.command()
+def export_messages(
+    project_id: UUID,
+    output: Path = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output xlsx path (default: ./{project_id}-messages.xlsx)",
+    ),
+):
+    """Export all interview messages of a project to an xlsx file."""
+    from .utils import messages_to_dataframe, write_messages_xlsx
+
+    db = next(get_db())
+
+    interviews, _ = db.interviews.get_interviews(project_id)
+
+    messages = [
+        message
+        for interview in interviews
+        for message in db.interviews.get_messages(interview.id, project_id)
+    ]
+
+    if not messages:
+        typer.echo(
+            typer.style(
+                f"No messages found for project {project_id}.",
+                fg=typer.colors.RED,
+            )
+        )
+        raise typer.Exit(code=1)
+
+    output = output or Path(f"{project_id}-messages.xlsx")
+
+    df = messages_to_dataframe(messages)
+    write_messages_xlsx(df, str(output))
+
+    typer.echo(f"Exported {len(messages)} message(s) to {output}.")
 
 
 if __name__ == "__main__":

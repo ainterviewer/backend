@@ -1,12 +1,10 @@
 import datetime
 import io
-import json
 from base64 import b64decode
 from pathlib import Path
 from typing import Annotated
 
 import aiofiles
-import polars as pl
 from fastapi import (
     APIRouter,
     Body,
@@ -20,7 +18,6 @@ from fastapi import (
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from pydantic import UUID4, EmailStr
 from sqlalchemy.exc import NoResultFound
-from xlsxwriter import Workbook
 
 from ainterviewer.agents.config import AgentConfigs
 from ainterviewer.config import InterviewConfig
@@ -37,7 +34,11 @@ from ainterviewer.utils import get_language_dict
 
 from ...db.models import InterviewSummaryPublic, MessagePublic, ProjectPublic
 from ...db.types import InterviewType
-from ...db.utils import fix_nested_columns
+from ...db.utils import (
+    fix_nested_columns,
+    messages_to_dataframe,
+    write_messages_xlsx,
+)
 from ...dependencies import (
     DBSession,
     DemoToken,
@@ -587,37 +588,7 @@ async def export_messages(
         for message in interview
     ]
 
-    rows = []
-
-    for message in messages:
-        d = json.loads(message.model_dump_json())
-
-        if d.get("feedback") is None:
-            d["feedback"] = ""
-
-        if (attachment := d.get("attachment")) is not None:
-            d["attachment"] = str(attachment)
-        else:
-            d["attachment"] = ""
-
-        if (image := d.get("image")) is not None:
-            d["image"] = json.dumps(image)
-        else:
-            d["image"] = ""
-
-        if (survey_item := d.get("survey_item")) is not None:
-            d["survey_item"] = json.dumps(survey_item)
-        else:
-            d["survey_item"] = ""
-
-        if (annotations := d.get("annotations")) is not None:
-            d["annotations"] = json.dumps(annotations)
-        else:
-            d["annotations"] = ""
-
-        rows.append(d)
-
-    df = pl.from_dicts(rows)
+    df = messages_to_dataframe(messages)
 
     with io.BytesIO() as stream:
         match export_request.format:
@@ -626,17 +597,7 @@ async def export_messages(
                 df.write_csv(stream)
 
             case "xlsx":
-                with Workbook(stream) as workbook:
-                    text_format = workbook.add_format({"text_wrap": True})
-                    for interview_id, interview in df.group_by(
-                        "interview_id", maintain_order=True
-                    ):
-                        interview.write_excel(
-                            workbook,
-                            column_formats={"backend_content": text_format},
-                            column_widths={"backend_content": 400},
-                            worksheet=interview_id[0][:31],
-                        )
+                write_messages_xlsx(df, stream)
 
             case _:
                 raise ValueError(f"Unsupported format: {format}")
