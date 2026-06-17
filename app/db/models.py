@@ -114,7 +114,7 @@ class UserBase(_BaseModel):
 class UserCreateRequest(UserBase):
     """API request model for user registration."""
 
-    invite_token: UUID4 | None = None
+    invite_token: UUID4 | str | None = None
 
     created_at: datetime = Field(default_factory=now)
     last_active: datetime = Field(default_factory=now)
@@ -135,6 +135,7 @@ class UserCreateRequest(UserBase):
 class UserCreate(UserCreateRequest):
     """Internal model for creating a user, includes snapshot fields."""
 
+    registration_token: str | None = None
     invitation_title: str | None = None
     expires_at: datetime | None = None
     access_request_message: str | None = None

@@ -199,10 +199,7 @@ async def delete_me(body: DeleteAccountRequest, db: DBSession, jwt: DemoToken):
 
 
 @router.post("/register")
-async def register(
-    user: UserCreateRequest,
-    db: DBSession,
-) -> JSONResponse:
+async def register(user: UserCreateRequest, db: DBSession) -> JSONResponse:
     # NOTE: Validate user scope to user when created through the API.
     # - should this be done at the model level?
     if not Scope.USER.includes(user.scope):
@@ -213,6 +210,14 @@ async def register(
     if app_settings.app.registration_requires_token is True:
         if not user.invite_token:
             return JSONResponse({"detail": "Invite token required"}, status_code=406)
+        elif isinstance(user.invite_token, str):
+            if user.invite_token not in app_settings.app.special_registration_tokens:
+                return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
+            # Special tokens are validated against settings, not stored as
+            # invitations. Record which one was used in registration_token and
+            # keep the arbitrary string out of the UUID invite_token column.
+            snapshot["registration_token"] = user.invite_token
+            user.invite_token = None
         else:
             try:
                 invitation = db.users.check_invite_token(user.invite_token)

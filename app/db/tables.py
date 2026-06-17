@@ -183,6 +183,7 @@ class UserTable(Base):
     last_login: Mapped[datetime.datetime] = mapped_column(default=now)
     scope: Mapped[Scope] = mapped_column(SQLEnum(Scope), default=Scope.USER)
     invite_token: Mapped[uuid.UUID | None] = mapped_column()
+    registration_token: Mapped[str | None] = mapped_column(default=None)
     research_consent: Mapped[bool] = mapped_column(default=False)
     invitation_title: Mapped[str | None] = mapped_column(default=None)
     expires_at: Mapped[datetime.datetime | None] = mapped_column(default=None)

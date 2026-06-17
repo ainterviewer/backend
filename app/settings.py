@@ -41,6 +41,7 @@ class AppSettings(BaseModel):
         default_factory=lambda: TimeDelta(days=3)
     )
     registration_requires_token: bool = True
+    special_registration_tokens: set[str] = Field(default_factory=set)
 
     @computed_field
     def api_endpoint(self) -> str:
