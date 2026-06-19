@@ -9,6 +9,7 @@ AInterviewer is a FastAPI backend for conducting automated AI-powered interviews
 ## Essential Commands
 
 ### Development
+
 ```bash
 # Start development server (port 8666)
 just dev
@@ -24,21 +25,8 @@ just generate-openapi
 python -m app.cli generate-openapi-scheme
 ```
 
-### Database Management
-```bash
-# Recreate database and create initial users
-just setup-db
-# or
-python -m app.db --recreate-db && python -m app.db --create-users
-
-# Update projects schema
-just update-projects
-
-# Create/update users
-just update-users
-```
-
 ### Database Migrations (Alembic)
+
 ```bash
 # Create a new migration
 uv run alembic revision --autogenerate -m "description"
@@ -54,19 +42,17 @@ uv run alembic history
 ```
 
 ### Code Quality
+
 ```bash
 # Run ruff linter and formatter
 uv run ruff check .
 uv run ruff format .
+uv run ty check app
 
-# Check dependencies for issues
-uv run deptry .
-
-# Format Jinja templates
-uv run djlint app/ --reformat
 ```
 
 ### Testing
+
 ```bash
 # Run tests (pytest)
 uv run pytest
@@ -88,6 +74,7 @@ API Layer (app/api) → Services (app/services) → Repository Pattern (app/db) 
 ### Core Components
 
 **1. API Layer (`app/api/`)**
+
 - Organized by feature domain with sub-routers
 - Main aggregator: `api/main.py` combines all routes under `/api` prefix
 - Key modules:
@@ -99,6 +86,7 @@ API Layer (app/api) → Services (app/services) → Repository Pattern (app/db) 
 - Generic `PaginatedResponse[T]` pattern for list endpoints
 
 **2. Repository Pattern (`app/db/repositories/`)**
+
 - `InterviewDataBase` facade implements `PersistenceProtocol` from ainterviewer library
 - All repositories share a single SQLAlchemy session (transactional consistency)
 - Specialized repositories:
@@ -109,6 +97,7 @@ API Layer (app/api) → Services (app/services) → Repository Pattern (app/db) 
   - `TestRepository`: Experiment management
 
 **3. ORM Layer (`app/db/tables.py`)**
+
 - SQLAlchemy 2.0+ with typed mapped columns and relationships
 - UUID primary keys throughout
 - JSON/JSONB columns for complex data (interview guides, configs, prompts)
@@ -116,6 +105,7 @@ API Layer (app/api) → Services (app/services) → Repository Pattern (app/db) 
 - Foreign key constraints with cascade options
 
 **4. Authentication & Authorization (`app/auth.py`)**
+
 - Two token types:
   - `AuthToken`: API access (JWT in secure httponly cookies)
   - `InterviewToken`: Interview participation (includes project/interview IDs)
@@ -124,6 +114,7 @@ API Layer (app/api) → Services (app/services) → Repository Pattern (app/db) 
 - Pre-configured aliases: `AdminToken`, `UserToken`, `GuestToken`
 
 **5. WebSocket Management (`app/websockets.py`)**
+
 - `WebSocketConnectionManager`: Tracks active connections per project/interview
 - `WebsocketMessageHandler`: Implements `IOProtocol` to bridge WebSocket ↔ ainterviewer library
 - Automatic message queueing for embedding generation after send/receive
@@ -146,12 +137,14 @@ The backend is tightly coupled with the `ainterviewer` library (sibling package 
 ### Database Support
 
 **Default: SQLite**
+
 - WAL mode enabled for concurrency
 - SQLiteAI vector extension for embeddings
 - Pragmas: `foreign_keys=ON`, `busy_timeout=60000`, `cache_size=-65536`
 - Storage location: `storage/db.sqlite`
 
 **Alternative: PostgreSQL**
+
 - Connection pooling: 20 pool size, 40 max overflow
 - Configured via `DATABASE_URL` environment variable
 - Use `db = "postgres"` in config.toml
@@ -159,6 +152,7 @@ The backend is tightly coupled with the `ainterviewer` library (sibling package 
 ### Async Task Queue Pattern
 
 **Embedding Queue (`app/embed/main.py`)**
+
 - Priority queue for message embeddings (higher priority first, FIFO within same priority)
 - User messages: priority=1, AI messages: priority=0
 - Decouples message delivery from embedding generation
@@ -168,6 +162,7 @@ The backend is tightly coupled with the `ainterviewer` library (sibling package 
 ### Configuration Management
 
 **Multi-source configuration** (`app/settings.py`):
+
 - Sources (priority order): Environment variables → `.env` → `pyproject.toml` → `config.toml`
 - Pydantic BaseSettings with validation
 - Prefixes: `APP_SECRET__`, `APP_SERVICE__`, `APP_DATABASE__`
@@ -332,6 +327,7 @@ DATABASE_URL=postgresql://user:pass@host:port/dbname
 ## Package Manager: uv
 
 This project uses `uv` (fast Python package installer/resolver):
+
 - Always use `uv run` to execute commands with project dependencies
 - `uv sync` installs/updates all dependencies from `uv.lock`
 - `uv add <package>` to add new dependencies
