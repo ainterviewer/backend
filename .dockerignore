@@ -1,5 +1,38 @@
+# secrets & local config
 .env
+config.toml
 
+# python / venv
 .venv
 __pycache__/
+*.py[cod]
+*.egg-info/
+
+# tool caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# vcs & ci
 .git/
+.github/
+.pre-commit-config.yaml
+
+# runtime data (mounted as a volume at /app/storage)
+storage/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# logs
+*.log
+
+# local-only / non-runtime
+notes/
+scripts/
+tests/
+.claude/
+README.md
+CLAUDE.md
+LICENSE
+openapi.json
