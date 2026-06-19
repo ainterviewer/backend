@@ -32,7 +32,5 @@ notes/
 scripts/
 tests/
 .claude/
-README.md
 CLAUDE.md
-LICENSE
 openapi.json
