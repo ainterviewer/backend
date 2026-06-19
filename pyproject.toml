@@ -75,10 +75,6 @@ dev = [
 ainterviewer = { git = "https://github.com/ainterviewer/lib.git", tag = "v0.2.13" }
 # ainterviewer = { path = "../lib", editable = true }
 
-[tool.basedpyright]
-reportExplicitAny = false
-reportUnusedCallResult = false
-
 [tool.locust]
 locustfile = "scripts/locust_file.py"
 host = "http://localhost:8666"
