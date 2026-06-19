@@ -5,6 +5,8 @@ description = "AInterviewer backend API and services used to setup and conduct a
 readme = "README.md"
 authors = [{ name = "Tobias Gårdhus", email = "tpg@sodas.ku.dk" }]
 requires-python = ">=3.12,<3.13"
+license = "AGPL-3.0-only"
+license_files = ["LICENSE"]
 
 dependencies = [
   "adbc-driver-postgresql>=1.6.0",
