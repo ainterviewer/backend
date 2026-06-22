@@ -1,3 +1,3 @@
-# ainterviewer-backend
+# AInterviewer backend
 
-AInterviewer API used to setup and conduct automated interviews at scale.
+AInterviewer backend used to setup, manage and conduct automated interviews at scale.
