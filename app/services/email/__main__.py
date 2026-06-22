@@ -26,7 +26,7 @@ def create_static_email_header():
         page.set_content(html)
 
         element = page.locator(".header")
-        element.screenshot(path="header.png")
+        element.screenshot(path="./app/assets/email_header.png")
 
         browser.close()
 
@@ -55,7 +55,6 @@ def send_test_email():
         send_email(
             recipients=[
                 "tobias_gaardhus@hotmail.com",
-                # "jonas.raaschou@sodas.ku.dk",
                 # "tpg@sodas.ku.dk",
             ],
             subject="Hello from AInterviewer",
