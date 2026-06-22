@@ -95,7 +95,7 @@ app.add_middleware(
 
 # Static assets
 app.mount(
-    "/assets",
+    "/api/assets",
     StaticFiles(directory=Path(__file__).parent / "assets"),
     name="assets",
 )
