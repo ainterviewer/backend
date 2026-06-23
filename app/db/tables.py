@@ -36,7 +36,13 @@ from app.platform_release import PlatformManifest
 
 from ..types import CollaboratorRole, ExternalParam, ProjectStatus, Scope, TestRunStatus
 from ._extra import PydanticJSONB
-from .types import AccessRequestStatus, AnnotationType, InterviewType, LanguageType
+from .types import (
+    AccessRequestStatus,
+    AnnotationType,
+    InterviewType,
+    LanguageType,
+    VerificationPurpose,
+)
 
 naming_convention = {
     "ix": "ix_%(column_0_label)s",
@@ -166,6 +172,31 @@ class RefreshTokenTable(Base):
     user: Mapped["UserTable"] = relationship(back_populates="refresh_tokens")
 
 
+#####################
+# Verification Code #
+#####################
+
+
+class VerificationCodeTable(Base):
+    """One-time secrets for email verification (magic-link token) and login
+    two-factor (OTP code). Both store only a sha256 hash of the raw value."""
+
+    __tablename__ = "verification_code"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), index=True
+    )
+    code_hash: Mapped[str] = mapped_column(index=True)
+    purpose: Mapped[VerificationPurpose] = mapped_column(SQLEnum(VerificationPurpose))
+    attempts: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[datetime.datetime] = mapped_column(default=now)
+    expires_at: Mapped[datetime.datetime] = mapped_column()
+    consumed_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
+
+    # Relationships
+    user: Mapped["UserTable"] = relationship(back_populates="verification_codes")
+
+
 ########
 # User #
 ########
@@ -178,6 +209,12 @@ class UserTable(Base):
     password: Mapped[str] = mapped_column()
     first_name: Mapped[str] = mapped_column()
     last_name: Mapped[str | None] = mapped_column()
+    email_verified: Mapped[bool] = mapped_column(
+        default=False, server_default=sa.false()
+    )
+    two_factor_enabled: Mapped[bool] = mapped_column(
+        default=True, server_default=sa.true()
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     last_active: Mapped[datetime.datetime] = mapped_column(default=now)
     last_login: Mapped[datetime.datetime] = mapped_column(default=now)
@@ -223,6 +260,9 @@ class UserTable(Base):
         cascade="all, delete-orphan",
     )
     refresh_tokens: Mapped[list["RefreshTokenTable"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    verification_codes: Mapped[list["VerificationCodeTable"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 

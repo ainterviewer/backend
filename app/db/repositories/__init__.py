@@ -8,6 +8,7 @@ from .participant import ParticipantRepository
 from .project import ProjectRepository
 from .test import TestRepository
 from .user import UserRepository
+from .verification import VerificationRepository
 
 __all__ = [
     "AuthRepository",
@@ -20,4 +21,5 @@ __all__ = [
     "TestRepository",
     "AnalysisRepository",
     "AssistanceRepository",
+    "VerificationRepository",
 ]

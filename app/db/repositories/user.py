@@ -83,6 +83,15 @@ class UserRepository(BaseRepository):
         self.session.execute(statement)
         self.session.commit()
 
+    def set_email_verified(self, user_id: UUID4, verified: bool = True) -> None:
+        statement = (
+            update(UserTable)
+            .where(UserTable.id == user_id)
+            .values(email_verified=verified)
+        )
+        self.session.execute(statement)
+        self.session.commit()
+
     def update_user_status(
         self,
         id: UUID4,

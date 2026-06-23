@@ -43,6 +43,15 @@ class AppSettings(BaseModel):
     registration_requires_token: bool = True
     special_registration_tokens: set[str] = Field(default_factory=set)
 
+    email_verification_token_expiration: TimeDelta = Field(
+        default_factory=lambda: TimeDelta(days=1)
+    )
+    login_code_expiration: TimeDelta = Field(
+        default_factory=lambda: TimeDelta(minutes=10)
+    )
+    login_code_max_attempts: int = 5
+    code_resend_cooldown_seconds: int = 30
+
     @computed_field
     def api_endpoint(self) -> str:
         return f"{self.api_host}:{self.api_port}"

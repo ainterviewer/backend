@@ -1,3 +1,5 @@
+import logging
+import secrets
 from datetime import datetime
 from uuid import uuid4
 
@@ -11,7 +13,9 @@ from ainterviewer.utils import now
 
 from ..auth import (
     create_auth_token,
+    generate_login_code,
     generate_refresh_token,
+    generate_verification_token,
     get_password_hash,
     hash_token,
     verify_password,
@@ -24,16 +28,22 @@ from ..db.models import (
     UserPublic,
     UserSelfUpdate,
 )
+from ..db.types import VerificationPurpose
 from ..dependencies import DBSession, DemoToken
-from ..services.email.mail import send_email
+from ..services.email.mail import email_templates, send_email
 from ..settings import app_settings
 from ..types import Scope
 from .request_models import (
     DeleteAccountRequest,
     LoginData,
+    ResendVerificationRequest,
     UpdateEmailRequest,
     UpdatePasswordRequest,
+    VerifyEmailRequest,
+    VerifyLoginCodeRequest,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["auth"])
 
@@ -109,6 +119,91 @@ def _create_and_store_refresh_token(
     return raw_refresh
 
 
+def _issue_session(
+    db,
+    user: UserPrivate,
+    extended: bool,
+    detail: str = "Successfully logged in",
+) -> JSONResponse:
+    """Mark the user logged in and return a response with fresh auth cookies."""
+    db.users.update_user_status(user.id, last_login=True)
+
+    access_token = create_auth_token(user_id=user.id, scope=user.scope)
+    raw_refresh = _create_and_store_refresh_token(db, user_id=user.id, extended=extended)
+
+    # Opportunistically clean up expired refresh tokens
+    db.auth.cleanup_expired()
+
+    response = JSONResponse({"detail": detail})
+    _set_auth_cookies(response, access_token, raw_refresh)
+    return response
+
+
+_EMAIL_SEND_FAILED = HTTPException(
+    status_code=502, detail="Failed to send email. Please try again."
+)
+
+
+async def _send_verification_email(db, user: UserPublic | UserPrivate) -> None:
+    """Issue a fresh email-verification magic link and email it to the user.
+
+    On send failure the just-created code row is deleted and a 502 is raised so
+    no orphan state lingers and the resend cooldown isn't poisoned."""
+    raw_token = generate_verification_token()
+    db.verification.invalidate_active(user.id, VerificationPurpose.EMAIL_VERIFICATION)
+    code = db.verification.create(
+        user_id=user.id,
+        code_hash=hash_token(raw_token),
+        purpose=VerificationPurpose.EMAIL_VERIFICATION,
+        expires_at=now()
+        + app_settings.app.email_verification_token_expiration.to_timedelta(),
+    )
+    link = (
+        f"{app_settings.sveltekit_platform_public_addr}/verify-email?token={raw_token}"
+    )
+    try:
+        await send_email(
+            user.email,
+            "Verify your email address",
+            html_content=email_templates.get_template("verify_email.jinja").render(
+                recipient_name=user.first_name,
+                verification_link=link,
+            ),
+        )
+    except Exception:
+        logger.exception("Failed to send verification email to %s", user.email)
+        db.verification.delete(code.id)
+        raise _EMAIL_SEND_FAILED
+
+
+async def _send_login_code(db, user: UserPrivate) -> None:
+    """Issue a fresh one-time login code and email it to the user.
+
+    On send failure the code row is deleted and a 502 is raised so the user can
+    immediately retry without tripping the resend cooldown."""
+    raw_code = generate_login_code()
+    db.verification.invalidate_active(user.id, VerificationPurpose.LOGIN)
+    code = db.verification.create(
+        user_id=user.id,
+        code_hash=hash_token(raw_code),
+        purpose=VerificationPurpose.LOGIN,
+        expires_at=now() + app_settings.app.login_code_expiration.to_timedelta(),
+    )
+    try:
+        await send_email(
+            user.email,
+            "Your sign-in code",
+            html_content=email_templates.get_template("signin_code.jinja").render(
+                recipient_name=user.first_name,
+                verification_code=raw_code,
+            ),
+        )
+    except Exception:
+        logger.exception("Failed to send login code to %s", user.email)
+        db.verification.delete(code.id)
+        raise _EMAIL_SEND_FAILED
+
+
 @router.post("/login")
 async def login(login_request: LoginData, db: DBSession):
     exception = HTTPException(status_code=403, detail="Invalid email or password")
@@ -121,19 +216,57 @@ async def login(login_request: LoginData, db: DBSession):
     if not verify_password(login_request.password, user.password):
         raise exception
 
-    db.users.update_user_status(user.id, last_login=True)
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=403,
+            detail="Email not verified. Please check your inbox for the verification link.",
+        )
 
-    access_token = create_auth_token(user_id=user.id, scope=user.scope)
-    raw_refresh = _create_and_store_refresh_token(
-        db, user_id=user.id, extended=login_request.extended
-    )
+    if user.two_factor_enabled:
+        if db.verification.in_cooldown(
+            user.id,
+            VerificationPurpose.LOGIN,
+            app_settings.app.code_resend_cooldown_seconds,
+        ):
+            raise HTTPException(
+                status_code=429,
+                detail="A code was just sent. Please wait before requesting another.",
+            )
+        await _send_login_code(db, user)
+        return JSONResponse(
+            {"detail": "Verification code sent", "two_factor_required": True},
+            status_code=202,
+        )
 
-    # Opportunistically clean up expired refresh tokens
-    db.auth.cleanup_expired()
+    return _issue_session(db, user, login_request.extended)
 
-    response = JSONResponse({"detail": "Successfully logged in"})
-    _set_auth_cookies(response, access_token, raw_refresh)
-    return response
+
+@router.post("/login/verify-code")
+async def verify_login_code(body: VerifyLoginCodeRequest, db: DBSession):
+    """Second factor: validate the emailed one-time code and start a session."""
+    exception = HTTPException(status_code=403, detail="Invalid or expired code")
+    try:
+        user = db.users.get_user_private(body.email)
+    except sqlalchemy.exc.NoResultFound:
+        raise exception
+
+    code = db.verification.get_active_for_user(user.id, VerificationPurpose.LOGIN)
+    if code is None:
+        raise exception
+
+    attempts = db.verification.increment_attempts(code.id)
+    if attempts > app_settings.app.login_code_max_attempts:
+        db.verification.consume(code.id)
+        raise HTTPException(
+            status_code=429,
+            detail="Too many attempts. Please request a new code.",
+        )
+
+    if not secrets.compare_digest(code.code_hash, hash_token(body.code)):
+        raise exception
+
+    db.verification.consume(code.id)
+    return _issue_session(db, user, body.extended)
 
 
 @router.get("/me")
@@ -254,12 +387,60 @@ async def register(user: UserCreateRequest, db: DBSession) -> JSONResponse:
     # NOTE: Password hashing happens in the users.create_user method
     new_user = db.users.create_user(UserCreate(**user.model_dump(), **snapshot))
 
-    access_token = create_auth_token(user_id=new_user.id, scope=new_user.scope)
-    raw_refresh = _create_and_store_refresh_token(db, user_id=new_user.id)
+    # Hard gate: no session is issued until the email address is verified.
+    # If the email can't be sent, roll back the new account so the address is
+    # free for a clean retry rather than being stuck unverified.
+    try:
+        await _send_verification_email(db, new_user)
+    except HTTPException:
+        db.users.delete_user(new_user.id)
+        raise
 
-    response = JSONResponse({"detail": "Successfully registered user"})
-    _set_auth_cookies(response, access_token, raw_refresh)
-    return response
+    return JSONResponse(
+        {"detail": "Registration successful. Please verify your email to continue."},
+        status_code=201,
+    )
+
+
+@router.post("/verify-email")
+async def verify_email(body: VerifyEmailRequest, db: DBSession):
+    """Confirm a sign-up email-verification magic link."""
+    code = db.verification.get_active_by_hash(
+        hash_token(body.token), VerificationPurpose.EMAIL_VERIFICATION
+    )
+    if code is None:
+        raise HTTPException(
+            status_code=400, detail="Invalid or expired verification link"
+        )
+
+    db.users.set_email_verified(code.user_id)
+    db.verification.consume(code.id)
+
+    return JSONResponse({"detail": "Email verified successfully"})
+
+
+@router.post("/resend-verification")
+async def resend_verification(body: ResendVerificationRequest, db: DBSession):
+    """Re-send the verification email. Always returns 200 to avoid leaking
+    which addresses are registered."""
+    detail = "If the account exists and is unverified, a verification email has been sent."
+    try:
+        user = db.users.get_user_private(body.email)
+    except sqlalchemy.exc.NoResultFound:
+        return JSONResponse({"detail": detail})
+
+    # Skip silently when already verified or still within the resend cooldown,
+    # so a 200 can't be used to distinguish those states from a missing account.
+    # A genuine SMTP failure still surfaces as a 502 (only ever for a real,
+    # unverified account), which is an acceptable, rare-condition leak.
+    if not user.email_verified and not db.verification.in_cooldown(
+        user.id,
+        VerificationPurpose.EMAIL_VERIFICATION,
+        app_settings.app.code_resend_cooldown_seconds,
+    ):
+        await _send_verification_email(db, user)
+
+    return JSONResponse({"detail": detail})
 
 
 @router.post("/request-access")

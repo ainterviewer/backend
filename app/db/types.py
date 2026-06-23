@@ -23,6 +23,11 @@ class InterviewType(StrEnum):
     DISTRIBUTED = "distributed"
 
 
+class VerificationPurpose(StrEnum):
+    EMAIL_VERIFICATION = "email_verification"
+    LOGIN = "login"
+
+
 @final
 class LanguageType(TypeDecorator):
     """Custom SQLAlchemy type that validates and transforms language codes"""

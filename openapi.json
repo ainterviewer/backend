@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.3.28"
+        "version": "0.3.40"
     },
     "paths": {
         "/api/projects/{project_id}/analysis/categories": {
@@ -7963,6 +7963,46 @@
                 }
             }
         },
+        "/api/login/verify-code": {
+            "post": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Verify Login Code",
+                "description": "Second factor: validate the emailed one-time code and start a session.",
+                "operationId": "verify_login_code",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/VerifyLoginCodeRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/me": {
             "get": {
                 "tags": [
@@ -8177,6 +8217,86 @@
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/UserCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/verify-email": {
+            "post": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Verify Email",
+                "description": "Confirm a sign-up email-verification magic link.",
+                "operationId": "verify_email",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/VerifyEmailRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/resend-verification": {
+            "post": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Resend Verification",
+                "description": "Re-send the verification email. Always returns 200 to avoid leaking\nwhich addresses are registered.",
+                "operationId": "resend_verification",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ResendVerificationRequest"
                             }
                         }
                     },
@@ -11179,10 +11299,6 @@
                                 "type": "string"
                             },
                             {
-                                "format": "binary",
-                                "type": "string"
-                            },
-                            {
                                 "type": "null"
                             }
                         ],
@@ -11243,7 +11359,7 @@
                         "type": "boolean",
                         "title": "With Audio",
                         "description": "Allows the respondents to record their answers as audio messages which are transcribed before send as answers to the AInterviewer.",
-                        "default": true
+                        "default": false
                     },
                     "probing_strategy": {
                         "items": {
@@ -13923,6 +14039,20 @@
                 "title": "Reference",
                 "description": "Create a reference to a previous answer, useful when refering back to a\nprevious answer, eg. an answer to a survey item. If used, the main question\nmust contains an empty `{}` as a placeholder for the referred answer."
             },
+            "ResendVerificationRequest": {
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "Email"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "email"
+                ],
+                "title": "ResendVerificationRequest"
+            },
             "Scope": {
                 "enum": [
                     "admin",
@@ -14818,6 +14948,9 @@
                                 "format": "uuid4"
                             },
                             {
+                                "type": "string"
+                            },
+                            {
                                 "type": "null"
                             }
                         ],
@@ -15028,6 +15161,42 @@
                     "type"
                 ],
                 "title": "ValidationError"
+            },
+            "VerifyEmailRequest": {
+                "properties": {
+                    "token": {
+                        "type": "string",
+                        "title": "Token"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "token"
+                ],
+                "title": "VerifyEmailRequest"
+            },
+            "VerifyLoginCodeRequest": {
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "title": "Email"
+                    },
+                    "code": {
+                        "type": "string",
+                        "title": "Code"
+                    },
+                    "extended": {
+                        "type": "boolean",
+                        "title": "Extended",
+                        "default": false
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "email",
+                    "code"
+                ],
+                "title": "VerifyLoginCodeRequest"
             },
             "VisualConfig": {
                 "properties": {

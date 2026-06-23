@@ -147,6 +147,8 @@ class UserPrivate(UserBase):
     password: str
     with_demo_features: bool
     organization: str | None = None
+    email_verified: bool = False
+    two_factor_enabled: bool = True
 
 
 class UserPublic(UserBase):

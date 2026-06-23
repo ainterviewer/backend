@@ -1,0 +1,15 @@
+{% extends "base_email.jinja" %}
+{% block content %}
+    <p class="main-text">
+        Thanks for signing up for <strong>AInterviewer</strong>! Please confirm your email address to activate your account.
+    </p>
+    <p class="main-text">Click the button below to verify your email address:</p>
+    <a href="{{ verification_link }}" class="cta-button">Verify Email Address</a>
+    <p class="main-text">
+        This link will expire in {{ expires_in|default("24 hours") }}. If the button above doesn't work, copy and paste this URL into your browser:
+    </p>
+    <p class="main-text" style="word-break: break-all; color: #196858;">{{ verification_link }}</p>
+    <p class="main-text">
+        If you didn't create an account, you can safely ignore this email.
+    </p>
+{% endblock %}

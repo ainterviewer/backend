@@ -26,7 +26,7 @@ def create_static_email_header():
         page.set_content(html)
 
         element = page.locator(".header")
-        element.screenshot(path="./app/assets/email_header.png")
+        element.screenshot(path="../frontend/static/images/email_header.png")
 
         browser.close()
 
@@ -54,8 +54,8 @@ def send_test_email():
     result = asyncio.run(
         send_email(
             recipients=[
-                "tobias_gaardhus@hotmail.com",
-                # "tpg@sodas.ku.dk",
+                # "tobias_gaardhus@hotmail.com",
+                "tpg@sodas.ku.dk",
             ],
             subject="Hello from AInterviewer",
             html_content=email_templates.get_template("dummy.jinja").render(

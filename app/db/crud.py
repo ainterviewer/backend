@@ -17,6 +17,7 @@ from .repositories import (
     ProjectRepository,
     TestRepository,
     UserRepository,
+    VerificationRepository,
 )
 from .tables import Base, PlatformReleaseTable
 from .triggers import install_triggers
@@ -47,6 +48,7 @@ class InterviewDataBase(PersistenceProtocol):
 
         # Initialize all repositories with the shared session
         self.auth: AuthRepository = AuthRepository(session)
+        self.verification: VerificationRepository = VerificationRepository(session)
         self.users: UserRepository = UserRepository(session)
         self.projects: ProjectRepository = ProjectRepository(session)
         self.interviews: InterviewRepository = InterviewRepository(session)

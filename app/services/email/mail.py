@@ -1,12 +1,9 @@
 import mimetypes
 from email import encoders
 from email.mime.base import MIMEBase
-from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formatdate, make_msgid
-from functools import lru_cache
-from pathlib import Path
 from typing import overload
 
 import aiosmtplib
@@ -19,23 +16,10 @@ from ...settings import app_settings
 
 EmailAttachment = tuple[str, bytes]  # (filename, content)
 
-# Content-ID for the email header image embedded inline (see base_email.jinja,
-# which references it via `<img src="cid:email_header">`).
-EMAIL_HEADER_CID = "email_header"
-_ASSETS_DIR = Path(__file__).parents[2] / "assets"
-
-
-@lru_cache(maxsize=1)
-def _email_header_image() -> bytes:
-    return (_ASSETS_DIR / "email_header.png").read_bytes()
-
-
-def _inline_images_for(html_content: str | None) -> list[tuple[str, bytes]]:
-    """Return (cid, content) pairs for images referenced inline in the HTML."""
-    if html_content and f"cid:{EMAIL_HEADER_CID}" in html_content:
-        return [(EMAIL_HEADER_CID, _email_header_image())]
-    return []
-
+# The email header image is referenced by a public HTTPS URL in the templates
+# (served from app/main.py at /api/assets) rather than embedded inline as a
+# `cid:` part: corporate Outlook on the web / Exchange (e.g. webmail.ku.dk)
+# renders hosted URLs reliably but routinely drops inline CID images.
 
 email_templates = Environment(
     loader=PackageLoader(
@@ -116,24 +100,9 @@ def _create_email_message(
         html_content = css_inline.inline(html_content)
         alternative.attach(MIMEText(html_content, "html", "utf-8"))
 
-    # Embed any inline images (e.g. the header) as related CID parts so they
-    # render without depending on a publicly reachable URL.
-    inline_images = _inline_images_for(html_content)
-    if inline_images:
-        related = MIMEMultipart("related")
-        related.attach(alternative)
-        for cid, content in inline_images:
-            image = MIMEImage(content)
-            image.add_header("Content-ID", f"<{cid}>")
-            image.add_header("Content-Disposition", "inline", filename=f"{cid}.png")
-            related.attach(image)
-        root = related
-    else:
-        root = alternative
-
     if attachments:
         message = MIMEMultipart("mixed")
-        message.attach(root)
+        message.attach(alternative)
         for filename, content in attachments:
             mime_type, _ = mimetypes.guess_type(filename)
             maintype, subtype = (
@@ -151,7 +120,7 @@ def _create_email_message(
             )
             message.attach(part)
     else:
-        message = root
+        message = alternative
 
     message["From"] = app_settings.services.email.sender.email  # ty:ignore[unresolved-attribute]
     message["To"] = recipients

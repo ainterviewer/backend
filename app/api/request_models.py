@@ -71,6 +71,20 @@ class LoginData(BaseModel):
     extended: bool = False
 
 
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+
+class VerifyLoginCodeRequest(BaseModel):
+    email: str
+    code: str
+    extended: bool = False
+
+
 class UpdateEmailRequest(BaseModel):
     password: str
     new_email: EmailStr

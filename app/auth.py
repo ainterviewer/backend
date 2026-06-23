@@ -83,8 +83,18 @@ def generate_refresh_token() -> str:
     return secrets.token_urlsafe(64)
 
 
+def generate_verification_token() -> str:
+    """Generate a high-entropy token for email-verification magic links."""
+    return secrets.token_urlsafe(32)
+
+
+def generate_login_code() -> str:
+    """Generate a 6-digit one-time login code (zero-padded)."""
+    return f"{secrets.randbelow(10**6):06d}"
+
+
 def hash_token(raw_token: str) -> str:
-    """SHA-256 hash a raw refresh token for DB storage."""
+    """SHA-256 hash a raw token/code for DB storage."""
     return hashlib.sha256(raw_token.encode()).hexdigest()
 
 
