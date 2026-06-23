@@ -3,7 +3,6 @@
 # https://fastapi.tiangolo.com/advanced/generate-clients/#custom-generate-unique-id-function
 import logging
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 import rich.console
 import rich.logging
@@ -11,7 +10,6 @@ import rich.theme
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -91,13 +89,6 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-)
-
-# Static assets
-app.mount(
-    "/api/assets",
-    StaticFiles(directory=Path(__file__).parent / "assets"),
-    name="assets",
 )
 
 # Routers
