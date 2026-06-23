@@ -5582,8 +5582,8 @@
                 "tags": [
                     "projects"
                 ],
-                "summary": "Create Prompts",
-                "operationId": "create_prompts",
+                "summary": "Update Prompts",
+                "operationId": "update_prompts",
                 "security": [
                     {
                         "APIKeyCookie": []

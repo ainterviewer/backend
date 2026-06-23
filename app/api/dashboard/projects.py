@@ -388,7 +388,7 @@ async def get_prompts(
 
 
 @router.post("/projects/{project_id}/{lang}/prompts")
-async def create_prompts(
+async def update_prompts(
     project_id: UUID4,
     lang: LanguageCode,
     prompts: PromptsUpdateRequest,
