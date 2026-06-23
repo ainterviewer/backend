@@ -71,6 +71,7 @@ app = FastAPI(
     title="AInterviewer",
     version=__version__,
     lifespan=lifespan,
+    servers=[{"url": "/"}],
 )
 
 # Middleware
