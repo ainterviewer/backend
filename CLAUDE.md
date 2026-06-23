@@ -20,9 +20,7 @@ uv run -m fastapi dev app/main.py --port 8666
 uv sync
 
 # Generate OpenAPI schema (for SDK generation)
-just generate-openapi
-# or
-python -m app.cli generate-openapi-scheme
+just generate-sdk
 ```
 
 ### Database Migrations (Alembic)
@@ -176,7 +174,7 @@ The backend is tightly coupled with the `ainterviewer` library (sibling package 
    - Update routes in `app/api/`
    - Update request models in `app/api/request_models.py`
    - Update response models in `app/api/response_models.py`
-   - Regenerate OpenAPI schema: `just generate-openapi`
+   - Regenerate OpenAPI schema: `just generate-sdk`
    - Commit `openapi.json` for SDK client generation
 
 2. **Database Schema Changes**:

@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.3.40"
+        "version": "0.4.1"
     },
     "paths": {
         "/api/projects/{project_id}/analysis/categories": {
@@ -14825,6 +14825,11 @@
                             }
                         ],
                         "title": "Admin Note Updated At"
+                    },
+                    "two_factor_enabled": {
+                        "type": "boolean",
+                        "title": "Two Factor Enabled",
+                        "default": true
                     }
                 },
                 "type": "object",
@@ -14894,6 +14899,18 @@
                             }
                         ],
                         "title": "Expires At",
+                        "default": "UNSET"
+                    },
+                    "two_factor_enabled": {
+                        "anyOf": [
+                            {
+                                "type": "boolean"
+                            },
+                            {
+                                "$ref": "#/components/schemas/_Unset"
+                            }
+                        ],
+                        "title": "Two Factor Enabled",
                         "default": "UNSET"
                     }
                 },

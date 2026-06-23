@@ -163,6 +163,7 @@ class UserAdmin(UserPublic):
     access_request_message: str | None = None
     admin_note: str | None = None
     admin_note_updated_at: datetime | None = None
+    two_factor_enabled: bool = True
 
 
 class UserAdminUpdate(BaseModel):
@@ -170,6 +171,7 @@ class UserAdminUpdate(BaseModel):
     with_demo_features: bool | _Unset = UNSET
     organization: str | None | _Unset = UNSET
     expires_at: datetime | None | _Unset = UNSET
+    two_factor_enabled: bool | _Unset = UNSET
 
 
 class UserSelfUpdate(BaseModel):
