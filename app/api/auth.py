@@ -129,7 +129,9 @@ def _issue_session(
     db.users.update_user_status(user.id, last_login=True)
 
     access_token = create_auth_token(user_id=user.id, scope=user.scope)
-    raw_refresh = _create_and_store_refresh_token(db, user_id=user.id, extended=extended)
+    raw_refresh = _create_and_store_refresh_token(
+        db, user_id=user.id, extended=extended
+    )
 
     # Opportunistically clean up expired refresh tokens
     db.auth.cleanup_expired()
@@ -423,7 +425,9 @@ async def verify_email(body: VerifyEmailRequest, db: DBSession):
 async def resend_verification(body: ResendVerificationRequest, db: DBSession):
     """Re-send the verification email. Always returns 200 to avoid leaking
     which addresses are registered."""
-    detail = "If the account exists and is unverified, a verification email has been sent."
+    detail = (
+        "If the account exists and is unverified, a verification email has been sent."
+    )
     try:
         user = db.users.get_user_private(body.email)
     except sqlalchemy.exc.NoResultFound:

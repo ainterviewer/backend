@@ -136,7 +136,9 @@ class VerificationRepository(BaseRepository):
 
     def cleanup_expired(self) -> int:
         result = self.session.execute(
-            delete(VerificationCodeTable).where(VerificationCodeTable.expires_at < now())
+            delete(VerificationCodeTable).where(
+                VerificationCodeTable.expires_at < now()
+            )
         )
         self.session.commit()
         return result.rowcount  # ty:ignore[unresolved-attribute]
