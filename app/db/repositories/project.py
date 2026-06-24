@@ -20,7 +20,6 @@ from ainterviewer.interview_guides.translate import (
 from ainterviewer.types import LanguageCode, LanguageDict
 from ainterviewer.utils import get_language_dict
 
-from ...api.request_models import PromptsUpdateRequest
 from ...types import CollaboratorRole, ExternalParam, ProjectStatus, Scope
 from ..models import (
     Collaborator,
@@ -759,36 +758,6 @@ class ProjectRepository(BaseRepository):
             .values(prompts=prompts)
         )
 
-        self.session.commit()
-
-    def update_prompts(
-        self,
-        project_id: UUID4,
-        language: LanguageCode,
-        prompts: PromptsUpdateRequest,
-    ):
-        # FIXME: Update permissions to collab
-        statement = select(ProjectLocalizationTable).where(
-            ProjectLocalizationTable.project_id == project_id,
-            ProjectLocalizationTable.language == language,
-        )
-        project_localization = self.session.execute(statement).scalar_one()
-
-        existing_prompts = project_localization.prompts
-
-        # Merge updates recursively
-        updated_data = existing_prompts.model_dump()
-        new_data = prompts.model_dump(exclude_unset=True)
-
-        for agent, value in new_data.items():
-            if isinstance(value, dict):
-                updated_data[agent].update(value)
-            else:
-                updated_data[agent] = value
-
-        # Recreate full Prompts model
-        project_localization.prompts = Prompts(**updated_data)
-        self.session.add(project_localization)
         self.session.commit()
 
     # ==================== Consent / Welcome Methods ====================

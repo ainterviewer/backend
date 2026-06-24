@@ -19,7 +19,11 @@ from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from pydantic import UUID4, EmailStr
 from sqlalchemy.exc import NoResultFound
 
-from ainterviewer.agents.config import AgentConfigs
+from ainterviewer.agents.config import (
+    DEFAULT_PROBING_SLOTS,
+    AgentConfigs,
+    ProbingPromptSlots,
+)
 from ainterviewer.config import InterviewConfig
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.interview_guides.extra import Consent, Welcome
@@ -55,7 +59,6 @@ from ..request_models import (
     PaginatedQueryParams,
     ProjectStatusChangeRequest,
     ProjectTitleUpdateRequest,
-    PromptsUpdateRequest,
     QuestionGenerationRequest,
     QuestionSectionGenerationRequest,
 )
@@ -371,36 +374,16 @@ async def update_external_params(
     db.projects.update_external_params(project_id, request.params)
 
 
-@router.get("/projects/{project_id}/{lang}/prompts")
-async def get_prompts(
-    project_id: UUID4,
-    lang: LanguageCode,
-    db: DBSession,
-    jwt: DemoToken,
-    _: ProjectViewer,
-):
-    project_localization = db.projects.get_project_localization(
-        project_id=project_id,
-        language=lang,
-    )
+@router.get("/prompt-defaults")
+async def get_prompt_defaults(jwt: DemoToken) -> ProbingPromptSlots:
+    """Default values for the editable probing-agent prompt slots.
 
-    return project_localization.prompts
-
-
-@router.post("/projects/{project_id}/{lang}/prompts")
-async def update_prompts(
-    project_id: UUID4,
-    lang: LanguageCode,
-    prompts: PromptsUpdateRequest,
-    db: DBSession,
-    jwt: DemoToken,
-    _: ProjectEditor,
-):
-    db.projects.update_prompts(
-        project_id=project_id,
-        language=lang,
-        prompts=prompts,
-    )
+    Project-specific overrides live on the probing agent config
+    (``AgentConfigs.probing.prompt_slots``) and are read/written through the
+    ``/agents`` endpoints. The frontend uses these defaults to show the effective
+    text for any slot a project has not overridden.
+    """
+    return DEFAULT_PROBING_SLOTS
 
 
 # NOTE: Doesn't require auth since it's not sensitive and has to be read

@@ -3,7 +3,6 @@ from typing import Any, Literal
 from fastapi import Query
 from pydantic import UUID4, BaseModel, EmailStr, Field, field_validator
 
-from ainterviewer.agents.prompts.models import PromptTemplates
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
 from ainterviewer.types import Interviewer, LanguageCode, TestType
@@ -32,10 +31,6 @@ class PromptRequest(BaseModel):
     prompt: str
 
 
-class BroadcastRequest(BaseModel):
-    message: str
-
-
 class InterviewGuideGenerationRequest(PromptRequest): ...
 
 
@@ -54,10 +49,6 @@ class ProjectStatusChangeRequest(BaseModel):
 
 class ProjectTitleUpdateRequest(BaseModel):
     title: str
-
-
-class PromptsUpdateRequest(BaseModel):
-    probing_agent: PromptTemplates
 
 
 class CreateProjectRequest(BaseModel):

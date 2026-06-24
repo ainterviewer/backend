@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.4.1"
+        "version": "0.4.2"
     },
     "servers": [
         {
@@ -5190,7 +5190,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/AgentConfigs"
+                                    "$ref": "#/components/schemas/AgentConfigs-Output"
                                 }
                             }
                         }
@@ -5270,7 +5270,7 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/AgentConfigs"
+                                "$ref": "#/components/schemas/AgentConfigs-Input"
                             }
                         }
                     }
@@ -5498,174 +5498,31 @@
                 }
             }
         },
-        "/api/projects/{project_id}/{lang}/prompts": {
+        "/api/prompt-defaults": {
             "get": {
                 "tags": [
                     "projects"
                 ],
-                "summary": "Get Prompts",
-                "operationId": "get_prompts",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "project_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "anyOf": [
-                                {
-                                    "type": "string",
-                                    "format": "uuid4"
-                                },
-                                {
-                                    "type": "null"
-                                }
-                            ],
-                            "title": "Project Id"
-                        }
-                    },
-                    {
-                        "name": "lang",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "minLength": 2,
-                            "maxLength": 2,
-                            "title": "Lang"
-                        }
-                    },
-                    {
-                        "name": "folder_id",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "anyOf": [
-                                {
-                                    "type": "string",
-                                    "format": "uuid4"
-                                },
-                                {
-                                    "type": "null"
-                                }
-                            ],
-                            "title": "Folder Id"
-                        }
-                    }
-                ],
+                "summary": "Get Prompt Defaults",
+                "description": "Default values for the editable probing-agent prompt slots.\n\nProject-specific overrides live on the probing agent config\n(``AgentConfigs.probing.prompt_slots``) and are read/written through the\n``/agents`` endpoints. The frontend uses these defaults to show the effective\ntext for any slot a project has not overridden.",
+                "operationId": "get_prompt_defaults",
                 "responses": {
                     "200": {
                         "description": "Successful Response",
                         "content": {
                             "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                    "$ref": "#/components/schemas/ProbingPromptSlots"
                                 }
-                            }
-                        }
-                    }
-                }
-            },
-            "post": {
-                "tags": [
-                    "projects"
-                ],
-                "summary": "Update Prompts",
-                "operationId": "update_prompts",
-                "security": [
-                    {
-                        "APIKeyCookie": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "project_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "anyOf": [
-                                {
-                                    "type": "string",
-                                    "format": "uuid4"
-                                },
-                                {
-                                    "type": "null"
-                                }
-                            ],
-                            "title": "Project Id"
-                        }
-                    },
-                    {
-                        "name": "lang",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "minLength": 2,
-                            "maxLength": 2,
-                            "title": "Lang"
-                        }
-                    },
-                    {
-                        "name": "folder_id",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "anyOf": [
-                                {
-                                    "type": "string",
-                                    "format": "uuid4"
-                                },
-                                {
-                                    "type": "null"
-                                }
-                            ],
-                            "title": "Folder Id"
-                        }
-                    }
-                ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/PromptsUpdateRequest"
                             }
                         }
                     }
                 },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
+                "security": [
+                    {
+                        "APIKeyCookie": []
                     }
-                }
+                ]
             }
         },
         "/api/projects/{project_id}/guide/consent/{language}": {
@@ -9497,7 +9354,38 @@
                 "type": "object",
                 "title": "AgentConfig"
             },
-            "AgentConfigs": {
+            "AgentConfigs-Input": {
+                "properties": {
+                    "probing": {
+                        "$ref": "#/components/schemas/ProbingAgentConfig"
+                    },
+                    "classification": {
+                        "$ref": "#/components/schemas/AgentConfig"
+                    },
+                    "guide": {
+                        "$ref": "#/components/schemas/AgentConfig"
+                    },
+                    "history": {
+                        "$ref": "#/components/schemas/AgentConfig"
+                    },
+                    "security": {
+                        "$ref": "#/components/schemas/SecurityConfig"
+                    },
+                    "visual": {
+                        "$ref": "#/components/schemas/VisualConfig"
+                    },
+                    "answering": {
+                        "$ref": "#/components/schemas/AgentConfig"
+                    },
+                    "reformulation": {
+                        "$ref": "#/components/schemas/AgentConfig"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "title": "AgentConfigs"
+            },
+            "AgentConfigs-Output": {
                 "properties": {
                     "probing": {
                         "$ref": "#/components/schemas/ProbingAgentConfig"
@@ -13101,6 +12989,9 @@
                             }
                         ],
                         "title": "Few Shot Examples"
+                    },
+                    "prompt_slots": {
+                        "$ref": "#/components/schemas/ProbingPromptSlots"
                     }
                 },
                 "additionalProperties": false,
@@ -13114,6 +13005,67 @@
                     "question"
                 ],
                 "title": "ProbingContext"
+            },
+            "ProbingPromptSlots": {
+                "properties": {
+                    "persona": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Persona"
+                    },
+                    "question_qualities": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Question Qualities"
+                    },
+                    "guidelines": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Guidelines"
+                    },
+                    "instructions": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Instructions"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "title": "ProbingPromptSlots",
+                "description": "User-editable regions of the probing agent's system and instruction prompts.\n\nEach field is an override: when left as ``None`` the corresponding default\nfrom ``DEFAULT_PROBING_SLOTS`` is used at render time, so improvements to the\ndefaults flow through to projects that have not customized that slot."
             },
             "ProbingStrategy": {
                 "type": "string",
@@ -13362,37 +13314,6 @@
                     "title"
                 ],
                 "title": "ProjectTitleUpdateRequest"
-            },
-            "PromptTemplates": {
-                "properties": {
-                    "system_prompt": {
-                        "type": "string",
-                        "title": "System Prompt"
-                    },
-                    "instruction_prompt": {
-                        "type": "string",
-                        "title": "Instruction Prompt"
-                    }
-                },
-                "additionalProperties": true,
-                "type": "object",
-                "required": [
-                    "system_prompt",
-                    "instruction_prompt"
-                ],
-                "title": "PromptTemplates"
-            },
-            "PromptsUpdateRequest": {
-                "properties": {
-                    "probing_agent": {
-                        "$ref": "#/components/schemas/PromptTemplates"
-                    }
-                },
-                "type": "object",
-                "required": [
-                    "probing_agent"
-                ],
-                "title": "PromptsUpdateRequest"
             },
             "Question-Input": {
                 "properties": {
