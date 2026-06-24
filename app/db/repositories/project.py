@@ -10,8 +10,9 @@ from sqlalchemy.orm import Session
 from ainterviewer.agents.config import AgentConfigs
 from ainterviewer.agents.prompts.models import Prompts
 from ainterviewer.config import InterviewConfig
-from ainterviewer.interview_guides import InterviewGuide
+from ainterviewer.interview_guides import InterviewGuide, Question
 from ainterviewer.interview_guides.extra import Consent, Welcome
+from ainterviewer.interview_guides.sections import QuestionSection
 from ainterviewer.interview_guides.translate import (
     translate_consent,
     translate_interview_guide,
@@ -234,6 +235,17 @@ class ProjectRepository(BaseRepository):
         localization_kwargs = {}
         if interview_guide_content:
             localization_kwargs["interview_guide"] = interview_guide_content
+        else:
+            # New projects start with a guide containing one empty question so
+            # the editor has something to fill in.
+            localization_kwargs["interview_guide"] = InterviewGuide(
+                question_sections=[
+                    QuestionSection(
+                        description="",
+                        questions=[Question(main_question="")],
+                    )
+                ]
+            )
         if agent_configs:
             localization_kwargs["agent_configs"] = agent_configs
         if prompts:
