@@ -22,8 +22,10 @@ from sqlalchemy.exc import NoResultFound
 from ainterviewer.agents.config import (
     DEFAULT_PROBING_SLOTS,
     AgentConfigs,
+    ProbingAgentConfig,
     ProbingPromptSlots,
 )
+from ainterviewer.agents.prompts.agent_prompts import ProbingAgentPrompts
 from ainterviewer.config import InterviewConfig
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.interview_guides.extra import Consent, Welcome
@@ -62,7 +64,7 @@ from ..request_models import (
     QuestionGenerationRequest,
     QuestionSectionGenerationRequest,
 )
-from ..response_models import PaginatedResponse
+from ..response_models import PaginatedResponse, ProbingPromptPreview
 
 router = APIRouter(tags=["projects"])
 
@@ -339,6 +341,43 @@ async def create_interview_agents(
         project_id=project_id,
         language=lang,
         agent_configs=config,
+    )
+
+
+# Labelled stand-ins for the interview-time context the instruction prompt
+# expects. They let us render the template at config time so the user can see
+# how their edited slots land, without needing a live interview.
+_PREVIEW_PLACEHOLDERS = {
+    "interview_framing": "«interview framing — filled in during the interview»",
+    "section_description": "«section description — filled in during the interview»",
+    "question_description": "«question description — filled in during the interview»",
+    "main_question": "«main question — filled in during the interview»",
+    "interview_transcript": "«transcript so far — filled in during the interview»",
+    "suggested_probes": "«suggested probes for this question — included when configured»",
+    "translation": "«interview language — included when the interview is not in English»",
+}
+
+
+@router.post("/projects/{project_id}/{lang}/agents/prompts/preview")
+async def preview_probing_prompts(
+    project_id: UUID4,
+    lang: LanguageCode,
+    config: ProbingAgentConfig,
+    jwt: DemoToken,
+    _: ProjectViewer,
+) -> ProbingPromptPreview:
+    """Render the probing agent's system and instruction prompts with the
+    supplied (possibly unsaved) slot overrides injected, for a read-only preview."""
+    prompts = ProbingAgentPrompts(prompt_slots=config.prompt_slots, lang=lang)
+
+    instruction = prompts.generate_probing_prompt(
+        **_PREVIEW_PLACEHOLDERS,
+        few_shot_examples=config.few_shot_examples,
+    )
+
+    return ProbingPromptPreview(
+        system=prompts.system_prompt,
+        instruction=instruction,
     )
 
 

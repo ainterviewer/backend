@@ -5297,6 +5297,100 @@
                 }
             }
         },
+        "/api/projects/{project_id}/{lang}/agents/prompts/preview": {
+            "post": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "Preview Probing Prompts",
+                "description": "Render the probing agent's system and instruction prompts with the\nsupplied (possibly unsaved) slot overrides injected, for a read-only preview.",
+                "operationId": "preview_probing_prompts",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "lang",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2,
+                            "title": "Lang"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProbingAgentConfig"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProbingPromptPreview"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/projects/{project_id}/config": {
             "get": {
                 "tags": [
@@ -13005,6 +13099,25 @@
                     "question"
                 ],
                 "title": "ProbingContext"
+            },
+            "ProbingPromptPreview": {
+                "properties": {
+                    "system": {
+                        "type": "string",
+                        "title": "System"
+                    },
+                    "instruction": {
+                        "type": "string",
+                        "title": "Instruction"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "system",
+                    "instruction"
+                ],
+                "title": "ProbingPromptPreview",
+                "description": "Rendered probing-agent prompts with the project's editable slots injected.\n\nInterview-time context (transcript, framing, etc.) is shown as labelled\nplaceholders since those values only exist while an interview is running."
             },
             "ProbingPromptSlots": {
                 "properties": {

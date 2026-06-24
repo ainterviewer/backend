@@ -43,3 +43,14 @@ class MessageFeedbackResponse(BaseModel):
     project_id: UUID4
     message_id: int
     feedback: Feedback | None
+
+
+class ProbingPromptPreview(BaseModel):
+    """Rendered probing-agent prompts with the project's editable slots injected.
+
+    Interview-time context (transcript, framing, etc.) is shown as labelled
+    placeholders since those values only exist while an interview is running.
+    """
+
+    system: str
+    instruction: str
