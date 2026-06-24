@@ -398,6 +398,15 @@ async def register(user: UserCreateRequest, db: DBSession) -> JSONResponse:
         db.users.delete_user(new_user.id)
         raise
 
+    # Give every new account a personal folder to start from. Created only
+    # after the verification email succeeds, so it can't be orphaned by the
+    # rollback above (deleting a user cascades the collaborator row, not the
+    # folder itself).
+    db.projects.create_folder(
+        title=f"{new_user.first_name}'s Personal Folder",
+        user_id=new_user.id,
+    )
+
     return JSONResponse(
         {"detail": "Registration successful. Please verify your email to continue."},
         status_code=201,
