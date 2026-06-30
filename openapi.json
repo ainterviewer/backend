@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.4.2"
+        "version": "0.4.4"
     },
     "servers": [
         {
@@ -4846,7 +4846,9 @@
                         "description": "Successful Response",
                         "content": {
                             "application/json": {
-                                "schema": {}
+                                "schema": {
+                                    "$ref": "#/components/schemas/InterviewGuide-Output"
+                                }
                             }
                         }
                     },
@@ -4937,7 +4939,9 @@
                         "description": "Successful Response",
                         "content": {
                             "application/json": {
-                                "schema": {}
+                                "schema": {
+                                    "$ref": "#/components/schemas/QuestionSection"
+                                }
                             }
                         }
                     },
@@ -5028,7 +5032,9 @@
                         "description": "Successful Response",
                         "content": {
                             "application/json": {
-                                "schema": {}
+                                "schema": {
+                                    "$ref": "#/components/schemas/Question-Output"
+                                }
                             }
                         }
                     },
@@ -13546,7 +13552,7 @@
                         "type": "boolean",
                         "title": "Check If Answered",
                         "description": "Check if the question has already been answered under a previous question",
-                        "default": true
+                        "default": false
                     },
                     "check_if_exhausted": {
                         "type": "boolean",
@@ -13564,13 +13570,13 @@
                         "type": "boolean",
                         "title": "Shuffle",
                         "description": "Should the question be shuffled?",
-                        "default": true
+                        "default": false
                     },
                     "create_segue": {
                         "type": "boolean",
                         "title": "Create Segue",
                         "description": "Create a segue from the previous question, to possibly improve the flow of the interview.",
-                        "default": true
+                        "default": false
                     },
                     "exclude_from_history": {
                         "type": "boolean",
@@ -13765,7 +13771,7 @@
                         "type": "boolean",
                         "title": "Check If Answered",
                         "description": "Check if the question has already been answered under a previous question",
-                        "default": true
+                        "default": false
                     },
                     "check_if_exhausted": {
                         "type": "boolean",
@@ -13783,13 +13789,13 @@
                         "type": "boolean",
                         "title": "Shuffle",
                         "description": "Should the question be shuffled?",
-                        "default": true
+                        "default": false
                     },
                     "create_segue": {
                         "type": "boolean",
                         "title": "Create Segue",
                         "description": "Create a segue from the previous question, to possibly improve the flow of the interview.",
-                        "default": true
+                        "default": false
                     },
                     "exclude_from_history": {
                         "type": "boolean",
@@ -13864,6 +13870,75 @@
                     "main_question"
                 ],
                 "title": "Question",
+                "description": "A question that can be asked to the interviewee"
+            },
+            "QuestionBase": {
+                "properties": {
+                    "description": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Description",
+                        "description": "A description of the question, may be used to reformulate the question and improve the relevance of the probes."
+                    },
+                    "main_question": {
+                        "type": "string",
+                        "title": "Main Question",
+                        "description": "The question to ask the interviewee."
+                    },
+                    "probes": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Probes",
+                        "description": "A list of possible follow-up questions to ask after the main question. If provided set max_probes_n or max_probes_time to greater than 0."
+                    },
+                    "max_probes_n": {
+                        "anyOf": [
+                            {
+                                "type": "integer",
+                                "minimum": 0.0
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Max Probes N",
+                        "description": "Max number of probes.",
+                        "default": 3
+                    },
+                    "max_probes_time": {
+                        "anyOf": [
+                            {
+                                "type": "number",
+                                "exclusiveMinimum": 0.0
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Max Probes Time",
+                        "description": "Max time to spend on probing, in seconds."
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "main_question"
+                ],
+                "title": "QuestionBase",
                 "description": "A question that can be asked to the interviewee"
             },
             "QuestionContext": {
@@ -13950,6 +14025,41 @@
                 "type": "array",
                 "maxItems": 2,
                 "minItems": 2
+            },
+            "QuestionSection": {
+                "properties": {
+                    "description": {
+                        "type": "string",
+                        "title": "Description",
+                        "description": "A description of the section, used as context for the prober to limit its scope."
+                    },
+                    "questions": {
+                        "items": {
+                            "$ref": "#/components/schemas/QuestionBase"
+                        },
+                        "type": "array",
+                        "title": "Questions"
+                    },
+                    "shuffle": {
+                        "type": "boolean",
+                        "title": "Shuffle",
+                        "description": "Should the section be included in shuffling?",
+                        "default": false
+                    },
+                    "ai_generated_questions": {
+                        "$ref": "#/components/schemas/GeneratedQuestions",
+                        "default": {
+                            "n": 0
+                        }
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "description",
+                    "questions"
+                ],
+                "title": "QuestionSection",
+                "description": "A section of questions that all revolve around the same topic"
             },
             "QuestionSectionGenerationRequest": {
                 "properties": {
