@@ -27,7 +27,7 @@ from ainterviewer.agents.config import (
 )
 from ainterviewer.agents.prompts.agent_prompts import ProbingAgentPrompts
 from ainterviewer.config import InterviewConfig
-from ainterviewer.interview_guides import InterviewGuide
+from ainterviewer.interview_guides import InterviewGuide, Question, QuestionSection
 from ainterviewer.interview_guides.extra import Consent, Welcome
 from ainterviewer.interview_guides.generate import (
     generate_interview_guide,
@@ -231,7 +231,7 @@ async def generate_guide(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
-):
+) -> InterviewGuide:
     language = get_language_dict(language_code=lang)["name"]
 
     data.prompt += f"\n\nYou must generate the interview guide in the following language: {language}"
@@ -255,7 +255,7 @@ async def generate_guide_section(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
-):
+) -> QuestionSection:
     project = db.projects.get_project_localization(project_id, lang)
 
     section = await generate_section(
@@ -275,7 +275,7 @@ async def generate_section_question(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
-):
+) -> Question:
     project = db.projects.get_project_localization(project_id, lang)
 
     question = await generate_question(
