@@ -402,8 +402,10 @@ async def register(user: UserCreateRequest, db: DBSession) -> JSONResponse:
     # after the verification email succeeds, so it can't be orphaned by the
     # rollback above (deleting a user cascades the collaborator row, not the
     # folder itself).
+    username = f"{new_user.first_name}'{'s' if new_user.first_name[-1] != 's' else ''}"
+
     db.projects.create_folder(
-        title=f"{new_user.first_name}'s Personal Folder",
+        title=f"{username} Personal Folder",
         user_id=new_user.id,
     )
 
