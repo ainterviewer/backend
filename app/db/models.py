@@ -114,7 +114,7 @@ class UserBase(_BaseModel):
 class UserCreateRequest(UserBase):
     """API request model for user registration."""
 
-    invite_token: UUID4 | str | None = None
+    invite_token: UUID4 | str | None = Field(union_mode="left_to_right")
 
     created_at: datetime = Field(default_factory=now)
     last_active: datetime = Field(default_factory=now)
