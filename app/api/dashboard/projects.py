@@ -64,7 +64,11 @@ from ..request_models import (
     QuestionGenerationRequest,
     QuestionSectionGenerationRequest,
 )
-from ..response_models import PaginatedResponse, ProbingPromptPreview
+from ..response_models import (
+    InterviewConfigWithModels,
+    PaginatedResponse,
+    ProbingPromptPreview,
+)
 
 router = APIRouter(tags=["projects"])
 
@@ -381,14 +385,43 @@ async def preview_probing_prompts(
     )
 
 
+# Conversational, respondent-facing agents whose model(s) we surface to
+# respondents. Excludes the auxiliary `visual` agent even though it also
+# carries a `.model`.
+_RESPONDENT_FACING_AGENTS = frozenset(
+    {
+        "probing",
+        "classification",
+        "guide",
+        "history",
+        "answering",
+        "reformulation",
+        "security",
+    }
+)
+
+
 @router.get("/projects/{project_id}/config")
 async def get_interview_config(
     project_id: UUID4,
     db: DBSession,
-) -> InterviewConfig:
+) -> InterviewConfigWithModels:
     project = db.projects.get_project(project_id)
 
-    return project.config
+    models: set[str] = set()
+
+    for language in project.available_languages:  # ty: ignore[not-iterable]
+        project_localization = db.projects.get_project_localization(
+            project_id=project_id, language=language["code"]
+        )
+
+        models.update(
+            agent_config.model
+            for agent, agent_config in project_localization.agent_configs
+            if agent in _RESPONDENT_FACING_AGENTS
+        )
+
+    return InterviewConfigWithModels(**project.config.model_dump(), models=models)
 
 
 @router.post("/projects/{project_id}/config")

@@ -419,7 +419,6 @@ class ProjectRepository(BaseRepository):
         *,
         with_interviews: bool = False,
         with_tests: Literal[True],
-        with_localizations: bool = False,
     ) -> ProjectPublicWithTests: ...
 
     @overload
@@ -429,7 +428,6 @@ class ProjectRepository(BaseRepository):
         *,
         with_interviews: bool = False,
         with_tests: Literal[False] = False,
-        with_localizations: bool = False,
     ) -> ProjectPublic: ...
 
     def get_project(
@@ -438,7 +436,6 @@ class ProjectRepository(BaseRepository):
         *,
         with_interviews: bool = False,
         with_tests: bool = False,
-        with_localizations: bool = False,
     ) -> ProjectPublic | ProjectPublicWithTests:
         statement = select(ProjectTable).where(
             ProjectTable.id == project_id,
@@ -453,9 +450,6 @@ class ProjectRepository(BaseRepository):
             project.tests
             if project.tests is None:
                 project.tests = []
-
-        if with_localizations:
-            project.localizations
 
         public_project = ProjectPublic.model_validate(project)
 

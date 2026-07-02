@@ -2,6 +2,7 @@ from typing import Generic, TypeVar
 
 from pydantic import UUID4, BaseModel
 
+from ainterviewer.config import InterviewConfig
 from ainterviewer.types import Feedback
 
 T = TypeVar("T")
@@ -54,3 +55,7 @@ class ProbingPromptPreview(BaseModel):
 
     system: str
     instruction: str
+
+
+class InterviewConfigWithModels(InterviewConfig):
+    models: set[str]

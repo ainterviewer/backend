@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.4.4"
+        "version": "0.4.7"
     },
     "servers": [
         {
@@ -5422,7 +5422,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/InterviewConfig"
+                                    "$ref": "#/components/schemas/InterviewConfigWithModels"
                                 }
                             }
                         }
@@ -11367,6 +11367,54 @@
                 "type": "object",
                 "title": "InterviewConfig"
             },
+            "InterviewConfigWithModels": {
+                "properties": {
+                    "default_language": {
+                        "$ref": "#/components/schemas/LanguageCode",
+                        "default": "EN"
+                    },
+                    "with_consent": {
+                        "type": "boolean",
+                        "title": "With Consent",
+                        "description": "Whether to ask for consent before starting the interview",
+                        "default": true
+                    },
+                    "with_welcome": {
+                        "type": "boolean",
+                        "title": "With Welcome",
+                        "description": "Whether to show a welcome message before starting the interview",
+                        "default": true
+                    },
+                    "with_audio": {
+                        "type": "boolean",
+                        "title": "With Audio",
+                        "description": "Allows the respondents to record their answers as audio messages which are transcribed before send as answers to the AInterviewer.",
+                        "default": false
+                    },
+                    "probing_strategy": {
+                        "items": {
+                            "$ref": "#/components/schemas/ProbingStrategy"
+                        },
+                        "type": "array",
+                        "uniqueItems": true,
+                        "title": "Probing Strategy"
+                    },
+                    "models": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "uniqueItems": true,
+                        "title": "Models"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "models"
+                ],
+                "title": "InterviewConfigWithModels"
+            },
             "InterviewDurationStats": {
                 "properties": {
                     "min_seconds": {
@@ -15137,6 +15185,7 @@
                 "required": [
                     "email",
                     "first_name",
+                    "invite_token",
                     "password"
                 ],
                 "title": "UserCreateRequest",
