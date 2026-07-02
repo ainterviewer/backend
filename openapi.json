@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.4.7"
+        "version": "0.4.9"
     },
     "servers": [
         {
@@ -5422,7 +5422,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/InterviewConfigWithModels"
+                                    "$ref": "#/components/schemas/InterviewConfig"
                                 }
                             }
                         }
@@ -5502,6 +5502,54 @@
                         "content": {
                             "application/json": {
                                 "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/projects/{project_id}/models": {
+            "get": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "Get Interview Models",
+                "operationId": "get_interview_models",
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid4",
+                            "title": "Project Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "uniqueItems": true,
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "title": "Response Get Interview Models"
+                                }
                             }
                         }
                     },
@@ -11366,54 +11414,6 @@
                 "additionalProperties": false,
                 "type": "object",
                 "title": "InterviewConfig"
-            },
-            "InterviewConfigWithModels": {
-                "properties": {
-                    "default_language": {
-                        "$ref": "#/components/schemas/LanguageCode",
-                        "default": "EN"
-                    },
-                    "with_consent": {
-                        "type": "boolean",
-                        "title": "With Consent",
-                        "description": "Whether to ask for consent before starting the interview",
-                        "default": true
-                    },
-                    "with_welcome": {
-                        "type": "boolean",
-                        "title": "With Welcome",
-                        "description": "Whether to show a welcome message before starting the interview",
-                        "default": true
-                    },
-                    "with_audio": {
-                        "type": "boolean",
-                        "title": "With Audio",
-                        "description": "Allows the respondents to record their answers as audio messages which are transcribed before send as answers to the AInterviewer.",
-                        "default": false
-                    },
-                    "probing_strategy": {
-                        "items": {
-                            "$ref": "#/components/schemas/ProbingStrategy"
-                        },
-                        "type": "array",
-                        "uniqueItems": true,
-                        "title": "Probing Strategy"
-                    },
-                    "models": {
-                        "items": {
-                            "type": "string"
-                        },
-                        "type": "array",
-                        "uniqueItems": true,
-                        "title": "Models"
-                    }
-                },
-                "additionalProperties": false,
-                "type": "object",
-                "required": [
-                    "models"
-                ],
-                "title": "InterviewConfigWithModels"
             },
             "InterviewDurationStats": {
                 "properties": {

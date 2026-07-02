@@ -40,11 +40,7 @@ from ainterviewer.utils import get_language_dict
 
 from ...db.models import InterviewSummaryPublic, MessagePublic, ProjectPublic
 from ...db.types import InterviewType
-from ...db.utils import (
-    fix_nested_columns,
-    messages_to_dataframe,
-    write_messages_xlsx,
-)
+from ...db.utils import fix_nested_columns, messages_to_dataframe, write_messages_xlsx
 from ...dependencies import (
     DBSession,
     DemoToken,
@@ -64,11 +60,7 @@ from ..request_models import (
     QuestionGenerationRequest,
     QuestionSectionGenerationRequest,
 )
-from ..response_models import (
-    InterviewConfigWithModels,
-    PaginatedResponse,
-    ProbingPromptPreview,
-)
+from ..response_models import PaginatedResponse, ProbingPromptPreview
 
 router = APIRouter(tags=["projects"])
 
@@ -405,7 +397,17 @@ _RESPONDENT_FACING_AGENTS = frozenset(
 async def get_interview_config(
     project_id: UUID4,
     db: DBSession,
-) -> InterviewConfigWithModels:
+) -> InterviewConfig:
+    project = db.projects.get_project(project_id)
+
+    return project.config
+
+
+@router.get("/projects/{project_id}/models")
+async def get_interview_models(
+    project_id: UUID4,
+    db: DBSession,
+) -> set[str]:
     project = db.projects.get_project(project_id)
 
     models: set[str] = set()
@@ -421,7 +423,7 @@ async def get_interview_config(
             if agent in _RESPONDENT_FACING_AGENTS
         )
 
-    return InterviewConfigWithModels(**project.config.model_dump(), models=models)
+    return models
 
 
 @router.post("/projects/{project_id}/config")
