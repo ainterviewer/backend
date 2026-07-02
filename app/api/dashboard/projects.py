@@ -680,7 +680,7 @@ async def generate_project_qr(
 
     if not file_path.exists():
         interview_url = str(request.base_url) + f"interview?id={project_id}"
-        img_data = generate_qr_img(str(interview_url), file_path)
+        img_data = generate_qr_img(str(interview_url), file_path=file_path)
         # TODO: Why not just return FileResponse after file has been created?
         return StreamingResponse(io.BytesIO(img_data), media_type="image/png")
 
