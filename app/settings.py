@@ -13,6 +13,13 @@ from pydantic_settings import (
 from ainterviewer.settings import BaseSettingsConfigDict
 from ainterviewer.types import DatabaseType, TimeDelta
 
+from .types import Scope
+
+
+class SpecialRegistrationTokens(BaseModel):
+    token: str
+    scope: Scope
+
 
 class AppSettings(BaseModel):
     api_host: str = "127.0.0.1"
@@ -41,7 +48,9 @@ class AppSettings(BaseModel):
         default_factory=lambda: TimeDelta(days=3)
     )
     registration_requires_token: bool = True
-    special_registration_tokens: set[str] = Field(default_factory=set)
+    special_registration_tokens: list[SpecialRegistrationTokens] = Field(
+        default_factory=list
+    )
 
     email_verification_token_expiration: TimeDelta = Field(
         default_factory=lambda: TimeDelta(days=1)
@@ -219,5 +228,6 @@ if __name__ == "__main__":
 
     # print(app_settings.secrets)
     # print(lib_settings)
-    print(app_settings.services)
+    # print(app_settings.services)
+    print(app_settings.app.special_registration_tokens)
     pass

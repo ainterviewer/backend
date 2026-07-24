@@ -346,13 +346,19 @@ async def register(user: UserCreateRequest, db: DBSession) -> JSONResponse:
         if not user.invite_token:
             return JSONResponse({"detail": "Invite token required"}, status_code=406)
         elif isinstance(user.invite_token, str):
-            if user.invite_token not in app_settings.app.special_registration_tokens:
+            for (
+                special_registration_token
+            ) in app_settings.app.special_registration_tokens:
+                if user.invite_token == special_registration_token.token:
+                    # Special tokens are validated against settings, not stored as
+                    # invitations. Record which one was used in registration_token and
+                    # keep the arbitrary string out of the UUID invite_token column.
+                    snapshot["registration_token"] = user.invite_token
+                    user.invite_token = None
+                    user.scope = special_registration_token.scope
+                    break
+            else:
                 return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
-            # Special tokens are validated against settings, not stored as
-            # invitations. Record which one was used in registration_token and
-            # keep the arbitrary string out of the UUID invite_token column.
-            snapshot["registration_token"] = user.invite_token
-            user.invite_token = None
         else:
             try:
                 invitation = db.users.check_invite_token(user.invite_token)
