@@ -1,4 +1,4 @@
-set dotenv-load := true
+set dotenv-load
 
 [private]
 default:
