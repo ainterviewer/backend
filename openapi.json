@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "AInterviewer",
-        "version": "0.4.9"
+        "version": "0.4.12"
     },
     "servers": [
         {
@@ -4574,6 +4574,87 @@
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/ProjectTitleUpdateRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/projects/{project_id}/folder": {
+            "patch": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "Move Project",
+                "description": "Move a project to another folder",
+                "operationId": "move_project",
+                "security": [
+                    {
+                        "APIKeyCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project Id"
+                        }
+                    },
+                    {
+                        "name": "folder_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "format": "uuid4"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Folder Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/MoveProjectRequest"
                             }
                         }
                     }
@@ -12692,6 +12773,20 @@
                 ],
                 "title": "MonitoringStats",
                 "description": "Aggregated monitoring statistics for a project."
+            },
+            "MoveProjectRequest": {
+                "properties": {
+                    "folder_id": {
+                        "type": "string",
+                        "format": "uuid4",
+                        "title": "Folder Id"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "folder_id"
+                ],
+                "title": "MoveProjectRequest"
             },
             "NewsletterRequest": {
                 "properties": {
