@@ -3,6 +3,7 @@ import enum
 import secrets
 import sys
 import uuid
+from collections.abc import Sequence
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Optional
@@ -166,7 +167,7 @@ def replay_history(
 
 def extend_openapi_schema(
     openapi: dict[str, Any],
-    models: list[type[BaseModel] | type[enum.Enum] | type[TypedDict]],  # ty: ignore[invalid-type-form]
+    models: Sequence[type[BaseModel] | type[enum.Enum] | type[TypedDict]],  # ty: ignore[invalid-type-form]
 ) -> dict[str, Any]:
     """Adds extra pydantic models, enums, or TypedDicts to the `openapi[\"components\"][\"schema\"]`"""
     openapi = copy.deepcopy(openapi)
