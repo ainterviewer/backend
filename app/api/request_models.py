@@ -51,6 +51,10 @@ class ProjectTitleUpdateRequest(BaseModel):
     title: str
 
 
+class MoveProjectRequest(BaseModel):
+    folder_id: UUID4
+
+
 class CreateProjectRequest(BaseModel):
     title: str
     default_language: LanguageCode

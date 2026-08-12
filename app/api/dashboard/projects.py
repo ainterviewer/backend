@@ -17,7 +17,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from pydantic import UUID4, EmailStr
-from sqlalchemy.exc import NoResultFound
+from sqlalchemy.exc import IntegrityError, NoResultFound
 
 from ainterviewer.agents.config import (
     DEFAULT_PROBING_SLOTS,
@@ -48,12 +48,14 @@ from ...dependencies import (
     ProjectEditor,
     ProjectViewer,
 )
+from ...types import CollaboratorRole, Scope
 from ...utils import ensure_filename, generate_qr_img
 from ..request_models import (
     DeleteInterviewRequest,
     ExportMessagesRequest,
     ExternalParamsRequest,
     InterviewGuideGenerationRequest,
+    MoveProjectRequest,
     PaginatedQueryParams,
     ProjectStatusChangeRequest,
     ProjectTitleUpdateRequest,
@@ -165,6 +167,36 @@ async def change_project_title(
     _: ProjectAdmin,
 ):
     db.projects.update_project_title(project_id, title_request.title)
+
+
+@router.patch(
+    "/projects/{project_id}/folder",
+    description="Move a project to another folder",
+)
+async def move_project(
+    project_id: UUID4,
+    move_request: MoveProjectRequest,
+    db: DBSession,
+    jwt: DemoToken,
+    _: ProjectEditor,
+):
+    # ProjectEditor only guards the folder the project currently lives in. The
+    # destination folder is not in the path, so it needs its own role check.
+    if Scope.ADMIN not in {Scope(s) for s in jwt.scope.split()}:
+        target_role = db.projects.get_user_role_on_folder(
+            jwt.user_id, move_request.folder_id
+        )
+        if target_role is None:
+            raise HTTPException(404, "Resource not found")
+        if not target_role.includes(CollaboratorRole.EDITOR):
+            raise HTTPException(403, "Requires editor role")
+
+    try:
+        db.projects.move_project(project_id, move_request.folder_id)
+    except IntegrityError:
+        raise HTTPException(
+            409, "A project with this title already exists in the target folder"
+        )
 
 
 @router.get("/projects/{project_id}", description="Load projects")

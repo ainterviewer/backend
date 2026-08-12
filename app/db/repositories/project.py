@@ -491,6 +491,24 @@ class ProjectRepository(BaseRepository):
         self.session.execute(statement)
         self.session.commit()
 
+    def move_project(self, project_id: UUID4, folder_id: UUID4):
+        """Move a project into another folder.
+
+        Raises IntegrityError if the target folder already holds a project with
+        the same title (the ("title", "folder_id") unique constraint).
+        """
+        statement = (
+            update(ProjectTable)
+            .where(ProjectTable.id == project_id)
+            .values(folder_id=folder_id)
+        )
+        try:
+            self.session.execute(statement)
+            self.session.commit()
+        except IntegrityError:
+            self.session.rollback()
+            raise
+
     def delete_project(self, project_id: UUID4):
         # FIXME: Update permissions to collab
         statement = select(ProjectTable).where(
