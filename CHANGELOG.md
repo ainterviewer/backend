@@ -4,6 +4,12 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.4.15] - 2026-08-12
+
+### Features
+
+- Add manifest release highlight
+
 ## [0.4.14] - 2026-08-12
 
 ### Features
