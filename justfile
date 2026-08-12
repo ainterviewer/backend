@@ -35,15 +35,24 @@ bump TYPE: && publish
     uv run prek -a
     uv version --bump {{ TYPE }}
 
+# Install this clone's git hooks (pre-commit + commit-msg).
+[group("Release & Publish")]
+install-hooks:
+    uv run prek install
+
 [group("Release & Publish")]
 publish:
     #!/usr/bin/env bash
+    set -euo pipefail
     VERSION="$(uv version --short)"
 
     uv sync
-    git add uv.lock pyproject.toml
-    git commit -m "Release v${VERSION}"
-    git tag -a "v${VERSION}" -m "Release v${VERSION}"
+    # Prepend this release's section; --prepend needs the file to exist.
+    touch CHANGELOG.md
+    uvx git-cliff@2.13.1 --unreleased --tag "v${VERSION}" --prepend CHANGELOG.md
+    git add uv.lock pyproject.toml CHANGELOG.md
+    git commit -m "chore(release): v${VERSION}"
+    git tag -a "v${VERSION}" -m "v${VERSION}"
     git push --follow-tags
 
 # Manually build & push the Docker image to ghcr.io (fallback for when CI is down).
