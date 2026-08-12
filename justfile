@@ -10,12 +10,6 @@ dev:
       --reload-dir .venv/ \
       --reload-dir ../lib/src'
 
-# The SDK is generated from the frontend repo (`just generate-sdk` there), which
-# reads this backend's live /api/openapi.json using its pinned generator version.
-# This only writes the schema to a file, for offline use and for diffing.
-generate-openapi-scheme:
-    uv run -m app.cli generate-openapi-scheme
-
 [group("Database")]
 setup-db:
     python -m app.db --recreate-db
