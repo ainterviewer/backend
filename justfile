@@ -10,9 +10,11 @@ dev:
       --reload-dir .venv/ \
       --reload-dir ../lib/src'
 
-generate-sdk:
+# The SDK is generated from the frontend repo (`just generate-sdk` there), which
+# reads this backend's live /api/openapi.json using its pinned generator version.
+# This only writes the schema to a file, for offline use and for diffing.
+generate-openapi-scheme:
     uv run -m app.cli generate-openapi-scheme
-    bunx @hey-api/openapi-ts --input "openapi.json" --output "../frontend/src/lib/api" --file "../frontend/openapi-ts.config.ts"
 
 [group("Database")]
 setup-db:

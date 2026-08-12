@@ -4,22 +4,14 @@ from typing import Annotated, Optional
 import typer
 from typer import Typer
 
-from ainterviewer.interfaces import (
-    OutgoingData,
-    OutgoingHistoryMessage,
-    OutgoingMessage,
-    ReceivedData,
-)
-from ainterviewer.lpm.types import CustomToken
 from ainterviewer.settings import Settings as LibSettings
 from app.platform_release import PlatformManifest
 
 from . import __version__
-from .api.dashboard.assistance import ChatMessage
-from .auth import AuthToken, InterviewToken
 from .main import app
+from .openapi import build_openapi_schema
 from .settings import Settings
-from .utils import extend_openapi_schema, merge_config_schemas
+from .utils import merge_config_schemas
 
 cli = Typer(
     pretty_exceptions_enable=False,
@@ -47,32 +39,13 @@ def callback(
 
 @cli.command()
 def generate_openapi_scheme(output: str = "openapi.json"):
-    openapi = app.openapi()
+    """Write the SDK-facing OpenAPI schema to a file.
 
-    openapi["paths"] = {
-        path: spec
-        for path, spec in openapi["paths"].items()
-        if path.startswith("/api/") or path.startswith("/ws/")
-    }
-
-    # TODO: Make sure that we should in fact extend the openapi schema, and not
-    # just export them as separately
-    openapi = extend_openapi_schema(
-        openapi,
-        models=[
-            AuthToken,
-            ChatMessage,
-            CustomToken,
-            InterviewToken,
-            OutgoingData,
-            OutgoingHistoryMessage,
-            OutgoingMessage,
-            ReceivedData,
-        ],
-    )
-
+    The frontend normally generates its SDK straight from the running backend's
+    `/api/openapi.json`; this command is the offline equivalent.
+    """
     with open(output, "w") as f:
-        f.write(json.dumps(openapi, indent=4))
+        f.write(json.dumps(build_openapi_schema(app), indent=4))
 
 
 @cli.command()

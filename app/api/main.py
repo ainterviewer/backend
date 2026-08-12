@@ -1,10 +1,11 @@
 from sqlalchemy.exc import NoResultFound
 import json
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.routing import APIRoute
 
 from ..dependencies import DBSession
+from ..openapi import build_openapi_schema
 from ..platform_release import PlatformManifest
 from . import auth, interview, misc
 from .admin import main as admin
@@ -19,6 +20,16 @@ router.include_router(interview.router)
 router.include_router(auth.router)
 router.include_router(admin.router)
 router.include_router(misc.router)
+
+
+@router.get("/openapi.json", include_in_schema=False)
+def openapi_schema(request: Request):
+    """The schema the frontend generates its SDK from (`just generate-sdk`).
+
+    Not FastAPI's own `/openapi.json`: see `app.openapi` for what differs.
+    Excluded from the schema itself so it does not become an SDK operation.
+    """
+    return build_openapi_schema(request.app)
 
 
 @router.get("/health")

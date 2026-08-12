@@ -174,8 +174,14 @@ The backend is tightly coupled with the `ainterviewer` library (sibling package 
    - Update routes in `app/api/`
    - Update request models in `app/api/request_models.py`
    - Update response models in `app/api/response_models.py`
-   - Regenerate OpenAPI schema: `just generate-sdk`
-   - Commit `openapi.json` for SDK client generation
+   - Regenerate the frontend SDK from the **frontend** repo: `just generate-sdk`
+     there, with this backend's dev server running. It reads the live
+     `/api/openapi.json` (see `app/openapi.py`) using the generator version
+     pinned in the frontend's `package.json` — never generate it via `bunx`,
+     which resolves to an unpinned latest and rewrites the vendored client
+     runtime.
+   - Refresh and commit `openapi.json` (`just generate-openapi-scheme`) so API
+     changes stay reviewable in the diff
 
 2. **Database Schema Changes**:
    - Modify ORM models in `app/db/tables.py`
