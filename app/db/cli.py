@@ -14,7 +14,7 @@ from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import DatabaseType
 
 from ..dependencies import engine, get_db
-from ..platform_release import PlatformManifest
+from ..platform_release import Highlight, PlatformManifest
 from ..settings import app_settings
 from .models import UserCreate
 
@@ -95,6 +95,21 @@ def add_release_manifest(release_manifest: str):
     platform_release_manifest = PlatformManifest.model_validate_json(release_manifest)
 
     db.set_platform_release(platform_manifest=platform_release_manifest)
+
+
+@cli.command()
+def set_release_highlights(platform_version: str, highlights: str):
+    """Attach curated user-facing highlights to an already-inserted release.
+
+    `highlights` is a JSON array of Highlight objects, produced by the
+    curation step in the deploy repo (`just release-notes`).
+    """
+    db = next(get_db())
+
+    parsed = [Highlight.model_validate(item) for item in json.loads(highlights)]
+    db.set_release_highlights(platform_version=platform_version, highlights=parsed)
+
+    typer.echo(f"Set {len(parsed)} highlight(s) on {platform_version}")
 
 
 def _as_dict(value):

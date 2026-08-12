@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -38,6 +39,19 @@ class ReleaseNotes(BaseModel):
     frontend: list[ComponentChange] = Field(default_factory=list)
 
 
+class Highlight(BaseModel):
+    """One user-facing change in a platform release.
+
+    Deliberately carries no component or version: a single change often spans
+    backend and frontend, and a user has no use for either fact. `notes` keeps
+    the per-component provenance for support and debugging.
+    """
+
+    kind: Literal["new", "improved", "fixed"]
+    title: str
+    body: str | None = None
+
+
 class PlatformManifest(BaseModel):
     platform_version: str
     core_lib: str
@@ -48,3 +62,14 @@ class PlatformManifest(BaseModel):
     # Optional so manifests stored before release notes existed still validate,
     # and so a deploy whose notes could not be fetched is still insertable.
     notes: ReleaseNotes | None = None
+    # Curated, user-facing rewrite of `notes`. None means "not curated yet";
+    # an empty list means "curated, and nothing here concerns users".
+    highlights: list[Highlight] | None = None
+
+
+class PlatformRelease(BaseModel):
+    """What the app shows a user: no components, no versions, no hashes."""
+
+    platform_version: str
+    released_at: datetime
+    highlights: list[Highlight]

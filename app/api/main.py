@@ -6,7 +6,7 @@ from fastapi.routing import APIRoute
 
 from ..dependencies import DBSession
 from ..openapi import build_openapi_schema
-from ..platform_release import PlatformManifest
+from ..platform_release import PlatformManifest, PlatformRelease
 from . import auth, interview, misc
 from .admin import main as admin
 from .dashboard import main as dashboard
@@ -48,6 +48,25 @@ def version(db: DBSession) -> PlatformManifest | None:
 @router.get("/version/{platform_version}")
 def platform_version(db: DBSession, platform_version: str):
     return db.get_platform_release(platform_version=platform_version)
+
+
+@router.get("/releases")
+def releases(db: DBSession, limit: int = 10) -> list[PlatformRelease]:
+    """Recent releases for the "What's new" dialog.
+
+    Only the curated, user-facing view: per-component `notes` and git hashes
+    stay out of it. A release that has not been curated yet (`highlights` is
+    None) is omitted rather than shown empty.
+    """
+    return [
+        PlatformRelease(
+            platform_version=manifest.platform_version,
+            released_at=manifest.build_time,
+            highlights=manifest.highlights or [],
+        )
+        for manifest in db.get_platform_releases(limit=limit)
+        if manifest.highlights is not None
+    ]
 
 
 def use_route_names_as_operation_ids(router: APIRouter) -> None:

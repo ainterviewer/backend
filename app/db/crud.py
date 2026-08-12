@@ -4,7 +4,7 @@ from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
 from ainterviewer.interfaces import PersistenceProtocol
-from app.platform_release import PlatformManifest
+from app.platform_release import Highlight, PlatformManifest
 
 from ..paths import APP_DIR
 from .repositories import (
@@ -107,6 +107,36 @@ class InterviewDataBase(PersistenceProtocol):
             platform_release_entry = self.session.execute(statement).scalar_one()
 
         return platform_release_entry.platform_manifest
+
+    def get_platform_releases(self, limit: int = 10) -> list[PlatformManifest]:
+        """Recent platform releases, newest first."""
+        statement = (
+            select(PlatformReleaseTable)
+            .order_by(PlatformReleaseTable.created_at.desc())
+            .limit(limit)
+        )
+        return [
+            row.platform_manifest for row in self.session.execute(statement).scalars()
+        ]
+
+    def set_release_highlights(
+        self, platform_version: str, highlights: list[Highlight]
+    ) -> PlatformManifest:
+        """Attach curated highlights to an already-inserted release."""
+        statement = select(PlatformReleaseTable).where(
+            PlatformReleaseTable.platform_release_version == platform_version
+        )
+        entry = self.session.execute(statement).scalar_one()
+
+        # PydanticJSONB stores the manifest as a whole, so replace the model
+        # rather than mutating it in place — an in-place edit is invisible to
+        # SQLAlchemy's change detection and would never be written.
+        entry.platform_manifest = entry.platform_manifest.model_copy(
+            update={"highlights": highlights}
+        )
+        self.session.commit()
+        self.session.refresh(entry)
+        return entry.platform_manifest
 
     def set_platform_release(self, platform_manifest: PlatformManifest):
         platform_release_entry = PlatformReleaseTable(
