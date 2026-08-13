@@ -4,7 +4,16 @@ from typing import Any, Optional
 from uuid import uuid4
 
 import sqlalchemy as sa
-from sqlalchemy import JSON, ForeignKey, MetaData, Text, UniqueConstraint, Uuid, select
+from sqlalchemy import (
+    JSON,
+    ForeignKey,
+    Index,
+    MetaData,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    select,
+)
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -606,6 +615,8 @@ class InterviewTable(Base):
     __tablename__ = "interview"
     __table_args__ = (
         UniqueConstraint("id", "project_id", name="_unique_interview_ids"),
+        # Nearly every dashboard query filters interviews by project and type.
+        Index("ix_interview_project_id_type", "project_id", "type"),
     )
 
     interview_guide: Mapped[InterviewGuide] = mapped_column(
@@ -702,6 +713,10 @@ class MessageTable(Base):
         UniqueConstraint(
             "message_id", "interview_id", "project_id", name="_unique_message_ids"
         ),
+        # Foreign keys are not indexed automatically; both of these are
+        # joined/filtered on by the monitoring and analysis queries.
+        Index("ix_message_interview_id", "interview_id"),
+        Index("ix_message_project_id", "project_id"),
     )
 
     message_id: Mapped[int] = mapped_column()

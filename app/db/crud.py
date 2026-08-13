@@ -85,6 +85,23 @@ class InterviewDataBase(PersistenceProtocol):
             isinstance(self.session.bind, Engine)
             and self.session.bind.dialect.name == "sqlite"
         ):
+            # Refresh the planner statistics in sqlite_stat1. Without them
+            # SQLite cannot tell that filtering messages by interview_id is far
+            # more selective than by project_id, and picks the wrong index for
+            # the dashboard's aggregate queries.
+            #
+            # This is a plain ANALYZE rather than the more usual `PRAGMA
+            # optimize`: optimize decides what to re-analyze from counters the
+            # *current connection* accumulated while running queries, and this
+            # shutdown session has run none, so it treats everything as
+            # unchanged and does nothing. analysis_limit caps the rows sampled
+            # per index, which keeps this bounded on a large database
+            # (~40ms at 500k messages) at the cost of approximate statistics.
+            self.session.execute(text("PRAGMA analysis_limit=400"))
+            self.session.execute(text("ANALYZE"))
+            self.session.commit()
+
+            # After ANALYZE, so its writes are folded into the main file.
             self.session.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))
             self.session.commit()
 

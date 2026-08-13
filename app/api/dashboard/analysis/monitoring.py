@@ -116,6 +116,28 @@ def _compute_histogram_buckets(
     ]
 
 
+def _summarize(data_rows: Sequence) -> tuple[int, int, float, int] | None:
+    """Derive min/max/avg/sum from value-count rows sorted by value.
+
+    The histogram queries already group by value, so the summary statistics can
+    be folded out of those rows instead of issuing a second aggregate query.
+    """
+    if not data_rows:
+        return None
+
+    total_count = sum(row.count for row in data_rows)
+    total_sum = sum(row.value * row.count for row in data_rows)
+    if total_count == 0:
+        return None
+
+    return (
+        int(data_rows[0].value),
+        int(data_rows[-1].value),
+        total_sum / total_count,
+        int(total_sum),
+    )
+
+
 class DropoutPoint(BaseModel):
     """Count of dropouts at a specific question."""
 
@@ -155,7 +177,7 @@ class MonitoringStats(BaseModel):
     "/projects/{project_id}/stats",
     description="Get monitoring statistics for a project's interviews",
 )
-async def get_project_monitoring_stats(
+def get_project_monitoring_stats(
     project_id: UUID4,
     db: DBSession,
     jwt: DemoToken,
@@ -166,6 +188,10 @@ async def get_project_monitoring_stats(
     start_date: Annotated[datetime.datetime | None, Query()] = None,
     end_date: Annotated[datetime.datetime | None, Query()] = None,
 ) -> MonitoringStats:
+    # NOTE: this endpoint is a plain `def` on purpose. The session is a
+    # synchronous SQLAlchemy session, so running it as `async def` would block
+    # the event loop for the whole duration of every query. As a sync endpoint
+    # FastAPI runs it in a threadpool instead.
     session = db.session
 
     # Base conditions for filtering
@@ -173,10 +199,7 @@ async def get_project_monitoring_stats(
         InterviewTable.project_id == project_id,
         InterviewTable.type.in_(interview_types),
     ]
-    message_conditions = [
-        MessageTable.project_id == project_id,
-        MessageTable.interview_type.in_(interview_types),
-    ]
+    message_conditions = [MessageTable.project_id == project_id]
 
     if start_date:
         interview_conditions.append(InterviewTable.created_at >= start_date)
@@ -186,31 +209,31 @@ async def get_project_monitoring_stats(
         interview_conditions.append(InterviewTable.created_at <= end_date)
         message_conditions.append(MessageTable.created_at <= end_date)
 
-    # Total interviews count
-    total_interviews_stmt = select(func.count(InterviewTable.id)).where(
-        *interview_conditions
-    )
-    total_interviews = session.execute(total_interviews_stmt).scalar() or 0
-
-    # Total completed interviews
-    completed_conditions = interview_conditions + [
-        InterviewTable.status == InterviewStatus.COMPLETED
-    ]
-    total_completed_stmt = select(func.count(InterviewTable.id)).where(
-        *completed_conditions
-    )
-    total_completed = session.execute(total_completed_stmt).scalar() or 0
-
-    # Completion rate
-    completion_rate = (
-        (total_completed / total_interviews) if total_interviews > 0 else 0.0
-    )
-
-    # Interviews by status
-    status_stmt = (
-        select(InterviewTable.status, func.count(InterviewTable.id))
+    # Every statistic below is derived from this one filtered set of interviews.
+    # Message queries join against it rather than re-filtering through
+    # `MessageTable.interview_type`, which is a hybrid property that expands to
+    # a correlated subquery evaluated once per message row.
+    interviews = (
+        select(
+            InterviewTable.id.label("id"),
+            InterviewTable.status.label("status"),
+            InterviewTable.created_at.label("created_at"),
+            InterviewTable.total_time_spent.label("total_time_spent"),
+        )
         .where(*interview_conditions)
-        .group_by(InterviewTable.status)
+        .cte("filtered_interviews")
+    )
+
+    def interview_ids(status: InterviewStatus):
+        return select(interviews.c.id).where(interviews.c.status == status).subquery()
+
+    completed_interviews = interview_ids(InterviewStatus.COMPLETED)
+    inactive_interviews = interview_ids(InterviewStatus.INACTIVE)
+
+    # Interviews by status. Total and completed counts are folded out of the
+    # same rows instead of being counted by two extra queries.
+    status_stmt = select(interviews.c.status, func.count().label("count")).group_by(
+        interviews.c.status
     )
     status_results = session.execute(status_stmt).all()
     interviews_by_status = [
@@ -218,20 +241,34 @@ async def get_project_monitoring_stats(
         for status, count in status_results
     ]
 
+    total_interviews = sum(item.count for item in interviews_by_status)
+    total_completed = next(
+        (
+            item.count
+            for item in interviews_by_status
+            if item.status == InterviewStatus.COMPLETED
+        ),
+        0,
+    )
+
+    # Completion rate
+    completion_rate = (
+        (total_completed / total_interviews) if total_interviews > 0 else 0.0
+    )
+
     # Daily interview counts (last 30 days by default, or within date range)
-    date_trunc = func.date(InterviewTable.created_at)
+    date_trunc = func.date(interviews.c.created_at)
     daily_stmt = (
         select(
             date_trunc.label("date"),
-            func.count(InterviewTable.id).label("count"),
+            func.count().label("count"),
             func.sum(
                 case(
-                    (InterviewTable.status == InterviewStatus.COMPLETED, 1),
+                    (interviews.c.status == InterviewStatus.COMPLETED, 1),
                     else_=0,
                 )
             ).label("completed_count"),
         )
-        .where(*interview_conditions)
         .group_by(date_trunc)
         .order_by(date_trunc)
     )
@@ -246,13 +283,12 @@ async def get_project_monitoring_stats(
     ]
 
     # Interviews by time of day (grouped by hour)
-    hour_extract = func.extract("hour", InterviewTable.created_at)
+    hour_extract = func.extract("hour", interviews.c.created_at)
     time_of_day_stmt = (
         select(
             hour_extract.label("hour"),
-            func.count(InterviewTable.id).label("count"),
+            func.count().label("count"),
         )
-        .where(*interview_conditions)
         .group_by(hour_extract)
         .order_by(hour_extract)
     )
@@ -270,72 +306,53 @@ async def get_project_monitoring_stats(
     # Stats for COMPLETED interviews #
     # ++++++++++++++++++++++++++++++ #
 
-    # Duration statistics
-    duration_conditions = completed_conditions + [InterviewTable.total_time_spent > 0]
-    duration_stmt = select(
-        func.min(InterviewTable.total_time_spent).label("min_seconds"),
-        func.max(InterviewTable.total_time_spent).label("max_seconds"),
-        func.avg(InterviewTable.total_time_spent).label("avg_seconds"),
-        func.sum(InterviewTable.total_time_spent).label("sum_seconds"),
-    ).where(*duration_conditions)
-    duration_result = session.execute(duration_stmt).first()
-
-    duration_stats = None
-    if duration_result and duration_result.min_seconds is not None:
-        duration_stats = InterviewDurationStats(
-            min_seconds=duration_result.min_seconds,
-            max_seconds=duration_result.max_seconds,
-            avg_seconds=float(duration_result.avg_seconds or 0),
-            sum_seconds=duration_result.sum_seconds,
-        )
-
-    # Message count statistics per interview
-    message_counts_subquery = (
-        select(
-            MessageTable.interview_id,
-            func.count(MessageTable.id).label("msg_count"),
-        )
-        .where(
-            *message_conditions,
-            MessageTable.interview_id.in_(
-                select(InterviewTable.id).where(*completed_conditions)
-            ),
-        )
-        .group_by(MessageTable.interview_id)
-        .subquery()
-    )
-
-    msg_stats_stmt = select(
-        func.min(message_counts_subquery.c.msg_count).label("min_messages"),
-        func.max(message_counts_subquery.c.msg_count).label("max_messages"),
-        func.avg(message_counts_subquery.c.msg_count).label("avg_messages"),
-        func.sum(message_counts_subquery.c.msg_count).label("sum_messages"),
-    )
-    msg_stats_result = session.execute(msg_stats_stmt).first()
-
-    message_count_stats = None
-    if msg_stats_result and msg_stats_result.min_messages is not None:
-        message_count_stats = MessageCountStats(
-            min_messages=msg_stats_result.min_messages,
-            max_messages=msg_stats_result.max_messages,
-            avg_messages=float(msg_stats_result.avg_messages or 0),
-            sum_messages=msg_stats_result.sum_messages,
-        )
-
-    # Duration histogram (one entry per distinct total_time_spent value)
+    # Duration histogram (one entry per distinct total_time_spent value).
+    # min/max/avg/sum are derived from these rows.
     duration_hist_stmt = (
         select(
-            InterviewTable.total_time_spent.label("value"),
-            func.count(InterviewTable.id).label("count"),
+            interviews.c.total_time_spent.label("value"),
+            func.count().label("count"),
         )
-        .where(*duration_conditions)
-        .group_by(InterviewTable.total_time_spent)
-        .order_by(InterviewTable.total_time_spent)
+        .where(
+            interviews.c.status == InterviewStatus.COMPLETED,
+            interviews.c.total_time_spent > 0,
+        )
+        .group_by(interviews.c.total_time_spent)
+        .order_by(interviews.c.total_time_spent)
     )
     duration_rows = session.execute(duration_hist_stmt).all()
     duration_histogram = _compute_histogram_buckets(duration_rows)
 
-    # Message count histogram (one entry per distinct message count per interview)
+    duration_summary = _summarize(duration_rows)
+    duration_stats = (
+        InterviewDurationStats(
+            min_seconds=duration_summary[0],
+            max_seconds=duration_summary[1],
+            avg_seconds=duration_summary[2],
+            sum_seconds=duration_summary[3],
+        )
+        if duration_summary
+        else None
+    )
+
+    # Message counts per completed interview
+    message_counts_subquery = (
+        select(
+            MessageTable.interview_id,
+            func.count().label("msg_count"),
+        )
+        .select_from(MessageTable)
+        .join(
+            completed_interviews,
+            MessageTable.interview_id == completed_interviews.c.id,
+        )
+        .where(*message_conditions)
+        .group_by(MessageTable.interview_id)
+        .subquery()
+    )
+
+    # Message count histogram (one entry per distinct message count per
+    # interview). min/max/avg/sum are derived from these rows.
     msg_count_hist_stmt = (
         select(
             message_counts_subquery.c.msg_count.label("value"),
@@ -347,43 +364,51 @@ async def get_project_monitoring_stats(
     msg_count_rows = session.execute(msg_count_hist_stmt).all()
     message_count_histogram = _compute_histogram_buckets(msg_count_rows)
 
+    msg_summary = _summarize(msg_count_rows)
+    message_count_stats = (
+        MessageCountStats(
+            min_messages=msg_summary[0],
+            max_messages=msg_summary[1],
+            avg_messages=msg_summary[2],
+            sum_messages=msg_summary[3],
+        )
+        if msg_summary
+        else None
+    )
+
     # Message length histogram (one entry per distinct character length)
+    msg_length = func.length(MessageTable.content)
     msg_length_stmt = (
         select(
-            func.length(MessageTable.content).label("value"),
-            func.count(MessageTable.id).label("count"),
+            msg_length.label("value"),
+            func.count().label("count"),
         )
-        .where(
-            *message_conditions,
-            MessageTable.interview_id.in_(
-                select(InterviewTable.id).where(*completed_conditions)
-            ),
+        .select_from(MessageTable)
+        .join(
+            completed_interviews,
+            MessageTable.interview_id == completed_interviews.c.id,
         )
-        .group_by(func.length(MessageTable.content))
-        .order_by(func.length(MessageTable.content))
+        .where(*message_conditions)
+        .group_by(msg_length)
+        .order_by(msg_length)
     )
     msg_length_rows = session.execute(msg_length_stmt).all()
     message_length_histogram = _compute_histogram_buckets(msg_length_rows)
 
-    # ++++++++++++++++++++++++++++++ #
-    # Stats for INCOMPLETE interviews #
-    # ++++++++++++++++++++++++++++++ #
+    # +++++++++++++++++++++++++++++++ #
+    # Stats for INACTIVE interviews   #
+    # +++++++++++++++++++++++++++++++ #
 
-    # Filter for incomplete interviews
-    incomplete_conditions = interview_conditions + [
-        InterviewTable.status != InterviewStatus.COMPLETED,
-    ]
-
-    # Find the last message for each incomplete interview
+    # Find the last message of each inactive interview
     last_msg_subquery = (
         select(
             MessageTable.interview_id,
             func.max(MessageTable.message_id).label("max_msg_id"),
         )
-        .where(
-            MessageTable.interview_id.in_(
-                select(InterviewTable.id).where(*incomplete_conditions)
-            ),
+        .select_from(MessageTable)
+        .join(
+            inactive_interviews,
+            MessageTable.interview_id == inactive_interviews.c.id,
         )
         .group_by(MessageTable.interview_id)
         .subquery()
@@ -394,16 +419,9 @@ async def get_project_monitoring_stats(
         select(
             MessageTable.main_question,
             MessageTable.sub_question,
-            func.count(MessageTable.id).label("count"),
+            func.count().label("count"),
         )
-        .where(
-            MessageTable.interview_id.in_(
-                select(InterviewTable.id).where(
-                    *interview_conditions,
-                    InterviewTable.status == InterviewStatus.INACTIVE,
-                )
-            ),
-        )
+        .select_from(MessageTable)
         .join(
             last_msg_subquery,
             (MessageTable.interview_id == last_msg_subquery.c.interview_id)
