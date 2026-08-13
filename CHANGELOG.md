@@ -4,6 +4,16 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.4.17] - 2026-08-13
+
+### Features
+
+- (db-optimization) Optimized db tables and calls to improve loading speed for heavy monitoring reads.
+
+### Internal
+
+- Add seed-release just command
+
 ## [0.4.16] - 2026-08-13
 
 ### Features
