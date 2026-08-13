@@ -4,6 +4,12 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.4.16] - 2026-08-13
+
+### Features
+
+- (export) Exporting an interview now also exports external params
+
 ## [0.4.15] - 2026-08-12
 
 ### Features
