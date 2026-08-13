@@ -28,6 +28,18 @@ fetch-db:
     rm -f storage/db.sqlite*
     scp aws-1:/var/backups/sqlite/app-daily-latest.db storage/db.sqlite
 
+# ENV/VERSION pick which archived manifest to copy in (VERSION defaults to newest).
+# Copy a release — versions, notes and highlights — into the local dev database.
+[group("Database")]
+seed-release ENV="prod" VERSION="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    VERSION="{{ VERSION }}"
+    [ -n "$VERSION" ] || VERSION="$(python3 ../deploy/scripts/latest_version.py {{ ENV }})"
+    MANIFEST="../deploy/manifests/{{ ENV }}/${VERSION}.json"
+    uv run python -m app.db.cli add-release-manifest "$(cat "$MANIFEST")"
+    echo "Seeded local dev database from $MANIFEST"
+
 [group("Release & Publish")]
 bump TYPE: && publish
     #!/usr/bin/env bash
