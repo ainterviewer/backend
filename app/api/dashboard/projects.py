@@ -677,7 +677,13 @@ async def export_messages(
         for message in interview
     ]
 
-    df = messages_to_dataframe(messages)
+    df = messages_to_dataframe(
+        messages,
+        external_params=db.projects.get_external_params(project_id),
+        external_param_values=db.projects.get_external_param_values_for_interviews(
+            project_id, export_request.interview_ids
+        ),
+    )
 
     with io.BytesIO() as stream:
         match export_request.format:

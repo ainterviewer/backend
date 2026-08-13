@@ -1,11 +1,14 @@
 import base64
 import json
 import uuid
-from typing import IO
+from collections.abc import Sequence
+from typing import IO, Any
 
 import polars as pl
+from pydantic import UUID4
 from xlsxwriter import Workbook
 
+from ..types import ExternalParam
 from .models import MessagePublic
 
 
@@ -44,17 +47,38 @@ def fix_nested_columns(df: pl.DataFrame) -> pl.DataFrame:
     return df
 
 
-def messages_to_dataframe(messages: list[MessagePublic]) -> pl.DataFrame:
+EXTERNAL_PARAM_PREFIX = "ext_"
+
+
+def messages_to_dataframe(
+    messages: list[MessagePublic],
+    external_params: Sequence[ExternalParam] | None = None,
+    external_param_values: dict[UUID4, dict[str, Any]] | None = None,
+) -> pl.DataFrame:
     """Normalize interview messages into a flat DataFrame for export.
 
     Nested/optional fields (feedback, attachment, image, survey_item,
     annotations) are coerced to strings so the result can be written to
     csv/xlsx without struct columns.
+
+    When ``external_params`` is given, one ``ext_<name>`` column per declared
+    param is added to every row, filled from that message's interview in
+    ``external_param_values`` (blank where the interview has no value).
     """
     rows = []
+    param_names = [param.name for param in external_params or []]
+    param_values = external_param_values or {}
 
     for message in messages:
         d = json.loads(message.model_dump_json())
+
+        if param_names:
+            values = param_values.get(message.interview_id) or {}
+            for name in param_names:
+                value = values.get(name)
+                if not isinstance(value, (str, int, float, bool, type(None))):
+                    value = json.dumps(value)
+                d[f"{EXTERNAL_PARAM_PREFIX}{name}"] = value
 
         if d.get("feedback") is None:
             d["feedback"] = ""

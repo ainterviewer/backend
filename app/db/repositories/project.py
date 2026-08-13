@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+from collections.abc import Sequence
 from typing import Any, Literal, Optional, overload
 
 from pydantic import UUID4
@@ -733,6 +734,37 @@ class ProjectRepository(BaseRepository):
         interview = self.session.execute(statement).scalar_one()
 
         return interview.external_params
+
+    def get_external_param_values_for_interviews(
+        self,
+        project_id: UUID4,
+        interview_ids: Sequence[UUID4],
+    ) -> dict[UUID4, dict[str, Any]]:
+        """External param values per interview, keyed by interview id.
+
+        Interviews without stored values are omitted.
+        """
+        if not interview_ids:
+            return {}
+
+        statement = select(InterviewTable.id, InterviewTable.external_params).where(
+            InterviewTable.project_id == project_id,
+            InterviewTable.id.in_(interview_ids),
+        )
+
+        return {
+            interview_id: values
+            for interview_id, values in self.session.execute(statement).all()
+            if values
+        }
+
+    def get_external_params(self, project_id: UUID4) -> list[ExternalParam]:
+        """The project's declared external param schema (empty if unset)."""
+        statement = select(ProjectTable.external_params).where(
+            ProjectTable.id == project_id
+        )
+
+        return self.session.execute(statement).scalar_one() or []
 
     def update_external_params(
         self,
