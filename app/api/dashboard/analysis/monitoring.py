@@ -61,10 +61,41 @@ class HistogramBucket(BaseModel):
     label: str
 
 
+# Mantissas that read as "round" on an axis. Only whole-number steps are used,
+# so 2.5 is only ever picked from a magnitude of 10 upwards (25, 250, ...).
+_NICE_MANTISSAS = (1, 2, 2.5, 5, 10)
+
+
+def _nice_step(raw_step: float) -> int:
+    """Round `raw_step` up to the next whole, human-readable step.
+
+    Produces 1, 2, 5, 10, 25, 50, 100, 250, ... rather than the arbitrary
+    integers a plain `ceil(span / num_bins)` yields (43, 39, ...), so axis
+    labels land on values a reader can scan.
+    """
+    if raw_step <= 1:
+        return 1
+
+    magnitude = 10 ** math.floor(math.log10(raw_step))
+    for mantissa in _NICE_MANTISSAS:
+        candidate = mantissa * magnitude
+        if candidate >= raw_step and float(candidate).is_integer():
+            return int(candidate)
+
+    # log10 rounding can leave us just past 10 * magnitude; the next decade is
+    # always nice and always large enough.
+    return int(10 * magnitude)
+
+
 def _compute_histogram_buckets(
     data_rows: Sequence, num_bins: int = 20
 ) -> list[HistogramBucket]:
-    """Helper to bin grouped data into a fixed number of buckets."""
+    """Bin grouped value/count rows into `num_bins` evenly spaced buckets.
+
+    Bucket width is a "nice" number and the first bucket edge is snapped down to
+    a multiple of that width, so the axis reads 300, 350, 400, ... instead of
+    321, 364, 407, ...
+    """
     if not data_rows:
         return []
 
@@ -82,37 +113,28 @@ def _compute_histogram_buckets(
             HistogramBucket(value=int(min_val), count=total_count, label=str(min_val))
         ]
 
-    # Calculate step size to be a whole number (integer)
-    # We want roughly num_bins, so step = ceil(span / num_bins)
-    step = math.ceil(span / num_bins)
-    if step < 1:
-        step = 1
-
-    # Recalculate number of bins based on the integer step
-    # We maintain the passed num_bins as the fixed output size if possible,
-    # or effectively we cover the span.
-    # The user asked for "based on a bin size of 20", so we try to output 20 buckets.
-    # However, if step is large due to ceil, the last buckets might be empty.
+    # Snapping the origin down costs at most one bucket of headroom, so size the
+    # step against `num_bins - 1` buckets and then verify coverage explicitly.
+    step = _nice_step((span + 1) / (num_bins - 1))
+    start = int(math.floor(min_val / step) * step)
+    while start + num_bins * step <= max_val:
+        step = _nice_step(step + 1)
+        start = int(math.floor(min_val / step) * step)
 
     buckets = [0] * num_bins
-    # Calculate bucket starts for the response
-    bucket_starts = [int(min_val + i * step) for i in range(num_bins)]
-
     for row in data_rows:
-        val = row.value
-        # Determine bin index
-        idx = int((val - min_val) / step)
-        # Clamp max value to last bin (if it exceeds due to some reason, though logic says it shouldn't if num_bins covers it)
-        # But wait, if step is rounded up, idx will be smaller.
-        # e.g. span=30, num_bins=20, step=2. val=30. idx=15.
-        # If val is very large? No, max_val is used to compute span.
-        if idx >= num_bins:
-            idx = num_bins - 1
+        idx = int((row.value - start) // step)
+        # Defensive clamp; the coverage loop above should make this unreachable.
+        idx = max(0, min(idx, num_bins - 1))
         buckets[idx] += row.count
 
     return [
-        HistogramBucket(value=v, count=c, label=f"{v}-{v + step}")
-        for v, c in zip(bucket_starts, buckets)
+        HistogramBucket(
+            value=start + i * step,
+            count=count,
+            label=f"{start + i * step}-{start + (i + 1) * step}",
+        )
+        for i, count in enumerate(buckets)
     ]
 
 
