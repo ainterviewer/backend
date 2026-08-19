@@ -18,10 +18,11 @@ uv run -m fastapi dev app/main.py --port 8666
 
 # Install dependencies
 uv sync
-
-# Generate OpenAPI schema (for SDK generation)
-just generate-sdk
 ```
+
+There is no SDK or OpenAPI recipe in this repo. The TypeScript client is
+generated from the **frontend** repo against this backend's live
+`/api/openapi.json`; see "Making Changes" below.
 
 ### Database Migrations (Alembic)
 
@@ -87,12 +88,17 @@ API Layer (app/api) → Services (app/services) → Repository Pattern (app/db) 
 
 - `InterviewDataBase` facade implements `PersistenceProtocol` from ainterviewer library
 - All repositories share a single SQLAlchemy session (transactional consistency)
-- Specialized repositories:
-  - `UserRepository`: Users, invites, access requests with email notifications
+- Specialized repositories (`app/db/repositories/`):
+  - `UserRepository`, `AuthRepository`, `VerificationRepository`: users, invites,
+    access requests, credentials and email verification
   - `ProjectRepository`: Projects, folders, collaborators, multi-language support
   - `InterviewRepository`: Interview records, messages, feedback tracking
   - `AnalysisRepository`: Annotations, categories, vector search
   - `TestRepository`: Experiment management
+  - `ParticipantRepository`, `AssistanceRepository`, `NewsletterRepository`
+- `errors.py` holds the domain exceptions repositories raise (e.g.
+  `ProjectLanguageError`); the API layer maps them to HTTP status codes rather
+  than repositories raising `HTTPException` themselves
 
 **3. ORM Layer (`app/db/tables.py`)**
 
@@ -111,10 +117,11 @@ API Layer (app/api) → Services (app/services) → Repository Pattern (app/db) 
 - `ScopeChecker` class for dependency injection-based authorization
 - Pre-configured aliases: `AdminToken`, `UserToken`, `GuestToken`
 
-**5. WebSocket Management (`app/websockets.py`)**
+**5. WebSocket Management (`app/api/websockets/`)**
 
-- `WebSocketConnectionManager`: Tracks active connections per project/interview
-- `WebsocketMessageHandler`: Implements `IOProtocol` to bridge WebSocket ↔ ainterviewer library
+- `manager.py` — `InterviewSessionManager`: tracks active sessions per project/interview
+- `handler.py` — `WebsocketMessageHandler`: implements `IOProtocol` to bridge WebSocket ↔ ainterviewer library
+- `interviews/` — the interview loop itself, including agent/template wiring (`interviews/ai.py`)
 - Automatic message queueing for embedding generation after send/receive
 - Image upload support (path over WS, full file over HTTP)
 - System messages broadcast when users disconnect
@@ -180,8 +187,6 @@ The backend is tightly coupled with the `ainterviewer` library (sibling package 
      pinned in the frontend's `package.json` — never generate it via `bunx`,
      which resolves to an unpinned latest and rewrites the vendored client
      runtime.
-   - Refresh and commit `openapi.json` (`just generate-openapi-scheme`) so API
-     changes stay reviewable in the diff
 
 2. **Database Schema Changes**:
    - Modify ORM models in `app/db/tables.py`
@@ -284,6 +289,36 @@ async def list_items(
     return PaginatedResponse(results=items, total=total)
 ```
 
+### Project languages and the default localization
+
+A project's languages are its `projectlocalization` rows. Exactly one of them
+carries `is_default = True`, enforced by the partial unique index
+`uq_project_default_language`. That row is the project's fallback language: it
+is seeded at project creation, used when a requested language has no
+localization (`app/api/interview.py`, `app/api/websockets/interviews/ai.py`),
+used as the translation source when a language is added, and sorted first in
+the participant email templates.
+
+Read it through `ProjectRepository.get_default_language` /
+`_get_default_localization`, and change it only through `set_default_language`,
+which clears the old flag before setting the new one. `remove_project_language`
+refuses to delete the default localization or the last remaining one, raising
+`ProjectLanguageError`, which the API maps to a 409.
+
+Do **not** reintroduce a `default_language` field on `InterviewConfig`. That was
+the old design: a bare language string in the project's JSON config with nothing
+tying it to the rows it named. Deleting the localization it pointed at left it
+dangling, which made localization lookup raise, broke interview creation and the
+translation source, and sent the dashboard's per-language routes to a language
+with no data. Nothing validated writes to it either. See revision
+`a1c4e9f30b57`, which moved the flag onto the row and stripped the key from
+every stored config.
+
+The public language lists use `ProjectLanguage` (`app/db/models.py`), which is
+`LanguageDict` plus `is_default`. The library's `LanguageDict` deliberately
+stays free of the flag: it comes straight out of the shared `LANGUAGES`
+constant and knows nothing about projects.
+
 ### Repository Session Management
 
 Never create new sessions within repository methods. Always use `self.session`:
@@ -317,25 +352,25 @@ await self.message_queue.put(
 
 ## Known Issues & TODOs
 
-- Template-based routes in `app/routes/` are legacy (migrating to SvelteKit frontend)
-- Some exception handlers are marked as not working with new frontend (see `app/main.py:86-101`)
-- No test suite currently exists (pytest configured but no tests written)
-- OpenAPI SDK generation pattern needs full implementation (see `app/main.py:1-3`)
+- No test suite currently exists (pytest is a dev dependency but no tests are written)
+- OpenAPI SDK generation pattern needs full implementation (see the TODO at the top of `app/main.py`)
+- `create_interview` falls back to the project's default language when a
+  respondent requests one the project has no localization for, instead of
+  surfacing the choice (see the `FIXME` in `app/api/interview.py`)
 
 ## Release Process
 
 ```bash
-# Bump version (patch/minor/major)
+# Bump version (patch/minor/major); chains into `just publish`
 just bump patch  # or minor, major
-
-# This will:
-# 1. Update version in pyproject.toml
-# 2. Run uv sync to update uv.lock
-# 3. Stage changes
-# 4. Commit with "Release vX.Y.Z"
-# 5. Create git tag
-# 6. Push with tags
 ```
+
+`just bump` runs `prek` over the tree and bumps the version in
+`pyproject.toml`. `just publish` then syncs `uv.lock`, prepends this release's
+section to `CHANGELOG.md` via `git-cliff`, commits as `chore(release): vX.Y.Z`,
+tags, and pushes with `--follow-tags`.
+
+`just install-hooks` installs this clone's pre-commit and commit-msg hooks.
 
 ## Environment Variables
 
