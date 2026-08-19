@@ -531,10 +531,20 @@ async def get_consent(
     db: DBSession,
     language: LanguageCode,
 ) -> Consent | None:
-    return db.projects.get_consent(
-        project_id,
-        language=language,
-    )
+    # A missing localization is a 404, distinct from a 200 `null` meaning the
+    # localization exists but has no consent configured. The interview page
+    # relies on that distinction: it may only start an interview without a
+    # consent screen for the second case.
+    try:
+        return db.projects.get_consent(
+            project_id,
+            language=language,
+        )
+    except NoResultFound as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="The project has no localization for that language.",
+        ) from exc
 
 
 @router.post("/projects/{project_id}/guide/consent/{language}")
@@ -557,10 +567,17 @@ async def get_welcome(
     language: LanguageCode,
     db: DBSession,
 ) -> Welcome | None:
-    return db.projects.get_welcome(
-        project_id=project_id,
-        language=language,
-    )
+    # See `get_consent`: missing localization is a 404, not a 500.
+    try:
+        return db.projects.get_welcome(
+            project_id=project_id,
+            language=language,
+        )
+    except NoResultFound as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="The project has no localization for that language.",
+        ) from exc
 
 
 @router.post("/projects/{project_id}/guide/welcome/{language}")
