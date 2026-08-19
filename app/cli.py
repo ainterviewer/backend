@@ -1,5 +1,5 @@
 import json
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from typer import Typer
@@ -28,7 +28,7 @@ def version_callback(value: bool) -> None:
 @cli.callback()
 def callback(
     version: Annotated[
-        Optional[bool],
+        bool | None,
         typer.Option(
             "--version", help="Show the version and exit.", callback=version_callback
         ),

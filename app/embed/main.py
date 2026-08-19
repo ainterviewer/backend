@@ -20,7 +20,6 @@ Architecture Components:
 import asyncio
 import random
 import time
-from typing import Dict, List
 
 from ainterviewer.utils import now
 
@@ -95,7 +94,7 @@ class EmbeddingService:
         # Simulate model dimension
         self.embedding_dim = 1536
 
-    async def generate_embedding(self, text: str) -> List[float]:
+    async def generate_embedding(self, text: str) -> list[float]:
         """
         Generate embedding for single text
 
@@ -110,7 +109,7 @@ class EmbeddingService:
         # Return random vector
         return [random.random() for _ in range(self.embedding_dim)]
 
-    async def generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
+    async def generate_embeddings_batch(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for multiple texts efficiently"""
         # Simulate network latency (batch processing is usually faster per item)
         await asyncio.sleep(0.1)
@@ -152,10 +151,10 @@ class VectorStore:
 
     def __init__(self):
         # In-memory storage for prototype
-        self._store: Dict[str, List[float]] = {}
-        self._status: Dict[str, str] = {}
+        self._store: dict[str, list[float]] = {}
+        self._status: dict[str, str] = {}
 
-    async def save_embedding(self, message_id: int, embedding: List[float]):
+    async def save_embedding(self, message_id: int, embedding: list[float]):
         """Persist embedding to vector store"""
         # Simulate DB IO
         await asyncio.sleep(0.01)
@@ -163,7 +162,7 @@ class VectorStore:
         await self.update_embedding_status(message_id, "completed")
         print(f"Saved embedding for message {message_id}")
 
-    async def search_similar(self, query_embedding: List[float], limit: int = 10):
+    async def search_similar(self, query_embedding: list[float], limit: int = 10):
         """Semantic search for similar messages"""
         # Simulate search latency
         await asyncio.sleep(0.05)
@@ -286,7 +285,7 @@ class BatchEmbeddingWorker:
                 print(f"Error in batch worker loop: {e}")
                 await asyncio.sleep(1)
 
-    async def _collect_batch(self) -> List[EmbeddingTask]:
+    async def _collect_batch(self) -> list[EmbeddingTask]:
         """Collect tasks up to batch_size or timeout"""
         batch = []
         start_time = time.time()
@@ -305,13 +304,12 @@ class BatchEmbeddingWorker:
                 # If batch is empty, we can wait longer (or indefinitely if we prefer)
                 # but here we use timeout to check is_running
                 wait_time = remaining if batch else 1.0
-                if wait_time < 0:
-                    wait_time = 0
+                wait_time = max(wait_time, 0)
 
                 # We need to wrap dequeue in wait_for because dequeue waits indefinitely
                 task = await asyncio.wait_for(self.queue.dequeue(), timeout=wait_time)
                 batch.append(task)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Timeout reached
                 if batch:
                     break
@@ -325,7 +323,7 @@ class BatchEmbeddingWorker:
 
         return batch
 
-    async def _process_batch(self, tasks: List[EmbeddingTask]):
+    async def _process_batch(self, tasks: list[EmbeddingTask]):
         """Process batch of tasks together"""
         if not tasks:
             return

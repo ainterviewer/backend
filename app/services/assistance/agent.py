@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from pydantic import UUID4, Field
 from pydantic_ai import (
@@ -135,7 +135,7 @@ async def stream_messages(
     yield (
         ChatMessage(
             role="user",
-            timestamp=datetime.now(tz=timezone.utc).isoformat(),
+            timestamp=datetime.now(tz=UTC).isoformat(),
             content=prompt,
         )
         .model_dump_json()

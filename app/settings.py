@@ -102,17 +102,17 @@ class DatabaseSettings(BaseModel):
         return connection_string
 
 
+class EmailAccount(BaseModel):
+    email: str
+    password: SecretStr
+
+
 class EmailSettings(BaseModel):
     smtp_server: str
     smtp_port: int = 587
     smtp_use_ssl: bool = False
     sender: EmailAccount
     recipient: EmailAccount
-
-
-class EmailAccount(BaseModel):
-    email: str
-    password: SecretStr
 
 
 class SpeechSettings(BaseModel):
@@ -156,7 +156,7 @@ class Settings(BaseSettings):
     # - Should the secrets be a standalone class so they cant be read
     # through the config.toml file?
     # - Should all "secrets" be moved to that class?
-    secrets: AppSecrets = AppSecrets()  # ty: ignore[missing-argument]
+    secrets: AppSecrets = AppSecrets()
 
     model_config = BaseSettingsConfigDict(
         toml_file="config.toml",
@@ -221,7 +221,7 @@ class Settings(BaseSettings):
 
 
 # TODO: Read/write to/from database or config file to get persistent changes?
-app_settings = Settings()  # ty: ignore[missing-argument]
+app_settings = Settings()
 
 if __name__ == "__main__":
     # from ainterviewer.settings import settings as lib_settings
@@ -230,4 +230,3 @@ if __name__ == "__main__":
     # print(lib_settings)
     # print(app_settings.services)
     print(app_settings.app.special_registration_tokens)
-    pass

@@ -44,7 +44,7 @@ def build_openapi_schema(app: FastAPI) -> dict[str, Any]:
     openapi["paths"] = {
         path: spec
         for path, spec in openapi["paths"].items()
-        if path.startswith("/api/") or path.startswith("/ws/")
+        if path.startswith(("/api/", "/ws/"))
     }
 
     # TODO: Make sure that we should in fact extend the openapi schema, and not

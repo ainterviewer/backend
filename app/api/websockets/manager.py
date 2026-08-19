@@ -54,7 +54,7 @@ class InterviewSessionManager:
                 await asyncio.wait_for(
                     existing.done.wait(), timeout=self._CANCEL_TIMEOUT_S
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.error(
                     "Prior session for project=%s interview=%s did not exit "
                     "within %.1fs; proceeding anyway",

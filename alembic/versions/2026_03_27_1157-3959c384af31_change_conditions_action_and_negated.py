@@ -6,16 +6,16 @@ Create Date: 2026-03-27 11:57:12.222513
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "3959c384af31"
-down_revision: Union[str, None] = "03ea14d07326"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "03ea14d07326"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def process_guide(guide_str: str, downgrade: bool = False) -> str:

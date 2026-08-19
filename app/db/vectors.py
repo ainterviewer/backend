@@ -32,24 +32,18 @@ from __future__ import annotations
 import importlib.resources
 import json
 import logging
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import (
-    TYPE_CHECKING,
     Any,
-    Iterator,
     Literal,
-    Sequence,
     TypeVar,
     overload,
 )
 
 from sqlalchemy import Engine, Row, event, text
 from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute, Session
-
-if TYPE_CHECKING:
-    pass
-
 
 # Type variable for table classes
 T = TypeVar("T", bound=DeclarativeBase)
@@ -821,8 +815,7 @@ class VectorExtension:
 
         result = self.session.execute(text(base_query), params)
 
-        for row in result:
-            yield row
+        yield from result
 
     # ==================== ORM-Integrated Search ====================
 

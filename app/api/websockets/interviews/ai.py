@@ -76,7 +76,7 @@ async def ai_interview_websocket_endpoint(
         try:
             await websocket.close()
         except Exception:
-            pass
+            logger.debug("Websocket already closed while cancelling interview")
     finally:
         session_manager.release(project_id, interview_id, session_done)
 
@@ -109,7 +109,7 @@ async def _run_interview(
                 content=CustomToken.restart_interview,
             ).model_dump()
         )
-        exit()
+        return
 
     project = db.projects.get_project(project_id)
 
@@ -134,8 +134,8 @@ async def _run_interview(
                 interview_id=interview_id,
             )
 
-            for messages in messages:
-                await websocket.send_json(messages.model_dump())
+            for message in messages:
+                await websocket.send_json(message.model_dump())
 
         if not continue_from_history:
             await websocket.close()
@@ -191,6 +191,6 @@ async def _run_interview(
                             OutgoingData(error="InferenceError").model_dump()
                         )
                     else:
-                        raise e
+                        raise
     except WebSocketDisconnect:
         pass

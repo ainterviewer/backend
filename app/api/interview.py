@@ -1,6 +1,6 @@
-import shutil
 from typing import Annotated
 
+import aiofiles
 import aiohttp
 from fastapi import (
     APIRouter,
@@ -22,7 +22,7 @@ from uvicorn.config import logger
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode, MessageRole, TestType
 
-from ..auth import create_interview_token, AuthToken, InterviewToken
+from ..auth import AuthToken, InterviewToken, create_interview_token
 from ..db.types import InterviewType
 from ..dependencies import (
     AdminToken,
@@ -37,6 +37,8 @@ from ..types import CollaboratorRole, Scope, build_external_params_model
 from ..utils import generate_random_filename
 from .request_models import CreateInterviewRequest, SpeechRequest
 from .response_models import MediaUploadResponse, MessageFeedbackResponse
+
+CHUNK_SIZE = 1024 * 1024
 
 router = APIRouter(tags=["interviews"])
 
@@ -192,8 +194,9 @@ async def upload_interview_image(
         lib_settings.storage.interview_storage.image_path(interview_id) / filename
     )
 
-    with open(filepath, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    async with aiofiles.open(filepath, "wb") as f:
+        while chunk := await file.read(CHUNK_SIZE):
+            await f.write(chunk)
 
     return MediaUploadResponse(message="Image uploaded successfully", filename=filename)
 
@@ -217,8 +220,9 @@ async def upload_audio(
         lib_settings.storage.interview_storage.audio_path(interview_id) / filename
     )
 
-    with open(filepath, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    async with aiofiles.open(filepath, "wb") as f:
+        while chunk := await file.read(CHUNK_SIZE):
+            await f.write(chunk)
 
     return MediaUploadResponse(message="Audio uploaded successfully", filename=filename)
 

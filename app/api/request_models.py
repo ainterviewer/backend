@@ -178,7 +178,7 @@ class ExternalParamsRequest(BaseModel):
     @field_validator("params")
     @classmethod
     def validate_params(cls, values: list[ExternalParam]):
-        if len(values) != len(set(x.name for x in values)):
+        if len(values) != len({x.name for x in values}):
             raise ValueError("External parameter names must be unique")
         return values
 

@@ -6,19 +6,18 @@ Create Date: 2026-05-06 14:00:04.635502
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 from alembic import op
 
 import app.db.types  # noqa: F401
 from app.db.triggers import install_triggers, uninstall_triggers
 
-
 # revision identifiers, used by Alembic.
 revision: str = "08e271a5c2b5"
-down_revision: Union[str, None] = "3d64d3a385a1"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "3d64d3a385a1"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

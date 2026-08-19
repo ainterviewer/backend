@@ -183,14 +183,14 @@ async def run_synthetic_test(
                     test_run_id=test_run_id,
                     status=TestRunStatus.COMPLETED,
                 )
-            except Exception as e:
+            except Exception:
                 logger.error("Error running synthesis job")
                 db.tests.update_test_run_status(
                     test_setup_id=test_id,
                     test_run_id=test_run_id,
                     status=TestRunStatus.FAILED,
                 )
-                raise e
+                raise
 
         return wrapper
 

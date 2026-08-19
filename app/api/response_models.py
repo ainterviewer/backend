@@ -1,13 +1,9 @@
-from typing import Generic, TypeVar
-
 from pydantic import UUID4, BaseModel
 
 from ainterviewer.types import Feedback
 
-T = TypeVar("T")
 
-
-class PaginatedResponse(BaseModel, Generic[T]):
+class PaginatedResponse[T](BaseModel):
     total: int
     items: list[T]
 

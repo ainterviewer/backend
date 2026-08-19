@@ -25,7 +25,7 @@ dependencies = [
   "passlib[bcrypt]>=1.7.4",
   "polars>=1.30.0",
   "pyarrow>=20.0.0",
-  "pydantic-ai-slim>=1.58.0",
+  "pydantic-ai-slim>=1.106.0,<2",
   "pydantic-extra-types>=2.10.4",
   "pydantic-settings>=2.7.1",
   "pydantic>=2.9,<3",
@@ -69,7 +69,7 @@ dev = [
   "prek>=0.3.10",
   "psycopg2-binary>=2.9.10",
   "pytest>=8.4.0",
-  "ruff>=0.11.12",
+  "ruff>=0.16.3",
   "ty>=0.0.32",
 ]
 
@@ -87,6 +87,31 @@ indent = 4
 
 [tool.ruff]
 target-version = "py312"
+
+[tool.ruff.lint]
+ignore = [
+  # Broad `except Exception` is deliberate in the embedding worker, the
+  # websocket teardown paths and the load-test scripts: those must keep the
+  # process alive and log, not propagate.
+  "BLE001",
+]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI, Typer and pydantic all express defaults as calls in the signature.
+extend-immutable-calls = [
+  "fastapi.Body",
+  "fastapi.Cookie",
+  "fastapi.Depends",
+  "fastapi.File",
+  "fastapi.Form",
+  "fastapi.Header",
+  "fastapi.Path",
+  "fastapi.Query",
+  "fastapi.Security",
+  "pydantic.Field",
+  "typer.Argument",
+  "typer.Option",
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["ainterviewer"]

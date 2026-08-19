@@ -11,15 +11,15 @@ from .user import UserRepository
 from .verification import VerificationRepository
 
 __all__ = [
+    "AnalysisRepository",
+    "AssistanceRepository",
     "AuthRepository",
     "BaseRepository",
-    "UserRepository",
-    "ProjectRepository",
     "InterviewRepository",
     "NewsletterRepository",
     "ParticipantRepository",
+    "ProjectRepository",
     "TestRepository",
-    "AnalysisRepository",
-    "AssistanceRepository",
+    "UserRepository",
     "VerificationRepository",
 ]

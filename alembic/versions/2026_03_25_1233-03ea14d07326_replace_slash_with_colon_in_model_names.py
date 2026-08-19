@@ -7,7 +7,7 @@ Create Date: 2026-03-25 12:33:03.357113
 """
 
 import json
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
@@ -23,9 +23,9 @@ AGENT_CONFIG_KEYS = [
 
 # revision identifiers, used by Alembic.
 revision: str = "03ea14d07326"
-down_revision: Union[str, None] = "4d693d77718b"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "4d693d77718b"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def _replace_first_slash(value: str) -> str:

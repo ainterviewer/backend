@@ -7,7 +7,7 @@ Create Date: 2026-08-19 14:00:00.000000
 """
 
 import json
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
@@ -15,12 +15,11 @@ from alembic import op
 import app.db.types  # noqa: F401
 from app.db.triggers import install_triggers, uninstall_triggers
 
-
 # revision identifiers, used by Alembic.
 revision: str = "a1c4e9f30b57"
-down_revision: Union[str, None] = "b4e91c07d3a2"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "b4e91c07d3a2"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 # `InterviewConfig.default_language` was a bare string inside the project's

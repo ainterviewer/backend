@@ -262,10 +262,12 @@ Always use typed annotations for automatic scope checking:
 ```python
 from app.dependencies import AdminToken, UserToken
 
+
 @router.get("/admin-only")
 async def admin_endpoint(token: AdminToken):  # Only ADMIN scope
     # token.user_id is UUID of authenticated user
     pass
+
 
 @router.get("/user-endpoint")
 async def user_endpoint(token: UserToken):  # USER and ADMIN allowed
@@ -279,6 +281,7 @@ Use `PaginatedQueryParams` and `PaginatedResponse[T]`:
 ```python
 from app.api.request_models import PaginatedQueryParams
 from app.api.response_models import PaginatedResponse
+
 
 @router.get("/items")
 async def list_items(

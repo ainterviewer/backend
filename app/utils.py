@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Sequence
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import fastapi.openapi.constants
@@ -18,7 +18,7 @@ from qrcode.image.styledpil import StyledPilImage
 from qrcode.image.styles.colormasks import (
     HorizontalGradiantColorMask,  # noqa: F401
     RadialGradiantColorMask,
-    SolidFillColorMask,  # noqa: F401
+    SolidFillColorMask,
 )
 from qrcode.image.styles.moduledrawers.pil import RoundedModuleDrawer
 from typer import Context, Typer
@@ -42,7 +42,7 @@ def generate_qr_img(
     payload: str,
     icon_path: Path | None = None,
     color_rgb: tuple[int, int, int] | None = None,
-    file_path: Path = None,  # ty: ignore[invalid-parameter-default]
+    file_path: Path | None = None,
     ctx: Context = None,  # ty: ignore[invalid-parameter-default]
 ) -> bytes:
     img_byte_array = BytesIO()
@@ -75,7 +75,7 @@ def generate_qr_img(
 
     if file_path:
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        if not file_path.suffix == ".png":
+        if file_path.suffix != ".png":
             file_path = file_path.with_suffix(".png")
         with open(file_path, "wb") as f:
             _ = f.write(img_byte_array)
@@ -229,11 +229,11 @@ def clean_schema(obj):
         # Remove 'default' if it contains masked secret values
         if "default" in obj:
             default = obj["default"]
-            if isinstance(default, dict) and any(
-                v == _MASKED_SECRET for v in default.values()
+            if (
+                isinstance(default, dict)
+                and any(v == _MASKED_SECRET for v in default.values())
+                or default == _MASKED_SECRET
             ):
-                del obj["default"]
-            elif default == _MASKED_SECRET:
                 del obj["default"]
         return {k: clean_schema(v) for k, v in obj.items()}
     elif isinstance(obj, list):
@@ -275,7 +275,7 @@ def merge_config_schemas(models: list[type[BaseSettings]]) -> dict[str, Any]:
     return merged
 
 
-def ensure_filename(filename: Optional[str], fallback_ext: str = ".bin") -> str:
+def ensure_filename(filename: str | None, fallback_ext: str = ".bin") -> str:
     """
     Return the original filename if present, otherwise generate a random one.
     """

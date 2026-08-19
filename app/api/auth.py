@@ -362,12 +362,13 @@ async def register(user: UserCreateRequest, db: DBSession) -> JSONResponse:
         else:
             try:
                 invitation = db.users.check_invite_token(user.invite_token)
-                if not invitation.reuseable:
-                    if not db.users.delete_invitation(invitation.id):
-                        # Another request already claimed this token
-                        return JSONResponse(
-                            {"detail": "Invalid invite token"}, status_code=406
-                        )
+                if not invitation.reuseable and not db.users.delete_invitation(
+                    invitation.id
+                ):
+                    # Another request already claimed this token
+                    return JSONResponse(
+                        {"detail": "Invalid invite token"}, status_code=406
+                    )
                 user.scope = invitation.user_scope
             except sqlalchemy.exc.NoResultFound:
                 return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
@@ -480,7 +481,7 @@ async def request_access(access_request: AccessRequestCreate, db: DBSession):
                 content={"details": "Access request already exists for this email."},
                 status_code=400,
             )
-        raise e
+        raise
 
 
 @router.post("/logout")

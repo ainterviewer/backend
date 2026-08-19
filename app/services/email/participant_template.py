@@ -69,9 +69,9 @@ def render_participant_email_template(template: str, context: dict[str, Any]) ->
 
 __all__ = [
     "ALLOWED_TEMPLATE_VARIABLES",
+    "TemplateSyntaxError",
     "build_template_context",
     "participant_template_env",
     "render_participant_email_template",
     "validate_participant_email_template",
-    "TemplateSyntaxError",
 ]

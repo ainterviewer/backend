@@ -1,8 +1,8 @@
-from sqlalchemy.exc import NoResultFound
 import json
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.routing import APIRoute
+from sqlalchemy.exc import NoResultFound
 
 from ..dependencies import DBSession
 from ..openapi import build_openapi_schema
@@ -11,8 +11,24 @@ from . import auth, interview, misc
 from .admin import main as admin
 from .dashboard import main as dashboard
 
+
+def route_name_as_operation_id(route: APIRoute) -> str:
+    """Simplify operation IDs so that generated API clients have simpler
+    function names: `addCollaborator` rather than
+    `addCollaboratorApiFoldersFolderIdCollaboratorsPost`.
+
+    This must stay a `generate_unique_id_function` rather than a post-hoc loop
+    over `router.routes`. Since FastAPI 0.14x, `include_router` keeps sub-routers
+    as lazy `_IncludedRouter` entries instead of flattening their routes into the
+    parent, so walking `router.routes` only ever sees the handful of routes
+    declared directly on this module and silently misses every sub-router.
+    """
+    return route.name
+
+
 router = APIRouter(
     prefix="/api",
+    generate_unique_id_function=route_name_as_operation_id,
 )
 
 router.include_router(dashboard.router)
@@ -68,20 +84,6 @@ def releases(db: DBSession, limit: int = 10) -> list[PlatformRelease]:
         if manifest.highlights is not None
     ]
 
-
-def use_route_names_as_operation_ids(router: APIRouter) -> None:
-    """
-    Simplify operation IDs so that generated API clients have simpler function
-    names.
-
-    Should be called only after all routes have been added.
-    """
-    for route in router.routes:
-        if isinstance(route, APIRoute):
-            route.operation_id = route.name
-
-
-use_route_names_as_operation_ids(router)
 
 if __name__ == "__main__":
     app = FastAPI()

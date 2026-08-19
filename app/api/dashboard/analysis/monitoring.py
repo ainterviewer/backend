@@ -1,6 +1,7 @@
 import datetime
 import math
-from typing import Annotated, Sequence
+from collections.abc import Sequence
+from typing import Annotated
 
 from fastapi import APIRouter, Query
 from pydantic import UUID4, BaseModel

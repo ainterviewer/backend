@@ -1,6 +1,6 @@
-from uuid import UUID
 import json
 from pathlib import Path
+from uuid import UUID
 
 import typer
 from sqlalchemy import text

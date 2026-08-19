@@ -6,12 +6,7 @@ from typing import (
     TYPE_CHECKING,
     Annotated,
     Any,
-    Dict,
-    List,
-    Optional,
-    Type,
     TypeVar,
-    Union,
     cast,
     get_args,
     get_origin,
@@ -37,7 +32,7 @@ else:
 BaseModelType = TypeVar("BaseModelType", bound=BaseModel)
 
 # Define a type alias for JSON-serializable values
-JSONValue = Union[Dict[str, Any], List[Any], str, int, float, bool, None]
+JSONValue = dict[str, Any] | list[Any] | str | int | float | bool | None
 
 
 class AutoString(types.TypeDecorator):
@@ -60,12 +55,10 @@ class PydanticJSONB(types.TypeDecorator):
 
     def __init__(
         self,
-        model_class: Union[
-            Type[BaseModelType],
-            Type[List[BaseModelType]],
-            Type[Dict[str, BaseModelType]],
-            Any,
-        ],
+        model_class: type[BaseModelType]
+        | type[list[BaseModelType]]
+        | type[dict[str, BaseModelType]]
+        | Any,
         *args: Any,
         **kwargs: Any,
     ):
@@ -103,7 +96,7 @@ class PydanticJSONB(types.TypeDecorator):
 
     def process_result_value(
         self, value: Any, dialect: Any
-    ) -> Optional[Union[BaseModelType, List[BaseModelType], Dict[str, BaseModelType]]]:
+    ) -> BaseModelType | list[BaseModelType] | dict[str, BaseModelType] | None:
         if value is None:
             return None
         if isinstance(value, dict):

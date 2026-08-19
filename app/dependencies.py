@@ -1,4 +1,5 @@
-from typing import Annotated, Generator, Literal
+from collections.abc import Generator
+from typing import Annotated, Literal
 
 from fastapi import Cookie, Depends, HTTPException
 from fastapi.security import APIKeyCookie

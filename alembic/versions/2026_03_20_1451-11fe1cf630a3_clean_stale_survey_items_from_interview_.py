@@ -12,7 +12,7 @@ Create Date: 2026-03-20 14:51:14.585969
 
 import json
 import logging
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
@@ -24,9 +24,9 @@ logger = logging.getLogger(__name__)
 
 # revision identifiers, used by Alembic.
 revision: str = "11fe1cf630a3"
-down_revision: Union[str, None] = "d76ee7c3a020"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "d76ee7c3a020"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 _survey_item_adapter = TypeAdapter(SurveyItem)
 

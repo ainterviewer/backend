@@ -228,9 +228,9 @@ class UserRepository(BaseRepository):
                     ),
                 )
                 access_request.status = AccessRequestStatus.FULFILLED
-            except Exception as e:
+            except Exception:
                 self.delete_invitation(invite.id)
-                raise e
+                raise
 
         elif action == "deny":
             access_request.status = AccessRequestStatus.DENIED

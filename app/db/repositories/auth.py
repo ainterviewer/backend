@@ -45,7 +45,7 @@ class AuthRepository(BaseRepository):
             update(RefreshTokenTable)
             .where(
                 RefreshTokenTable.id == token_id,
-                RefreshTokenTable.is_used == False,  # noqa: E712
+                RefreshTokenTable.is_used == False,
             )
             .values(is_used=True)
         )

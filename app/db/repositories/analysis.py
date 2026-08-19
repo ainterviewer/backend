@@ -319,7 +319,7 @@ class AnalysisRepository(BaseRepository):
         annotations = self.session.execute(statement).scalars().all()
         # Ensure values are loaded
         for annotation in annotations:
-            annotation.values
+            _ = annotation.values
 
         return [
             MessageAnnotationPublic.model_validate(annotation)
@@ -351,7 +351,7 @@ class AnalysisRepository(BaseRepository):
         self.session.refresh(new_annotation)
 
         # Ensure values are loaded for response
-        new_annotation.values
+        _ = new_annotation.values
 
         return MessageAnnotationPublic.model_validate(new_annotation)
 
@@ -390,7 +390,7 @@ class AnalysisRepository(BaseRepository):
         existing_annotation = self.session.execute(statement).scalar_one()
 
         # Ensure values are loaded for response
-        existing_annotation.values
+        _ = existing_annotation.values
 
         return MessageAnnotationPublic.model_validate(existing_annotation)
 

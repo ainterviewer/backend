@@ -14,19 +14,18 @@ Create Date: 2026-05-26 12:29:20.512603
 # table, which breaks any trigger that references it by name. See
 # `app/db/triggers.py` and revision 3d64d3a385a1 for an example.
 import json
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 import app.db.types  # noqa: F401
 
-
 # revision identifiers, used by Alembic.
 revision: str = "0909697430ec"
-down_revision: Union[str, None] = "84ab990a0092"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "84ab990a0092"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 # Tables whose `interview_guide` JSON column holds question sections with an
 # `ai_generated_questions` field.

@@ -2,7 +2,6 @@ import logging
 from urllib.parse import urlparse
 
 import gevent
-from ainterviewer.config import CONFIGS
 from locust import (
     HttpUser,
     SequentialTaskSet,
@@ -12,6 +11,10 @@ from locust import (
 )
 from locust.exception import StopUser
 from locust_plugins.users.socketio import SocketIOUser
+
+from ainterviewer.config import CONFIGS
+
+logger = logging.getLogger(__name__)
 
 
 @events.init_command_line_parser.add_listener
@@ -76,7 +79,7 @@ class InterviewUser(HttpUser, SocketIOUser):
             )
             gevent.sleep(20)
         except Exception as e:
-            logging.warning(e)
+            logger.warning(e)
         finally:
             raise StopUser()
 
@@ -102,4 +105,4 @@ class InterviewUser(HttpUser, SocketIOUser):
                 except Exception as e:
                     print(f"Failed to close WebSocket connection: {e}")
         except Exception as e:
-            logging.warning(e)
+            logger.warning(e)

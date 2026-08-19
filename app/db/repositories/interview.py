@@ -2,7 +2,7 @@ import datetime
 import logging
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import UUID4
 from sqlalchemy import delete, func, select, update
@@ -178,7 +178,7 @@ class InterviewRepository(BaseRepository):
 
         if with_messages:
             for interview in interviews:
-                interview.messages
+                _ = interview.messages
 
         return [
             InterviewPublic.model_validate(interview) for interview in interviews
@@ -206,8 +206,8 @@ class InterviewRepository(BaseRepository):
             else:
                 raise
         if full:
-            interview.messages
-            interview.n_messages
+            _ = interview.messages
+            _ = interview.n_messages
 
         return InterviewPublic.model_validate(interview)
 
@@ -246,13 +246,13 @@ class InterviewRepository(BaseRepository):
         message_type: MessageType = MessageType.TEXT,
         can_answer: bool = True,
         include_in_history: bool = True,
-        attachment: Optional[Path] = None,
-        audio_file: Optional[str] = None,
-        survey_item: Optional[SurveyItem] = None,
-        image: Optional[Image | list[Image]] = None,
-        section: Optional[int] = None,
-        main_question: Optional[int] = None,
-        sub_question: Optional[int] = None,
+        attachment: Path | None = None,
+        audio_file: str | None = None,
+        survey_item: SurveyItem | None = None,
+        image: Image | list[Image] | None = None,
+        section: int | None = None,
+        main_question: int | None = None,
+        sub_question: int | None = None,
         is_introduction: bool = False,
         outro: bool = False,
         timed: bool = False,
@@ -304,7 +304,7 @@ class InterviewRepository(BaseRepository):
         self,
         message_id: int,
         interview_id: UUID4,
-        feedback: Optional[Feedback],
+        feedback: Feedback | None,
     ):
         """Updates a message with feedback"""
 
@@ -321,8 +321,8 @@ class InterviewRepository(BaseRepository):
         self,
         interview_id: UUID4,
         project_id: UUID4,
-        role: Optional[MessageRole] = None,
-    ) -> Optional[MessagePublic]:
+        role: MessageRole | None = None,
+    ) -> MessagePublic | None:
         """Fetch the most recent message of an interview, optionally
         restricted to a role. Returns None if there are no matches."""
         statement = (
@@ -374,12 +374,12 @@ class InterviewRepository(BaseRepository):
         interview_id: UUID4,
         project_id: UUID4,
         task: str,
-        reason: Optional[str] = None,
-        context: Optional[str] = None,
-        content: Optional[str] = None,
-        response: Optional[str] = None,
-        model: Optional[str] = None,
-        time_spend: Optional[int] = None,
+        reason: str | None = None,
+        context: str | None = None,
+        content: str | None = None,
+        response: str | None = None,
+        model: str | None = None,
+        time_spend: int | None = None,
     ):
         new_task = TaskTable(
             message_id=message_id,

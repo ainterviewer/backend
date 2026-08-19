@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 from pydantic import (
     UUID4,
@@ -209,14 +208,14 @@ class ProjectLocalizationBase(_BaseModel):
     prompt_overrides: dict[str, str]
     agent_configs: AgentConfigs
     created_at: datetime
-    last_updated: Optional[datetime] = None
+    last_updated: datetime | None = None
 
 
 class ProjectLocalizationCreate(_BaseModel):
     language: LanguageCode
-    interview_guide: Optional[InterviewGuide] = None
-    prompt_overrides: Optional[dict[str, str]] = None
-    agent_configs: Optional[AgentConfigs] = None
+    interview_guide: InterviewGuide | None = None
+    prompt_overrides: dict[str, str] | None = None
+    agent_configs: AgentConfigs | None = None
 
 
 class ProjectLocalizationPublic(ProjectLocalizationBase):
@@ -253,7 +252,7 @@ class ProjectBase(_BaseModel):
     id: UUID4
     title: str
     created_at: datetime
-    last_updated: Optional[datetime] = None
+    last_updated: datetime | None = None
     status: ProjectStatus = ProjectStatus.ACTIVE
     config: InterviewConfig
     external_params: list[ExternalParam] | None = None
@@ -262,7 +261,7 @@ class ProjectBase(_BaseModel):
 
 class ProjectCreate(_BaseModel):
     title: str
-    config: Optional[InterviewConfig] = None
+    config: InterviewConfig | None = None
 
 
 class ProjectLanguage(LanguageDict):
@@ -292,7 +291,7 @@ class ExperimentProjectCreate(_BaseModel):
     """Input model for adding a project to an experiment."""
 
     project_id: UUID4
-    weight: Optional[float] = None
+    weight: float | None = None
 
 
 class ExperimentProjectPublic(_BaseModel):
@@ -300,7 +299,7 @@ class ExperimentProjectPublic(_BaseModel):
 
     id: UUID4
     project_id: UUID4
-    weight: Optional[float] = None
+    weight: float | None = None
     added_at: datetime
 
 
@@ -326,13 +325,13 @@ class InterviewBase(_BaseModel):
     status: InterviewStatus = InterviewStatus.INACTIVE
     type: InterviewType = InterviewType.DISTRIBUTED
     created_at: datetime
-    last_updated: Optional[datetime] = None
+    last_updated: datetime | None = None
     total_time_spent: int = 0
-    survey_token: Optional[str] = None
-    user_agent: Optional[str] = None
-    ip_address: Optional[str] = None
-    referer: Optional[str] = None
-    platform_version: Optional[str] = None
+    survey_token: str | None = None
+    user_agent: str | None = None
+    ip_address: str | None = None
+    referer: str | None = None
+    platform_version: str | None = None
     test_name: str | None = None
 
 
@@ -341,12 +340,12 @@ class InterviewCreate(_BaseModel):
     language: LanguageCode = "EN"
     interviewer: Interviewer = Interviewer.AI
     project_id: UUID4
-    experiment_id: Optional[UUID4] = None
+    experiment_id: UUID4 | None = None
 
 
 class InterviewPublic(InterviewBase):
     n_messages: int
-    messages: list["MessagePublic"]
+    messages: list[MessagePublic]
 
 
 class InterviewSummaryPublic(_BaseModel):
@@ -356,10 +355,10 @@ class InterviewSummaryPublic(_BaseModel):
     status: InterviewStatus
     type: InterviewType
     created_at: datetime
-    last_updated: Optional[datetime] = None
+    last_updated: datetime | None = None
     total_time_spent: int = 0
     n_messages: int
-    messages: list["MessagePublic"]
+    messages: list[MessagePublic]
     test_name: str | None = None
 
 
@@ -370,20 +369,20 @@ class MessageBase(_BaseModel):
     interview_id: UUID4
     project_id: UUID4
     message_type: MessageType = MessageType.TEXT
-    section: Optional[int] = None
-    main_question: Optional[int] = None
-    sub_question: Optional[int] = None
+    section: int | None = None
+    main_question: int | None = None
+    sub_question: int | None = None
     is_introduction: bool = False
     outro: bool = False
     timed: bool = False
     can_answer: bool = True
     include_in_history: bool = True
-    attachment: Optional[Path] = None
-    audio_file: Optional[str] = None
-    feedback: Optional[Feedback] = None
+    attachment: Path | None = None
+    audio_file: str | None = None
+    feedback: Feedback | None = None
     created_at: datetime
-    image: Optional[Image | list[Image]] = None
-    survey_item: Optional[SurveyItem] = None
+    image: Image | list[Image] | None = None
+    survey_item: SurveyItem | None = None
     skipped_by_condition: bool = False
 
 
@@ -394,25 +393,25 @@ class MessageCreate(_BaseModel):
     interview_id: UUID4
     project_id: UUID4
     message_type: MessageType = MessageType.TEXT
-    section: Optional[int] = None
-    main_question: Optional[int] = None
-    sub_question: Optional[int] = None
+    section: int | None = None
+    main_question: int | None = None
+    sub_question: int | None = None
     is_introduction: bool = False
     outro: bool = False
     timed: bool = False
     can_answer: bool = True
     include_in_history: bool = True
-    attachment: Optional[Path] = None
-    audio_file: Optional[str] = None
-    feedback: Optional[Feedback] = None
-    image: Optional[Image | list[Image]] = None
-    survey_item: Optional[SurveyItem] = None
+    attachment: Path | None = None
+    audio_file: str | None = None
+    feedback: Feedback | None = None
+    image: Image | list[Image] | None = None
+    survey_item: SurveyItem | None = None
     skipped_by_condition: bool = False
 
 
 class MessagePublic(MessageBase):
     id: UUID4
-    annotations: list["MessageAnnotationPublic"] = []
+    annotations: list[MessageAnnotationPublic] = []
 
     interview_type: InterviewType
 
@@ -424,11 +423,11 @@ class TaskBase(_BaseModel):
     interview_id: UUID4
     project_id: UUID4
     task: str
-    reason: Optional[str] = None
-    content: Optional[str] = None
-    response: Optional[str] = None
-    model: Optional[str] = None
-    time_spend: Optional[int] = None
+    reason: str | None = None
+    content: str | None = None
+    response: str | None = None
+    model: str | None = None
+    time_spend: int | None = None
 
 
 class TaskCreate(_BaseModel):
@@ -436,11 +435,11 @@ class TaskCreate(_BaseModel):
     interview_id: UUID4
     project_id: UUID4
     task: str
-    reason: Optional[str] = None
-    content: Optional[str] = None
-    response: Optional[str] = None
-    model: Optional[str] = None
-    time_spend: Optional[int] = None
+    reason: str | None = None
+    content: str | None = None
+    response: str | None = None
+    model: str | None = None
+    time_spend: int | None = None
 
 
 class TaskPublic(TaskBase):
@@ -448,14 +447,14 @@ class TaskPublic(TaskBase):
 
 
 class TestSetupBase(_BaseModel):
-    name: Optional[str] = None
+    name: str | None = None
     type: TestType
     project_id: UUID4
     answering_model: str = lib_settings.llm.default_model
-    last_updated: Optional[datetime] = None
+    last_updated: datetime | None = None
     language: LanguageCode = "EN"
     n_interviews: int = 5
-    delay_before_answers: Optional[tuple[float, float]] = None
+    delay_before_answers: tuple[float, float] | None = None
 
 
 class TestSetupCreate(TestSetupBase):
@@ -476,7 +475,7 @@ class TestRunBase(_BaseModel):
     language: LanguageCode = "EN"
     n_interviews: int
     answering_model: str
-    delay_before_answers: Optional[tuple[float, float]] = None
+    delay_before_answers: tuple[float, float] | None = None
 
 
 class TestRunCreate(TestRunBase):
@@ -486,7 +485,7 @@ class TestRunCreate(TestRunBase):
 class TestRunPublic(TestRunBase):
     id: UUID4
     created_at: datetime
-    last_updated: Optional[datetime] = None
+    last_updated: datetime | None = None
     status: TestRunStatus
 
 
@@ -541,11 +540,11 @@ class IntervieweePublic(IntervieweeBase):
 class AnalysisCategoryBase(_BaseModel):
     project_id: UUID4
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     type: AnnotationType
     color: str
-    min_value: Optional[int] = None
-    max_value: Optional[int] = None
+    min_value: int | None = None
+    max_value: int | None = None
 
 
 class AnalysisCategoryCreate(AnalysisCategoryBase):

@@ -103,7 +103,7 @@ class AccessRequestTable(Base):
     status: Mapped[AccessRequestStatus] = mapped_column(
         default=AccessRequestStatus.WAITING
     )
-    processed_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("user.id"))
+    processed_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("user.id"))
 
     # Relationships
     processed_by: Mapped[Optional["UserTable"]] = relationship(
@@ -773,7 +773,7 @@ class MessageTable(Base):
     )
 
     @hybrid_property
-    def interview_type(self) -> Optional[InterviewType]:
+    def interview_type(self) -> InterviewType | None:
         return self.interview.type if self.interview else None
 
     @interview_type.expression

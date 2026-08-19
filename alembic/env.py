@@ -14,8 +14,8 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-from app.db._extra import PydanticJSONB  # noqa: E402
-from app.db.tables import Base  # noqa: E402
+from app.db._extra import PydanticJSONB
+from app.db.tables import Base
 
 target_metadata = Base.metadata
 
@@ -29,9 +29,7 @@ EXCLUDED_TABLES = {"_sqliteai_vector"}
 
 
 def include_object(object, name, type_, reflected, compare_to):
-    if type_ == "table" and name in EXCLUDED_TABLES:
-        return False
-    return True
+    return not (type_ == "table" and name in EXCLUDED_TABLES)
 
 
 def render_item(type_, obj, autogen_context):

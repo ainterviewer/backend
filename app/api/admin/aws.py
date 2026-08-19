@@ -73,10 +73,10 @@ async def proxy_to_ec2_manager(request: Request, full_path: str):
             detail="Timeout connecting to EC2 manager service",
         )
     except httpx.RequestError as e:
-        logger.error(f"Failed to connect to EC2 proxy: {repr(e)}")
+        logger.error(f"Failed to connect to EC2 proxy: {e!r}")
         raise HTTPException(
             status_code=502,
-            detail=f"Failed to reach EC2 manager service: {str(e)}",
+            detail=f"Failed to reach EC2 manager service: {e!s}",
         )
 
 

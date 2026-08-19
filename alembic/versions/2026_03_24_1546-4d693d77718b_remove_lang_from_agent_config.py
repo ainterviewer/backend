@@ -7,16 +7,16 @@ Create Date: 2026-03-24 15:46:25.343127
 """
 
 import json
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "4d693d77718b"
-down_revision: Union[str, None] = "11fe1cf630a3"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "11fe1cf630a3"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -34,7 +34,7 @@ def upgrade() -> None:
             agent_configs = agent_configs_raw
 
         changed = False
-        for key, config in agent_configs.items():
+        for config in agent_configs.values():
             if isinstance(config, dict) and "lang" in config:
                 del config["lang"]
                 changed = True

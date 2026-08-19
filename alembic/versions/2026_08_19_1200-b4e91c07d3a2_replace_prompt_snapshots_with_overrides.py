@@ -6,7 +6,7 @@ Create Date: 2026-08-19 12:00:00.000000
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
@@ -14,12 +14,11 @@ from alembic import op
 import app.db.types  # noqa: F401
 from app.db.triggers import install_triggers, uninstall_triggers
 
-
 # revision identifiers, used by Alembic.
 revision: str = "b4e91c07d3a2"
-down_revision: Union[str, None] = "c7f21a5b4e10"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "c7f21a5b4e10"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 # `projectlocalization.prompts` held a full snapshot of the package's Jinja

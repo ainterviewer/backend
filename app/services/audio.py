@@ -26,7 +26,7 @@ class LocalWavSink:
 
     def __init__(self, path: Path):
         self.path = path
-        self._wav = wave.open(str(path), "wb")
+        self._wav = wave.open(str(path), "wb")  # noqa: SIM115
         self._wav.setnchannels(CHANNELS)
         self._wav.setsampwidth(SAMPLE_WIDTH)
         self._wav.setframerate(SAMPLE_RATE)

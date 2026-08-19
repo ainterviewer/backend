@@ -276,8 +276,8 @@ async def create_guide(
                 lib_settings.storage.project_storage.image_path(project_id) / image.name
             )
 
-            with open(filepath, "wb") as f:
-                f.write(data)
+            async with aiofiles.open(filepath, "wb") as f:
+                await f.write(data)
 
     db.projects.update_interview_guide(project_id, guide, language=lang)
 
@@ -600,12 +600,12 @@ async def create_welcome(
         if not video.filename:
             raise ValueError()
 
-        with open(
+        async with aiofiles.open(
             lib_settings.storage.project_storage.video_path(project_id)
             / video.filename,
             "wb",
         ) as f:
-            f.write(data)
+            await f.write(data)
 
         welcome.video_file_name = video.filename
 

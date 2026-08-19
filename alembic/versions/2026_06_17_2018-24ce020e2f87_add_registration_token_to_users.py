@@ -13,19 +13,18 @@ Create Date: 2026-06-17 20:18:44.144640
 # `install_triggers(op.get_bind())` after. SQLite batch-alter renames the
 # table, which breaks any trigger that references it by name. See
 # `app/db/triggers.py` and revision 3d64d3a385a1 for an example.
-from typing import Sequence, Union
+from collections.abc import Sequence
 
+import sqlalchemy as sa
 from alembic import op
-import sqlalchemy as sa  # noqa: F401
 
 import app.db.types  # noqa: F401
 
-
 # revision identifiers, used by Alembic.
 revision: str = "24ce020e2f87"
-down_revision: Union[str, None] = "a9128ba6abfb"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "a9128ba6abfb"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

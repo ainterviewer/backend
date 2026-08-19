@@ -9,7 +9,8 @@ import asyncio
 import json
 import platform
 import random
-from typing import Any, AsyncGenerator, Optional
+from collections.abc import AsyncGenerator
+from typing import Any
 
 import aiohttp
 from pydantic import UUID4
@@ -38,7 +39,7 @@ async def fetch_token(
     auth_token: str,
     project_id: str,
     test_run_id: str,
-    language: Optional[LanguageCode] = None,
+    language: LanguageCode | None = None,
 ) -> InterviewToken:
     url = f"http://{app_settings.app.api_endpoint}/api/projects/{project_id}/{language}/interviews"
 
@@ -52,22 +53,24 @@ async def fetch_token(
 
     payload = CreateInterviewRequest(
         interview_type=InterviewType.SYNTHETIC_TEST,
-        test_run_id=test_run_id,  # ty:ignore[invalid-argument-type]
+        test_run_id=test_run_id,
     )
 
-    async with aiohttp.ClientSession(cookies=cookies, headers=headers) as session:
-        async with session.post(url, json=payload.model_dump(mode="json")) as response:
-            print(await response.json())
-            response.raise_for_status()
+    async with (
+        aiohttp.ClientSession(cookies=cookies, headers=headers) as session,
+        session.post(url, json=payload.model_dump(mode="json")) as response,
+    ):
+        print(await response.json())
+        response.raise_for_status()
 
-            token = (await response.text()).strip().strip('"')
+        token = (await response.text()).strip().strip('"')
 
     return InterviewToken.decode(token)
 
 
 async def _connect_and_yield_messages(
     token: str,
-    language: Optional[LanguageCode] = None,
+    language: LanguageCode | None = None,
 ) -> AsyncGenerator[tuple[dict, ClientConnection], None]:
     """Connect to the websocket and yield parsed messages."""
 
@@ -92,8 +95,8 @@ async def run_synthetic_answering_agent(
     user_token: str,
     project_id: str,
     test_run_id: str,
-    language: Optional[LanguageCode] = None,
-    delay_before_answer: Optional[tuple[float, float]] = None,
+    language: LanguageCode | None = None,
+    delay_before_answer: tuple[float, float] | None = None,
 ):
     interview_token = await fetch_token(
         auth_token=user_token,
@@ -140,8 +143,8 @@ async def run_synthetic_fixed_answers(
     project_id: str,
     test_run_id: str,
     fixed_answers: list[str],
-    language: Optional[LanguageCode] = None,
-    delay_before_answer: Optional[tuple[float, float]] = None,
+    language: LanguageCode | None = None,
+    delay_before_answer: tuple[float, float] | None = None,
 ):
     # NOTE: We need to copy the list to avoid modifying the original which may be used
     # other places.
@@ -174,7 +177,7 @@ async def run_synthetic_fixed_answers(
 async def _send_response(
     websocket,
     response_text: str,
-    delay_before_answer: Optional[tuple[float, float]] = None,
+    delay_before_answer: tuple[float, float] | None = None,
 ):
     """Send a response with optional delay."""
     if delay_before_answer:
@@ -196,16 +199,18 @@ async def add_interviewee(
     interview_id: str | UUID4,
     interviewee: dict[str, Any] | str,
 ):
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
+    async with (
+        aiohttp.ClientSession() as session,
+        session.post(
             f"http://{app_settings.app.api_endpoint}/api/projects/{project_id}/interviewee",
             json={
                 "interview_id": str(interview_id),
                 "interview_subject": interviewee,
             },
             cookies={"access_token": user_token},
-        ) as response:
-            response.raise_for_status()
+        ) as response,
+    ):
+        response.raise_for_status()
 
 
 async def run_synthesis_job_fixed_answers(
@@ -215,7 +220,7 @@ async def run_synthesis_job_fixed_answers(
     fixed_answers: list[str],
     n_interviews: int,
     language: LanguageCode,
-    delay_before_answer: Optional[tuple[float, float]] = None,
+    delay_before_answer: tuple[float, float] | None = None,
 ):
     tasks = []
     for _ in range(n_interviews):
@@ -246,7 +251,7 @@ async def run_synthesis_job_fixed_ai(
     n_interviews: int,
     answering_model: str,
     language: LanguageCode,
-    delay_before_answer: Optional[tuple[float, float]] = None,
+    delay_before_answer: tuple[float, float] | None = None,
 ):
     shuffled_personas = [random.choice(fixed_personas) for _ in range(n_interviews)]
 
@@ -290,7 +295,7 @@ async def run_synthesis_job_shuffled_ai(
     n_interviews: int,
     answering_model: str,
     language: LanguageCode,
-    delay_before_answer: Optional[tuple[float, float]] = None,
+    delay_before_answer: tuple[float, float] | None = None,
 ):
     subjects = generate_synthetic_persons(background_info_options, n_interviews)
 

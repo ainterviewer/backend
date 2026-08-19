@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter
 from fastapi.responses import Response, StreamingResponse
@@ -52,7 +52,7 @@ async def get_chat(
         session_id = db.assistance.create_new_session(project_id, jwt.user_id)
 
         greeting_text = GREETING_TEMPLATE.format(user_name=user.first_name)
-        greeting_timestamp = datetime.now(tz=timezone.utc)
+        greeting_timestamp = datetime.now(tz=UTC)
         db.assistance.add_messages(
             _messages_adapter.dump_json(
                 [

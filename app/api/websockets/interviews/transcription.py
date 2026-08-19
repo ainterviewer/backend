@@ -41,7 +41,7 @@ async def _notify(websocket: WebSocket, error: str) -> None:
     try:
         await websocket.send_json({"type": "error", "error": error})
     except Exception:
-        pass
+        logger.debug("Could not notify client of error %r; socket is gone", error)
 
 
 async def _relay_transcripts(websocket: WebSocket, upstream) -> None:

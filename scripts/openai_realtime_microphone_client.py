@@ -48,8 +48,6 @@ model = ""
 
 async def websocket_handler():
     """Connect to WebSocket and handle audio streaming + transcription."""
-    global transcription_text, is_running
-
     async with websockets.connect(ws_url) as ws:
         # Wait for session.created
         await ws.recv()
@@ -114,8 +112,6 @@ def stop_recording():
 
 def process_audio(audio):
     """Process incoming audio and queue for streaming."""
-    global transcription_text
-
     if audio is None or not is_running:
         return transcription_text
 

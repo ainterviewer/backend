@@ -1,7 +1,7 @@
 import asyncio
 import uuid
 from collections.abc import Iterable, Sequence
-from typing import Any, Literal, Optional, overload
+from typing import Any, Literal, overload
 
 from pydantic import UUID4
 from sqlalchemy import delete, func, select, update
@@ -228,11 +228,11 @@ class ProjectRepository(BaseRepository):
         title: str,
         owner_id: UUID4,
         default_language: LanguageCode = "EN",
-        interview_config: Optional[InterviewConfig] = None,
-        interview_guide_content: Optional[InterviewGuide] = None,
-        agent_configs: Optional[AgentConfigs] = None,
-        prompt_overrides: Optional[dict[str, str]] = None,
-        project_id: Optional[UUID4] = None,
+        interview_config: InterviewConfig | None = None,
+        interview_guide_content: InterviewGuide | None = None,
+        agent_configs: AgentConfigs | None = None,
+        prompt_overrides: dict[str, str] | None = None,
+        project_id: UUID4 | None = None,
     ) -> UUID4:
         project_kwargs = {}
 
@@ -465,10 +465,10 @@ class ProjectRepository(BaseRepository):
         project = self.session.execute(statement).scalar_one()
 
         if with_interviews:
-            project.interviews
+            _ = project.interviews
 
         if with_tests:
-            project.tests
+            _ = project.tests
             if project.tests is None:
                 project.tests = []
 
