@@ -116,7 +116,7 @@ async def _run_interview(
     interview_config = project.config
 
     if (language := websocket.cookies.get("language")) is None:
-        language = interview_config.default_language
+        language = db.projects.get_default_language(project_id)
 
     project_localization = db.projects.get_project_localization(project_id, language)
 

@@ -146,7 +146,7 @@ async def export_email_bundle(
         "project_id": str(project_id),
         "project_title": project.title,
         "base_url": base_url,
-        "default_language": project.config.default_language,
+        "default_language": db.projects.get_default_language(project_id),
         "languages": [lang for (lang, _, _) in localizations],
     }
 

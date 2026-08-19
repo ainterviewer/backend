@@ -1,7 +1,6 @@
 from fastapi import APIRouter, BackgroundTasks, Request
 from pydantic import UUID4
 
-from ainterviewer.config import InterviewConfig
 from ainterviewer.settings import settings as lib_settings
 
 from ...db.models import (
@@ -130,9 +129,7 @@ async def create_project(
         folder_id=folder_id,
         title=project_request.title,
         owner_id=jwt.user_id,
-        interview_config=InterviewConfig(
-            default_language=project_request.default_language
-        ),
+        default_language=project_request.default_language,
     )
 
     file_path = (

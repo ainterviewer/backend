@@ -62,10 +62,9 @@ async def create_interview(
     except NoResultFound:
         # FIXME: This should probably trigger an error allowing the user to pick
         # a language instead of just returning the default
-        default_lang = project.config.default_language
         project_localization = db.projects.get_project_localization(
             project_id,
-            language=default_lang,
+            language=db.projects.get_default_language(project_id),
         )
 
     if new_interview.interview_type == InterviewType.DISTRIBUTED:

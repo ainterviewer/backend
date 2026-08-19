@@ -265,9 +265,21 @@ class ProjectCreate(_BaseModel):
     config: Optional[InterviewConfig] = None
 
 
+class ProjectLanguage(LanguageDict):
+    """A language a project has a localization for.
+
+    Same shape as the library's `LanguageDict` plus whether it is the
+    project's default. `LanguageDict` itself stays free of the flag: it comes
+    straight out of the shared `LANGUAGES` constant and knows nothing about
+    projects.
+    """
+
+    is_default: bool
+
+
 class ProjectPublic(ProjectBase):
     n_interviews: int | None = None
-    available_languages: list[LanguageDict] | None = None
+    available_languages: list[ProjectLanguage] | None = None
     tests: list[TestSetupPublic] | None = None
     owner: UserPublic
 

@@ -379,10 +379,24 @@ class ProjectLocalizationTable(Base):
     __tablename__ = "projectlocalization"
     __table_args__ = (
         UniqueConstraint("project_id", "language", name="unique_project_language"),
+        # Exactly one default localization per project. The partial index lets
+        # the database hold the invariant instead of the application; see
+        # ProjectRepository.set_default_language.
+        Index(
+            "uq_project_default_language",
+            "project_id",
+            unique=True,
+            sqlite_where=sa.text("is_default"),
+            postgresql_where=sa.text("is_default"),
+        ),
     )
 
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
     language: Mapped[LanguageCode] = mapped_column(LanguageType, index=True)
+    # The project's fallback language: seeded at project creation, used when a
+    # requested language has no localization, and the source the other
+    # localizations are translated from.
+    is_default: Mapped[bool] = mapped_column(default=False, server_default=sa.false())
     consent: Mapped[Consent | None] = mapped_column(PydanticJSONB(Consent))
     welcome: Mapped[Welcome | None] = mapped_column(PydanticJSONB(Welcome))
     interview_guide: Mapped[InterviewGuide] = mapped_column(

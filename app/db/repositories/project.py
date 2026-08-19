@@ -1,11 +1,11 @@
 import asyncio
 import uuid
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import Any, Literal, Optional, overload
 
 from pydantic import UUID4
 from sqlalchemy import delete, func, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlalchemy.orm import Session
 
 from ainterviewer.agents.config import AgentConfigs
@@ -18,7 +18,7 @@ from ainterviewer.interview_guides.translate import (
     translate_interview_guide,
     translate_welcome,
 )
-from ainterviewer.types import LanguageCode, LanguageDict
+from ainterviewer.types import LanguageCode
 from ainterviewer.utils import get_language_dict
 
 from ...types import CollaboratorRole, ExternalParam, ProjectStatus, Scope
@@ -27,6 +27,7 @@ from ..models import (
     CollaboratorPublic,
     ProjectFolderPublic,
     ProjectFolderWithProjects,
+    ProjectLanguage,
     ProjectLocalizationPublic,
     ProjectPublic,
     ProjectPublicWithTests,
@@ -42,8 +43,22 @@ from ..tables import (
 )
 from ..types import InterviewType
 from .base import BaseRepository
+from .errors import ProjectLanguageError
 
 TRANSLATION_MODEL = "openai:gpt-5.4-mini"
+
+
+def _sorted_project_languages(
+    rows: Iterable[tuple[LanguageCode, bool]],
+) -> list[ProjectLanguage]:
+    """Build the public language list, sorted by name, from (code, is_default)."""
+    return sorted(
+        (
+            ProjectLanguage(**get_language_dict(language), is_default=is_default)
+            for language, is_default in rows
+        ),
+        key=lambda lan: lan["name"],
+    )
 
 
 class ProjectRepository(BaseRepository):
@@ -111,6 +126,9 @@ class ProjectRepository(BaseRepository):
                 folder_dict.projects = self._get_projects(
                     self.session,
                     folder.id,
+                    # The dashboard needs each project's default language to
+                    # build its per-language links.
+                    include_available_languages=True,
                     include_interview_count=True,
                 )
                 result.append(folder_dict)
@@ -209,6 +227,7 @@ class ProjectRepository(BaseRepository):
         folder_id: UUID4,
         title: str,
         owner_id: UUID4,
+        default_language: LanguageCode = "EN",
         interview_config: Optional[InterviewConfig] = None,
         interview_guide_content: Optional[InterviewGuide] = None,
         agent_configs: Optional[AgentConfigs] = None,
@@ -253,7 +272,8 @@ class ProjectRepository(BaseRepository):
 
         default_localization = ProjectLocalizationTable(
             project_id=project.id,
-            language=project.config.default_language,
+            language=default_language,
+            is_default=True,
             **localization_kwargs,
         )
         self.session.add(default_localization)
@@ -330,6 +350,7 @@ class ProjectRepository(BaseRepository):
             new_loc = ProjectLocalizationTable(
                 project_id=new_project.id,
                 language=loc.language,
+                is_default=loc.is_default,
                 interview_guide=loc.interview_guide,
                 prompt_overrides=dict(loc.prompt_overrides),
                 agent_configs=loc.agent_configs,
@@ -547,12 +568,77 @@ class ProjectRepository(BaseRepository):
 
     def remove_project_language(
         self, project_id: UUID4, language: LanguageCode
-    ) -> list[LanguageDict]:
-        delete_statement = delete(ProjectLocalizationTable).where(
-            ProjectLocalizationTable.project_id == project_id,
-            ProjectLocalizationTable.language == language,
+    ) -> list[ProjectLanguage]:
+        """Delete a project's localization for `language`.
+
+        Refuses to delete the default localization or the last remaining one:
+        either would leave the project without a fallback language, which the
+        interview and translation paths assume exists.
+        """
+        localizations = (
+            self.session.execute(
+                select(ProjectLocalizationTable).where(
+                    ProjectLocalizationTable.project_id == project_id
+                )
+            )
+            .scalars()
+            .all()
         )
-        self.session.execute(delete_statement)
+
+        target = next((loc for loc in localizations if loc.language == language), None)
+        if target is None:
+            raise NoResultFound(
+                f"Project {project_id} has no localization for {language}."
+            )
+
+        if len(localizations) <= 1:
+            raise ProjectLanguageError("A project must keep at least one language.")
+
+        if target.is_default:
+            raise ProjectLanguageError(
+                f"{get_language_dict(language)['name']} is the project's default "
+                "language. Pick a different default before removing it."
+            )
+
+        self.session.delete(target)
+        self.session.commit()
+
+        return self.get_available_languages_optimized(project_id)
+
+    def set_default_language(
+        self, project_id: UUID4, language: LanguageCode
+    ) -> list[ProjectLanguage]:
+        """Make `language` the project's default localization.
+
+        The partial unique index only allows one default per project, so the
+        old default is cleared before the new one is set.
+        """
+        localizations = (
+            self.session.execute(
+                select(ProjectLocalizationTable).where(
+                    ProjectLocalizationTable.project_id == project_id
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        target = next((loc for loc in localizations if loc.language == language), None)
+        if target is None:
+            raise ProjectLanguageError(
+                f"The project has no {get_language_dict(language)['name']} "
+                "localization, so it cannot be the default. Add the language first."
+            )
+
+        if target.is_default:
+            return self.get_available_languages_optimized(project_id)
+
+        for loc in localizations:
+            if loc.is_default:
+                loc.is_default = False
+        self.session.flush()
+
+        target.is_default = True
         self.session.commit()
 
         return self.get_available_languages_optimized(project_id)
@@ -629,50 +715,50 @@ class ProjectRepository(BaseRepository):
             if loc.language == language:
                 return loc
 
-        # Fallback to default language
-        for loc in project.localizations:
-            if loc.language == project.config.default_language:
-                return loc
-
-        # This should not happen if data integrity is maintained
-        raise ValueError(f"No localization found for project {project.id}")
+        return self._get_default_localization(project)
 
     def _get_default_localization(
         self, project: ProjectTable
     ) -> ProjectLocalizationTable:
         """Get the default localization for this project."""
-        return self._get_localization(project, project.config.default_language)
+        for loc in project.localizations:
+            if loc.is_default:
+                return loc
 
-    def get_available_languages(self, project: ProjectTable) -> list[LanguageDict]:
+        # This should not happen if data integrity is maintained
+        raise ValueError(f"No default localization found for project {project.id}")
+
+    def get_default_language(self, project_id: UUID4) -> LanguageCode:
+        """The project's default language, without loading the whole project."""
+        statement = select(ProjectLocalizationTable.language).where(
+            ProjectLocalizationTable.project_id == project_id,
+            ProjectLocalizationTable.is_default,
+        )
+        return self.session.execute(statement).scalar_one()
+
+    def get_available_languages(self, project: ProjectTable) -> list[ProjectLanguage]:
         """Get list of available languages for the project"""
-        return list(
-            sorted(
-                (
-                    get_language_dict(localization.language)
-                    for localization in project.localizations
-                ),
-                key=lambda lan: lan["name"],
-            )
+        return _sorted_project_languages(
+            (localization.language, localization.is_default)
+            for localization in project.localizations
         )
 
     def get_available_languages_optimized(
         self, project_id: uuid.UUID
-    ) -> list[LanguageDict]:
+    ) -> list[ProjectLanguage]:
         """
         Get available languages without loading the full project.
         Optimized query that only fetches language codes.
         """
-        languages = (
-            self.session.query(ProjectLocalizationTable.language)
+        rows = (
+            self.session.query(
+                ProjectLocalizationTable.language,
+                ProjectLocalizationTable.is_default,
+            )
             .filter(ProjectLocalizationTable.project_id == project_id)
             .all()
         )
-        return list(
-            sorted(
-                (get_language_dict(lang[0]) for lang in languages),
-                key=lambda lan: lan["name"],
-            )
-        )
+        return _sorted_project_languages((row.language, row.is_default) for row in rows)
 
     def get_interview_count_optimized(
         self, project_id: uuid.UUID, exclude_tests: bool = True
@@ -882,10 +968,7 @@ class ProjectRepository(BaseRepository):
     ) -> list[tuple[LanguageCode, str | None, str | None]]:
         """Return (language, subject, template) for every localization, with
         the project's default language first."""
-        project = self.session.execute(
-            select(ProjectTable).where(ProjectTable.id == project_id)
-        ).scalar_one()
-        default_lang = project.config.default_language
+        default_lang = self.get_default_language(project_id)
 
         rows = self.session.execute(
             select(
@@ -942,10 +1025,7 @@ class ProjectRepository(BaseRepository):
     ) -> list[tuple[LanguageCode, str | None, str | None]]:
         """Return (language, subject, template) of the reminder email for every
         localization, with the project's default language first."""
-        project = self.session.execute(
-            select(ProjectTable).where(ProjectTable.id == project_id)
-        ).scalar_one()
-        default_lang = project.config.default_language
+        default_lang = self.get_default_language(project_id)
 
         rows = self.session.execute(
             select(

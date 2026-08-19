@@ -35,10 +35,16 @@ from ainterviewer.interview_guides.generate import (
     generate_section,
 )
 from ainterviewer.settings import settings as lib_settings
-from ainterviewer.types import LanguageCode, LanguageDict
+from ainterviewer.types import LanguageCode
 from ainterviewer.utils import get_language_dict
 
-from ...db.models import InterviewSummaryPublic, MessagePublic, ProjectPublic
+from ...db.models import (
+    InterviewSummaryPublic,
+    MessagePublic,
+    ProjectLanguage,
+    ProjectPublic,
+)
+from ...db.repositories.errors import ProjectLanguageError
 from ...db.types import InterviewType
 from ...db.utils import fix_nested_columns, messages_to_dataframe, write_messages_xlsx
 from ...dependencies import (
@@ -91,8 +97,8 @@ async def clone_project(
 
 @router.get(
     "/projects/{project_id}/available_languages",
-    description="Adds a new localization to the project",
-    response_model=list[LanguageDict],
+    description="List the languages the project has a localization for",
+    response_model=list[ProjectLanguage],
 )
 async def get_project_languages(
     project_id: UUID4,
@@ -104,7 +110,7 @@ async def get_project_languages(
 @router.post(
     "/projects/{project_id}/available_languages",
     description="Adds a new localization to the project",
-    response_model=list[LanguageDict],
+    response_model=list[ProjectLanguage],
 )
 async def add_project_language(
     project_id: UUID4,
@@ -127,7 +133,7 @@ async def add_project_language(
 @router.delete(
     "/projects/{project_id}/available_languages",
     description="Remove project language",
-    response_model=list[LanguageDict],
+    response_model=list[ProjectLanguage],
 )
 async def remove_project_language(
     project_id: UUID4,
@@ -136,9 +142,34 @@ async def remove_project_language(
     jwt: DemoToken,
     _: ProjectEditor,
 ):
-    available_languages = db.projects.remove_project_language(project_id, language)
+    try:
+        available_languages = db.projects.remove_project_language(project_id, language)
+    except ProjectLanguageError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except NoResultFound as exc:
+        raise HTTPException(
+            status_code=404, detail="The project has no localization for that language."
+        ) from exc
 
     return available_languages
+
+
+@router.put(
+    "/projects/{project_id}/default_language",
+    description="Set the project's default language",
+    response_model=list[ProjectLanguage],
+)
+async def set_default_language(
+    project_id: UUID4,
+    language: Annotated[LanguageCode, Body()],
+    db: DBSession,
+    jwt: DemoToken,
+    _: ProjectEditor,
+):
+    try:
+        return db.projects.set_default_language(project_id, language)
+    except ProjectLanguageError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.patch(
