@@ -34,6 +34,28 @@ def _to_public(link: ProjectParticipantTable) -> ParticipantPublic:
     )
 
 
+def _is_blank_row(row: dict[str | None, str | None]) -> bool:
+    """True when every cell in a CSV row is empty or whitespace.
+
+    Trailing newlines and separator lines in hand-edited spreadsheets
+    otherwise import as participants with no name, email or pid."""
+    for value in row.values():
+        if isinstance(value, list):  # csv restval for over-long rows
+            if any(v and v.strip() for v in value):
+                return False
+        elif value is not None and value.strip():
+            return False
+    return True
+
+
+def _is_blank(data: ParticipantCreate) -> bool:
+    """True when a participant carries no identifying field at all.
+
+    `participating` is ignored: it defaults to True, so it is never evidence
+    that the caller actually filled the row in."""
+    return not any((data.name, data.email, data.pid, data.lang))
+
+
 class ParticipantRepository(BaseRepository):
     """Repository for Participant operations.
 
@@ -118,6 +140,8 @@ class ParticipantRepository(BaseRepository):
         folder_id = self._folder_id_for_project(project_id)
         links: list[ProjectParticipantTable] = []
         for data in participants:
+            if _is_blank(data):
+                continue
             p = self._get_or_create_participant(folder_id, data)
             links.append(self._attach(project_id, p))
         self.session.commit()
@@ -129,7 +153,9 @@ class ParticipantRepository(BaseRepository):
         self,
         project_id: UUID4,
         content: bytes,
-    ) -> list[ParticipantPublic]:
+    ) -> tuple[list[ParticipantPublic], int]:
+        """Import participants from CSV, returning the created rows and the
+        number of blank rows that were skipped."""
         text = content.decode("utf-8-sig")
         reader = csv.DictReader(io.StringIO(text))
 
@@ -143,8 +169,12 @@ class ParticipantRepository(BaseRepository):
             "latest_interview_status",
         }
         participants: list[ParticipantCreate] = []
+        skipped = 0
 
         for row in reader:
+            if _is_blank_row(row):
+                skipped += 1
+                continue
             data = {
                 k.strip().lower(): (v.strip() if isinstance(v, str) else v)
                 for k, v in row.items()
@@ -153,7 +183,7 @@ class ParticipantRepository(BaseRepository):
             data = {k: (v if v else None) for k, v in data.items()}
             participants.append(ParticipantCreate(**data))  # ty:ignore[invalid-argument-type]
 
-        return self.add_participants(project_id, participants)
+        return self.add_participants(project_id, participants), skipped
 
     def resolve_link_by_pid(self, project_id: UUID4, pid: str) -> UUID4:
         """Resolve a public pid to its project_participant.id within the given

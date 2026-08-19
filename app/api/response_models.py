@@ -2,6 +2,8 @@ from pydantic import UUID4, BaseModel
 
 from ainterviewer.types import Feedback
 
+from ..db.models import ParticipantPublic
+
 
 class PaginatedResponse[T](BaseModel):
     total: int
@@ -26,6 +28,11 @@ class SynthesizeResponse(BaseModel):
 class SendParticipantEmailResponse(BaseModel):
     sent: list[UUID4]
     skipped: list[UUID4]
+
+
+class UploadParticipantsResponse(BaseModel):
+    participants: list[ParticipantPublic]
+    skipped_rows: int
 
 
 class ParticipantEmailAttachment(BaseModel):

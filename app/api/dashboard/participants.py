@@ -43,6 +43,7 @@ from ..request_models import (
 from ..response_models import (
     ParticipantEmailAttachment,
     SendParticipantEmailResponse,
+    UploadParticipantsResponse,
 )
 
 SECTION_SEPARATOR = "\n<hr/>\n"
@@ -246,9 +247,12 @@ async def upload_participants(
     db: DBSession,
     jwt: UserToken,
     _: ProjectEditor,
-) -> list[ParticipantPublic]:
+) -> UploadParticipantsResponse:
     content = await file.read()
-    return db.participants.add_participants_from_csv(project_id, content)
+    participants, skipped = db.participants.add_participants_from_csv(
+        project_id, content
+    )
+    return UploadParticipantsResponse(participants=participants, skipped_rows=skipped)
 
 
 @router.patch("/projects/{project_id}/participants/{participant_id}")
