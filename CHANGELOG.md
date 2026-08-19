@@ -4,6 +4,18 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.4.21] - 2026-08-19
+
+### Bug Fixes
+
+- Improved prompt version overwriting based on lib content
+- (api) Return 404 instead of 500 for a missing localization
+
+### Internal
+
+- Move project default language from config to project localization table column
+- Update CLAUDE.md
+
 ## [0.4.20] - 2026-08-14
 
 ### Internal
