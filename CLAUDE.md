@@ -211,6 +211,33 @@ cd ../lib
 # See pyproject.toml: ainterviewer = { path = "../lib", editable = true }
 ```
 
+#### Agent prompt templates
+
+The agents' Jinja prompt templates live in the library
+(`../lib/src/ainterviewer/agents/prompts/templates/EN/`) and are resolved at
+interview time via `PackageLoader`, so **editing a template there is enough --
+no migration is needed and every project picks it up on the next deploy.**
+
+`ProjectLocalizationTable.prompt_overrides` holds only per-project overrides,
+keyed by template name (`"probing_agent/system_prompt.jinja"`). It is empty for
+virtually every project. The interview loader is a `ChoiceLoader` that tries the
+overrides first and falls through to the package
+(`app/api/websockets/interviews/ai.py`), which is what makes a newly added
+template impossible to "miss" for an existing project.
+
+Do **not** reintroduce snapshotting whole prompt sets into the database. That
+was the old design: it froze each project on the templates that existed when it
+was created, raised `TemplateNotFound` mid-interview whenever the library added
+one, and required a hand-written data migration per template change (see
+revisions `f7aaeeea0a76` and `b4e91c07d3a2`). It also looked like it pinned
+prompt behaviour but did not -- it captured no agent code, model IDs or schemas,
+and the resync migrations overwrote it wholesale anyway. Real reproducibility
+needs a pinned library version plus workers running it; that is a separate,
+unbuilt concern.
+
+User-facing prompt customisation is exposed through
+`agent_configs.probing.prompt_slots`, not through this column.
+
 ### Running with Different Configurations
 
 ```bash

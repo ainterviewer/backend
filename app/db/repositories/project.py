@@ -9,7 +9,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ainterviewer.agents.config import AgentConfigs
-from ainterviewer.agents.prompts.models import Prompts
 from ainterviewer.config import InterviewConfig
 from ainterviewer.interview_guides import InterviewGuide, Question
 from ainterviewer.interview_guides.extra import Consent, Welcome
@@ -213,7 +212,7 @@ class ProjectRepository(BaseRepository):
         interview_config: Optional[InterviewConfig] = None,
         interview_guide_content: Optional[InterviewGuide] = None,
         agent_configs: Optional[AgentConfigs] = None,
-        prompts: Optional[Prompts] = None,
+        prompt_overrides: Optional[dict[str, str]] = None,
         project_id: Optional[UUID4] = None,
     ) -> UUID4:
         project_kwargs = {}
@@ -249,8 +248,8 @@ class ProjectRepository(BaseRepository):
             )
         if agent_configs:
             localization_kwargs["agent_configs"] = agent_configs
-        if prompts:
-            localization_kwargs["prompts"] = prompts
+        if prompt_overrides:
+            localization_kwargs["prompt_overrides"] = prompt_overrides
 
         default_localization = ProjectLocalizationTable(
             project_id=project.id,
@@ -332,7 +331,7 @@ class ProjectRepository(BaseRepository):
                 project_id=new_project.id,
                 language=loc.language,
                 interview_guide=loc.interview_guide,
-                prompts=loc.prompts,
+                prompt_overrides=dict(loc.prompt_overrides),
                 agent_configs=loc.agent_configs,
                 consent=loc.consent,
                 welcome=loc.welcome,
@@ -615,7 +614,7 @@ class ProjectRepository(BaseRepository):
             consent=consent,
             welcome=welcome,
             interview_guide=interview_guide,
-            prompts=default_loc.prompts,
+            prompt_overrides=dict(default_loc.prompt_overrides),
             agent_configs=default_loc.agent_configs,
         )
         self.session.add(new_loc)
@@ -795,25 +794,6 @@ class ProjectRepository(BaseRepository):
             .values(agent_configs=agent_configs)
         )
         self.session.execute(statement)
-        self.session.commit()
-
-    def set_prompts(
-        self,
-        project_id: UUID4,
-        language: LanguageCode,
-        prompts: Prompts,
-    ):
-        # FIXME: Update permissions to collab
-
-        self.session.execute(
-            update(ProjectLocalizationTable)
-            .where(
-                ProjectLocalizationTable.project_id == project_id,
-                ProjectLocalizationTable.language == language,
-            )
-            .values(prompts=prompts)
-        )
-
         self.session.commit()
 
     # ==================== Consent / Welcome Methods ====================

@@ -15,7 +15,7 @@ from fastapi import (
     WebSocketDisconnect,
     WebSocketException,
 )
-from jinja2 import DictLoader
+from jinja2 import ChoiceLoader, DictLoader, PackageLoader
 from jose import JWTError
 from sqlalchemy.exc import NoResultFound
 from uvicorn.config import logger
@@ -23,7 +23,6 @@ from uvicorn.config import logger
 from ainterviewer.interfaces import OutgoingData
 from ainterviewer.interview import AInterviewer
 from ainterviewer.lpm.types import CustomToken
-from ainterviewer.settings import settings
 
 from ....auth import InterviewToken
 from ....db import InterviewDataBase
@@ -142,12 +141,14 @@ async def _run_interview(
             await websocket.close()
             return
 
-    agent_prompts = project_localization.prompts
-    prompt_loader = DictLoader(agent_prompts.dump_templates())
-
-    if settings.debug:
-        pass
-        # agent_prompts.print_prompts()
+    # Overrides shadow the package templates; anything absent falls through, so
+    # a template added to the library can never go missing for an old project.
+    prompt_loader = ChoiceLoader(
+        [
+            DictLoader(project_localization.prompt_overrides),
+            PackageLoader("ainterviewer.agents.prompts.templates", "EN"),
+        ]
+    )
 
     external_params = db.projects.get_external_param_values_for_interview(interview_id)
 

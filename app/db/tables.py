@@ -21,7 +21,6 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, rela
 from sqlalchemy.sql import func
 
 from ainterviewer.agents.config import AgentConfigs
-from ainterviewer.agents.prompts.models import DEFAULT_PROMPTS, Prompts
 from ainterviewer.config import InterviewConfig
 from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
 from ainterviewer.interview_guides.extra import Consent, Welcome
@@ -390,8 +389,12 @@ class ProjectLocalizationTable(Base):
         PydanticJSONB(InterviewGuide),
         default=lambda: InterviewGuide(),
     )
-    prompts: Mapped[Prompts] = mapped_column(
-        PydanticJSONB(Prompts), default=DEFAULT_PROMPTS
+    # Overrides for the agents' Jinja prompt templates, keyed by template name
+    # (e.g. "probing_agent/system_prompt.jinja"). Usually empty; the templates
+    # ship with the `ainterviewer` package and anything absent here falls
+    # through to it. See app/api/websockets/interviews/ai.py.
+    prompt_overrides: Mapped[dict[str, str]] = mapped_column(
+        JSON, default=dict, server_default=sa.text("'{}'")
     )
     agent_configs: Mapped[AgentConfigs] = mapped_column(
         PydanticJSONB(AgentConfigs),

@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from typer import Typer
 
 from ainterviewer.agents.config import AgentConfigs
-from ainterviewer.agents.prompts.models import DEFAULT_PROMPTS
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import DatabaseType
 
@@ -70,22 +69,6 @@ def setup_db(
                 fg=typer.colors.RED,
             )
         )
-
-
-@cli.command()
-def update_prompts():
-    db = next(get_db())
-    for user in db.users.get_users():
-        for folder in db.projects.get_folders(user_id=user.id):
-            for project in db.projects.get_projects(
-                folder_id=folder.id, include_available_languages=True
-            ):
-                for language in project.available_languages:  # ty:ignore[not-iterable]
-                    db.projects.set_prompts(
-                        project.id,
-                        language=language["code"],
-                        prompts=DEFAULT_PROMPTS,
-                    )
 
 
 @cli.command()

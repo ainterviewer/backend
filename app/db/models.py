@@ -16,7 +16,6 @@ from pydantic import (
 )
 
 from ainterviewer.agents.config import AgentConfigs
-from ainterviewer.agents.prompts.models import Prompts
 from ainterviewer.config import InterviewConfig
 from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
 from ainterviewer.interview_guides.extra import Consent, Welcome
@@ -207,7 +206,7 @@ class ProjectLocalizationBase(_BaseModel):
     consent: Consent | None
     welcome: Welcome | None
     interview_guide: InterviewGuide
-    prompts: Prompts
+    prompt_overrides: dict[str, str]
     agent_configs: AgentConfigs
     created_at: datetime
     last_updated: Optional[datetime] = None
@@ -216,7 +215,7 @@ class ProjectLocalizationBase(_BaseModel):
 class ProjectLocalizationCreate(_BaseModel):
     language: LanguageCode
     interview_guide: Optional[InterviewGuide] = None
-    prompts: Optional[Prompts] = None
+    prompt_overrides: Optional[dict[str, str]] = None
     agent_configs: Optional[AgentConfigs] = None
 
 
