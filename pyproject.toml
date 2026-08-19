@@ -43,16 +43,9 @@ dependencies = [
 [project.optional-dependencies]
 analysis = [
   "adbc-driver-sqlite>=1.6.0",
-  "ipykernel>=6.29.5",
-  "marimo[recommended]>=0.13.2",
-  "matplotlib>=3.10.3",
-  "pandas>=2.2.3",
-  "plotly>=6.3.0",
-  "rich>=14.0.0",
   "sentence-transformers>=4.1.0",
   "ua-parser[regex]>=1.0.1",
   "user-agents>=2.2.0",
-  "watchdog>=6.0.0",
 ]
 
 [dependency-groups]
@@ -117,8 +110,6 @@ extend-immutable-calls = [
 known-first-party = ["ainterviewer"]
 known-third-party = ["alembic"]
 
-[tool.marimo.runtime]
-watcher_on_save = "autorun"
 
 [build-system]
 requires = ["hatchling"]
