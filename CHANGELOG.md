@@ -4,6 +4,12 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.4.27] - 2026-08-20
+
+### Features
+
+- Add new validate_interview_params public api endpoint so we can gate the interview before any content is shown to the user
+
 ## [0.4.26] - 2026-08-20
 
 ### Internal
