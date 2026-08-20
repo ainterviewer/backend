@@ -4,6 +4,12 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.4.30] - 2026-08-20
+
+### Bug Fixes
+
+- (security) Harden file upload and file serving
+
 ## [0.4.29] - 2026-08-20
 
 ### Bug Fixes
