@@ -762,11 +762,14 @@ async def export_messages(
             case _:
                 raise ValueError(f"Unsupported format: {format}")
 
-        response = StreamingResponse(
-            iter([stream.getvalue()]), media_type=f"text/{format}"
+        media_type = (
+            "text/csv"
+            if export_request.format == "csv"
+            else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+        response = StreamingResponse(iter([stream.getvalue()]), media_type=media_type)
         response.headers["Content-Disposition"] = (
-            f"attachment; filename={project_id}-messages.{format}"
+            f'attachment; filename="{project_id}-messages.{export_request.format}"'
         )
 
         return response

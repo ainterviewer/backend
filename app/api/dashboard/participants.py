@@ -1,15 +1,18 @@
 import io
 import json
+import logging
 import mimetypes
 import zipfile
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import quote
 
 import polars as pl
 from fastapi import APIRouter, Body, HTTPException, Response, UploadFile
 from jinja2 import TemplateError
 from pydantic import UUID4
 
+from ainterviewer.constants import LANGUAGE_CODES
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode
 from ainterviewer.utils import now
@@ -52,6 +55,14 @@ REMINDER_ATTACHMENT_SUBDIR = "_reminders"
 
 MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024  # 10MB per file
 MAX_TOTAL_ATTACHMENT_BYTES = 25 * 1024 * 1024  # 25MB per language
+
+# Attachments are mailed out to participants from our own domain, so restrict
+# them to formats that can't carry executable content. Widen deliberately.
+ALLOWED_ATTACHMENT_EXTENSIONS = frozenset(
+    {".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".txt", ".csv", ".ics", ".docx"}
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["participants"])
 
@@ -199,12 +210,23 @@ async def export_email_bundle(
     project_title = project.title.replace("-", "").replace("  ", " ").replace(" ", "-")
     filename = f"email_bundle_{now().strftime('%Y-%m-%d_%H-%M')}_{project_title}_{project_id}.zip"
 
+    # The bundle carries every participant's email address and opt-out token,
+    # so record who took a copy.
+    logger.info(
+        "email bundle exported: project=%s user=%s participants=%d languages=%s bytes=%d",
+        project_id,
+        jwt.user_id,
+        len(participants),
+        ",".join(lang for (lang, _, _) in localizations),
+        buf.getbuffer().nbytes,
+    )
+
     return Response(
         content=buf.getvalue(),
         media_type="application/zip",
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            "X-Filename": filename,
+            "Content-Disposition": _content_disposition(filename),
+            "X-Filename": quote(filename),
         },
     )
 
@@ -327,18 +349,40 @@ async def set_participant_email_template(
     )
 
 
+def _checked_language(language: LanguageCode) -> LanguageCode:
+    """Reject language codes that aren't real, before they become a path.
+
+    ``LanguageCode`` only constrains the string to two characters, which ".."
+    satisfies, so every use of a language as a directory name has to check it
+    against the known codes first.
+    """
+    if language not in LANGUAGE_CODES:
+        raise HTTPException(status_code=422, detail=f"Unknown language '{language}'.")
+    return language
+
+
 def _attachments_dir(project_id: UUID4, language: LanguageCode) -> Path:
     base = lib_settings.storage.project_storage.email_attachments_path(project_id)
-    path = base / language
+    path = base / _checked_language(language)
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def _reminder_attachments_dir(project_id: UUID4, language: LanguageCode) -> Path:
     base = lib_settings.storage.project_storage.email_attachments_path(project_id)
-    path = base / REMINDER_ATTACHMENT_SUBDIR / language
+    path = base / REMINDER_ATTACHMENT_SUBDIR / _checked_language(language)
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _content_disposition(filename: str) -> str:
+    """Build a Content-Disposition value that survives non-ASCII filenames.
+
+    Header values are latin-1, so the raw name is sent RFC 5987 style and the
+    quoted fallback is stripped to ASCII.
+    """
+    ascii_name = filename.encode("ascii", "replace").decode("ascii").replace('"', "_")
+    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
 
 
 def _safe_filename(filename: str | None) -> str:
@@ -353,6 +397,24 @@ def _safe_filename(filename: str | None) -> str:
         raise HTTPException(status_code=422, detail="Invalid filename.")
     if len(name) > 255:
         raise HTTPException(status_code=422, detail="Filename is too long.")
+    if "\x00" in name:
+        raise HTTPException(status_code=422, detail="Invalid filename.")
+    return name
+
+
+def _safe_upload_filename(filename: str | None) -> str:
+    """``_safe_filename`` plus the upload-only file-type restriction.
+
+    Deletes deliberately skip the type check so attachments uploaded before
+    the allowlist existed can still be removed.
+    """
+    name = _safe_filename(filename)
+    if Path(name).suffix.lower() not in ALLOWED_ATTACHMENT_EXTENSIONS:
+        allowed = ", ".join(sorted(ALLOWED_ATTACHMENT_EXTENSIONS))
+        raise HTTPException(
+            status_code=422,
+            detail=f"Attachment '{name}' has an unsupported file type. Allowed: {allowed}.",
+        )
     return name
 
 
@@ -404,7 +466,7 @@ async def upload_participant_email_attachments(
     new_payloads: list[tuple[str, bytes]] = []
     incoming_total = 0
     for upload in files:
-        name = _safe_filename(upload.filename)
+        name = _safe_upload_filename(upload.filename)
         content = await upload.read()
         if len(content) > MAX_ATTACHMENT_BYTES:
             raise HTTPException(
@@ -460,6 +522,8 @@ def _read_attachments(
     if reminder:
         base = base / REMINDER_ATTACHMENT_SUBDIR
     for lang in languages:
+        if lang not in LANGUAGE_CODES:
+            continue
         directory = base / lang
         if not directory.exists():
             continue
@@ -663,7 +727,7 @@ async def upload_participant_reminder_email_attachments(
     new_payloads: list[tuple[str, bytes]] = []
     incoming_total = 0
     for upload in files:
-        name = _safe_filename(upload.filename)
+        name = _safe_upload_filename(upload.filename)
         content = await upload.read()
         if len(content) > MAX_ATTACHMENT_BYTES:
             raise HTTPException(
