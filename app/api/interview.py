@@ -152,9 +152,12 @@ async def create_interview(
             project_id=project_id, token=auth_token, db=db
         )
 
-    validate_external_params(
-        project.external_params, new_interview.external_params, project_id
-    )
+    # Test runs are started from the dashboard by a collaborator, not from a
+    # distributed link, so there are no link params to satisfy.
+    if new_interview.interview_type == InterviewType.DISTRIBUTED:
+        validate_external_params(
+            project.external_params, new_interview.external_params, project_id
+        )
 
     if not (interview_guide := project_localization.interview_guide):
         raise ValueError("Interview guide is not set")
