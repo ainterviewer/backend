@@ -54,6 +54,7 @@ from ...dependencies import (
     ProjectEditor,
     ProjectViewer,
 )
+from ...services.project_storage import copy_email_attachments, delete_project_storage
 from ...types import CollaboratorRole, Scope
 from ...utils import ensure_filename, generate_qr_img
 from ..request_models import (
@@ -82,6 +83,7 @@ async def delete_project(
     _: ProjectAdmin,
 ):
     db.projects.delete_project(project_id)
+    delete_project_storage(project_id)
 
 
 @router.post("/projects/{project_id}/clone")
@@ -92,7 +94,22 @@ async def clone_project(
     jwt: DemoToken,
     _: ProjectEditor,
 ) -> ProjectPublic:
-    return db.projects.clone_project(project_id, owner_id=jwt.user_id)
+    new_project = db.projects.clone_project(project_id, owner_id=jwt.user_id)
+
+    # The email attachments live on disk, outside the cloned rows. A clone
+    # whose templates reference files that were never copied is worse than a
+    # failed clone, so undo the database side if the copy fails.
+    try:
+        copy_email_attachments(project_id, new_project.id)
+    except OSError as exc:
+        db.projects.delete_project(new_project.id)
+        delete_project_storage(new_project.id)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to copy the project's email attachments.",
+        ) from exc
+
+    return new_project
 
 
 @router.get(
