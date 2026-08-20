@@ -120,6 +120,13 @@ class CreateInterviewRequest(BaseModel):
     referer: str | None = Field(None, description="The referer of original request")
 
 
+class ValidateExternalParamsRequest(BaseModel):
+    external_params: dict[str, Any] | None = Field(
+        None,
+        description="Query parameters carried by the interview link.",
+    )
+
+
 class SynthesizeRequest(BaseModel):
     answering_model: str | None = None
     n_interviews: int = Field(ge=1, le=100)

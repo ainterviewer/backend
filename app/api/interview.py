@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 import aiofiles
 import aiohttp
@@ -33,14 +33,74 @@ from ..dependencies import (
     ScopeChecker,
 )
 from ..settings import app_settings
-from ..types import CollaboratorRole, Scope, build_external_params_model
+from ..types import (
+    CollaboratorRole,
+    ExternalParam,
+    Scope,
+    build_external_params_model,
+)
 from ..utils import generate_random_filename
-from .request_models import CreateInterviewRequest, SpeechRequest
+from .request_models import (
+    CreateInterviewRequest,
+    SpeechRequest,
+    ValidateExternalParamsRequest,
+)
 from .response_models import MediaUploadResponse, MessageFeedbackResponse
 
 CHUNK_SIZE = 1024 * 1024
 
 router = APIRouter(tags=["interviews"])
+
+
+def validate_external_params(
+    schema: list[ExternalParam] | None,
+    values: dict[str, Any] | None,
+    project_id: UUID4,
+) -> None:
+    """Validate submitted query params against a project's declared schema.
+
+    A project without a schema accepts anything; a project with one is
+    validated against `{}` when the respondent supplied nothing, so missing
+    required params are caught.
+
+    The 422 body is deliberately opaque. Pydantic's error list names the
+    parameters the link is expected to carry (and, for enums, their allowed
+    values), which is exactly the hint a respondent would need to fabricate
+    one. The detail is logged for the project owner instead; the interview page
+    only tells the respondent the link is invalid.
+    """
+    if not schema:
+        return
+
+    params_model = build_external_params_model(schema)
+    try:
+        params_model.model_validate(values or {})
+    except ValidationError as e:
+        logger.info(
+            f"External param validation failed for project {project_id}: {e.errors()}"
+        )
+        raise HTTPException(status_code=422, detail="Invalid interview link parameters")
+
+
+# NOTE: Unauthenticated like the consent/welcome endpoints: the interview page
+# calls this before showing anything, so a broken link fails on arrival rather
+# than after the respondent has read and accepted the consent text.
+@router.post("/projects/{project_id}/external_params/validate")
+async def validate_interview_params(
+    db: DBSession,
+    project_id: Annotated[UUID4, URLPath],
+    params: ValidateExternalParamsRequest,
+) -> None:
+    """Check a link's query params against the project's schema without
+    creating an interview.
+
+    `create_interview` runs the same check; this only moves the feedback
+    earlier, it does not replace it.
+    """
+    project = db.projects.get_project(project_id)
+    validate_external_params(
+        project.external_params, params.external_params, project_id
+    )
 
 
 @router.post("/projects/{project_id}/{lang}/interviews")
@@ -92,17 +152,9 @@ async def create_interview(
             project_id=project_id, token=auth_token, db=db
         )
 
-    # Validate external params against project schema
-    try:
-        if project.external_params and new_interview.external_params:
-            params_model = build_external_params_model(project.external_params)
-            params_model.model_validate(new_interview.external_params)
-        elif project.external_params:
-            # Check if any required params are missing
-            params_model = build_external_params_model(project.external_params)
-            params_model.model_validate({})
-    except ValidationError as e:
-        raise HTTPException(status_code=422, detail=e.errors())
+    validate_external_params(
+        project.external_params, new_interview.external_params, project_id
+    )
 
     if not (interview_guide := project_localization.interview_guide):
         raise ValueError("Interview guide is not set")
