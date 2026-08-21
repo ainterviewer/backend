@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import UUID4
 from sqlalchemy import delete, func, select, update
-from sqlalchemy.exc import IntegrityError, NoResultFound
+from sqlalchemy.exc import IntegrityError
 
 from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
 from ainterviewer.types import (
@@ -201,22 +201,14 @@ class InterviewRepository(BaseRepository):
         project_id: UUID4,
         interview_id: UUID4,
         full: bool = False,
-        create: bool = False,
     ) -> InterviewPublic:
-        try:
-            statement = (
-                select(InterviewTable)
-                .where(InterviewTable.project_id == project_id)
-                .where(InterviewTable.id == interview_id)
-            )
-            interview = self.session.execute(statement).scalar_one()
-        except NoResultFound:
-            if create:
-                interview = InterviewTable(id=interview_id, project_id=project_id)
-                self.session.add(interview)
-                self.session.commit()
-            else:
-                raise
+        """Fetch an interview scoped to its project. Raises NoResultFound."""
+        statement = (
+            select(InterviewTable)
+            .where(InterviewTable.project_id == project_id)
+            .where(InterviewTable.id == interview_id)
+        )
+        interview = self.session.execute(statement).scalar_one()
         if full:
             _ = interview.messages
             _ = interview.n_messages
