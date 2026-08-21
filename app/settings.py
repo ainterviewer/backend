@@ -78,6 +78,12 @@ class DatabaseSettings(BaseModel):
     db: DatabaseType = DatabaseType.SQLITE
     db_path: str = "storage"
 
+    # SQLite only, and per-connection: see app/db/pragmas.py. Exposed as a
+    # setting so enforcement can be switched off with
+    # `APP_DATABASE__ENFORCE_FOREIGN_KEYS=false` and a restart, without a
+    # deploy, if it surfaces a violation in production.
+    enforce_foreign_keys: bool = False
+
     db_url: str = "localhost"
     db_port: str = "5432"
     db_name: str = "ainterviewer"

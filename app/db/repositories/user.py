@@ -191,8 +191,22 @@ class UserRepository(BaseRepository):
         return [AccessRequestPublic.model_validate(request) for request in requests]
 
     def delete_access_requests(self, ids: list[UUID4]) -> None:
-        statement = delete(AccessRequestTable).where(AccessRequestTable.id.in_(ids))
-        self.session.execute(statement)
+        """Delete access requests, detaching any invitation issued for them.
+
+        An invitation outlives the request it came from -- pruning the request
+        list must not revoke a pending invite -- so the link is cleared and the
+        invitation kept. The foreign key declares SET NULL for the same reason;
+        this does it explicitly so the behaviour also holds where foreign keys
+        are not enforced.
+        """
+        self.session.execute(
+            update(InvitationTable)
+            .where(InvitationTable.access_request_id.in_(ids))
+            .values(access_request_id=None)
+        )
+        self.session.execute(
+            delete(AccessRequestTable).where(AccessRequestTable.id.in_(ids))
+        )
         self.session.commit()
 
     async def process_access_request(

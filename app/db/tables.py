@@ -109,9 +109,11 @@ class AccessRequestTable(Base):
     processed_by: Mapped[Optional["UserTable"]] = relationship(
         back_populates="processed_requests"
     )
+    # No delete cascade: deleting an access request detaches its invitation
+    # rather than deleting it (see the FK's SET NULL, and
+    # UserRepository.delete_access_requests).
     invitation: Mapped[Optional["InvitationTable"]] = relationship(
         back_populates="access_request",
-        cascade="all, delete-orphan",
         uselist=False,
     )
 
@@ -131,8 +133,10 @@ class InvitationTable(Base):
     )
     title: Mapped[str | None] = mapped_column(default=None)
 
+    # SET NULL, not CASCADE: an invitation outlives the access request it came
+    # from. Pruning the request list must never revoke a pending invite.
     access_request_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("access_requests.id")
+        ForeignKey("access_requests.id", ondelete="SET NULL")
     )
 
     # Relationships

@@ -38,7 +38,9 @@ engine = create_engine(
 )
 
 register_vector_extension(engine)
-register_pragmas(engine)
+register_pragmas(
+    engine, enforce_foreign_keys=app_settings.database.enforce_foreign_keys
+)
 
 
 def get_db() -> Generator[InterviewDataBase, None, None]:

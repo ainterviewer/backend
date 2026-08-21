@@ -4,6 +4,12 @@ Every pragma here except `journal_mode` is *connection* state, so setting it
 once when the database is created does nothing for the pooled connections the
 app actually serves requests on. It has to be reapplied on every new connection,
 which is what `register_pragmas` does via SQLAlchemy's `connect` event.
+
+`foreign_keys` is handled separately from the rest because it changes behaviour
+rather than tuning it: with enforcement on, a delete that would orphan rows
+raises IntegrityError instead of succeeding quietly. It is driven by
+`app_settings.database.enforce_foreign_keys` so it can be switched back off with
+an environment variable and a restart rather than a deploy.
 """
 
 import logging
@@ -31,7 +37,7 @@ _SQLITE_PRAGMAS: tuple[tuple[str, str], ...] = (
 )
 
 
-def register_pragmas(engine: Engine) -> None:
+def register_pragmas(engine: Engine, *, enforce_foreign_keys: bool = False) -> None:
     """Apply the SQLite pragmas to every new connection of `engine`.
 
     A no-op on other dialects.
@@ -39,11 +45,15 @@ def register_pragmas(engine: Engine) -> None:
     if engine.dialect.name != "sqlite":
         return
 
+    pragmas = _SQLITE_PRAGMAS
+    if enforce_foreign_keys:
+        pragmas = (*pragmas, ("foreign_keys", "ON"))
+
     @event.listens_for(engine, "connect")
     def _set_sqlite_pragmas(dbapi_connection, _connection_record):
         cursor = dbapi_connection.cursor()
         try:
-            for pragma, value in _SQLITE_PRAGMAS:
+            for pragma, value in pragmas:
                 cursor.execute(f"PRAGMA {pragma}={value}")
         except Exception:
             logger.exception("Failed to apply SQLite pragmas to a new connection")
