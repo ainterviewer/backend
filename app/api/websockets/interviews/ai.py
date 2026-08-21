@@ -13,10 +13,8 @@ from fastapi import (
     Query,
     WebSocket,
     WebSocketDisconnect,
-    WebSocketException,
 )
 from jinja2 import ChoiceLoader, DictLoader, PackageLoader
-from jose import JWTError
 from sqlalchemy.exc import NoResultFound
 from uvicorn.config import logger
 
@@ -24,10 +22,10 @@ from ainterviewer.interfaces import OutgoingData
 from ainterviewer.interview import AInterviewer
 from ainterviewer.lpm.types import CustomToken
 
-from ....auth import InterviewToken
 from ....db import InterviewDataBase
 from ....dependencies import DBSession
 from ....utils import replay_history
+from ..auth import authenticate_or_close
 from ..handler import WebsocketMessageHandler
 from ..manager import session_manager
 
@@ -45,16 +43,9 @@ async def ai_interview_websocket_endpoint(
     db: DBSession,
     initialized: bool = Query(False),
 ):
-    token = websocket.cookies.get("interview_token")
-
-    if token is None:
-        raise WebSocketException(401, "Unauthorized")
-    try:
-        interview_token = InterviewToken.decode(token)
-    except JWTError as e:
-        raise WebSocketException(401, str(e))
-
-    await websocket.accept()
+    interview_token = await authenticate_or_close(websocket)
+    if interview_token is None:
+        return
 
     project_id = interview_token.project_id
     interview_id = interview_token.interview_id

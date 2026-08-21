@@ -204,9 +204,20 @@ async def create_interview(
     # NOTE:
     # if we need to support iframe set samesite='none' and reconsider frontend
     # localstorage
+    #
+    # max_age is required: without it this is a session cookie that the browser
+    # drops on close, while the JWT inside stays valid for
+    # jwt_interview_token_expiration. The frontend decides whether to resume
+    # from a localStorage entry sized to that same expiration, so a shorter
+    # cookie lifetime left respondents resuming with no credential -- an
+    # unauthenticated websocket handshake and no way to recover. Derive it from
+    # the setting rather than restating the duration; that drift was the bug.
     response.set_cookie(
         key="interview_token",
         value=interview_token,
+        max_age=int(
+            app_settings.app.jwt_interview_token_expiration.to_timedelta().total_seconds()
+        ),
         secure=True,
         httponly=True,
         samesite="lax",

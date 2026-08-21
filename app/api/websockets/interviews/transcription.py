@@ -4,8 +4,7 @@ import json
 import time
 
 import websockets
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, WebSocketException
-from jose import JWTError
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.exc import NoResultFound
 from uvicorn.config import logger
 from websockets.exceptions import ConnectionClosed
@@ -14,10 +13,10 @@ from websockets.exceptions import WebSocketException as WSException
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode, MessageRole
 
-from ....auth import InterviewToken
 from ....dependencies import DBSession
 from ....services.audio import SAMPLE_RATE, LocalWavSink
 from ....settings import app_settings
+from ..auth import authenticate_or_close
 
 router = APIRouter(prefix="/ws", tags=["interviews"])
 
@@ -128,15 +127,9 @@ async def transcription_websocket_endpoint(websocket: WebSocket, db: DBSession):
     straight back, and the client submits the final text through the normal
     interview message path.
     """
-    token = websocket.cookies.get("interview_token")
-    if token is None:
-        raise WebSocketException(401, "Unauthorized")
-    try:
-        interview_token = InterviewToken.decode(token)
-    except JWTError as e:
-        raise WebSocketException(401, str(e))
-
-    await websocket.accept()
+    interview_token = await authenticate_or_close(websocket)
+    if interview_token is None:
+        return
 
     audio_dir = lib_settings.storage.interview_storage.audio_path(
         interview_token.interview_id
