@@ -586,8 +586,12 @@ class ExperimentProjectTable(Base):
         UniqueConstraint("experiment_id", "project_id", name="uq_experiment_project"),
     )
 
-    experiment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("experiment.id"))
-    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
+    experiment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("experiment.id", ondelete="CASCADE")
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE")
+    )
     weight: Mapped[float | None] = mapped_column(default=None)
     added_at: Mapped[datetime.datetime] = mapped_column(default=now)
 
@@ -854,7 +858,9 @@ class TestSetupTable(Base):
 class TestRunTable(Base):
     __tablename__ = "testrun"
 
-    test_setup_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("testsetup.id"))
+    test_setup_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("testsetup.id", ondelete="CASCADE")
+    )
     language: Mapped[LanguageCode] = mapped_column(LanguageType, default="EN")
     n_interviews: Mapped[int] = mapped_column()
     answering_model: Mapped[str | None] = mapped_column()

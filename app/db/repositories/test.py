@@ -19,6 +19,10 @@ from ..models import (
 from ..tables import (
     ExperimentProjectTable,
     ExperimentTable,
+    IntervieweeTable,
+    InterviewTable,
+    MessageTable,
+    TaskTable,
     TestRunTable,
     TestSetupTable,
 )
@@ -50,8 +54,31 @@ class TestRepository(BaseRepository):
         return TestSetupPublic.model_validate(test)
 
     def delete_test_setup(self, test_id: UUID4):
-        statement = delete(TestSetupTable).where(TestSetupTable.id == test_id)
-        self.session.execute(statement)
+        """Delete a test setup along with its runs and the interviews they
+        produced.
+
+        The children are deleted explicitly rather than left to ON DELETE
+        CASCADE: SQLite only enforces foreign keys on connections that ran
+        `PRAGMA foreign_keys=ON`, which the app does not currently do, so the
+        cascade would not fire and the rows would be orphaned instead.
+        """
+        run_ids = select(TestRunTable.id).where(TestRunTable.test_setup_id == test_id)
+        interview_ids = select(InterviewTable.id).where(
+            InterviewTable.test_run_id.in_(run_ids)
+        )
+
+        # Interview children first, so the subquery above still resolves.
+        for table in (MessageTable, TaskTable, IntervieweeTable):
+            self.session.execute(
+                delete(table).where(table.interview_id.in_(interview_ids))
+            )
+        self.session.execute(
+            delete(InterviewTable).where(InterviewTable.test_run_id.in_(run_ids))
+        )
+        self.session.execute(
+            delete(TestRunTable).where(TestRunTable.test_setup_id == test_id)
+        )
+        self.session.execute(delete(TestSetupTable).where(TestSetupTable.id == test_id))
         self.session.commit()
 
     def get_test(self, test_id: UUID4) -> TestSetupPublic:
@@ -208,11 +235,35 @@ class TestRepository(BaseRepository):
         return self._to_experiment_public(experiment)
 
     def delete_experiment(self, experiment_id: UUID4, user_id: UUID4) -> None:
-        statement = delete(ExperimentTable).where(
+        """Delete an experiment owned by `user_id`, unlinking its projects and
+        interviews.
+
+        Interviews are kept and their reference cleared, matching the SET NULL
+        that `interview.experiment_id` declares; the project links are deleted.
+        Both are done explicitly because the cascade does not fire while
+        foreign keys are unenforced -- see `delete_test_setup`.
+        """
+        owned = select(ExperimentTable.id).where(
             ExperimentTable.id == experiment_id,
             ExperimentTable.user_id == user_id,
         )
-        self.session.execute(statement)
+
+        self.session.execute(
+            delete(ExperimentProjectTable).where(
+                ExperimentProjectTable.experiment_id.in_(owned)
+            )
+        )
+        self.session.execute(
+            update(InterviewTable)
+            .where(InterviewTable.experiment_id.in_(owned))
+            .values(experiment_id=None)
+        )
+        self.session.execute(
+            delete(ExperimentTable).where(
+                ExperimentTable.id == experiment_id,
+                ExperimentTable.user_id == user_id,
+            )
+        )
         self.session.commit()
 
     def _to_experiment_public(self, experiment: ExperimentTable) -> ExperimentPublic:
