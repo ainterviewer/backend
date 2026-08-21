@@ -281,6 +281,12 @@ class InterviewRepository(BaseRepository):
         )
         self.session.add(message)
         try:
+            self.session.execute(
+                update(InterviewTable)
+                .where(InterviewTable.id == interview_id)
+                .where(InterviewTable.project_id == project_id)
+                .values(last_updated=now())
+            )
             self.session.commit()
         except IntegrityError:
             self.session.rollback()
