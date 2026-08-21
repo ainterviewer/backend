@@ -101,8 +101,6 @@ class InterviewRepository(BaseRepository):
         project_id: UUID4,
         interview_ids: list[UUID4],
     ):
-        # FIXME: Update permissions to collab
-        # Check if the project exists and belongs to the folder
         statement = select(ProjectTable).where(
             ProjectTable.id == project_id,
         )
