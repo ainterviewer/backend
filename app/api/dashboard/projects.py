@@ -642,7 +642,6 @@ async def get_interviews(
 ) -> PaginatedResponse[InterviewSummaryPublic]:
     interviews, total = db.interviews.get_interviews(
         project_id,
-        with_messages=True,
         offset=paginated_query.offset,
         limit=paginated_query.limit,
         sorting_column=paginated_query.column,
@@ -653,11 +652,7 @@ async def get_interviews(
         created_at=created_at,
         completed=completed,
     )
-    response = [
-        InterviewSummaryPublic(**interview.model_dump()) for interview in interviews
-    ]
-
-    return PaginatedResponse(total=total, items=response)
+    return PaginatedResponse(total=total, items=list(interviews))
 
 
 @router.delete("/projects/{project_id}/interviews")

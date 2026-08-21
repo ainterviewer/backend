@@ -5,8 +5,10 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import UUID4
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload, noload, selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 
 from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
 from ainterviewer.types import (
@@ -22,15 +24,19 @@ from ..models import (
     IntervieweeCreate,
     IntervieweePublic,
     InterviewPublic,
+    InterviewSummaryPublic,
     MessagePublic,
 )
 from ..tables import (
     IntervieweeTable,
     InterviewTable,
+    MessageAnnotationTable,
     MessageTable,
     PlatformReleaseTable,
     ProjectTable,
     TaskTable,
+    TestRunTable,
+    TestSetupTable,
 )
 from ..types import InterviewType
 from .base import BaseRepository
@@ -76,6 +82,11 @@ class InterviewRepository(BaseRepository):
         self.session.add(interview)
         self.session.commit()
         self.session.refresh(interview)
+        # The interview was just created, so its transcript is empty by
+        # construction. Mark the collection loaded rather than letting
+        # InterviewPublic's `messages` field trigger a query for it.
+        set_committed_value(interview, "messages", [])
+
         return InterviewPublic.model_validate(interview)
 
     def update_interview_guide(
@@ -136,7 +147,6 @@ class InterviewRepository(BaseRepository):
     def get_interviews(
         self,
         project_id: UUID4,
-        with_messages: bool = False,
         offset: int | None = None,
         limit: int | None = None,
         sorting_column: str = "created_at",
@@ -144,7 +154,16 @@ class InterviewRepository(BaseRepository):
         interview_types: list[InterviewType] | None = None,
         created_at: datetime.datetime | None = None,
         completed: bool | None = None,
-    ) -> tuple[Sequence[InterviewPublic], int]:
+    ) -> tuple[Sequence[InterviewSummaryPublic], int]:
+        """One page of interview summaries, plus the total matching count.
+
+        Selects columns rather than ORM objects on purpose. Returning
+        InterviewTable instances would make Pydantic read every field the
+        model declares, and `messages` alone pulled the full transcript of
+        every interview on the page (plus a query per message for its
+        annotations). `n_messages` and `test_name` are computed in SQL here
+        instead of by walking relationships.
+        """
         SORTABLE_COLUMNS = {"created_at", "last_updated", "status", "language", "type"}
         if sorting_column not in SORTABLE_COLUMNS:
             raise ValueError(f"Invalid sort column: {sorting_column}")
@@ -173,8 +192,30 @@ class InterviewRepository(BaseRepository):
                 else InterviewTable.status != InterviewStatus.COMPLETED
             )
 
+        # Mirrors InterviewTable.test_name: only synthetic test runs carry one.
+        test_name = case(
+            (
+                InterviewTable.type == InterviewType.SYNTHETIC_TEST,
+                TestSetupTable.name,
+            ),
+            else_=None,
+        ).label("test_name")
+
         statement = (
-            select(InterviewTable)
+            select(
+                InterviewTable.id,
+                InterviewTable.language,
+                InterviewTable.interviewer,
+                InterviewTable.status,
+                InterviewTable.type,
+                InterviewTable.created_at,
+                InterviewTable.last_updated,
+                InterviewTable.total_time_spent,
+                InterviewTable.n_messages.label("n_messages"),
+                test_name,
+            )
+            .outerjoin(TestRunTable, InterviewTable.test_run_id == TestRunTable.id)
+            .outerjoin(TestSetupTable, TestRunTable.test_setup_id == TestSetupTable.id)
             .where(*conditions)
             .order_by(
                 _sorting_col.desc() if sorting_order == "desc" else _sorting_col.asc()
@@ -184,15 +225,10 @@ class InterviewRepository(BaseRepository):
         )
 
         total = self._get_total_count(InterviewTable, *conditions)
-
-        interviews = self.session.execute(statement).scalars().all()
-
-        if with_messages:
-            for interview in interviews:
-                _ = interview.messages
+        rows = self.session.execute(statement).all()
 
         return [
-            InterviewPublic.model_validate(interview) for interview in interviews
+            InterviewSummaryPublic.model_validate(row._mapping) for row in rows
         ], total
 
     def get_interview(
@@ -201,18 +237,37 @@ class InterviewRepository(BaseRepository):
         interview_id: UUID4,
         full: bool = False,
     ) -> InterviewPublic:
-        """Fetch an interview scoped to its project. Raises NoResultFound."""
+        """Fetch an interview scoped to its project. Raises NoResultFound.
+
+        `full=True` includes the transcript. Without it the messages are not
+        merely skipped but explicitly `noload`ed: `InterviewPublic` declares
+        the field, and Pydantic reads every declared attribute, so a lazy
+        relationship would load the whole transcript no matter what the caller
+        asked for. `n_messages` therefore comes from SQL rather than
+        `len(messages)`, which would be 0 under noload.
+        """
+        options = [
+            # test_name walks test_run -> test_setup; join it rather than
+            # emitting two lazy loads per interview.
+            joinedload(InterviewTable.test_run).joinedload(TestRunTable.test_setup),
+            selectinload(InterviewTable.messages)
+            .selectinload(MessageTable.annotations)
+            .selectinload(MessageAnnotationTable.values)
+            if full
+            else noload(InterviewTable.messages),
+        ]
+
         statement = (
-            select(InterviewTable)
+            select(InterviewTable, InterviewTable.n_messages.label("n_messages"))
+            .options(*options)
             .where(InterviewTable.project_id == project_id)
             .where(InterviewTable.id == interview_id)
         )
-        interview = self.session.execute(statement).scalar_one()
-        if full:
-            _ = interview.messages
-            _ = interview.n_messages
+        interview, n_messages = self.session.execute(statement).one()
 
-        return InterviewPublic.model_validate(interview)
+        return InterviewPublic.model_validate(interview).model_copy(
+            update={"n_messages": n_messages}
+        )
 
     def update_interview_status(
         self,
@@ -238,6 +293,21 @@ class InterviewRepository(BaseRepository):
         self.session.commit()
 
     # ==================== Message Methods ====================
+
+    @staticmethod
+    def _message_options():
+        """Eager-load what MessagePublic serializes.
+
+        `MessagePublic` declares `annotations`, and `MessageAnnotationPublic`
+        declares `values`, so validating a message emits a query for each --
+        one per message, whether or not any annotations exist. selectinload
+        collapses that into two queries for the whole result set.
+        """
+        return (
+            selectinload(MessageTable.annotations).selectinload(
+                MessageAnnotationTable.values
+            ),
+        )
 
     def insert_message(
         self,
@@ -336,6 +406,7 @@ class InterviewRepository(BaseRepository):
         restricted to a role. Returns None if there are no matches."""
         statement = (
             select(MessageTable)
+            .options(*self._message_options())
             .where(MessageTable.interview_id == interview_id)
             .where(MessageTable.project_id == project_id)
             .order_by(MessageTable.message_id.desc())
@@ -355,6 +426,7 @@ class InterviewRepository(BaseRepository):
         """Fetch a single message scoped to an interview. Raises NoResultFound."""
         statement = (
             select(MessageTable)
+            .options(*self._message_options())
             .where(MessageTable.message_id == message_id)
             .where(MessageTable.interview_id == interview_id)
             .where(MessageTable.project_id == project_id)
@@ -369,6 +441,7 @@ class InterviewRepository(BaseRepository):
     ) -> list[MessagePublic]:
         statement = (
             select(MessageTable)
+            .options(*self._message_options())
             .where(MessageTable.interview_id == interview_id)
             .where(MessageTable.project_id == project_id)
         )

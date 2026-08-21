@@ -344,11 +344,19 @@ class InterviewCreate(_BaseModel):
 
 
 class InterviewPublic(InterviewBase):
-    n_messages: int
-    messages: list[MessagePublic]
+    # Both default, so an interview can be returned without its transcript.
+    # `n_messages` comes from the SQL expression on InterviewTable rather than
+    # from `len(messages)`, so it stays correct when the messages are not
+    # loaded -- see InterviewRepository.get_interview.
+    n_messages: int = 0
+    messages: list[MessagePublic] = []
 
 
 class InterviewSummaryPublic(_BaseModel):
+    """One row of the interview list. Deliberately carries no messages: the
+    list only ever renders `n_messages`, and the transcript is fetched from
+    /interviews/{id}/messages when a single interview is opened."""
+
     id: UUID4
     language: LanguageCode = "EN"
     interviewer: Interviewer = Interviewer.AI
@@ -358,7 +366,6 @@ class InterviewSummaryPublic(_BaseModel):
     last_updated: datetime | None = None
     total_time_spent: int = 0
     n_messages: int
-    messages: list[MessagePublic]
     test_name: str | None = None
 
 
