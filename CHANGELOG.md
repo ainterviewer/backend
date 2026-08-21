@@ -4,6 +4,32 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.4.31] - 2026-08-21
+
+### Features
+
+- Update InterviewTable.last_updated on message insert
+
+### Bug Fixes
+
+- Sort interviews based on completed status correctly
+- Sorting by last_updated on InterviewTable now correctly falls back to created_at when it is not set
+- Auth session cookie for interviews now survives browser close. And an invalid/outdated auth now also displays a proper message before restarting.
+- Better error handling for interview loop
+- Move sqlite pragmas to engine
+- When deleting an interview, also delete messages, tasks, interviewees
+- Add cascade on testrun and experiment_project foreign keys
+- Invitation.access_request_id on delete set null and remove cascade="all, delete-orphan"
+
+### Internal
+
+- (interview) Remove dead create argument for get_interview
+- Remove outdated comment
+- Bump lib version
+- Improve alembic env with logger and better target url handling
+- Remove orphaned table rows
+- Move message loadin for interviews to improve speed
+
 ## [0.4.30] - 2026-08-20
 
 ### Bug Fixes
