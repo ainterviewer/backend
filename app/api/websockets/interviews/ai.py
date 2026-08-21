@@ -159,29 +159,21 @@ async def _run_interview(
             language=language,
             referable_values=external_params,
         ) as interviewer:
-            try:
-                await interviewer.interview(interview_history=interview_history)
-            except WebSocketDisconnect:
-                pass
-            except Exception as e:
-                # TODO: Add more errors or handle it in a different way.
-                if "EC2 instance initializing" in str(e):
-                    logger.warning(
-                        "Interview started with local LLM as model, but inference server is not available."
-                    )
-
-                    await websocket.send_json(
-                        OutgoingData(error="InstanceInitializing").model_dump()
-                    )
-                else:
-                    if str(e) == "Internal Server Error":
-                        logger.error(
-                            "Error fetching VLLM provider from inference proxy."
-                        )
-                        await websocket.send_json(
-                            OutgoingData(error="InferenceError").model_dump()
-                        )
-                    else:
-                        raise
+            await interviewer.interview(interview_history=interview_history)
     except WebSocketDisconnect:
         pass
+    except Exception as e:
+        # TODO: Add more errors or handle it in a different way.
+        if "EC2 instance initializing" in str(e):
+            logger.warning(
+                "Interview started with local LLM as model, but inference server is not available."
+            )
+
+            await websocket.send_json(
+                OutgoingData(error="InstanceInitializing").model_dump()
+            )
+        elif str(e) == "Internal Server Error":
+            logger.error("Error fetching VLLM provider from inference proxy.")
+            await websocket.send_json(OutgoingData(error="InferenceError").model_dump())
+        else:
+            raise
