@@ -160,7 +160,11 @@ class InterviewRepository(BaseRepository):
             conditions.append(InterviewTable.created_at == created_at)
 
         if completed is not None:
-            conditions.append(InterviewTable.status == InterviewStatus.COMPLETED)
+            conditions.append(
+                InterviewTable.status == InterviewStatus.COMPLETED
+                if completed
+                else InterviewTable.status != InterviewStatus.COMPLETED
+            )
 
         statement = (
             select(InterviewTable)
