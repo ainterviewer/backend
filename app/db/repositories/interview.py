@@ -149,7 +149,15 @@ class InterviewRepository(BaseRepository):
         SORTABLE_COLUMNS = {"created_at", "last_updated", "status", "language", "type"}
         if sorting_column not in SORTABLE_COLUMNS:
             raise ValueError(f"Invalid sort column: {sorting_column}")
-        _sorting_col = getattr(InterviewTable, sorting_column)
+        if sorting_column == "last_updated":
+            # Interviews written before last_updated was maintained still have
+            # NULL, and NULL ordering differs between SQLite and Postgres.
+            # Matches ProjectParticipantTable.latest_interview_at.
+            _sorting_col = func.coalesce(
+                InterviewTable.last_updated, InterviewTable.created_at
+            )
+        else:
+            _sorting_col = getattr(InterviewTable, sorting_column)
 
         conditions = [InterviewTable.project_id == project_id]
 
