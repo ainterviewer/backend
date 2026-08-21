@@ -12,6 +12,7 @@ from ainterviewer.types import LanguageCode
 
 from .auth import AssistanceSessionToken, AuthToken
 from .db import InterviewDataBase
+from .db.pragmas import register_pragmas
 from .db.vectors import register_vector_extension
 from .settings import app_settings
 from .types import CollaboratorRole, Scope
@@ -37,6 +38,7 @@ engine = create_engine(
 )
 
 register_vector_extension(engine)
+register_pragmas(engine)
 
 
 def get_db() -> Generator[InterviewDataBase, None, None]:

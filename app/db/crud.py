@@ -62,13 +62,10 @@ class InterviewDataBase(PersistenceProtocol):
 
     def create_db_and_tables(self):
         """Creates the db and all the required tables based on the SQLAlchemy models"""
-        self.session.execute(text("PRAGMA foreign_keys=ON"))
-        self.session.execute(text("PRAGMA journal_mode=WAL"))
-        self.session.execute(text("PRAGMA wal_autocheckpoint=100"))
-        self.session.execute(text("PRAGMA busy_timeout=60000"))
-        self.session.execute(text("PRAGMA cache_size=-65536"))
-        self.session.execute(text("PRAGMA temp_store=MEMORY"))
-
+        # Pragmas are not set here: they are per-connection state, so setting
+        # them on this one connection would leave every pooled connection on
+        # SQLite's defaults. See app/db/pragmas.py, which applies them to all
+        # of them -- including this one.
         Base.metadata.create_all(self.session.connection())
         install_triggers(self.session.connection())
         alembic_command.stamp(self._alembic_config, "head")

@@ -145,7 +145,20 @@ The backend is tightly coupled with the `ainterviewer` library (sibling package 
 
 - WAL mode enabled for concurrency
 - SQLiteAI vector extension for embeddings
-- Pragmas: `foreign_keys=ON`, `busy_timeout=60000`, `cache_size=-65536`
+- Pragmas live in `app/db/pragmas.py` and are applied to **every** connection
+  via a `connect` event listener registered in `app/dependencies.py`. They are
+  per-connection state, so setting them anywhere else (as
+  `create_db_and_tables` used to) leaves the pooled connections that actually
+  serve requests on SQLite's defaults. Add new pragmas to `_SQLITE_PRAGMAS`,
+  never to a one-off `session.execute`.
+- **Foreign keys are not enforced.** `foreign_keys` is deliberately left out of
+  `_SQLITE_PRAGMAS`: the database holds orphaned rows from the period when the
+  pragma never reached a live connection, and the Core `delete()` statements in
+  `TestRepository.delete_test_setup` / `delete_experiment` raise IntegrityError
+  once it is on (their child FKs have no `ondelete`). Until that is fixed,
+  `ON DELETE CASCADE` does nothing at runtime -- delete child rows explicitly,
+  as `InterviewRepository.delete_interviews` does. Note PostgreSQL enforces
+  foreign keys unconditionally, so this must be resolved before migrating.
 - Storage location: `storage/db.sqlite`
 
 **Alternative: PostgreSQL**
