@@ -106,25 +106,26 @@ class InterviewRepository(BaseRepository):
         )
         self.session.execute(statement).scalar_one()
 
-        statement = delete(InterviewTable).where(
-            InterviewTable.project_id == project_id,
-            InterviewTable.id.in_(interview_ids),
+        # Children first, then the interviews, in a single transaction. All
+        # three child tables declare ON DELETE CASCADE, but SQLite only
+        # enforces foreign keys on connections that ran `PRAGMA
+        # foreign_keys=ON` and the app does not currently enable it, so the
+        # cascade cannot be relied on -- leaving these out is what orphaned the
+        # task and interviewee rows already in the database. This order is
+        # correct whether or not the cascade fires.
+        for table in (MessageTable, TaskTable, IntervieweeTable):
+            self.session.execute(
+                delete(table).where(
+                    table.project_id == project_id,
+                    table.interview_id.in_(interview_ids),
+                )
+            )
+        self.session.execute(
+            delete(InterviewTable).where(
+                InterviewTable.project_id == project_id,
+                InterviewTable.id.in_(interview_ids),
+            )
         )
-        self.session.execute(statement)
-
-        self.session.commit()
-
-        self._delete_messages(project_id, interview_ids)
-
-    def _delete_messages(self, project_id: UUID4, interview_ids: list[UUID4]):
-        # WARNING: Add project ownership validation if this method is made public
-
-        statement = delete(MessageTable).where(
-            MessageTable.project_id == project_id,
-            MessageTable.interview_id.in_(interview_ids),
-        )
-        self.session.execute(statement)
-
         self.session.commit()
 
     def _get_total_count(self, table, *conditions) -> int:
