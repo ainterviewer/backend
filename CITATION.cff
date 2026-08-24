@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the paper below."
+title: "AInterviewer backend"
+authors:
+  - family-names: "Gårdhus"
+    given-names: "Tobias"
+  - family-names: "Vitsakis"
+    given-names: "Nikolas"
+  - family-names: "Frederiksen"
+    given-names: "Fie Lejre"
+  - family-names: "Rogers"
+    given-names: "Anna"
+  - family-names: "Carlsen"
+    given-names: "Hjalmar Bang"
+repository-code: "https://github.com/ainterviewer/backend"
+preferred-citation:
+  type: conference-paper
+  title: "AInterviewer: A Platform for Designing and Conducting AI-led Qualitative Interviews"
+  authors:
+    - family-names: "Gårdhus"
+      given-names: "Tobias"
+    - family-names: "Vitsakis"
+      given-names: "Nikolas"
+    - family-names: "Frederiksen"
+      given-names: "Fie Lejre"
+    - family-names: "Rogers"
+      given-names: "Anna"
+    - family-names: "Carlsen"
+      given-names: "Hjalmar Bang"
+  collection-title: "Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 3: System Demonstrations)"
+  publisher:
+    name: "Association for Computational Linguistics"
+  year: 2026
+  doi: "10.18653/v1/2026.acl-demo.12"
+  url: "https://aclanthology.org/2026.acl-demo.12/"
