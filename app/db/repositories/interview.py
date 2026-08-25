@@ -5,10 +5,11 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import UUID4
-from sqlalchemy import case, delete, func, select, update
+from sqlalchemy import String, case, cast, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload, noload, selectinload
 from sqlalchemy.orm.attributes import set_committed_value
+from sqlalchemy.sql.elements import ColumnElement
 
 from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
 from ainterviewer.types import (
@@ -42,6 +43,25 @@ from ..types import InterviewType
 from .base import BaseRepository
 
 logger = logging.getLogger(__name__)
+
+
+SORTABLE_INTERVIEW_COLUMNS = frozenset(
+    {
+        "created_at",
+        "last_updated",
+        "status",
+        "language",
+        "type",
+        "n_messages",
+        "test_name",
+    }
+)
+"""Columns `get_interviews` will sort by.
+
+The list API validates against this before calling, so a header the client
+should not have offered is rejected as a bad request rather than raised as a
+ValueError from the repository.
+"""
 
 
 class InterviewRepository(BaseRepository):
@@ -139,10 +159,100 @@ class InterviewRepository(BaseRepository):
         )
         self.session.commit()
 
-    def _get_total_count(self, table, *conditions) -> int:
-        statement = select(func.count()).select_from(table).where(*conditions)
+    @staticmethod
+    def _test_name_column():
+        """Mirrors InterviewTable.test_name: only synthetic test runs carry one."""
+        return case(
+            (
+                InterviewTable.type == InterviewType.SYNTHETIC_TEST,
+                TestSetupTable.name,
+            ),
+            else_=None,
+        ).label("test_name")
 
-        return self.session.execute(statement).scalar_one()
+    @staticmethod
+    def _join_test_setup(statement):
+        """test_name and the search term both reach through the test run.
+
+        Every statement built from `_interview_filters` needs these joins, not
+        just the one selecting rows: a search on the test name is a condition
+        like any other, and the count and facet queries apply it too.
+        """
+        return statement.outerjoin(
+            TestRunTable, InterviewTable.test_run_id == TestRunTable.id
+        ).outerjoin(TestSetupTable, TestRunTable.test_setup_id == TestSetupTable.id)
+
+    @staticmethod
+    def _interview_filters(
+        project_id: UUID4,
+        interview_types: list[InterviewType] | None = None,
+        selected_types: list[InterviewType] | None = None,
+        statuses: list[InterviewStatus] | None = None,
+        languages: list[str] | None = None,
+        created_from: datetime.datetime | None = None,
+        created_to: datetime.datetime | None = None,
+        completed: bool | None = None,
+        search: str | None = None,
+    ) -> dict[str, ColumnElement[bool]]:
+        """The active filters, keyed by the facet each one belongs to.
+
+        Keyed rather than listed because a facet's own selection must be left
+        out when counting that facet: with it applied, every unselected value
+        would report zero and the dropdown could never be widened.
+
+        `interview_types` and `selected_types` both constrain the type column
+        but are not interchangeable. The first is the scope of the list -- the
+        interviews page shows distributed interviews, the test results page
+        shows test runs -- and holds for the facet counts too, or the results
+        page would offer a `distributed` option that its own list can never
+        contain. The second is what the user picked inside that scope, and is
+        dropped when counting the type facet like any other selection.
+        """
+        filters: dict[str, ColumnElement[bool]] = {
+            "project": InterviewTable.project_id == project_id,
+        }
+
+        if interview_types:
+            filters["scope"] = InterviewTable.type.in_(interview_types)
+
+        if selected_types:
+            filters["type"] = InterviewTable.type.in_(selected_types)
+
+        if statuses:
+            filters["status"] = InterviewTable.status.in_(statuses)
+
+        if languages:
+            # Stored upper-cased by LanguageType; normalise so a lower-case
+            # query param still matches.
+            filters["language"] = InterviewTable.language.in_(
+                [language.upper() for language in languages]
+            )
+
+        if created_from is not None:
+            filters["created_from"] = InterviewTable.created_at >= created_from
+
+        if created_to is not None:
+            filters["created_to"] = InterviewTable.created_at <= created_to
+
+        if completed is not None:
+            filters["completed"] = (
+                InterviewTable.status == InterviewStatus.COMPLETED
+                if completed
+                else InterviewTable.status != InterviewStatus.COMPLETED
+            )
+
+        if search and (term := search.strip()):
+            pattern = f"%{term}%"
+            filters["search"] = or_(
+                # Ids are what the list actually shows, so they are what a
+                # search has to match; cast because the column is a UUID on
+                # Postgres. ilike() degrades to lower(x) LIKE lower(y) on
+                # SQLite, which has no ILIKE.
+                cast(InterviewTable.id, String).ilike(pattern),
+                TestSetupTable.name.ilike(pattern),
+            )
+
+        return filters
 
     def get_interviews(
         self,
@@ -152,8 +262,13 @@ class InterviewRepository(BaseRepository):
         sorting_column: str = "created_at",
         sorting_order: Literal["desc", "asc"] = "desc",
         interview_types: list[InterviewType] | None = None,
-        created_at: datetime.datetime | None = None,
+        selected_types: list[InterviewType] | None = None,
+        statuses: list[InterviewStatus] | None = None,
+        languages: list[str] | None = None,
+        created_from: datetime.datetime | None = None,
+        created_to: datetime.datetime | None = None,
         completed: bool | None = None,
+        search: str | None = None,
     ) -> tuple[Sequence[InterviewSummaryPublic], int]:
         """One page of interview summaries, plus the total matching count.
 
@@ -164,9 +279,11 @@ class InterviewRepository(BaseRepository):
         annotations). `n_messages` and `test_name` are computed in SQL here
         instead of by walking relationships.
         """
-        SORTABLE_COLUMNS = {"created_at", "last_updated", "status", "language", "type"}
-        if sorting_column not in SORTABLE_COLUMNS:
+        if sorting_column not in SORTABLE_INTERVIEW_COLUMNS:
             raise ValueError(f"Invalid sort column: {sorting_column}")
+
+        test_name = self._test_name_column()
+
         if sorting_column == "last_updated":
             # Interviews written before last_updated was maintained still have
             # NULL, and NULL ordering differs between SQLite and Postgres.
@@ -174,48 +291,43 @@ class InterviewRepository(BaseRepository):
             _sorting_col = func.coalesce(
                 InterviewTable.last_updated, InterviewTable.created_at
             )
+        elif sorting_column == "test_name":
+            # Not a column on the table: sort by the same expression the row
+            # is built from rather than by the output label, which only
+            # Postgres would resolve.
+            _sorting_col = test_name
         else:
             _sorting_col = getattr(InterviewTable, sorting_column)
 
-        conditions = [InterviewTable.project_id == project_id]
-
-        if interview_types:
-            conditions.append(InterviewTable.type.in_(interview_types))
-
-        if created_at is not None:
-            conditions.append(InterviewTable.created_at == created_at)
-
-        if completed is not None:
-            conditions.append(
-                InterviewTable.status == InterviewStatus.COMPLETED
-                if completed
-                else InterviewTable.status != InterviewStatus.COMPLETED
-            )
-
-        # Mirrors InterviewTable.test_name: only synthetic test runs carry one.
-        test_name = case(
-            (
-                InterviewTable.type == InterviewType.SYNTHETIC_TEST,
-                TestSetupTable.name,
-            ),
-            else_=None,
-        ).label("test_name")
+        conditions = list(
+            self._interview_filters(
+                project_id,
+                interview_types=interview_types,
+                selected_types=selected_types,
+                statuses=statuses,
+                languages=languages,
+                created_from=created_from,
+                created_to=created_to,
+                completed=completed,
+                search=search,
+            ).values()
+        )
 
         statement = (
-            select(
-                InterviewTable.id,
-                InterviewTable.language,
-                InterviewTable.interviewer,
-                InterviewTable.status,
-                InterviewTable.type,
-                InterviewTable.created_at,
-                InterviewTable.last_updated,
-                InterviewTable.total_time_spent,
-                InterviewTable.n_messages.label("n_messages"),
-                test_name,
+            self._join_test_setup(
+                select(
+                    InterviewTable.id,
+                    InterviewTable.language,
+                    InterviewTable.interviewer,
+                    InterviewTable.status,
+                    InterviewTable.type,
+                    InterviewTable.created_at,
+                    InterviewTable.last_updated,
+                    InterviewTable.total_time_spent,
+                    InterviewTable.n_messages.label("n_messages"),
+                    test_name,
+                )
             )
-            .outerjoin(TestRunTable, InterviewTable.test_run_id == TestRunTable.id)
-            .outerjoin(TestSetupTable, TestRunTable.test_setup_id == TestSetupTable.id)
             .where(*conditions)
             .order_by(
                 _sorting_col.desc() if sorting_order == "desc" else _sorting_col.asc()
@@ -224,12 +336,70 @@ class InterviewRepository(BaseRepository):
             .limit(limit)
         )
 
-        total = self._get_total_count(InterviewTable, *conditions)
+        count_statement = self._join_test_setup(
+            select(func.count()).select_from(InterviewTable)
+        ).where(*conditions)
+
+        total = self.session.execute(count_statement).scalar_one()
         rows = self.session.execute(statement).all()
 
         return [
             InterviewSummaryPublic.model_validate(row._mapping) for row in rows
         ], total
+
+    def get_interview_facets(
+        self,
+        project_id: UUID4,
+        interview_types: list[InterviewType] | None = None,
+        selected_types: list[InterviewType] | None = None,
+        statuses: list[InterviewStatus] | None = None,
+        languages: list[str] | None = None,
+        created_from: datetime.datetime | None = None,
+        created_to: datetime.datetime | None = None,
+        completed: bool | None = None,
+        search: str | None = None,
+    ) -> dict[str, dict[str, int]]:
+        """Distinct values and their counts for each filterable column.
+
+        The client cannot derive these: it only ever holds one page. Each
+        facet is counted with every *other* filter applied, so the numbers
+        answer "how many would I get if I also picked this one".
+        """
+        filters = self._interview_filters(
+            project_id,
+            interview_types=interview_types,
+            selected_types=selected_types,
+            statuses=statuses,
+            languages=languages,
+            created_from=created_from,
+            created_to=created_to,
+            completed=completed,
+            search=search,
+        )
+
+        columns = {
+            "status": InterviewTable.status,
+            "language": InterviewTable.language,
+            "type": InterviewTable.type,
+        }
+
+        facets: dict[str, dict[str, int]] = {}
+        for facet, column in columns.items():
+            conditions = [
+                condition for key, condition in filters.items() if key != facet
+            ]
+            statement = (
+                self._join_test_setup(select(column, func.count()))
+                .where(*conditions)
+                .group_by(column)
+            )
+            facets[facet] = {
+                str(value): count
+                for value, count in self.session.execute(statement).all()
+                if value is not None
+            }
+
+        return facets
 
     def get_interview(
         self,

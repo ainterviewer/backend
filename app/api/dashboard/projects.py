@@ -35,16 +35,16 @@ from ainterviewer.interview_guides.generate import (
     generate_section,
 )
 from ainterviewer.settings import settings as lib_settings
-from ainterviewer.types import LanguageCode
+from ainterviewer.types import InterviewStatus, LanguageCode
 from ainterviewer.utils import get_language_dict
 
 from ...db.models import (
-    InterviewSummaryPublic,
     MessagePublic,
     ProjectLanguage,
     ProjectPublic,
 )
 from ...db.repositories.errors import ProjectLanguageError
+from ...db.repositories.interview import SORTABLE_INTERVIEW_COLUMNS
 from ...db.types import InterviewType
 from ...db.utils import fix_nested_columns, messages_to_dataframe, write_messages_xlsx
 from ...dependencies import (
@@ -69,7 +69,12 @@ from ..request_models import (
     QuestionGenerationRequest,
     QuestionSectionGenerationRequest,
 )
-from ..response_models import PaginatedResponse, ProbingPromptPreview
+from ..response_models import (
+    FacetCount,
+    InterviewFacets,
+    InterviewListResponse,
+    ProbingPromptPreview,
+)
 
 router = APIRouter(tags=["projects"])
 
@@ -637,22 +642,68 @@ async def get_interviews(
     _: ProjectViewer,
     paginated_query: Annotated[PaginatedQueryParams, Depends(PaginatedQueryParams)],
     interview_types: Annotated[list[InterviewType] | None, Query()] = None,
-    created_at: Annotated[datetime.datetime | None, Query] = None,
-    completed: Annotated[bool | None, Query] = None,
-) -> PaginatedResponse[InterviewSummaryPublic]:
+    types: Annotated[list[InterviewType] | None, Query()] = None,
+    statuses: Annotated[list[InterviewStatus] | None, Query()] = None,
+    languages: Annotated[list[str] | None, Query()] = None,
+    created_from: Annotated[datetime.datetime | None, Query()] = None,
+    created_to: Annotated[datetime.datetime | None, Query()] = None,
+    completed: Annotated[bool | None, Query()] = None,
+    search: Annotated[str | None, Query(max_length=200)] = None,
+) -> InterviewListResponse:
+    """One page of interviews, with the filter options that fit the query.
+
+    `interview_types` is the scope of the list: the interviews page passes
+    nothing and gets distributed interviews, the test results page passes the
+    two test types. `types` is the user narrowing that scope from the Type
+    filter, and unlike the scope it is dropped when counting the type facet.
+    """
+    if paginated_query.column not in SORTABLE_INTERVIEW_COLUMNS:
+        # The repository raises ValueError, which would surface as a 500. A
+        # column the client should never have offered is a bad request.
+        raise HTTPException(
+            status_code=422,
+            detail=f"Cannot sort by {paginated_query.column!r}. Sortable columns: "
+            f"{', '.join(sorted(SORTABLE_INTERVIEW_COLUMNS))}.",
+        )
+
+    # The page and the facet counts must be built from exactly the same
+    # filters, or the dropdown would offer options the list contradicts.
+    filters = {
+        "interview_types": interview_types
+        if interview_types is not None
+        else [InterviewType.DISTRIBUTED],
+        "selected_types": types,
+        "statuses": statuses,
+        "languages": languages,
+        "created_from": created_from,
+        "created_to": created_to,
+        "completed": completed,
+        "search": search,
+    }
+
     interviews, total = db.interviews.get_interviews(
         project_id,
         offset=paginated_query.offset,
         limit=paginated_query.limit,
         sorting_column=paginated_query.column,
         sorting_order=paginated_query.order,
-        interview_types=interview_types
-        if interview_types is not None
-        else [InterviewType.DISTRIBUTED],
-        created_at=created_at,
-        completed=completed,
+        **filters,
     )
-    return PaginatedResponse(total=total, items=list(interviews))
+    facets = db.interviews.get_interview_facets(project_id, **filters)
+
+    return InterviewListResponse(
+        total=total,
+        items=list(interviews),
+        facets=InterviewFacets(
+            **{
+                name: [
+                    FacetCount(value=value, count=count)
+                    for value, count in sorted(counts.items())
+                ]
+                for name, counts in facets.items()
+            }
+        ),
+    )
 
 
 @router.delete("/projects/{project_id}/interviews")

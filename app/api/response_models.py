@@ -2,12 +2,38 @@ from pydantic import UUID4, BaseModel
 
 from ainterviewer.types import Feedback
 
-from ..db.models import ParticipantPublic
+from ..db.models import InterviewSummaryPublic, ParticipantPublic
 
 
 class PaginatedResponse[T](BaseModel):
     total: int
     items: list[T]
+
+
+class FacetCount(BaseModel):
+    """One selectable value of a filter, and how many rows carry it."""
+
+    value: str
+    count: int
+
+
+class InterviewFacets(BaseModel):
+    """The values each interview filter can usefully offer.
+
+    Counted server-side because the client holds a single page: it has no way
+    to know which statuses or languages exist across the whole result set, let
+    alone how many rows each one accounts for.
+    """
+
+    status: list[FacetCount] = []
+    language: list[FacetCount] = []
+    type: list[FacetCount] = []
+
+
+class InterviewListResponse(PaginatedResponse[InterviewSummaryPublic]):
+    """A page of interviews plus the filter options that fit the query."""
+
+    facets: InterviewFacets = InterviewFacets()
 
 
 class ErrorResponse(BaseModel):
