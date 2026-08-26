@@ -4,6 +4,12 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.4.35] - 2026-08-26
+
+### Internal
+
+- Fix broken url in readme
+
 ## [0.4.34] - 2026-08-26
 
 ### Features
