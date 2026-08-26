@@ -21,10 +21,14 @@ from ainterviewer.lpm.types import CustomToken
 
 from .api.dashboard.assistance import ChatMessage
 from .auth import AuthToken, InterviewToken
+from .services.email.participant_template import TemplatePlaceholder
 from .utils import extend_openapi_schema
 
 # Models the frontend consumes over the WebSocket or out of tokens, which are
 # unreachable from any HTTP route and so absent from the generated schema.
+# `TemplatePlaceholder` is here for a different reason: no route takes or
+# returns it, but the dashboard's email editor needs the authoritative list of
+# template variables, and exporting it keeps that list in one place.
 EXTRA_MODELS = [
     AuthToken,
     ChatMessage,
@@ -34,6 +38,7 @@ EXTRA_MODELS = [
     OutgoingHistoryMessage,
     OutgoingMessage,
     ReceivedData,
+    TemplatePlaceholder,
 ]
 
 
