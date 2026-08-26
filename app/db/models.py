@@ -367,6 +367,10 @@ class InterviewSummaryPublic(_BaseModel):
     total_time_spent: int = 0
     n_messages: int
     test_name: str | None = None
+    # The participant this interview belongs to, joined in from the
+    # participant record. NULL for interviews that were never distributed to
+    # one, and for interviews whose participant has since been deleted.
+    pid: str | None = None
 
 
 class MessageBase(_BaseModel):

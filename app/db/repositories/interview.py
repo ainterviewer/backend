@@ -33,7 +33,9 @@ from ..tables import (
     InterviewTable,
     MessageAnnotationTable,
     MessageTable,
+    ParticipantTable,
     PlatformReleaseTable,
+    ProjectParticipantTable,
     ProjectTable,
     TaskTable,
     TestRunTable,
@@ -54,6 +56,7 @@ SORTABLE_INTERVIEW_COLUMNS = frozenset(
         "type",
         "n_messages",
         "test_name",
+        "pid",
     }
 )
 """Columns `get_interviews` will sort by.
@@ -171,16 +174,30 @@ class InterviewRepository(BaseRepository):
         ).label("test_name")
 
     @staticmethod
-    def _join_test_setup(statement):
-        """test_name and the search term both reach through the test run.
+    def _join_filter_sources(statement):
+        """Join everything a filter, sort or selected column reaches through.
 
-        Every statement built from `_interview_filters` needs these joins, not
-        just the one selecting rows: a search on the test name is a condition
-        like any other, and the count and facet queries apply it too.
+        test_name comes from the test run and pid from the participant, and
+        both are searchable. Every statement built from `_interview_filters`
+        needs these joins, not just the one selecting rows: a search on the
+        test name or pid is a condition like any other, and the count and
+        facet queries apply it too. All outer joins -- an interview has a test
+        run or a participant, never both, and often neither.
         """
-        return statement.outerjoin(
-            TestRunTable, InterviewTable.test_run_id == TestRunTable.id
-        ).outerjoin(TestSetupTable, TestRunTable.test_setup_id == TestSetupTable.id)
+        return (
+            statement.outerjoin(
+                TestRunTable, InterviewTable.test_run_id == TestRunTable.id
+            )
+            .outerjoin(TestSetupTable, TestRunTable.test_setup_id == TestSetupTable.id)
+            .outerjoin(
+                ProjectParticipantTable,
+                InterviewTable.participant_id == ProjectParticipantTable.id,
+            )
+            .outerjoin(
+                ParticipantTable,
+                ProjectParticipantTable.participant_id == ParticipantTable.id,
+            )
+        )
 
     @staticmethod
     def _interview_filters(
@@ -193,6 +210,7 @@ class InterviewRepository(BaseRepository):
         created_to: datetime.datetime | None = None,
         completed: bool | None = None,
         search: str | None = None,
+        pid: str | None = None,
     ) -> dict[str, ColumnElement[bool]]:
         """The active filters, keyed by the facet each one belongs to.
 
@@ -241,6 +259,11 @@ class InterviewRepository(BaseRepository):
                 else InterviewTable.status != InterviewStatus.COMPLETED
             )
 
+        if pid:
+            # An exact match, not a search: this is the "show me this
+            # participant's interviews" link from the participants table.
+            filters["pid"] = ParticipantTable.pid == pid
+
         if search and (term := search.strip()):
             pattern = f"%{term}%"
             filters["search"] = or_(
@@ -250,6 +273,7 @@ class InterviewRepository(BaseRepository):
                 # SQLite, which has no ILIKE.
                 cast(InterviewTable.id, String).ilike(pattern),
                 TestSetupTable.name.ilike(pattern),
+                ParticipantTable.pid.ilike(pattern),
             )
 
         return filters
@@ -269,6 +293,7 @@ class InterviewRepository(BaseRepository):
         created_to: datetime.datetime | None = None,
         completed: bool | None = None,
         search: str | None = None,
+        pid: str | None = None,
     ) -> tuple[Sequence[InterviewSummaryPublic], int]:
         """One page of interview summaries, plus the total matching count.
 
@@ -283,6 +308,7 @@ class InterviewRepository(BaseRepository):
             raise ValueError(f"Invalid sort column: {sorting_column}")
 
         test_name = self._test_name_column()
+        pid_column = ParticipantTable.pid.label("pid")
 
         if sorting_column == "last_updated":
             # Interviews written before last_updated was maintained still have
@@ -291,6 +317,9 @@ class InterviewRepository(BaseRepository):
             _sorting_col = func.coalesce(
                 InterviewTable.last_updated, InterviewTable.created_at
             )
+        elif sorting_column == "pid":
+            # Lives on the joined participant, not on InterviewTable.
+            _sorting_col = ParticipantTable.pid
         elif sorting_column == "test_name":
             # Not a column on the table: sort by the same expression the row
             # is built from rather than by the output label, which only
@@ -310,11 +339,12 @@ class InterviewRepository(BaseRepository):
                 created_to=created_to,
                 completed=completed,
                 search=search,
+                pid=pid,
             ).values()
         )
 
         statement = (
-            self._join_test_setup(
+            self._join_filter_sources(
                 select(
                     InterviewTable.id,
                     InterviewTable.language,
@@ -326,6 +356,7 @@ class InterviewRepository(BaseRepository):
                     InterviewTable.total_time_spent,
                     InterviewTable.n_messages.label("n_messages"),
                     test_name,
+                    pid_column,
                 )
             )
             .where(*conditions)
@@ -336,7 +367,7 @@ class InterviewRepository(BaseRepository):
             .limit(limit)
         )
 
-        count_statement = self._join_test_setup(
+        count_statement = self._join_filter_sources(
             select(func.count()).select_from(InterviewTable)
         ).where(*conditions)
 
@@ -358,6 +389,7 @@ class InterviewRepository(BaseRepository):
         created_to: datetime.datetime | None = None,
         completed: bool | None = None,
         search: str | None = None,
+        pid: str | None = None,
     ) -> dict[str, dict[str, int]]:
         """Distinct values and their counts for each filterable column.
 
@@ -375,6 +407,7 @@ class InterviewRepository(BaseRepository):
             created_to=created_to,
             completed=completed,
             search=search,
+            pid=pid,
         )
 
         columns = {
@@ -389,7 +422,7 @@ class InterviewRepository(BaseRepository):
                 condition for key, condition in filters.items() if key != facet
             ]
             statement = (
-                self._join_test_setup(select(column, func.count()))
+                self._join_filter_sources(select(column, func.count()))
                 .where(*conditions)
                 .group_by(column)
             )
