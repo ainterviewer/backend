@@ -1,6 +1,7 @@
 import datetime
 import math
 from collections.abc import Sequence
+from enum import StrEnum
 from typing import Annotated
 
 from fastapi import APIRouter, Query
@@ -9,7 +10,7 @@ from sqlalchemy import case, func, select
 
 from ainterviewer.types import InterviewStatus
 
-from ....db.tables import InterviewTable, MessageTable
+from ....db.tables import InterviewTable, MessageTable, ProjectLocalizationTable
 from ....db.types import InterviewType
 from ....dependencies import DBSession, DemoToken
 
@@ -161,12 +162,61 @@ def _summarize(data_rows: Sequence) -> tuple[int, int, float, int] | None:
     )
 
 
-class DropoutPoint(BaseModel):
-    """Count of dropouts at a specific question."""
+class DropoutStage(StrEnum):
+    """Where in the interview an inactive respondent stopped.
 
+    Dropouts do not all land on a question: an interview can be abandoned
+    before a single message exists, during the introduction, or on the outro.
+    Those three stages have no `(section, main_question)` to group by, so they
+    are carried as explicit stages instead of being dropped.
+    """
+
+    NEVER_STARTED = "never_started"
+    INTRODUCTION = "introduction"
+    QUESTION = "question"
+    OUTRO = "outro"
+
+
+class DropoutPoint(BaseModel):
+    """Count of dropouts at a specific point in the interview.
+
+    `section`, `main_question` and `sub_question` are the zero-based indices
+    recorded on the last message, and are only populated for
+    `DropoutStage.QUESTION`.
+    """
+
+    stage: DropoutStage
+    section: int | None
     main_question: int | None
     sub_question: int | None
     count: int
+
+
+# Chronological order of the stages, for laying the dropout points out along an
+# axis that reads start-to-finish.
+_DROPOUT_STAGE_ORDER = {
+    DropoutStage.NEVER_STARTED: 0,
+    DropoutStage.INTRODUCTION: 1,
+    DropoutStage.QUESTION: 2,
+    DropoutStage.OUTRO: 3,
+}
+
+
+class DropoutSection(BaseModel):
+    """A section of the interview guide, for grouping dropout points.
+
+    Sourced from the project's default localization, so `description` and
+    `questions` may be in a different language than the dashboard page
+    requesting these stats.
+    """
+
+    section: int
+    description: str
+    # The section's main questions, in the guide's authored order, so a dropout
+    # point can be labelled with the text of the question it stopped on.
+    # Positional: `questions[main_question]`. Probes have no entry here — they
+    # are generated during the interview, not authored in the guide.
+    questions: list[str]
 
 
 class MonitoringStats(BaseModel):
@@ -194,6 +244,11 @@ class MonitoringStats(BaseModel):
 
     # Dropout analysis
     dropout_stats: list[DropoutPoint]
+    dropout_sections: list[DropoutSection]
+
+    # Denominator for `dropout_stats`: every dropout point is one inactive
+    # interview, so these two must agree.
+    total_inactive: int
 
 
 @router.get(
@@ -422,47 +477,171 @@ def get_project_monitoring_stats(
     # Stats for INACTIVE interviews   #
     # +++++++++++++++++++++++++++++++ #
 
-    # Find the last message of each inactive interview
+    # Find the last message of each inactive interview. The join is an outer
+    # join on purpose: an interview abandoned before it produced a single
+    # message still has to appear, as a NEVER_STARTED dropout. An inner join
+    # here silently dropped those, so the dropout counts did not add up to the
+    # inactive total.
     last_msg_subquery = (
         select(
-            MessageTable.interview_id,
+            inactive_interviews.c.id.label("interview_id"),
             func.max(MessageTable.message_id).label("max_msg_id"),
         )
-        .select_from(MessageTable)
-        .join(
-            inactive_interviews,
+        .select_from(inactive_interviews)
+        .outerjoin(
+            MessageTable,
             MessageTable.interview_id == inactive_interviews.c.id,
         )
-        .group_by(MessageTable.interview_id)
+        .group_by(inactive_interviews.c.id)
         .subquery()
     )
 
-    # Count dropouts by question
-    dropout_stmt = (
+    # Resolve each of those ids back to the last message's position. Outer join
+    # again so the no-message rows survive with NULL columns; `max_msg_id` is
+    # NULL for exactly those, which is what separates NEVER_STARTED from a
+    # message that merely carries no question index.
+    last_message = (
         select(
+            last_msg_subquery.c.interview_id,
+            last_msg_subquery.c.max_msg_id,
+            MessageTable.section,
             MessageTable.main_question,
             MessageTable.sub_question,
-            func.count().label("count"),
+            MessageTable.outro,
         )
-        .select_from(MessageTable)
-        .join(
-            last_msg_subquery,
+        .select_from(last_msg_subquery)
+        .outerjoin(
+            MessageTable,
             (MessageTable.interview_id == last_msg_subquery.c.interview_id)
             & (MessageTable.message_id == last_msg_subquery.c.max_msg_id),
         )
-        .group_by(MessageTable.main_question, MessageTable.sub_question)
-        .order_by(MessageTable.main_question, MessageTable.sub_question)
+        .subquery()
     )
 
+    has_message = last_message.c.max_msg_id.is_not(None)
+    dropout_stmt = (
+        select(
+            has_message.label("has_message"),
+            last_message.c.outro,
+            last_message.c.section,
+            last_message.c.main_question,
+            last_message.c.sub_question,
+            # Not labelled "count": `Row.count` is also a sequence method, so
+            # attribute access on it is ambiguous.
+            func.count().label("dropouts"),
+        )
+        .group_by(
+            has_message,
+            last_message.c.outro,
+            last_message.c.section,
+            last_message.c.main_question,
+            last_message.c.sub_question,
+        )
+        .order_by(
+            last_message.c.section,
+            last_message.c.main_question,
+            last_message.c.sub_question,
+        )
+    )
     dropout_results = session.execute(dropout_stmt).all()
+
+    def classify(row) -> DropoutStage:
+        if not row.has_message:
+            return DropoutStage.NEVER_STARTED
+        if row.outro:
+            return DropoutStage.OUTRO
+        if row.main_question is None:
+            return DropoutStage.INTRODUCTION
+        return DropoutStage.QUESTION
+
+    DropoutKey = tuple[DropoutStage, int | None, int | None, int | None]
+    observed: dict[DropoutKey, int] = {}
+    for row in dropout_results:
+        stage = classify(row)
+        if stage is DropoutStage.QUESTION:
+            # `sub_question` is a probe counter: 0 is the main question itself,
+            # and it is NULL on rows written before probing started. Both mean
+            # the same slot, so they are folded together to keep the skeleton
+            # below from emitting a duplicate zero-count bar beside them.
+            key: DropoutKey = (
+                stage,
+                row.section,
+                row.main_question,
+                row.sub_question or 0,
+            )
+        else:
+            # The non-question stages collapse to one bucket each; whatever
+            # indices the message happened to carry are not meaningful there.
+            key = (stage, None, None, None)
+        observed[key] = observed.get(key, 0) + row.dropouts
+
+    # Zero-fill from the project's default localization so a question nobody
+    # dropped out on still occupies a slot, and sections can be labelled.
+    #
+    # Note the indices recorded on a message are positions in the order the
+    # respondent was actually asked, which for a shuffled section is not the
+    # guide's authored order. The skeleton is therefore an approximation of
+    # "the Nth question of section M" rather than a specific authored question.
+    default_guide = session.execute(
+        select(ProjectLocalizationTable.interview_guide).where(
+            ProjectLocalizationTable.project_id == project_id,
+            ProjectLocalizationTable.is_default.is_(True),
+        )
+    ).scalar_one_or_none()
+
+    dropout_sections: list[DropoutSection] = []
+    skeleton: list[DropoutKey] = []
+    if default_guide is not None:
+        for section_idx, section in enumerate(default_guide.question_sections):
+            dropout_sections.append(
+                DropoutSection(
+                    section=section_idx,
+                    description=section.description,
+                    questions=[q.main_question for q in section.questions],
+                )
+            )
+            for question_idx in range(len(section.questions)):
+                skeleton.append((DropoutStage.QUESTION, section_idx, question_idx, 0))
+
+    # Union, not replacement: the guide above is the current editable draft,
+    # while these interviews ran against per-interview snapshots taken when
+    # they were created. An observed dropout whose indices no longer exist in
+    # the draft is still a real dropout and must not be discarded.
+    ordered_keys = list(skeleton)
+    seen = set(ordered_keys)
+    for key in observed:
+        if key not in seen:
+            seen.add(key)
+            ordered_keys.append(key)
+
+    def sort_key(key: DropoutKey):
+        stage, section, main, sub = key
+        return (
+            _DROPOUT_STAGE_ORDER[stage],
+            section if section is not None else -1,
+            main if main is not None else -1,
+            sub if sub is not None else -1,
+        )
+
     dropout_stats = [
         DropoutPoint(
-            main_question=row.main_question,
-            sub_question=row.sub_question,
-            count=row.count,  # ty:ignore[invalid-argument-type]
+            stage=stage,
+            section=section,
+            main_question=main,
+            sub_question=sub,
+            count=observed.get((stage, section, main, sub), 0),
         )
-        for row in dropout_results
+        for stage, section, main, sub in sorted(ordered_keys, key=sort_key)
     ]
+
+    total_inactive = next(
+        (
+            item.count
+            for item in interviews_by_status
+            if item.status == InterviewStatus.INACTIVE
+        ),
+        0,
+    )
 
     return MonitoringStats(
         total_interviews=total_interviews,
@@ -476,4 +655,6 @@ def get_project_monitoring_stats(
         message_count_histogram=message_count_histogram,
         message_length_histogram=message_length_histogram,
         dropout_stats=dropout_stats,
+        dropout_sections=dropout_sections,
+        total_inactive=total_inactive,
     )
