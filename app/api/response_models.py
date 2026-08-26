@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import UUID4, BaseModel
 
 from ainterviewer.types import Feedback
@@ -34,6 +36,41 @@ class InterviewListResponse(PaginatedResponse[InterviewSummaryPublic]):
     """A page of interviews plus the filter options that fit the query."""
 
     facets: InterviewFacets = InterviewFacets()
+
+
+class InterviewResumeLinkPublic(BaseModel):
+    """The state of an interview's most recent resume link.
+
+    Deliberately carries no token: the plaintext is shown once at creation and
+    is not stored, so there is nothing here to show again. This only answers
+    "is a link outstanding, and what happened to it".
+    """
+
+    created_at: datetime
+    expires_at: datetime
+    redeemed_at: datetime | None = None
+    revoked_at: datetime | None = None
+    # Precomputed rather than left to the client: "still usable" folds in the
+    # clock, and a client with a skewed one would draw the wrong badge.
+    redeemable: bool
+
+
+class InterviewResumeLinkCreated(BaseModel):
+    """A freshly minted resume link. The only time the URL ever exists."""
+
+    url: str
+    expires_at: datetime
+
+
+class InterviewResumeRedeemed(BaseModel):
+    """What the interview page needs to resume after redeeming a link.
+
+    The credential itself rides back as the httponly ``interview_token``
+    cookie; these ids only tell the page which interview to reconnect to.
+    """
+
+    project_id: UUID4
+    interview_id: UUID4
 
 
 class ErrorResponse(BaseModel):

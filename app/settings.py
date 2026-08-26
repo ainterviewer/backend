@@ -37,6 +37,13 @@ class AppSettings(BaseModel):
     jwt_invite_token_expiration: TimeDelta = Field(
         default_factory=lambda: TimeDelta(days=1)
     )
+    # How long a manually issued interview resume link stays redeemable. The
+    # whole point is reaching someone who has been away a while, so it is
+    # deliberately longer than jwt_interview_token_expiration -- that one
+    # bounds the session the link hands out, this one bounds the link itself.
+    interview_resume_link_expiration: TimeDelta = Field(
+        default_factory=lambda: TimeDelta(days=7)
+    )
 
     jwt_auth_token_expiration: TimeDelta = Field(
         default_factory=lambda: TimeDelta(minutes=15)

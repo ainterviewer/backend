@@ -22,7 +22,8 @@ from uvicorn.config import logger
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode, MessageRole, TestType
 
-from ..auth import AuthToken, InterviewToken, create_interview_token
+from ..auth import AuthToken, InterviewToken, create_interview_token, hash_token
+from ..db.repositories.errors import ResumeTokenError
 from ..db.types import InterviewType
 from ..dependencies import (
     AdminToken,
@@ -45,7 +46,11 @@ from .request_models import (
     SpeechRequest,
     ValidateExternalParamsRequest,
 )
-from .response_models import MediaUploadResponse, MessageFeedbackResponse
+from .response_models import (
+    InterviewResumeRedeemed,
+    MediaUploadResponse,
+    MessageFeedbackResponse,
+)
 
 CHUNK_SIZE = 1024 * 1024
 
@@ -100,6 +105,37 @@ async def validate_interview_params(
     project = db.projects.get_project(project_id)
     validate_external_params(
         project.external_params, params.external_params, project_id
+    )
+
+
+def set_interview_cookie(response: Response, interview_token: str) -> None:
+    """Attach the credential the websocket handshake authenticates with.
+
+    NOTE:
+    if we need to support iframe set samesite='none' and reconsider frontend
+    localstorage
+
+    max_age is required: without it this is a session cookie that the browser
+    drops on close, while the JWT inside stays valid for
+    jwt_interview_token_expiration. The frontend decides whether to resume from
+    a localStorage entry sized to that same expiration, so a shorter cookie
+    lifetime left respondents resuming with no credential -- an unauthenticated
+    websocket handshake and no way to recover. Derive it from the setting
+    rather than restating the duration; that drift was the bug.
+
+    Shared by interview creation and resume-link redemption so the two cannot
+    drift apart in exactly that way again.
+    """
+    response.set_cookie(
+        key="interview_token",
+        value=interview_token,
+        max_age=int(
+            app_settings.app.jwt_interview_token_expiration.to_timedelta().total_seconds()
+        ),
+        secure=True,
+        httponly=True,
+        samesite="lax",
+        path="/",
     )
 
 
@@ -201,30 +237,58 @@ async def create_interview(
         interview_id=interview.id,
     )
 
-    # NOTE:
-    # if we need to support iframe set samesite='none' and reconsider frontend
-    # localstorage
-    #
-    # max_age is required: without it this is a session cookie that the browser
-    # drops on close, while the JWT inside stays valid for
-    # jwt_interview_token_expiration. The frontend decides whether to resume
-    # from a localStorage entry sized to that same expiration, so a shorter
-    # cookie lifetime left respondents resuming with no credential -- an
-    # unauthenticated websocket handshake and no way to recover. Derive it from
-    # the setting rather than restating the duration; that drift was the bug.
-    response.set_cookie(
-        key="interview_token",
-        value=interview_token,
-        max_age=int(
-            app_settings.app.jwt_interview_token_expiration.to_timedelta().total_seconds()
-        ),
-        secure=True,
-        httponly=True,
-        samesite="lax",
-        path="/",
-    )
+    set_interview_cookie(response, interview_token)
 
     return interview_token
+
+
+# NOTE: POST, not GET, and deliberately so. The resume link is single-use, and
+# corporate mail security (Outlook Safe Links, Proofpoint and friends)
+# pre-fetches URLs in email before the recipient ever clicks. A link that
+# burned on GET would routinely be spent by a scanner, stranding the very
+# respondent it was issued for. Scanners follow GETs; they do not submit
+# forms, so the frontend lands on an interstitial and only the button redeems.
+@router.post("/interviews/resume/{resume_token}")
+async def redeem_interview_resume_link(
+    resume_token: str,
+    response: Response,
+    db: DBSession,
+) -> InterviewResumeRedeemed:
+    """Spend a one-time resume link and hand back an interview session.
+
+    Unauthenticated by design: the token *is* the credential, which is why it
+    is high-entropy, single-use, expiring and revocable.
+
+    Every failure is the same opaque 404. Saying which of "unknown", "already
+    used" or "expired" applied would confirm to someone probing tokens that a
+    guess had once been real.
+    """
+    try:
+        interview = db.interviews.redeem_resume_token(hash_token(resume_token))
+    except ResumeTokenError as exc:
+        logger.info("Rejecting interview resume link: %s", exc.reason)
+        raise HTTPException(
+            status_code=404,
+            detail="This link is no longer valid. Please ask for a new one.",
+        )
+
+    interview_token = create_interview_token(
+        project_id=interview.project_id,
+        interviewer=interview.interviewer,
+        interview_id=interview.id,
+    )
+    set_interview_cookie(response, interview_token)
+
+    logger.info(
+        "interview resume link redeemed: interview=%s project=%s",
+        interview.id,
+        interview.project_id,
+    )
+
+    return InterviewResumeRedeemed(
+        project_id=interview.project_id,
+        interview_id=interview.id,
+    )
 
 
 @router.patch("/feedback", response_model=MessageFeedbackResponse)

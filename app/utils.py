@@ -1,4 +1,5 @@
 import copy
+import datetime
 import enum
 import secrets
 import sys
@@ -30,6 +31,7 @@ from ainterviewer.interfaces import (
     OutgoingMessage,
 )
 from ainterviewer.lpm.types import CustomToken
+from ainterviewer.settings import settings as lib_settings
 
 from .db.models import MessagePublic
 from .paths import APP_DIR
@@ -288,3 +290,16 @@ def ensure_filename(filename: str | None, fallback_ext: str = ".bin") -> str:
 
 if __name__ == "__main__":
     cli()
+
+
+def as_aware(value: datetime.datetime) -> datetime.datetime:
+    """Attach the app timezone to a naive datetime read back from the database.
+
+    The datetime columns are timezone-less, so a value that went in as
+    `ainterviewer.utils.now()` (aware) comes back naive, and comparing it to
+    `now()` raises TypeError rather than returning a wrong answer. Every
+    expiry check has to normalise first.
+    """
+    if value.tzinfo is None:
+        return value.replace(tzinfo=lib_settings.tzinfo)
+    return value

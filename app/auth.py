@@ -88,6 +88,16 @@ def generate_verification_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+def generate_resume_token() -> str:
+    """Generate a high-entropy token for a one-time interview resume link.
+
+    Same size as the verification token: this is a bearer credential for an
+    interview transcript and is guessed at, not derived, so entropy is the
+    only thing standing in the way.
+    """
+    return secrets.token_urlsafe(32)
+
+
 def generate_login_code() -> str:
     """Generate a 6-digit one-time login code (zero-padded)."""
     return f"{secrets.randbelow(10**6):06d}"

@@ -1,5 +1,6 @@
 import datetime
 import io
+import logging
 from base64 import b64decode
 from pathlib import Path
 from typing import Annotated
@@ -36,8 +37,9 @@ from ainterviewer.interview_guides.generate import (
 )
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import InterviewStatus, LanguageCode
-from ainterviewer.utils import get_language_dict
+from ainterviewer.utils import get_language_dict, now
 
+from ...auth import generate_resume_token, hash_token
 from ...db.models import (
     MessagePublic,
     ProjectLanguage,
@@ -45,6 +47,7 @@ from ...db.models import (
 )
 from ...db.repositories.errors import ProjectLanguageError
 from ...db.repositories.interview import SORTABLE_INTERVIEW_COLUMNS
+from ...db.tables import InterviewResumeTokenTable
 from ...db.types import InterviewType
 from ...db.utils import fix_nested_columns, messages_to_dataframe, write_messages_xlsx
 from ...dependencies import (
@@ -53,10 +56,12 @@ from ...dependencies import (
     ProjectAdmin,
     ProjectEditor,
     ProjectViewer,
+    UserToken,
 )
 from ...services.project_storage import copy_email_attachments, delete_project_storage
+from ...settings import app_settings
 from ...types import CollaboratorRole, Scope
-from ...utils import ensure_filename, generate_qr_img
+from ...utils import as_aware, ensure_filename, generate_qr_img
 from ..request_models import (
     DeleteInterviewRequest,
     ExportMessagesRequest,
@@ -73,8 +78,12 @@ from ..response_models import (
     FacetCount,
     InterviewFacets,
     InterviewListResponse,
+    InterviewResumeLinkCreated,
+    InterviewResumeLinkPublic,
     ProbingPromptPreview,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["projects"])
 
@@ -721,6 +730,158 @@ async def delete_interviews(
     _: ProjectAdmin,
 ):
     db.interviews.delete_interviews(project_id, delete_request.interview_ids)
+
+
+# ============ Interview resume links ============
+#
+# A resume link is the only way to continue a specific interview in a browser
+# that has neither the `interview_token` cookie nor the frontend's localStorage
+# entry. It is therefore a bearer credential for one transcript, and is issued
+# one interview at a time, by hand, rather than mailed out with every
+# distribution link -- see InterviewResumeTokenTable.
+
+
+def _resume_link_public(
+    token: InterviewResumeTokenTable | None,
+) -> InterviewResumeLinkPublic | None:
+    if token is None:
+        return None
+    # Every datetime is normalised on the way out: these columns are
+    # timezone-less, and a naive ISO string is parsed by the browser as *local*
+    # time, so a viewer in another timezone would be shown the wrong expiry.
+    return InterviewResumeLinkPublic(
+        created_at=as_aware(token.created_at),
+        expires_at=as_aware(token.expires_at),
+        redeemed_at=as_aware(token.redeemed_at) if token.redeemed_at else None,
+        revoked_at=as_aware(token.revoked_at) if token.revoked_at else None,
+        redeemable=(
+            token.redeemed_at is None
+            and token.revoked_at is None
+            and as_aware(token.expires_at) > now()
+        ),
+    )
+
+
+def _resume_target_or_404(db: DBSession, project_id: UUID4, interview_id: UUID4):
+    try:
+        return db.interviews.get_resume_target(project_id, interview_id)
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail="Interview not found.")
+
+
+@router.get("/projects/{project_id}/interviews/{interview_id}/resume-link")
+async def get_interview_resume_link(
+    project_id: UUID4,
+    interview_id: UUID4,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectEditor,
+) -> InterviewResumeLinkPublic | None:
+    """Whether a resume link is outstanding for this interview, and its state.
+
+    Never the URL itself -- only a hash is stored, so there is nothing to give
+    back. Editor rather than viewer for symmetry with issuing one: knowing a
+    live credential exists is part of managing it.
+    """
+    _resume_target_or_404(db, project_id, interview_id)
+    return _resume_link_public(db.interviews.get_resume_token(interview_id))
+
+
+@router.post("/projects/{project_id}/interviews/{interview_id}/resume-link")
+async def create_interview_resume_link(
+    project_id: UUID4,
+    interview_id: UUID4,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectEditor,
+) -> InterviewResumeLinkCreated:
+    """Mint a one-time resume link, replacing any outstanding one.
+
+    Editor, not viewer: every other route on this page is viewer-readable, but
+    a member who can mint resume links can walk into any transcript in the
+    project, so this is a write.
+
+    The URL is returned exactly once. Only its hash is stored, so a member who
+    loses it has to issue a new one -- which revokes this one.
+    """
+    interview = _resume_target_or_404(db, project_id, interview_id)
+
+    if interview.status == InterviewStatus.COMPLETED:
+        raise HTTPException(
+            status_code=409,
+            detail="This interview is already complete, so there is nothing to resume.",
+        )
+
+    project = db.projects.get_project(project_id)
+    if project.owner.scope == Scope.DEMO:
+        raise HTTPException(
+            status_code=403,
+            detail="Demo projects cannot issue resume links.",
+        )
+
+    # Opting out means "stop contacting me", and a resume link exists to be
+    # sent. Redemption is left alone deliberately: a link already in someone's
+    # hands should still work if they choose to finish.
+    link = interview.project_participant
+    if link is not None and not link.participant.participating:
+        raise HTTPException(
+            status_code=409,
+            detail="This participant has opted out, so no resume link can be issued.",
+        )
+
+    raw_token = generate_resume_token()
+    expires_at = (
+        now() + app_settings.app.interview_resume_link_expiration.to_timedelta()
+    )
+    token = db.interviews.create_resume_token(
+        interview_id=interview_id,
+        token_hash=hash_token(raw_token),
+        expires_at=expires_at,
+        created_by=jwt.user_id,
+    )
+
+    # A live credential for a transcript: record who minted it, as the email
+    # bundle export does for participant data.
+    logger.info(
+        "interview resume link issued: interview=%s project=%s user=%s token=%s expires=%s",
+        interview_id,
+        project_id,
+        jwt.user_id,
+        token.id,
+        expires_at,
+    )
+
+    base_url = app_settings.sveltekit_platform_public_addr
+    return InterviewResumeLinkCreated(
+        url=f"{base_url}/interview/resume/{raw_token}",
+        expires_at=expires_at,
+    )
+
+
+@router.delete("/projects/{project_id}/interviews/{interview_id}/resume-link")
+async def revoke_interview_resume_link(
+    project_id: UUID4,
+    interview_id: UUID4,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectEditor,
+) -> InterviewResumeLinkPublic | None:
+    """Kill any still-redeemable link for this interview.
+
+    Already-redeemed rows are left as they are; revoking them would erase when
+    they were used.
+    """
+    _resume_target_or_404(db, project_id, interview_id)
+    revoked = db.interviews.revoke_resume_tokens(interview_id)
+    if revoked:
+        logger.info(
+            "interview resume link revoked: interview=%s project=%s user=%s count=%d",
+            interview_id,
+            project_id,
+            jwt.user_id,
+            revoked,
+        )
+    return _resume_link_public(db.interviews.get_resume_token(interview_id))
 
 
 @router.get("/projects/{project_id}/interviews/{interview_id}/messages/{message_id}")

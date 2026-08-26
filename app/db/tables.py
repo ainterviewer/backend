@@ -705,6 +705,9 @@ class InterviewTable(Base):
     interviewee: Mapped[list["IntervieweeTable"]] = relationship(
         back_populates="interview", cascade="all, delete-orphan"
     )
+    resume_tokens: Mapped[list["InterviewResumeTokenTable"]] = relationship(
+        back_populates="interview", cascade="all, delete-orphan"
+    )
 
     @hybrid_property
     def n_messages(self) -> int:
@@ -734,6 +737,49 @@ class InterviewService:
     def get_n_messages(self, interview: InterviewTable) -> int:
         """Get the number of messages for an interview"""
         return len(interview.messages)
+
+
+########################
+# Interview resume link #
+########################
+
+
+class InterviewResumeTokenTable(Base):
+    """A one-time link letting a respondent resume one specific interview in a
+    browser that has neither the ``interview_token`` cookie nor the
+    localStorage entry the frontend normally resumes from.
+
+    Only a sha256 hash is stored, as in RefreshTokenTable: the plaintext is
+    shown to the project member once, at creation, and is unrecoverable after
+    that. The token is a bearer credential for a single interview transcript,
+    which is why it is minted deliberately per interview rather than issued
+    with every distribution email, and why it is bound to ``interview_id``
+    rather than to a participant -- it can neither start a new interview nor
+    reach a different one.
+
+    Redemption is recorded rather than deleted so the dashboard can tell "not
+    used yet" from "already used", and so an unexpected redemption stays
+    visible after the fact.
+    """
+
+    __tablename__ = "interview_resume_token"
+
+    interview_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("interview.id", ondelete="CASCADE"), index=True
+    )
+    token_hash: Mapped[str] = mapped_column(unique=True, index=True)
+    # SET NULL rather than CASCADE: deleting the member who issued a link must
+    # not silently delete the audit trail of the link itself.
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), default=None
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(default=now)
+    expires_at: Mapped[datetime.datetime] = mapped_column()
+    redeemed_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
+    revoked_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
+
+    # Relationships
+    interview: Mapped["InterviewTable"] = relationship(back_populates="resume_tokens")
 
 
 ###########

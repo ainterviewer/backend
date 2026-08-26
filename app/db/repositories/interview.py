@@ -21,6 +21,7 @@ from ainterviewer.types import (
 )
 from ainterviewer.utils import now
 
+from ...utils import as_aware
 from ..models import (
     IntervieweeCreate,
     IntervieweePublic,
@@ -30,6 +31,7 @@ from ..models import (
 )
 from ..tables import (
     IntervieweeTable,
+    InterviewResumeTokenTable,
     InterviewTable,
     MessageAnnotationTable,
     MessageTable,
@@ -43,6 +45,7 @@ from ..tables import (
 )
 from ..types import InterviewType
 from .base import BaseRepository
+from .errors import ResumeTokenError
 
 logger = logging.getLogger(__name__)
 
@@ -377,6 +380,127 @@ class InterviewRepository(BaseRepository):
         return [
             InterviewSummaryPublic.model_validate(row._mapping) for row in rows
         ], total
+
+    # ================= Interview resume links =================
+
+    def get_resume_target(
+        self, project_id: UUID4, interview_id: UUID4
+    ) -> InterviewTable:
+        """The interview row a resume link would unlock, scoped to its project.
+
+        Returns the ORM row rather than InterviewPublic because the caller has
+        to reach the linked participant to check whether they have opted out,
+        which the public model does not carry. Raises NoResultFound when the
+        interview does not exist in this project.
+        """
+        return self.session.execute(
+            select(InterviewTable)
+            .options(
+                noload(InterviewTable.messages),
+                joinedload(InterviewTable.project_participant).joinedload(
+                    ProjectParticipantTable.participant
+                ),
+            )
+            .where(
+                InterviewTable.id == interview_id,
+                InterviewTable.project_id == project_id,
+            )
+        ).scalar_one()
+
+    def get_resume_token(self, interview_id: UUID4) -> InterviewResumeTokenTable | None:
+        """The most recently issued link for an interview, whatever its state.
+
+        Returns revoked and redeemed rows too: the dashboard has to be able to
+        say "already used" rather than silently offering to mint another.
+        """
+        return self.session.execute(
+            select(InterviewResumeTokenTable)
+            .where(InterviewResumeTokenTable.interview_id == interview_id)
+            .order_by(InterviewResumeTokenTable.created_at.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+
+    def create_resume_token(
+        self,
+        interview_id: UUID4,
+        token_hash: str,
+        expires_at: datetime.datetime,
+        created_by: UUID4 | None,
+    ) -> InterviewResumeTokenTable:
+        """Issue a link, revoking any outstanding one for the same interview.
+
+        Re-issuing has to invalidate the previous link, or "regenerate" would
+        quietly widen access instead of replacing it.
+        """
+        self.revoke_resume_tokens(interview_id)
+
+        token = InterviewResumeTokenTable(
+            interview_id=interview_id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+            created_by=created_by,
+        )
+        self.session.add(token)
+        self.session.commit()
+        self.session.refresh(token)
+        return token
+
+    def revoke_resume_tokens(self, interview_id: UUID4) -> int:
+        """Revoke every still-redeemable link for an interview. Returns the count.
+
+        Redeemed rows are left alone: they are spent already, and stamping them
+        as revoked would lose the record of when they were used.
+        """
+        result = self.session.execute(
+            update(InterviewResumeTokenTable)
+            .where(
+                InterviewResumeTokenTable.interview_id == interview_id,
+                InterviewResumeTokenTable.revoked_at.is_(None),
+                InterviewResumeTokenTable.redeemed_at.is_(None),
+            )
+            .values(revoked_at=now())
+        )
+        self.session.commit()
+        return result.rowcount or 0  # ty: ignore[unresolved-attribute]
+
+    def redeem_resume_token(self, token_hash: str) -> InterviewTable:
+        """Spend a resume link and return the interview it unlocks.
+
+        Every rejection raises ResumeTokenError, which the API renders as one
+        opaque 404 -- see that class. The row is stamped inside the same
+        transaction as the lookup, so two concurrent redemptions cannot both
+        succeed.
+        """
+        token = self.session.execute(
+            select(InterviewResumeTokenTable).where(
+                InterviewResumeTokenTable.token_hash == token_hash
+            )
+        ).scalar_one_or_none()
+
+        if token is None:
+            raise ResumeTokenError("no such resume token")
+        if token.revoked_at is not None:
+            raise ResumeTokenError(f"resume token {token.id} was revoked")
+        if token.redeemed_at is not None:
+            raise ResumeTokenError(
+                f"resume token {token.id} was already redeemed at {token.redeemed_at}"
+            )
+        # Naive coming back out of the database; see app.utils.as_aware.
+        if as_aware(token.expires_at) <= now():
+            raise ResumeTokenError(
+                f"resume token {token.id} expired at {token.expires_at}"
+            )
+
+        interview = self.session.get(InterviewTable, token.interview_id)
+        if interview is None:
+            raise ResumeTokenError(f"interview {token.interview_id} no longer exists")
+        if interview.status == InterviewStatus.COMPLETED:
+            raise ResumeTokenError(f"interview {interview.id} is already completed")
+
+        token.redeemed_at = now()
+        self.session.commit()
+        self.session.refresh(interview)
+        return interview
 
     def get_interview_facets(
         self,
