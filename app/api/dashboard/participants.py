@@ -33,7 +33,9 @@ from ...services.email.mail import send_email
 from ...services.email.participant_template import (
     TemplateSyntaxError,
     build_template_context,
+    render_participant_email_subject,
     render_participant_email_template,
+    validate_participant_email_subject,
     validate_participant_email_template,
 )
 from ...settings import app_settings
@@ -311,6 +313,27 @@ async def delete_participants(
     db.participants.remove_participants(project_id, delete_request.participant_ids)
 
 
+def _validate_template_request(request: ParticipantEmailTemplateRequest) -> None:
+    """Reject unparseable Jinja in either half of the template before storing it.
+
+    Subject and body share the placeholder context, so both are authored as
+    templates and both have to survive a parse.
+    """
+    for label, source, validate in (
+        ("subject", request.subject, validate_participant_email_subject),
+        ("template", request.template, validate_participant_email_template),
+    ):
+        if source is None:
+            continue
+        try:
+            validate(source)
+        except TemplateSyntaxError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid Jinja {label}: {exc.message}",
+            ) from exc
+
+
 @router.get("/projects/{project_id}/{language}/participant-email-template")
 async def get_participant_email_template(
     project_id: UUID4,
@@ -332,14 +355,7 @@ async def set_participant_email_template(
     jwt: UserToken,
     _: ProjectEditor,
 ) -> ParticipantEmailTemplateRequest:
-    if request.template is not None:
-        try:
-            validate_participant_email_template(request.template)
-        except TemplateSyntaxError as exc:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Invalid Jinja template: {exc.message}",
-            ) from exc
+    _validate_template_request(request)
 
     db.projects.set_participant_email_template(
         project_id, language, request.subject, request.template
@@ -616,6 +632,7 @@ async def _send_participant_emails(
         )
 
         try:
+            subject_line = render_participant_email_subject(subject, context)
             html_content = render_participant_email_template(template, context)
         except TemplateError as exc:
             raise HTTPException(
@@ -625,7 +642,7 @@ async def _send_participant_emails(
 
         await send_email(
             participant.email,
-            subject,
+            subject_line,
             html_content=html_content,
             attachments=attachments or None,
         )
@@ -680,14 +697,7 @@ async def set_participant_reminder_email_template(
     jwt: UserToken,
     _: ProjectEditor,
 ) -> ParticipantEmailTemplateRequest:
-    if request.template is not None:
-        try:
-            validate_participant_email_template(request.template)
-        except TemplateSyntaxError as exc:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Invalid Jinja template: {exc.message}",
-            ) from exc
+    _validate_template_request(request)
 
     db.projects.set_participant_reminder_email_template(
         project_id, language, request.subject, request.template

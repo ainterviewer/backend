@@ -1,7 +1,9 @@
 """Scaffolding for rendering participant invitation email templates.
 
-Templates are stored per-localization on `ProjectLocalizationTable.participant_email_template`
-and authored by users in Jinja2 syntax. This module centralizes the template
+The subject line and the HTML body are stored per-localization on
+`ProjectLocalizationTable` and both are authored by users in Jinja2 syntax
+against the same context -- they differ only in escaping, since a subject is a
+plain-text header rather than markup. This module centralizes the template
 environment and the context builder, so additional validation hooks can be
 added later (e.g. checking for required placeholders, max length, disallowed
 tags).
@@ -37,14 +39,18 @@ class TemplatePlaceholder(StrEnum):
     OPT_OUT_URL = "opt_out_url"
 
 
-def _build_environment() -> Environment:
+def _build_environment(*, autoescape: bool) -> Environment:
     return SandboxedEnvironment(
-        autoescape=select_autoescape(default_for_string=True),
+        autoescape=select_autoescape(default_for_string=True) if autoescape else False,
         undefined=StrictUndefined,
     )
 
 
-participant_template_env: Environment = _build_environment()
+participant_template_env: Environment = _build_environment(autoescape=True)
+
+# Subjects are a plain-text header, not markup: escaping here would deliver
+# "Study at Foo &amp; Bar" to the inbox.
+participant_subject_env: Environment = _build_environment(autoescape=False)
 
 
 def validate_participant_email_template(template: str) -> None:
@@ -54,6 +60,11 @@ def validate_participant_email_template(template: str) -> None:
     length limits, disallowed constructs) can be layered on top later.
     """
     participant_template_env.parse(template)
+
+
+def validate_participant_email_subject(subject: str) -> None:
+    """Parse the subject line and raise `TemplateSyntaxError` if invalid."""
+    participant_subject_env.parse(subject)
 
 
 def build_template_context(
@@ -80,11 +91,19 @@ def render_participant_email_template(template: str, context: dict[str, Any]) ->
     return participant_template_env.from_string(template).render(**context)
 
 
+def render_participant_email_subject(subject: str, context: dict[str, Any]) -> str:
+    """Render a subject line against the same context, without HTML escaping."""
+    return participant_subject_env.from_string(subject).render(**context)
+
+
 __all__ = [
     "TemplatePlaceholder",
     "TemplateSyntaxError",
     "build_template_context",
+    "participant_subject_env",
     "participant_template_env",
+    "render_participant_email_subject",
     "render_participant_email_template",
+    "validate_participant_email_subject",
     "validate_participant_email_template",
 ]
