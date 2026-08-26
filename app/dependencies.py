@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from ainterviewer.types import LanguageCode
 
-from .auth import AssistanceSessionToken, AuthToken
+from .auth import AssistanceSessionToken, AuthToken, InterviewToken
 from .db import InterviewDataBase
 from .db.pragmas import register_pragmas
 from .db.vectors import register_vector_extension
@@ -162,11 +162,33 @@ AssistanceSessionCookie = Annotated[
     AssistanceSessionToken | None, Depends(_parse_assistance_session)
 ]
 
+
+def _require_interview_token(
+    interview_token: Annotated[str | None, Cookie()] = None,
+) -> InterviewToken:
+    """The respondent's credential for one interview, from its httponly cookie.
+
+    This is what a participant in a running interview actually holds -- they
+    have no user account and so no `access_token`. It carries the project and
+    interview ids, which is the point: an endpoint acting inside an interview
+    must take those ids from here rather than from the request, or a caller can
+    name someone else's interview and act on it.
+    """
+    if interview_token is None:
+        raise AuthError(status_code=401, detail="Unauthorized")
+    try:
+        return InterviewToken.decode(interview_token)
+    except (JWTError, ValidationError):
+        raise AuthError(status_code=401, detail="Could not validate credentials")
+
+
+# The interview a respondent is in, as proven by their interview_token cookie.
+InterviewCredential = Annotated[InterviewToken, Depends(_require_interview_token)]
+
 # User tokens
 AdminToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.ADMIN))]
 UserToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.USER))]
 DemoToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.DEMO))]
-GuestToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.GUEST))]
 
 
 # Resource checks

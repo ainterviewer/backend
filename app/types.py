@@ -11,7 +11,6 @@ class Scope(StrEnum):
     ADMIN = "admin"
     USER = "user"
     DEMO = "demo"
-    GUEST = "guest"
 
     def includes(self, other: Scope) -> bool:
         """Check if this scope includes the permissions of another scope."""
@@ -19,10 +18,9 @@ class Scope(StrEnum):
 
 
 _SCOPE_HIERARCHY: dict[Scope, set[Scope]] = {
-    Scope.ADMIN: {Scope.ADMIN, Scope.USER, Scope.DEMO, Scope.GUEST},
-    Scope.USER: {Scope.USER, Scope.DEMO, Scope.GUEST},
-    Scope.DEMO: {Scope.DEMO, Scope.GUEST},
-    Scope.GUEST: {Scope.GUEST},
+    Scope.ADMIN: {Scope.ADMIN, Scope.USER, Scope.DEMO},
+    Scope.USER: {Scope.USER, Scope.DEMO},
+    Scope.DEMO: {Scope.DEMO},
 }
 
 

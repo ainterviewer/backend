@@ -5,7 +5,7 @@ from pydantic import UUID4, BaseModel, EmailStr, Field, field_validator
 
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
-from ainterviewer.types import Interviewer, LanguageCode, TestType
+from ainterviewer.types import Feedback, Interviewer, LanguageCode, TestType
 
 from ..db.types import InterviewType
 from ..types import ExternalParam, ProjectStatus
@@ -188,6 +188,20 @@ class ExternalParamsRequest(BaseModel):
         if len(values) != len({x.name for x in values}):
             raise ValueError("External parameter names must be unique")
         return values
+
+
+class MessageFeedbackRequest(BaseModel):
+    """Feedback on one message of the caller's own interview.
+
+    Carries no interview or project id on purpose: both come from the
+    interview_token cookie, so a caller cannot leave feedback on somebody
+    else's transcript by naming it. Mirrors SpeechRequest.
+    """
+
+    # Interview-scoped, so it only identifies a message together with the
+    # interview the token names.
+    message_id: int
+    feedback: Feedback | None = None
 
 
 class SpeechRequest(BaseModel):

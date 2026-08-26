@@ -29,7 +29,7 @@ from ..dependencies import (
     AdminToken,
     AuthError,
     DBSession,
-    GuestToken,
+    InterviewCredential,
     ResourceRoleChecker,
     ScopeChecker,
 )
@@ -43,6 +43,7 @@ from ..types import (
 from ..utils import generate_random_filename
 from .request_models import (
     CreateInterviewRequest,
+    MessageFeedbackRequest,
     SpeechRequest,
     ValidateExternalParamsRequest,
 )
@@ -175,7 +176,7 @@ async def create_interview(
         if not (token := request.cookies.get("access_token")):
             raise AuthError(
                 status_code=403,
-                detail="Forbidden, scope required: " + Scope.GUEST,
+                detail="Forbidden, scope required: " + Scope.DEMO,
             )
 
         try:
@@ -293,27 +294,77 @@ async def redeem_interview_resume_link(
 
 @router.patch("/feedback", response_model=MessageFeedbackResponse)
 async def put_feedback(
-    auth_token: GuestToken,
-    message: MessageFeedbackResponse,
+    interview_token: InterviewCredential,
+    feedback_request: MessageFeedbackRequest,
     db: DBSession,
-):
+) -> MessageFeedbackResponse:
+    """Record a respondent's thumbs up/down on one interviewer message.
+
+    Authenticated with the participant's interview token, like the speech and
+    transcription endpoints, and scoped the same way: the interview and project
+    come from the token, and the message is looked up inside them. Previously
+    both ids were taken from the request body under a user-account token, so
+    any account could write feedback onto any interview's message given its id
+    -- and a respondent, holding no account at all, could not use it.
+    """
+    try:
+        db.interviews.get_message(
+            message_id=feedback_request.message_id,
+            interview_id=interview_token.interview_id,
+            project_id=interview_token.project_id,
+        )
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail="Message not found")
+
     db.interviews.update_feedback(
-        message_id=message.message_id,
-        interview_id=message.interview_id,
-        feedback=message.feedback,
+        message_id=feedback_request.message_id,
+        interview_id=interview_token.interview_id,
+        feedback=feedback_request.feedback,
     )
-    return message
+    return MessageFeedbackResponse(
+        interview_id=interview_token.interview_id,
+        project_id=interview_token.project_id,
+        message_id=feedback_request.message_id,
+        feedback=feedback_request.feedback,
+    )
+
+
+def _checked_interview(db: DBSession, project_id: UUID4, interview_id: UUID4) -> None:
+    """Reject an upload that names an interview not in the given project.
+
+    Both ids arrive as form fields, so without this the pair is whatever the
+    caller said it was, and the interview id goes on to become a directory
+    name. Being UUID4-typed already rules out path traversal; this rules out
+    writing into an unrelated -- or entirely non-existent -- interview's
+    storage.
+
+    !! SECURITY: these two endpoints are admin-only, which is the only reason
+    trusting the caller's ids is survivable here. If they are ever opened up to
+    respondents (see the FIXMEs below), this check is NOT enough: take
+    project_id and interview_id from the InterviewCredential token instead and
+    drop the form fields, exactly as put_feedback and synthesize_speech do. An
+    endpoint that lets its caller name the interview it acts on is an IDOR the
+    moment it stops being admin-only.
+    """
+    try:
+        db.interviews.get_interview(project_id=project_id, interview_id=interview_id)
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail="Interview not found.")
 
 
 @router.post("/image")
 async def upload_interview_image(
     auth_token: AdminToken,
+    db: DBSession,
     project_id: Annotated[UUID4, Form()],
     interview_id: Annotated[UUID4, Form()],
     file: Annotated[UploadFile, File()],
 ) -> MediaUploadResponse:
     # FIXME: This should be accessible to the users, however need better
-    # security, to avoid misuse.
+    # security, to avoid misuse. Read _checked_interview first: opening this up
+    # means sourcing both ids from the interview token, not just relaxing the
+    # dependency above.
+    _checked_interview(db, project_id, interview_id)
 
     filename = generate_random_filename()
 
@@ -334,12 +385,16 @@ async def upload_interview_image(
 @router.post("/audio")
 async def upload_audio(
     auth_token: AdminToken,
+    db: DBSession,
     project_id: Annotated[UUID4, Form()],
     interview_id: Annotated[UUID4, Form()],
     file: Annotated[UploadFile, File()],
 ) -> MediaUploadResponse:
     # FIXME: This should be accessible to the users, however need better
-    # security, to avoid misuse.
+    # security, to avoid misuse. Read _checked_interview first: opening this up
+    # means sourcing both ids from the interview token, not just relaxing the
+    # dependency above.
+    _checked_interview(db, project_id, interview_id)
 
     filename = generate_random_filename()
 
