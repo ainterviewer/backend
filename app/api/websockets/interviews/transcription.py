@@ -1,39 +1,25 @@
 import asyncio
-import base64
-import json
 import time
 
-import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.exc import NoResultFound
 from uvicorn.config import logger
-from websockets.exceptions import ConnectionClosed
-from websockets.exceptions import WebSocketException as WSException
 
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode, MessageRole
 
 from ....dependencies import DBSession
-from ....services.audio import SAMPLE_RATE, LocalWavSink
-from ....settings import app_settings
+from ....services.audio import (
+    AudioServiceError,
+    LocalWavSink,
+    TranscriptionSession,
+)
 from ..auth import authenticate_or_close
 
 router = APIRouter(prefix="/ws", tags=["interviews"])
 
-DEFAULT_STT_ENDPOINT = "wss://api.openai.com"
-
-
-def _transcription_url() -> str | None:
-    """Build the upstream realtime URL, or None if STT is not configured.
-
-    The model must NOT be a query parameter for transcription sessions; it is
-    set via session.update in the handshake (see _init_transcript).
-    """
-    speech_settings = app_settings.services.speech
-    if speech_settings.stt_model is None:
-        return None
-    endpoint = (speech_settings.stt_endpoint or DEFAULT_STT_ENDPOINT).rstrip("/")
-    return f"{endpoint}/v1/realtime?intent=transcription"
+# Prompts condition on their tail; keep the end of long questions.
+PROMPT_CONTEXT_CHARS = 1000
 
 
 async def _notify(websocket: WebSocket, error: str) -> None:
@@ -43,89 +29,26 @@ async def _notify(websocket: WebSocket, error: str) -> None:
         logger.debug("Could not notify client of error %r; socket is gone", error)
 
 
-async def _relay_transcripts(websocket: WebSocket, upstream) -> None:
-    """Forward OpenAI transcription events from upstream back to the client."""
-    try:
-        async for message in upstream:
-            if isinstance(message, bytes):
-                await websocket.send_bytes(message)
-            else:
-                await websocket.send_text(message)
-    except ConnectionClosed:
-        pass
-
-
-def _session_update(transcription: dict) -> dict:
-    return {
-        "type": "session.update",
-        "session": {
-            "type": "transcription",
-            "audio": {
-                "input": {
-                    "format": {"type": "audio/pcm", "rate": SAMPLE_RATE},
-                    "turn_detection": None,
-                    "transcription": transcription,
-                }
-            },
-        },
-    }
-
-
-async def _await_session_response(upstream) -> dict:
-    """Consume upstream events until a session.update is acknowledged."""
-    while True:
-        event = json.loads(await asyncio.wait_for(upstream.recv(), timeout=10))
-        if event.get("type") in ("session.updated", "error"):
-            return event
-
-
-async def _init_transcript(
-    upstream,
-    stt_model: str,
-    language: LanguageCode | None,
-    last_message: str | None,
+async def _relay_transcripts(
+    websocket: WebSocket, session: TranscriptionSession
 ) -> None:
-    """Configure the upstream transcription session: PCM16 input, no server
-    VAD (the client commits the buffer manually on send), and the interview
-    language. Raises WSException if this core configuration is rejected.
-
-    The last interviewer question is then added as a transcription prompt in a
-    second, best-effort update: not all models support `prompt`, and a session
-    update fails atomically, so it must not ride along with the core config.
-    """
-    transcription: dict = {
-        "model": stt_model,
-        "delay": app_settings.services.speech.sst_delay,
-    }
-    if language is not None:
-        transcription["language"] = language.lower()
-
-    await upstream.send(json.dumps(_session_update(transcription)))
-    event = await _await_session_response(upstream)
-    if event.get("type") == "error":
-        raise WSException(f"Transcription session config rejected: {event['error']}")
-
-    if last_message:
-        prompted = transcription | {"prompt": "Q: " + last_message + "\nA:"}
-        await upstream.send(json.dumps(_session_update(prompted)))
-        event = await _await_session_response(upstream)
-        if event.get("type") == "error":
-            logger.warning(
-                "Transcription prompt not applied: "
-                f"{event['error'].get('message', event['error'])}"
-            )
+    """Forward transcription events from the upstream session to the client."""
+    async for message in session.events():
+        if isinstance(message, bytes):
+            await websocket.send_bytes(message)
+        else:
+            await websocket.send_text(message)
 
 
 @router.websocket("/transcribe")
 async def transcription_websocket_endpoint(websocket: WebSocket, db: DBSession):
     """Tee participant audio: persist the recording (source of truth) while
-    forwarding it to the OpenAI-compatible transcription service best-effort.
+    forwarding it to the transcription service best-effort.
 
-    The server configures the upstream session (model, language, and the last
-    interviewer question as prompt context). The client sends raw PCM16 binary
-    frames plus the buffer-commit control message; transcripts are relayed
-    straight back, and the client submits the final text through the normal
-    interview message path.
+    The client sends raw PCM16 binary frames plus the buffer-commit control
+    message; transcripts are relayed straight back, and the client submits the
+    final text through the normal interview message path. Everything about the
+    upstream protocol lives in `services.audio`.
     """
     interview_token = await authenticate_or_close(websocket)
     if interview_token is None:
@@ -141,20 +64,9 @@ async def transcription_websocket_endpoint(websocket: WebSocket, db: DBSession):
     # the recording when submitting the transcribed message.
     await websocket.send_json({"type": "recording", "filename": recording_filename})
 
-    upstream = None
-    relay_task = None
-    transcription_up = False
-
-    transcription_url = _transcription_url()
-    headers = {
-        "Authorization": "Bearer "
-        + lib_settings.secrets.openai_api_key.get_secret_value(),
-        "OpenAI-Safety-Identifier": str(interview_token.interview_id),
-    }
-
     # Session context: the interview language and the question being answered.
     language: LanguageCode | None = None
-    last_message: str | None = None
+    prompt_context: str | None = None
     try:
         interview = db.interviews.get_interview(
             project_id=interview_token.project_id,
@@ -167,31 +79,23 @@ async def transcription_websocket_endpoint(websocket: WebSocket, db: DBSession):
             role=MessageRole.ASSISTANT,
         )
         if last is not None:
-            # Prompts condition on their tail; keep the end of long questions.
-            last_message = last.content.strip()[-1000:] or None
+            prompt_context = last.content.strip()[-PROMPT_CONTEXT_CHARS:] or None
     except NoResultFound:
         logger.error(f"Interview {interview_token.interview_id} not found")
 
+    session: TranscriptionSession | None = None
+    relay_task: asyncio.Task | None = None
     try:
-        if (
-            transcription_url is None
-            or (stt_model := app_settings.services.speech.stt_model) is None
-        ):
-            logger.error("Transcription not configured (services.speech)")
+        try:
+            session = await TranscriptionSession.open(
+                interview_token.interview_id,
+                language=language,
+                prompt_context=prompt_context,
+            )
+            relay_task = asyncio.create_task(_relay_transcripts(websocket, session))
+        except AudioServiceError as e:
+            logger.error(f"Transcription unavailable: {e}")
             await _notify(websocket, "transcription_unavailable")
-        else:
-            try:
-                upstream = await websockets.connect(
-                    transcription_url, additional_headers=headers, max_size=None
-                )
-                await _init_transcript(upstream, stt_model, language, last_message)
-                transcription_up = True
-                relay_task = asyncio.create_task(
-                    _relay_transcripts(websocket, upstream)
-                )
-            except (OSError, WSException, TimeoutError) as e:
-                logger.error(f"Transcription upstream unavailable: {e!r}")
-                await _notify(websocket, "transcription_unavailable")
 
         while True:
             msg = await websocket.receive()
@@ -200,29 +104,22 @@ async def transcription_websocket_endpoint(websocket: WebSocket, db: DBSession):
 
             if (pcm := msg.get("bytes")) is not None:
                 sink.write(pcm)  # unconditional: recording is the source of truth
-                if transcription_up and upstream is not None:
+                if session is not None and session.is_open:
                     try:
-                        await upstream.send(
-                            json.dumps(
-                                {
-                                    "type": "input_audio_buffer.append",
-                                    "audio": base64.b64encode(pcm).decode(),
-                                }
-                            )
-                        )
-                    except ConnectionClosed:
-                        transcription_up = False
+                        await session.append_audio(pcm)
+                    except AudioServiceError as e:
+                        logger.error(f"Transcription dropped: {e}")
                         await _notify(websocket, "transcription_unavailable")
             elif (
                 (text := msg.get("text")) is not None
-                and transcription_up
-                and upstream is not None
+                and session is not None
+                and session.is_open
             ):
                 # Control passthrough (session.update, commit, ...).
                 try:
-                    await upstream.send(text)
-                except ConnectionClosed:
-                    transcription_up = False
+                    await session.send_control(text)
+                except AudioServiceError as e:
+                    logger.error(f"Transcription dropped: {e}")
                     await _notify(websocket, "transcription_unavailable")
 
     except WebSocketDisconnect:
@@ -231,6 +128,6 @@ async def transcription_websocket_endpoint(websocket: WebSocket, db: DBSession):
     finally:
         if relay_task is not None:
             relay_task.cancel()
-        if upstream is not None:
-            await upstream.close()
+        if session is not None:
+            await session.close()
         sink.close()

@@ -1,7 +1,6 @@
 from typing import Annotated, Any
 
 import aiofiles
-import aiohttp
 from fastapi import (
     APIRouter,
     File,
@@ -33,6 +32,7 @@ from ..dependencies import (
     ResourceRoleChecker,
     ScopeChecker,
 )
+from ..services.audio import SpeechNotConfigured, SpeechUnavailable, synthesize
 from ..settings import app_settings
 from ..types import (
     CollaboratorRole,
@@ -412,21 +412,6 @@ async def upload_audio(
     return MediaUploadResponse(message="Audio uploaded successfully", filename=filename)
 
 
-DEFAULT_TTS_ENDPOINT = "https://api.openai.com"
-
-# gpt-4o-mini-tts steers delivery via instructions; `speed` is only honored by
-# the older tts-1 models, so pacing is stated in both places.
-TTS_SPEED = 1.15
-TTS_INSTRUCTIONS = (
-    "You are the voice of a friendly, professional researcher reading "
-    "interview questions aloud to a participant. Tone: warm, engaged and "
-    "natural, never robotic or theatrical. Pacing: slightly faster than "
-    "normal conversation while staying clear and easy to follow; pause "
-    "briefly after a question. Language: the text is in the language with "
-    "ISO 639-1 code '{language}'; pronounce it like a native speaker."
-)
-
-
 @router.post(
     "/speech",
     response_class=StreamingResponse,
@@ -435,8 +420,8 @@ TTS_INSTRUCTIONS = (
 async def synthesize_speech(
     request: Request, speech_request: SpeechRequest, db: DBSession
 ):
-    """Synthesize speech for an interviewer message via the OpenAI-compatible
-    TTS service, streaming the MP3 back as it is generated.
+    """Synthesize speech for an interviewer message, streaming the MP3 back as
+    it is generated.
 
     Authenticated with the participant's interview token cookie, like the
     transcription endpoint. The text is looked up by message id within the
@@ -449,10 +434,6 @@ async def synthesize_speech(
         interview_token = InterviewToken.decode(token)
     except (JWTError, ValidationError):
         raise HTTPException(status_code=401, detail="Could not validate credentials")
-
-    speech_settings = app_settings.services.speech
-    if speech_settings.tts_model is None:
-        raise HTTPException(status_code=503, detail="Text-to-speech not configured")
 
     try:
         message = db.interviews.get_message(
@@ -471,49 +452,15 @@ async def synthesize_speech(
         raise HTTPException(
             status_code=403, detail="Only interviewer messages can be synthesized"
         )
-    if not message.content.strip():
+    if not (text := message.content.strip()):
         raise HTTPException(status_code=422, detail="Message has no text content")
 
-    # OpenAI's /v1/audio/speech caps input at 4096 characters.
-    text = message.content.strip()[:4096]
-
-    endpoint = (speech_settings.tts_endpoint or DEFAULT_TTS_ENDPOINT).rstrip("/")
-
-    session = aiohttp.ClientSession()
     try:
-        upstream = await session.post(
-            f"{endpoint}/v1/audio/speech",
-            headers={
-                "Authorization": "Bearer "
-                + lib_settings.secrets.openai_api_key.get_secret_value(),
-            },
-            json={
-                "model": speech_settings.tts_model,
-                "voice": speech_settings.tts_voice,
-                "input": text,
-                "response_format": "mp3",
-                "speed": TTS_SPEED,
-                "instructions": TTS_INSTRUCTIONS.format(language=interview.language),
-            },
-        )
-        if upstream.status != 200:
-            detail = await upstream.text()
-            logger.error(f"TTS upstream error {upstream.status}: {detail}")
-            raise HTTPException(status_code=502, detail="Speech synthesis failed")
-    except aiohttp.ClientError as e:
-        await session.close()
-        logger.error(f"TTS upstream unavailable: {e!r}")
+        stream = await synthesize(text, interview.language)
+    except SpeechNotConfigured:
+        raise HTTPException(status_code=503, detail="Text-to-speech not configured")
+    except SpeechUnavailable as e:
+        logger.error(str(e))
         raise HTTPException(status_code=502, detail="Speech synthesis failed")
-    except HTTPException:
-        await session.close()
-        raise
 
-    async def stream():
-        try:
-            async for chunk in upstream.content.iter_chunked(8192):
-                yield chunk
-        finally:
-            upstream.release()
-            await session.close()
-
-    return StreamingResponse(stream(), media_type="audio/mpeg")
+    return StreamingResponse(stream, media_type="audio/mpeg")
