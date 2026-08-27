@@ -30,6 +30,13 @@ class InterviewStatusCount(BaseModel):
     count: int
 
 
+class LanguageCount(BaseModel):
+    """Count of interviews conducted in a given language."""
+
+    language: str
+    count: int
+
+
 class DailyInterviewCount(BaseModel):
     """Count of interviews created per day."""
 
@@ -234,6 +241,7 @@ class MonitoringStats(BaseModel):
 
     # Breakdowns
     interviews_by_status: list[InterviewStatusCount]
+    interviews_by_language: list[LanguageCount]
 
     # Time series data
     interviews_over_time: list[DailyInterviewCount]
@@ -251,6 +259,15 @@ class MonitoringStats(BaseModel):
     # Dropout analysis
     dropout_stats: list[DropoutPoint]
     dropout_sections: list[DropoutSection]
+
+    # Participation. `total_participants` is the project's full participant
+    # roster, which carries no interview dates, so a `start_date`/`end_date`
+    # filter narrows `participants_completed` only. A project with no linked
+    # participants (anonymous-link distribution) reports 0/0 and a null rate;
+    # the dashboard hides the card in that case rather than showing 0%.
+    total_participants: int
+    participants_completed: int
+    participation_rate: float | None
 
     # Denominator for `dropout_stats`: every dropout point is one inactive
     # interview, so these two must agree.
@@ -303,6 +320,8 @@ def get_project_monitoring_stats(
         InterviewTable.status.label("status"),
         InterviewTable.created_at.label("created_at"),
         InterviewTable.total_time_spent.label("total_time_spent"),
+        InterviewTable.language.label("language"),
+        InterviewTable.participant_id.label("participant_id"),
     )
 
     if deduplicate_by_pid:
@@ -355,6 +374,8 @@ def get_project_monitoring_stats(
                 ranked.c.status,
                 ranked.c.created_at,
                 ranked.c.total_time_spent,
+                ranked.c.language,
+                ranked.c.participant_id,
             )
             # A NULL `pid` is not a duplicate key: SQL puts every such row in
             # one partition, so ranking alone would collapse all pid-less
@@ -399,6 +420,43 @@ def get_project_monitoring_stats(
     # Completion rate
     completion_rate = (
         (total_completed / total_interviews) if total_interviews > 0 else 0.0
+    )
+
+    # Interviews by language, over the same filtered set as every other stat.
+    language_stmt = (
+        select(interviews.c.language, func.count().label("count"))
+        .group_by(interviews.c.language)
+        .order_by(func.count().desc(), interviews.c.language)
+    )
+    interviews_by_language = [
+        LanguageCount(language=str(language), count=count)
+        for language, count in session.execute(language_stmt).all()
+    ]
+
+    # Participation: how much of the invited roster reached a completed
+    # interview. Counted over participants rather than interviews, so a
+    # participant with several attempts still counts once.
+    total_participants = (
+        session.execute(
+            select(func.count())
+            .select_from(ProjectParticipantTable)
+            .where(ProjectParticipantTable.project_id == project_id)
+        ).scalar_one()
+        or 0
+    )
+    participants_completed = (
+        session.execute(
+            select(func.count(func.distinct(interviews.c.participant_id))).where(
+                interviews.c.status == InterviewStatus.COMPLETED,
+                interviews.c.participant_id.is_not(None),
+            )
+        ).scalar_one()
+        or 0
+    )
+    participation_rate = (
+        (participants_completed / total_participants)
+        if total_participants > 0
+        else None
     )
 
     # Daily interview counts (last 30 days by default, or within date range)
@@ -714,6 +772,7 @@ def get_project_monitoring_stats(
         total_interviews=total_interviews,
         completion_rate=completion_rate,
         interviews_by_status=interviews_by_status,
+        interviews_by_language=interviews_by_language,
         interviews_over_time=interviews_over_time,
         interviews_by_time_of_day=interviews_by_time_of_day,
         duration_stats=duration_stats,
@@ -723,5 +782,8 @@ def get_project_monitoring_stats(
         message_length_histogram=message_length_histogram,
         dropout_stats=dropout_stats,
         dropout_sections=dropout_sections,
+        total_participants=total_participants,
+        participants_completed=participants_completed,
+        participation_rate=participation_rate,
         total_inactive=total_inactive,
     )
