@@ -1,5 +1,4 @@
 import datetime
-import math
 from collections.abc import Sequence
 from enum import StrEnum
 from typing import Annotated
@@ -19,6 +18,7 @@ from ....db.tables import (
 )
 from ....db.types import InterviewType
 from ....dependencies import DBSession, DemoToken
+from .histogram import HistogramBucket, compute_histogram_buckets
 
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])
 
@@ -66,91 +66,6 @@ class MessageCountStats(BaseModel):
     max_messages: int
     avg_messages: float
     sum_messages: int
-
-
-class HistogramBucket(BaseModel):
-    """A value-count pair for histogram use."""
-
-    value: int
-    count: int
-    label: str
-
-
-# Mantissas that read as "round" on an axis. Only whole-number steps are used,
-# so 2.5 is only ever picked from a magnitude of 10 upwards (25, 250, ...).
-_NICE_MANTISSAS = (1, 2, 2.5, 5, 10)
-
-
-def _nice_step(raw_step: float) -> int:
-    """Round `raw_step` up to the next whole, human-readable step.
-
-    Produces 1, 2, 5, 10, 25, 50, 100, 250, ... rather than the arbitrary
-    integers a plain `ceil(span / num_bins)` yields (43, 39, ...), so axis
-    labels land on values a reader can scan.
-    """
-    if raw_step <= 1:
-        return 1
-
-    magnitude = 10 ** math.floor(math.log10(raw_step))
-    for mantissa in _NICE_MANTISSAS:
-        candidate = mantissa * magnitude
-        if candidate >= raw_step and float(candidate).is_integer():
-            return int(candidate)
-
-    # log10 rounding can leave us just past 10 * magnitude; the next decade is
-    # always nice and always large enough.
-    return int(10 * magnitude)
-
-
-def _compute_histogram_buckets(
-    data_rows: Sequence, num_bins: int = 20
-) -> list[HistogramBucket]:
-    """Bin grouped value/count rows into `num_bins` evenly spaced buckets.
-
-    Bucket width is a "nice" number and the first bucket edge is snapped down to
-    a multiple of that width, so the axis reads 300, 350, 400, ... instead of
-    321, 364, 407, ...
-    """
-    if not data_rows:
-        return []
-
-    # data_rows are expected to be sorted by value
-    # and have .value and .count attributes
-    min_val = data_rows[0].value
-    max_val = data_rows[-1].value
-
-    span = max_val - min_val
-
-    # If single value or no span, return single bucket
-    if span == 0:
-        total_count = sum(row.count for row in data_rows)
-        return [
-            HistogramBucket(value=int(min_val), count=total_count, label=str(min_val))
-        ]
-
-    # Snapping the origin down costs at most one bucket of headroom, so size the
-    # step against `num_bins - 1` buckets and then verify coverage explicitly.
-    step = _nice_step((span + 1) / (num_bins - 1))
-    start = int(math.floor(min_val / step) * step)
-    while start + num_bins * step <= max_val:
-        step = _nice_step(step + 1)
-        start = int(math.floor(min_val / step) * step)
-
-    buckets = [0] * num_bins
-    for row in data_rows:
-        idx = int((row.value - start) // step)
-        # Defensive clamp; the coverage loop above should make this unreachable.
-        idx = max(0, min(idx, num_bins - 1))
-        buckets[idx] += row.count
-
-    return [
-        HistogramBucket(
-            value=start + i * step,
-            count=count,
-            label=f"{start + i * step}-{start + (i + 1) * step}",
-        )
-        for i, count in enumerate(buckets)
-    ]
 
 
 def _summarize(data_rows: Sequence) -> tuple[int, int, float, int] | None:
@@ -524,7 +439,7 @@ def get_project_monitoring_stats(
         .order_by(interviews.c.total_time_spent)
     )
     duration_rows = session.execute(duration_hist_stmt).all()
-    duration_histogram = _compute_histogram_buckets(duration_rows)
+    duration_histogram = compute_histogram_buckets(duration_rows)
 
     duration_summary = _summarize(duration_rows)
     duration_stats = (
@@ -565,7 +480,7 @@ def get_project_monitoring_stats(
         .order_by(message_counts_subquery.c.msg_count)
     )
     msg_count_rows = session.execute(msg_count_hist_stmt).all()
-    message_count_histogram = _compute_histogram_buckets(msg_count_rows)
+    message_count_histogram = compute_histogram_buckets(msg_count_rows)
 
     msg_summary = _summarize(msg_count_rows)
     message_count_stats = (
@@ -596,7 +511,7 @@ def get_project_monitoring_stats(
         .order_by(msg_length)
     )
     msg_length_rows = session.execute(msg_length_stmt).all()
-    message_length_histogram = _compute_histogram_buckets(msg_length_rows)
+    message_length_histogram = compute_histogram_buckets(msg_length_rows)
 
     # +++++++++++++++++++++++++++++++ #
     # Stats for INACTIVE interviews   #
