@@ -1,7 +1,7 @@
 """Histogram binning shared by the analysis endpoints.
 
 Lives in its own module because both `monitoring` (interview-level histograms)
-and `visualizations` (per-item histograms) bin value/count rows the same way,
+and `report` (per-item histograms) bin value/count rows the same way,
 and an axis that reads 300, 350, 400 in one place should read the same in the
 other.
 """
