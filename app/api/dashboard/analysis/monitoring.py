@@ -18,7 +18,13 @@ from ....db.tables import (
 )
 from ....db.types import InterviewType
 from ....dependencies import DBSession, DemoToken
-from .histogram import HistogramBucket, compute_histogram_buckets
+from .histogram import (
+    HistogramBucket,
+    ValueCount,
+    compute_histogram_buckets,
+    compute_log_histogram_buckets,
+    trim_upper_outliers,
+)
 
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])
 
@@ -168,6 +174,10 @@ class MonitoringStats(BaseModel):
 
     # Histogram distributions
     duration_histogram: list[HistogramBucket]
+    # Completed interviews left out of `duration_histogram` as outliers, and the
+    # longest duration it still covers. Zero and null when nothing was trimmed.
+    duration_outliers_excluded: int
+    duration_outlier_threshold: int | None
     message_count_histogram: list[HistogramBucket]
     message_length_histogram: list[HistogramBucket]
 
@@ -439,7 +449,21 @@ def get_project_monitoring_stats(
         .order_by(interviews.c.total_time_spent)
     )
     duration_rows = session.execute(duration_hist_stmt).all()
-    duration_histogram = compute_histogram_buckets(duration_rows)
+
+    # An interview left open in a browser tab records hours of "duration" and
+    # stretches the axis over a range the rest of the data never reaches. Those
+    # are dropped from the histogram only -- the min/avg/max/total below stay
+    # over every completed interview, since a long one is still a real one --
+    # and the count of what was dropped is reported alongside it.
+    trimmed = trim_upper_outliers(duration_rows)
+
+    # Binned in minutes: at second resolution the axis ticks come out as 100,
+    # 300, 500, ..., which no one reads as "eight and a bit minutes". The rows
+    # keep their seconds precision through the division, so the bin edges are
+    # whole minutes without the observations being rounded onto them first.
+    duration_histogram = compute_histogram_buckets(
+        [ValueCount(value=row.value / 60, count=row.count) for row in trimmed.rows]
+    )
 
     duration_summary = _summarize(duration_rows)
     duration_stats = (
@@ -494,7 +518,10 @@ def get_project_monitoring_stats(
         else None
     )
 
-    # Message length histogram (one entry per distinct character length)
+    # Message length histogram (one entry per distinct character length).
+    # Binned logarithmically: lengths run from a one-word answer to a few
+    # thousand characters, and even bins put almost every message in the
+    # first bar.
     msg_length = func.length(MessageTable.content)
     msg_length_stmt = (
         select(
@@ -511,7 +538,7 @@ def get_project_monitoring_stats(
         .order_by(msg_length)
     )
     msg_length_rows = session.execute(msg_length_stmt).all()
-    message_length_histogram = compute_histogram_buckets(msg_length_rows)
+    message_length_histogram = compute_log_histogram_buckets(msg_length_rows)
 
     # +++++++++++++++++++++++++++++++ #
     # Stats for INACTIVE interviews   #
@@ -693,6 +720,8 @@ def get_project_monitoring_stats(
         duration_stats=duration_stats,
         message_count_stats=message_count_stats,
         duration_histogram=duration_histogram,
+        duration_outliers_excluded=trimmed.excluded_count,
+        duration_outlier_threshold=trimmed.threshold,
         message_count_histogram=message_count_histogram,
         message_length_histogram=message_length_histogram,
         dropout_stats=dropout_stats,
