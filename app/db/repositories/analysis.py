@@ -1,7 +1,7 @@
 from pydantic import UUID4
 from sqlalchemy import delete, distinct, exists, func, or_, select, update
 from sqlalchemy.exc import NoResultFound
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from ainterviewer.types import MessageRole
 from ainterviewer.utils import now
@@ -257,9 +257,15 @@ class AnalysisRepository(BaseRepository):
                 selectinload(MessageTable.annotations).selectinload(
                     MessageAnnotationTable.values
                 ),
-                selectinload(MessageTable.comments).selectinload(
-                    MessageCommentTable.replies
+                selectinload(MessageTable.annotations).joinedload(
+                    MessageAnnotationTable.user
                 ),
+                selectinload(MessageTable.comments).joinedload(
+                    MessageCommentTable.user
+                ),
+                selectinload(MessageTable.comments)
+                .selectinload(MessageCommentTable.replies)
+                .joinedload(MessageCommentTable.user),
                 selectinload(MessageTable.interview),
             )
         )
@@ -313,9 +319,15 @@ class AnalysisRepository(BaseRepository):
                 selectinload(MessageTable.annotations).selectinload(
                     MessageAnnotationTable.values
                 ),
-                selectinload(MessageTable.comments).selectinload(
-                    MessageCommentTable.replies
+                selectinload(MessageTable.annotations).joinedload(
+                    MessageAnnotationTable.user
                 ),
+                selectinload(MessageTable.comments).joinedload(
+                    MessageCommentTable.user
+                ),
+                selectinload(MessageTable.comments)
+                .selectinload(MessageCommentTable.replies)
+                .joinedload(MessageCommentTable.user),
                 selectinload(MessageTable.interview),
             )
         )
@@ -328,8 +340,10 @@ class AnalysisRepository(BaseRepository):
     def get_message_annotations(
         self, message_id: UUID4
     ) -> list[MessageAnnotationPublic]:
-        statement = select(MessageAnnotationTable).where(
-            MessageAnnotationTable.message_id == message_id
+        statement = (
+            select(MessageAnnotationTable)
+            .where(MessageAnnotationTable.message_id == message_id)
+            .options(joinedload(MessageAnnotationTable.user))
         )
         annotations = self.session.execute(statement).scalars().all()
         # Ensure values are loaded
@@ -439,7 +453,12 @@ class AnalysisRepository(BaseRepository):
                 MessageCommentTable.parent_id.is_(None),
             )
             .order_by(MessageCommentTable.created_at)
-            .options(selectinload(MessageCommentTable.replies))
+            .options(
+                joinedload(MessageCommentTable.user),
+                selectinload(MessageCommentTable.replies).joinedload(
+                    MessageCommentTable.user
+                ),
+            )
         )
         comments = self.session.execute(statement).scalars().all()
         return [MessageCommentPublic.model_validate(comment) for comment in comments]

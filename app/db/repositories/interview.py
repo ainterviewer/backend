@@ -151,17 +151,12 @@ class InterviewRepository(BaseRepository):
         # cascade cannot be relied on -- leaving these out is what orphaned the
         # task and interviewee rows already in the database. This order is
         # correct whether or not the cascade fires.
-        # Comments hang off the messages rather than the interview, so they
-        # have to go before the messages do. (Annotations have the same shape
-        # and are not deleted here -- a pre-existing gap, not one this touches.)
-        self.session.execute(
-            delete(MessageCommentTable).where(
-                MessageCommentTable.message_id.in_(
-                    select(MessageTable.id).where(
-                        MessageTable.project_id == project_id,
-                        MessageTable.interview_id.in_(interview_ids),
-                    )
-                )
+        # Annotations and comments hang off the messages rather than the
+        # interview, so they go before the messages do.
+        self._delete_message_children(
+            select(MessageTable.id).where(
+                MessageTable.project_id == project_id,
+                MessageTable.interview_id.in_(interview_ids),
             )
         )
         for table in (MessageTable, TaskTable, IntervieweeTable):
@@ -599,6 +594,17 @@ class InterviewRepository(BaseRepository):
             selectinload(InterviewTable.messages)
             .selectinload(MessageTable.comments)
             .selectinload(MessageCommentTable.replies)
+            .joinedload(MessageCommentTable.user)
+            if full
+            else noload(InterviewTable.messages),
+            selectinload(InterviewTable.messages)
+            .selectinload(MessageTable.comments)
+            .joinedload(MessageCommentTable.user)
+            if full
+            else noload(InterviewTable.messages),
+            selectinload(InterviewTable.messages)
+            .selectinload(MessageTable.annotations)
+            .joinedload(MessageAnnotationTable.user)
             if full
             else noload(InterviewTable.messages),
         ]
@@ -654,9 +660,13 @@ class InterviewRepository(BaseRepository):
             selectinload(MessageTable.annotations).selectinload(
                 MessageAnnotationTable.values
             ),
-            selectinload(MessageTable.comments).selectinload(
-                MessageCommentTable.replies
+            selectinload(MessageTable.annotations).joinedload(
+                MessageAnnotationTable.user
             ),
+            selectinload(MessageTable.comments).joinedload(MessageCommentTable.user),
+            selectinload(MessageTable.comments)
+            .selectinload(MessageCommentTable.replies)
+            .joinedload(MessageCommentTable.user),
         )
 
     def insert_message(

@@ -67,7 +67,12 @@ class TestRepository(BaseRepository):
             InterviewTable.test_run_id.in_(run_ids)
         )
 
-        # Interview children first, so the subquery above still resolves.
+        # Annotations and comments hang off the messages, so they go first of
+        # all; see BaseRepository._delete_message_children.
+        self._delete_message_children(
+            select(MessageTable.id).where(MessageTable.interview_id.in_(interview_ids))
+        )
+        # Interview children next, so the subquery above still resolves.
         for table in (MessageTable, TaskTable, IntervieweeTable):
             self.session.execute(
                 delete(table).where(table.interview_id.in_(interview_ids))
