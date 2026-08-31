@@ -23,6 +23,7 @@ from pydantic import UUID4, BaseModel, Field
 from sqlalchemy import distinct, func, or_, select
 
 from ainterviewer.interview_guides import SurveyItem
+from ainterviewer.interview_guides.conditions import Conditions
 from ainterviewer.interview_guides.survey_items import (
     CheckboxItem,
     DateItem,
@@ -151,12 +152,23 @@ class ItemDistribution(BaseModel):
     # question. Taken from the guide, so it carries the authored options even
     # when nobody picked some of them.
     item: SurveyItem | None
+    # What had to hold for this question to be asked at all, straight from the
+    # guide. Each condition names the question it reads by index, so the page
+    # can both state the rule on this card and, reading the whole set, mark the
+    # cards that gate others. `None` for an unconditional question.
+    conditions: Conditions | None = None
 
     # Answer rate. `n_asked - n_answered - n_skipped` is the number of
     # respondents who saw the question and dropped out on it.
     n_asked: int
     n_answered: int
     n_skipped: int
+    # Respondents who never saw the question because a condition on it did not
+    # hold. Counted apart from `n_asked`, which is the denominator of the
+    # answer rate: not being asked is not the same as being asked and not
+    # answering, and folding the two together makes a gated question look like
+    # one everybody abandons.
+    n_not_asked_by_condition: int = 0
 
     counts: list[CategoryCount]
     buckets: list[DistributionBucket]
@@ -226,6 +238,7 @@ class _Collected:
     def __init__(self) -> None:
         self.n_asked = 0
         self.n_skipped = 0
+        self.n_not_asked_by_condition = 0
         self.answers: list[_Answer] = []
         # The wording and item snapshot an interview actually used, as a
         # fallback for questions the guide no longer has.
@@ -500,6 +513,7 @@ def _build_distribution(
     main_question: int,
     question: str,
     item: SurveyItem | None,
+    conditions: Conditions | None,
     collected: _Collected,
 ) -> ItemDistribution:
     answers = collected.answers
@@ -573,9 +587,11 @@ def _build_distribution(
         question=question,
         kind=kind,
         item=item,
+        conditions=conditions,
         n_asked=collected.n_asked,
         n_answered=len(answers),
         n_skipped=collected.n_skipped,
+        n_not_asked_by_condition=collected.n_not_asked_by_condition,
         counts=counts,
         buckets=buckets,
         stats=stats,
@@ -660,16 +676,20 @@ def get_project_item_distributions(
             MessageTable.section,
             MessageTable.main_question,
             MessageTable.survey_item,
+            MessageTable.skipped_by_condition,
             interviews.c.language,
         )
         .join(interviews, interviews.c.id == MessageTable.interview_id)
         .where(
             MessageTable.project_id == project_id,
             or_(
-                # The question: an authored main question, actually put to the
-                # respondent. Probes (`sub_question > 0`), the introduction,
-                # the outro, statements the respondent cannot answer and
-                # questions a condition skipped past are all excluded.
+                # The question: an authored main question. Probes
+                # (`sub_question > 0`), the introduction, the outro and
+                # statements the respondent cannot answer are excluded. A
+                # question a condition skipped past *is* fetched -- it was
+                # never put to the respondent, so it has no answer, but how
+                # often a gate closed is exactly what the condition on the card
+                # is read against.
                 (
                     (MessageTable.role == MessageRole.ASSISTANT)
                     & (MessageTable.section.is_not(None))
@@ -678,7 +698,6 @@ def get_project_item_distributions(
                     & (MessageTable.is_introduction.is_(False))
                     & (MessageTable.outro.is_(False))
                     & (MessageTable.can_answer.is_(True))
-                    & (MessageTable.skipped_by_condition.is_(False))
                 ),
                 # Every answer, unfiltered: which ones are answers to a main
                 # question is decided by the `message_id + 1` pairing below.
@@ -703,6 +722,15 @@ def get_project_item_distributions(
 
         key: QuestionKey = (row.section, row.main_question)
         bucket = collected[key]
+
+        if row.skipped_by_condition:
+            # Written to the transcript so the guide's shape survives there,
+            # but never shown to the respondent: it is not an asking, and the
+            # message that follows it is the *next* question's, not an answer
+            # to this one.
+            bucket.n_not_asked_by_condition += 1
+            continue
+
         bucket.n_asked += 1
         if bucket.observed_question is None:
             bucket.observed_question = row.content
@@ -744,7 +772,9 @@ def get_project_item_distributions(
     ).scalar_one_or_none()
 
     sections: list[GuideSection] = []
-    authored: dict[QuestionKey, tuple[str, SurveyItem | None, bool]] = {}
+    authored: dict[
+        QuestionKey, tuple[str, SurveyItem | None, bool, Conditions | None]
+    ] = {}
 
     if default_guide is not None:
         for section_idx, section in enumerate(default_guide.question_sections):
@@ -761,6 +791,7 @@ def get_project_item_distributions(
                     question.main_question,
                     question.survey_item,
                     question.can_answer,
+                    question.conditions,
                 )
 
     # Union, not replacement: the guide above is the current editable draft,
@@ -775,9 +806,11 @@ def get_project_item_distributions(
     items: list[ItemDistribution] = []
     for section_idx, question_idx in ordered_keys:
         bucket = collected.get((section_idx, question_idx), _Collected())
-        question, item, answerable = authored.get(
+        question, item, answerable, conditions = authored.get(
             (section_idx, question_idx),
-            (bucket.observed_question or "", bucket.observed_item, True),
+            # A question the draft no longer has: its conditions went with it,
+            # so the card states no rule rather than an outdated one.
+            (bucket.observed_question or "", bucket.observed_item, True, None),
         )
         if not answerable:
             items.append(
@@ -787,9 +820,11 @@ def get_project_item_distributions(
                     question=question,
                     kind=DistributionKind.STATEMENT,
                     item=None,
+                    conditions=conditions,
                     n_asked=0,
                     n_answered=0,
                     n_skipped=0,
+                    n_not_asked_by_condition=bucket.n_not_asked_by_condition,
                     counts=[],
                     buckets=[],
                     stats=None,
@@ -797,7 +832,9 @@ def get_project_item_distributions(
             )
             continue
         items.append(
-            _build_distribution(section_idx, question_idx, question, item, bucket)
+            _build_distribution(
+                section_idx, question_idx, question, item, conditions, bucket
+            )
         )
 
     return ItemDistributions(
