@@ -44,6 +44,7 @@ from ..tables import (
 from ..types import InterviewType
 from .base import BaseRepository
 from .errors import ProjectLanguageError
+from .permissions import can_moderate_project
 
 TRANSLATION_MODEL = "openai:gpt-5.4-mini"
 
@@ -1069,6 +1070,12 @@ class ProjectRepository(BaseRepository):
             )
         )
         return self.session.execute(statement).scalar_one_or_none()
+
+    def can_moderate_project(
+        self, user_id: UUID4, project_id: UUID4, scope: Scope
+    ) -> bool:
+        """Whether the user may act on other people's contributions here."""
+        return can_moderate_project(self.session, user_id, project_id, scope)
 
     def is_project_owner(self, user_id: UUID4, project_id: UUID4) -> bool:
         """Check if a user is the owner of a project."""

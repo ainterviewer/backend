@@ -43,6 +43,7 @@ from ...auth import generate_resume_token, hash_token
 from ...db.models import (
     MessagePublic,
     ProjectLanguage,
+    ProjectPermissionsPublic,
     ProjectPublic,
 )
 from ...db.repositories.errors import ProjectLanguageError
@@ -269,6 +270,25 @@ async def get_project(
     _: ProjectViewer,
 ) -> ProjectPublic:
     return db.projects.get_project(project_id)
+
+
+@router.get("/projects/{project_id}/permissions")
+async def get_project_permissions(
+    project_id: UUID4,
+    db: DBSession,
+    jwt: DemoToken,
+    _: ProjectViewer,
+) -> ProjectPermissionsPublic:
+    """What the caller may do here, for a UI that would rather not offer an
+    action the API is going to refuse. Never a substitute for the checks the
+    other endpoints make."""
+    return ProjectPermissionsPublic(
+        role=db.projects.get_user_role_on_project(jwt.user_id, project_id),
+        is_owner=db.projects.is_project_owner(jwt.user_id, project_id),
+        can_moderate=db.projects.can_moderate_project(
+            jwt.user_id, project_id, jwt.scope
+        ),
+    )
 
 
 @router.get("/projects/{project_id}/{lang}/guide")

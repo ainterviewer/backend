@@ -6,6 +6,7 @@ from pathlib import Path
 
 from pydantic import (
     UUID4,
+    AliasChoices,
     BaseModel,
     ConfigDict,
     EmailStr,
@@ -281,6 +282,19 @@ class ProjectPublic(ProjectBase):
     available_languages: list[ProjectLanguage] | None = None
     tests: list[TestSetupPublic] | None = None
     owner: UserPublic
+
+
+class ProjectPermissionsPublic(_BaseModel):
+    """What the caller may do in one project.
+
+    The UI asks for this so it can leave out the actions the API would refuse,
+    such as editing somebody else's comment. It is a convenience, never the
+    check itself: every endpoint still enforces its own rights.
+    """
+
+    role: CollaboratorRole | None = None
+    is_owner: bool
+    can_moderate: bool
 
 
 class ProjectPublicWithTests(ProjectPublic):
@@ -599,6 +613,20 @@ class AnnotationValuePublic(AnnotationValueBase):
     id: UUID4
 
 
+class AuthorPublic(_BaseModel):
+    """Who wrote an annotation or a comment.
+
+    Annotations and comments are author specific, so every one of them is shown
+    with a name attached. Carrying the author inline saves the client from
+    resolving user ids against a separate collaborator listing.
+    """
+
+    id: UUID4
+    first_name: str
+    last_name: str | None = None
+    email: EmailStr
+
+
 class MessageAnnotationBase(_BaseModel):
     message_id: UUID4
     user_id: UUID4
@@ -613,6 +641,8 @@ class MessageAnnotationPublic(MessageAnnotationBase):
     created_at: datetime
     updated_at: datetime
     values: list[AnnotationValuePublic]
+    # The ORM relationship is called ``user``; the payload calls it ``author``.
+    author: AuthorPublic = Field(validation_alias=AliasChoices("author", "user"))
 
 
 class MessageCommentCreate(_BaseModel):
@@ -635,5 +665,7 @@ class MessageCommentPublic(_BaseModel):
     body: str
     created_at: datetime
     updated_at: datetime
+    # The ORM relationship is called ``user``; the payload calls it ``author``.
+    author: AuthorPublic = Field(validation_alias=AliasChoices("author", "user"))
     # Only ever populated on a root comment: threads are two levels deep.
     replies: list[MessageCommentPublic] = []

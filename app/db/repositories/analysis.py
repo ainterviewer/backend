@@ -6,7 +6,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from ainterviewer.types import MessageRole
 from ainterviewer.utils import now
 
-from ...types import CollaboratorRole, Scope
+from ...types import Scope
 from ..models import (
     AnalysisCategoryCreate,
     AnalysisCategoryPublic,
@@ -19,15 +19,13 @@ from ..models import (
 from ..tables import (
     AnalysisCategoryTable,
     AnnotationValueTable,
-    CollaboratorTable,
     MessageAnnotationTable,
     MessageCommentTable,
     MessageTable,
-    ProjectFolderTable,
-    ProjectTable,
 )
 from .base import BaseRepository
 from .errors import CommentThreadError
+from .permissions import can_moderate_project
 
 
 class AnalysisRepository(BaseRepository):
@@ -529,33 +527,19 @@ class AnalysisRepository(BaseRepository):
         """Whether `user_id` may edit or delete this comment.
 
         Its author always may. Beyond that it takes moderation rights over the
-        project the comment's message belongs to: platform admins, the project
-        owner, or a folder collaborator with the ADMIN role.
+        project the comment's message belongs to -- see `can_moderate_project`.
         """
         comment = self.session.get(MessageCommentTable, comment_id)
         if comment is None:
             raise NoResultFound("Comment not found")
 
-        if comment.user_id == user_id or scope == Scope.ADMIN:
+        if comment.user_id == user_id:
             return True
 
-        statement = (
-            select(ProjectTable.owner_id, CollaboratorTable.role)
-            .select_from(MessageTable)
-            .join(ProjectTable, ProjectTable.id == MessageTable.project_id)
-            .join(ProjectFolderTable, ProjectFolderTable.id == ProjectTable.folder_id)
-            .outerjoin(
-                CollaboratorTable,
-                (CollaboratorTable.folder_id == ProjectFolderTable.id)
-                & (CollaboratorTable.user_id == user_id),
-            )
-            .where(MessageTable.id == comment.message_id)
-        )
-        row = self.session.execute(statement).first()
-        if row is None:
+        project_id = self.session.execute(
+            select(MessageTable.project_id).where(MessageTable.id == comment.message_id)
+        ).scalar_one_or_none()
+        if project_id is None:
             return False
 
-        owner_id, role = row
-        return owner_id == user_id or (
-            role is not None and role.includes(CollaboratorRole.ADMIN)
-        )
+        return can_moderate_project(self.session, user_id, project_id, scope)
