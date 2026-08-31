@@ -34,6 +34,7 @@ from ..tables import (
     InterviewResumeTokenTable,
     InterviewTable,
     MessageAnnotationTable,
+    MessageCommentTable,
     MessageTable,
     ParticipantTable,
     PlatformReleaseTable,
@@ -150,6 +151,19 @@ class InterviewRepository(BaseRepository):
         # cascade cannot be relied on -- leaving these out is what orphaned the
         # task and interviewee rows already in the database. This order is
         # correct whether or not the cascade fires.
+        # Comments hang off the messages rather than the interview, so they
+        # have to go before the messages do. (Annotations have the same shape
+        # and are not deleted here -- a pre-existing gap, not one this touches.)
+        self.session.execute(
+            delete(MessageCommentTable).where(
+                MessageCommentTable.message_id.in_(
+                    select(MessageTable.id).where(
+                        MessageTable.project_id == project_id,
+                        MessageTable.interview_id.in_(interview_ids),
+                    )
+                )
+            )
+        )
         for table in (MessageTable, TaskTable, IntervieweeTable):
             self.session.execute(
                 delete(table).where(
@@ -582,6 +596,11 @@ class InterviewRepository(BaseRepository):
             .selectinload(MessageAnnotationTable.values)
             if full
             else noload(InterviewTable.messages),
+            selectinload(InterviewTable.messages)
+            .selectinload(MessageTable.comments)
+            .selectinload(MessageCommentTable.replies)
+            if full
+            else noload(InterviewTable.messages),
         ]
 
         statement = (
@@ -625,14 +644,18 @@ class InterviewRepository(BaseRepository):
     def _message_options():
         """Eager-load what MessagePublic serializes.
 
-        `MessagePublic` declares `annotations`, and `MessageAnnotationPublic`
-        declares `values`, so validating a message emits a query for each --
-        one per message, whether or not any annotations exist. selectinload
-        collapses that into two queries for the whole result set.
+        `MessagePublic` declares `annotations` and `comments`, and each of
+        those declares children of its own (`values`, `replies`), so
+        validating a message emits a query per relationship -- one per message,
+        whether or not any exist. selectinload collapses that into a fixed
+        number of queries for the whole result set.
         """
         return (
             selectinload(MessageTable.annotations).selectinload(
                 MessageAnnotationTable.values
+            ),
+            selectinload(MessageTable.comments).selectinload(
+                MessageCommentTable.replies
             ),
         )
 

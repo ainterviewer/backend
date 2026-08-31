@@ -1,24 +1,33 @@
 from pydantic import UUID4
 from sqlalchemy import delete, distinct, exists, func, or_, select, update
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import selectinload
 
 from ainterviewer.types import MessageRole
 from ainterviewer.utils import now
 
+from ...types import CollaboratorRole, Scope
 from ..models import (
     AnalysisCategoryCreate,
     AnalysisCategoryPublic,
     MessageAnnotationCreate,
     MessageAnnotationPublic,
+    MessageCommentCreate,
+    MessageCommentPublic,
     MessagePublic,
 )
 from ..tables import (
     AnalysisCategoryTable,
     AnnotationValueTable,
+    CollaboratorTable,
     MessageAnnotationTable,
+    MessageCommentTable,
     MessageTable,
+    ProjectFolderTable,
+    ProjectTable,
 )
 from .base import BaseRepository
+from .errors import CommentThreadError
 
 
 class AnalysisRepository(BaseRepository):
@@ -248,6 +257,9 @@ class AnalysisRepository(BaseRepository):
                 selectinload(MessageTable.annotations).selectinload(
                     MessageAnnotationTable.values
                 ),
+                selectinload(MessageTable.comments).selectinload(
+                    MessageCommentTable.replies
+                ),
                 selectinload(MessageTable.interview),
             )
         )
@@ -301,6 +313,9 @@ class AnalysisRepository(BaseRepository):
                 selectinload(MessageTable.annotations).selectinload(
                     MessageAnnotationTable.values
                 ),
+                selectinload(MessageTable.comments).selectinload(
+                    MessageCommentTable.replies
+                ),
                 selectinload(MessageTable.interview),
             )
         )
@@ -333,7 +348,6 @@ class AnalysisRepository(BaseRepository):
         new_annotation = MessageAnnotationTable(
             message_id=annotation.message_id,
             user_id=annotation.user_id,
-            comment=annotation.comment,
         )
         self.session.add(new_annotation)
         self.session.flush()
@@ -358,11 +372,11 @@ class AnalysisRepository(BaseRepository):
     def update_message_annotation(
         self, annotation_id: UUID4, annotation: MessageAnnotationCreate
     ) -> MessageAnnotationPublic:
-        # Update core fields
+        # Touch the envelope so its updated_at reflects the value change
         statement = (
             update(MessageAnnotationTable)
             .where(MessageAnnotationTable.id == annotation_id)
-            .values(comment=annotation.comment, updated_at=now())
+            .values(updated_at=now())
         )
         self.session.execute(statement)
 
@@ -394,6 +408,18 @@ class AnalysisRepository(BaseRepository):
 
         return MessageAnnotationPublic.model_validate(existing_annotation)
 
+    def is_annotation_author(self, annotation_id: UUID4, user_id: UUID4) -> bool:
+        """Whether the annotation exists and belongs to `user_id`.
+
+        A coding is one person's reading of a message, so only its author may
+        change or remove it -- unlike a comment, which project moderators can
+        also delete.
+        """
+        annotation = self.session.get(MessageAnnotationTable, annotation_id)
+        if annotation is None:
+            raise NoResultFound("Annotation not found")
+        return annotation.user_id == user_id
+
     def delete_message_annotation(self, annotation_id: UUID4):
         statement = select(MessageAnnotationTable).where(
             MessageAnnotationTable.id == annotation_id
@@ -401,3 +427,116 @@ class AnalysisRepository(BaseRepository):
         annotation = self.session.execute(statement).scalar_one()
         self.session.delete(annotation)
         self.session.commit()
+
+    # ==================== Message Comment Methods ====================
+
+    def get_message_comments(self, message_id: UUID4) -> list[MessageCommentPublic]:
+        """The message's discussion: root comments, each carrying its replies."""
+        statement = (
+            select(MessageCommentTable)
+            .where(
+                MessageCommentTable.message_id == message_id,
+                MessageCommentTable.parent_id.is_(None),
+            )
+            .order_by(MessageCommentTable.created_at)
+            .options(selectinload(MessageCommentTable.replies))
+        )
+        comments = self.session.execute(statement).scalars().all()
+        return [MessageCommentPublic.model_validate(comment) for comment in comments]
+
+    def add_message_comment(
+        self, message_id: UUID4, user_id: UUID4, comment: MessageCommentCreate
+    ) -> MessageCommentPublic:
+        if comment.parent_id is not None:
+            parent = self.session.get(MessageCommentTable, comment.parent_id)
+            if parent is None:
+                raise CommentThreadError(
+                    "The comment being replied to no longer exists"
+                )
+            if parent.parent_id is not None:
+                raise CommentThreadError(
+                    "Replies can only be made to a top-level comment"
+                )
+            if parent.message_id != message_id:
+                raise CommentThreadError(
+                    "The comment being replied to is on another message"
+                )
+
+        new_comment = MessageCommentTable(
+            message_id=message_id,
+            user_id=user_id,
+            parent_id=comment.parent_id,
+            body=comment.body,
+        )
+        self.session.add(new_comment)
+        self.session.commit()
+        self.session.refresh(new_comment)
+        return MessageCommentPublic.model_validate(new_comment)
+
+    def update_message_comment(
+        self, comment_id: UUID4, body: str
+    ) -> MessageCommentPublic:
+        comment = self.session.get(MessageCommentTable, comment_id)
+        if comment is None:
+            raise NoResultFound("Comment not found")
+        comment.body = body
+        self.session.commit()
+        self.session.refresh(comment)
+        return MessageCommentPublic.model_validate(comment)
+
+    def delete_message_comment(self, comment_id: UUID4) -> None:
+        """Delete a comment, and its replies when it is a root.
+
+        The replies are deleted here rather than left to ON DELETE CASCADE:
+        SQLite does not enforce foreign keys in this application (see
+        CLAUDE.md), so the cascade would leave them orphaned.
+        """
+        comment = self.session.get(MessageCommentTable, comment_id)
+        if comment is None:
+            raise NoResultFound("Comment not found")
+
+        if comment.parent_id is None:
+            self.session.execute(
+                delete(MessageCommentTable).where(
+                    MessageCommentTable.parent_id == comment_id
+                )
+            )
+        self.session.delete(comment)
+        self.session.commit()
+
+    def can_modify_comment(
+        self, comment_id: UUID4, user_id: UUID4, scope: Scope
+    ) -> bool:
+        """Whether `user_id` may edit or delete this comment.
+
+        Its author always may. Beyond that it takes moderation rights over the
+        project the comment's message belongs to: platform admins, the project
+        owner, or a folder collaborator with the ADMIN role.
+        """
+        comment = self.session.get(MessageCommentTable, comment_id)
+        if comment is None:
+            raise NoResultFound("Comment not found")
+
+        if comment.user_id == user_id or scope == Scope.ADMIN:
+            return True
+
+        statement = (
+            select(ProjectTable.owner_id, CollaboratorTable.role)
+            .select_from(MessageTable)
+            .join(ProjectTable, ProjectTable.id == MessageTable.project_id)
+            .join(ProjectFolderTable, ProjectFolderTable.id == ProjectTable.folder_id)
+            .outerjoin(
+                CollaboratorTable,
+                (CollaboratorTable.folder_id == ProjectFolderTable.id)
+                & (CollaboratorTable.user_id == user_id),
+            )
+            .where(MessageTable.id == comment.message_id)
+        )
+        row = self.session.execute(statement).first()
+        if row is None:
+            return False
+
+        owner_id, role = row
+        return owner_id == user_id or (
+            role is not None and role.includes(CollaboratorRole.ADMIN)
+        )

@@ -423,6 +423,16 @@ class MessageCreate(_BaseModel):
 class MessagePublic(MessageBase):
     id: UUID4
     annotations: list[MessageAnnotationPublic] = []
+    comments: list[MessageCommentPublic] = []
+
+    @field_validator("comments", mode="after")
+    @classmethod
+    def _roots_only(
+        cls, comments: list[MessageCommentPublic]
+    ) -> list[MessageCommentPublic]:
+        """The ORM relationship holds every comment on the message; the thread
+        is exposed as roots carrying their own replies."""
+        return [comment for comment in comments if comment.parent_id is None]
 
     interview_type: InterviewType
 
@@ -592,7 +602,6 @@ class AnnotationValuePublic(AnnotationValueBase):
 class MessageAnnotationBase(_BaseModel):
     message_id: UUID4
     user_id: UUID4
-    comment: str | None = None
 
 
 class MessageAnnotationCreate(MessageAnnotationBase):
@@ -604,3 +613,27 @@ class MessageAnnotationPublic(MessageAnnotationBase):
     created_at: datetime
     updated_at: datetime
     values: list[AnnotationValuePublic]
+
+
+class MessageCommentCreate(_BaseModel):
+    """A new comment. The author is taken from the caller's token, never from
+    the payload; ``parent_id`` must name a root comment on the same message."""
+
+    body: str = Field(min_length=1)
+    parent_id: UUID4 | None = None
+
+
+class MessageCommentUpdate(_BaseModel):
+    body: str = Field(min_length=1)
+
+
+class MessageCommentPublic(_BaseModel):
+    id: UUID4
+    message_id: UUID4
+    user_id: UUID4
+    parent_id: UUID4 | None
+    body: str
+    created_at: datetime
+    updated_at: datetime
+    # Only ever populated on a root comment: threads are two levels deep.
+    replies: list[MessageCommentPublic] = []

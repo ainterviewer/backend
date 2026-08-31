@@ -21,3 +21,13 @@ class ResumeTokenError(Exception):
     def __init__(self, reason: str):
         super().__init__(reason)
         self.reason = reason
+
+
+class CommentThreadError(Exception):
+    """A comment could not be placed in the thread it named.
+
+    Raised when a reply names a parent that is itself a reply (threads are two
+    levels deep) or a parent on a different message. The API maps this to a
+    400: it means the caller built the wrong parent, and silently re-pointing
+    the reply at the root would hide that.
+    """

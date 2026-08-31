@@ -263,6 +263,9 @@ class UserTable(Base):
     annotations: Mapped[list["MessageAnnotationTable"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    comments: Mapped[list["MessageCommentTable"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
     experiments: Mapped[list["ExperimentTable"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
@@ -834,6 +837,14 @@ class MessageTable(Base):
     annotations: Mapped[list["MessageAnnotationTable"]] = relationship(
         back_populates="message", cascade="all, delete-orphan"
     )
+    # Every comment on the message, roots and replies alike, so deleting the
+    # message takes the whole discussion with it. Callers that want the thread
+    # shape read the roots (parent_id is None) and walk their `replies`.
+    comments: Mapped[list["MessageCommentTable"]] = relationship(
+        back_populates="message",
+        cascade="all, delete-orphan",
+        order_by="MessageCommentTable.created_at",
+    )
 
     @hybrid_property
     def interview_type(self) -> InterviewType | None:
@@ -984,13 +995,20 @@ class AnalysisCategoryTable(Base):
 
 
 class MessageAnnotationTable(Base):
+    """One user's coding of one message: a set of AnalysisCategory values.
+
+    Free-text discussion is *not* here -- it lives in MessageCommentTable,
+    which supports several users and threaded replies on the same message. The
+    ``comment`` column this table used to carry was migrated into that table
+    (revision 3c9a1e77b204) and dropped.
+    """
+
     __tablename__ = "message_annotation"
 
     message_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("message.id", ondelete="CASCADE")
     )
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("user.id"))
-    comment: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     updated_at: Mapped[datetime.datetime] = mapped_column(default=now, onupdate=now)
 
@@ -1019,6 +1037,59 @@ class AnnotationValueTable(Base):
     # Relationships
     annotation: Mapped["MessageAnnotationTable"] = relationship(back_populates="values")
     category: Mapped["AnalysisCategoryTable"] = relationship(back_populates="values")
+
+
+############
+# Comments #
+############
+
+
+class MessageCommentTable(Base):
+    """A comment on one message, or a reply to such a comment.
+
+    Threads are two levels deep by design: ``parent_id`` is NULL on a root
+    comment and points at a root on a reply. A reply to a reply is rejected in
+    ``AnalysisRepository.add_message_comment`` rather than silently re-pointed
+    at the root, so a frontend that builds the wrong parent fails loudly
+    instead of quietly reshaping the discussion.
+
+    Several users can comment on the same message and answer each other; this
+    is the discussion surface, while MessageAnnotationTable stays the coding
+    one.
+
+    ``ondelete="CASCADE"`` on both foreign keys is documentation on SQLite,
+    where foreign keys are not enforced (see CLAUDE.md). Deleting a root
+    comment therefore deletes its replies explicitly, in
+    ``AnalysisRepository.delete_message_comment``.
+    """
+
+    __tablename__ = "message_comment"
+
+    message_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("message.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE")
+    )
+    # NULL on a root comment; a root's id on a reply.
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("message_comment.id", ondelete="CASCADE"), default=None, index=True
+    )
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime.datetime] = mapped_column(default=now)
+    updated_at: Mapped[datetime.datetime] = mapped_column(default=now, onupdate=now)
+
+    # Relationships
+    message: Mapped["MessageTable"] = relationship(back_populates="comments")
+    user: Mapped["UserTable"] = relationship(back_populates="comments")
+    replies: Mapped[list["MessageCommentTable"]] = relationship(
+        back_populates="parent",
+        cascade="all, delete-orphan",
+        order_by="MessageCommentTable.created_at",
+    )
+    parent: Mapped[Optional["MessageCommentTable"]] = relationship(
+        back_populates="replies", remote_side="MessageCommentTable.id"
+    )
 
 
 ##############

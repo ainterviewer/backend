@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import UUID4
+from sqlalchemy.exc import NoResultFound
 
 from ....db.models import (
     AnalysisCategoryCreate,
@@ -14,6 +15,18 @@ from ....db.models import (
 from ....dependencies import DBSession, UserToken
 
 router = APIRouter()
+
+
+def _require_annotation_author(
+    db: DBSession, annotation_id: UUID4, jwt: UserToken
+) -> None:
+    try:
+        is_author = db.analysis.is_annotation_author(annotation_id, jwt.user_id)
+    except NoResultFound:
+        raise HTTPException(404, detail="Annotation not found")
+
+    if not is_author:
+        raise HTTPException(403, detail="Not allowed to modify this annotation")
 
 
 @router.get("/projects/{project_id}/analysis/categories")
@@ -92,6 +105,7 @@ async def update_message_annotation(
     if annotation.user_id != jwt.user_id:
         raise HTTPException(400, detail="user_id mismatch between user and payload")
 
+    _require_annotation_author(db, annotation_id, jwt)
     return db.analysis.update_message_annotation(annotation_id, annotation)
 
 
@@ -101,6 +115,7 @@ async def delete_message_annotation(
     db: DBSession,
     jwt: UserToken,
 ):
+    _require_annotation_author(db, annotation_id, jwt)
     db.analysis.delete_message_annotation(annotation_id)
 
 
