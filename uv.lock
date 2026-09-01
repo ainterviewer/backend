@@ -59,8 +59,8 @@ wheels = [
 
 [[package]]
 name = "ainterviewer"
-version = "0.3.5"
-source = { git = "https://github.com/ainterviewer/lib.git?tag=v0.3.5#916d35f7528dc51661e7599c6ca439158d6142be" }
+version = "0.4.0"
+source = { git = "https://github.com/ainterviewer/lib.git?tag=v0.4.0#e132d68f3022dded2662e1a04082cf7823f87ca2" }
 dependencies = [
     { name = "any-llm-sdk", extra = ["gemini"] },
     { name = "jinja2" },
@@ -102,6 +102,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "python-jose", extra = ["cryptography"] },
     { name = "qrcode", extra = ["pil"] },
+    { name = "scikit-learn" },
     { name = "semver" },
     { name = "sqlalchemy" },
     { name = "sqliteai-vector" },
@@ -141,7 +142,7 @@ dev = [
 requires-dist = [
     { name = "adbc-driver-postgresql", specifier = ">=1.6.0" },
     { name = "adbc-driver-sqlite", marker = "extra == 'analysis'", specifier = ">=1.6.0" },
-    { name = "ainterviewer", git = "https://github.com/ainterviewer/lib.git?tag=v0.3.5" },
+    { name = "ainterviewer", git = "https://github.com/ainterviewer/lib.git?tag=v0.4.0" },
     { name = "aiofiles", specifier = ">=25.1.0" },
     { name = "aiohttp", specifier = ">=3.13.5" },
     { name = "aiosmtplib", specifier = ">=4.0.1" },
@@ -162,6 +163,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.7.1" },
     { name = "python-jose", extras = ["cryptography"], specifier = ">=3.5.0" },
     { name = "qrcode", extras = ["pil"], specifier = ">=8.2" },
+    { name = "scikit-learn", specifier = ">=1.3" },
     { name = "semver", specifier = ">=3.0.4" },
     { name = "sentence-transformers", marker = "extra == 'analysis'", specifier = ">=4.1.0" },
     { name = "sqlalchemy", specifier = ">=2.0.43" },

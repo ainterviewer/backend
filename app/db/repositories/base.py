@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from ..tables import (
     AnnotationValueTable,
+    EmbeddingTable,
     MessageAnnotationTable,
     MessageCommentTable,
 )
@@ -50,4 +51,10 @@ class BaseRepository:
             delete(MessageCommentTable).where(
                 MessageCommentTable.message_id.in_(message_ids)
             )
+        )
+        # Only the per-message vectors: a QA-pair or interview vector carries a
+        # NULL message_id and belongs to the interview, which is deleted (and
+        # cleaned up) separately.
+        self.session.execute(
+            delete(EmbeddingTable).where(EmbeddingTable.message_id.in_(message_ids))
         )

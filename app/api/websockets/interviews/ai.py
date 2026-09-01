@@ -24,6 +24,8 @@ from ainterviewer.lpm.types import CustomToken
 
 from ....db import InterviewDataBase
 from ....dependencies import DBSession
+from ....embed.client import embedding_client
+from ....embed.queue import QueueEmbedder, chunk_queue
 from ....utils import replay_history
 from ..auth import authenticate_or_close
 from ..handler import WebsocketMessageHandler
@@ -145,6 +147,10 @@ async def _run_interview(
 
     wmh = WebsocketMessageHandler(websocket, project_id, interview_id)
 
+    # None when embedding is disabled or unconfigured, which makes the interview
+    # loop emit no chunks at all.
+    embedder = QueueEmbedder(chunk_queue) if embedding_client.enabled else None
+
     try:
         async with AInterviewer(
             io=wmh,
@@ -158,6 +164,7 @@ async def _run_interview(
             previous_time_spent=interview.total_time_spent,
             language=language,
             referable_values=external_params,
+            embedder=embedder,
         ) as interviewer:
             await interviewer.interview(interview_history=interview_history)
     except WebSocketDisconnect:

@@ -83,10 +83,13 @@
         "jwt_interview_token_expiration": {
           "$ref": "#/$defs/TimeDelta"
         },
-        "jwt_auth_token_expiration": {
+        "jwt_invite_token_expiration": {
           "$ref": "#/$defs/TimeDelta"
         },
-        "jwt_invite_token_expiration": {
+        "interview_resume_link_expiration": {
+          "$ref": "#/$defs/TimeDelta"
+        },
+        "jwt_auth_token_expiration": {
           "$ref": "#/$defs/TimeDelta"
         },
         "jwt_refresh_token_expiration": {
@@ -99,6 +102,29 @@
           "default": true,
           "title": "Registration Requires Token",
           "type": "boolean"
+        },
+        "special_registration_tokens": {
+          "items": {
+            "$ref": "#/$defs/SpecialRegistrationTokens"
+          },
+          "title": "Special Registration Tokens",
+          "type": "array"
+        },
+        "email_verification_token_expiration": {
+          "$ref": "#/$defs/TimeDelta"
+        },
+        "login_code_expiration": {
+          "$ref": "#/$defs/TimeDelta"
+        },
+        "login_code_max_attempts": {
+          "default": 5,
+          "title": "Login Code Max Attempts",
+          "type": "integer"
+        },
+        "code_resend_cooldown_seconds": {
+          "default": 30,
+          "title": "Code Resend Cooldown Seconds",
+          "type": "integer"
         }
       },
       "title": "AppSettings",
@@ -114,6 +140,11 @@
           "default": "storage",
           "title": "Db Path",
           "type": "string"
+        },
+        "enforce_foreign_keys": {
+          "default": false,
+          "title": "Enforce Foreign Keys",
+          "type": "boolean"
         },
         "db_url": {
           "default": "localhost",
@@ -193,20 +224,213 @@
       "title": "EmailSettings",
       "type": "object"
     },
+    "EmbeddingSettings": {
+      "description": "Text-embedding-inference server used to vectorise interview text.\n\nDisabled by default: with `enabled = false` nothing is embedded and no\nembedder is handed to the interview loop, so a missing or unreachable\nserver changes nothing about how interviews run.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "endpoint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Endpoint"
+        },
+        "model": {
+          "default": "microsoft/harrier-oss-v1-0.6b",
+          "title": "Model",
+          "type": "string"
+        },
+        "dimension": {
+          "default": 1024,
+          "title": "Dimension",
+          "type": "integer"
+        },
+        "batch_size": {
+          "default": 32,
+          "title": "Batch Size",
+          "type": "integer"
+        },
+        "max_input_chars": {
+          "default": 24000,
+          "title": "Max Input Chars",
+          "type": "integer"
+        },
+        "timeout": {
+          "default": 30.0,
+          "title": "Timeout",
+          "type": "number"
+        },
+        "max_retries": {
+          "default": 3,
+          "title": "Max Retries",
+          "type": "integer"
+        },
+        "circuit_breaker_threshold": {
+          "default": 5,
+          "title": "Circuit Breaker Threshold",
+          "type": "integer"
+        },
+        "circuit_breaker_reset_seconds": {
+          "default": 60.0,
+          "title": "Circuit Breaker Reset Seconds",
+          "type": "number"
+        }
+      },
+      "title": "EmbeddingSettings",
+      "type": "object"
+    },
+    "Scope": {
+      "enum": [
+        "admin",
+        "user",
+        "demo"
+      ],
+      "title": "Scope",
+      "type": "string"
+    },
     "ServiceSettings": {
       "description": "Different extra services required to run the app",
       "properties": {
         "email": {
-          "$ref": "#/$defs/EmailSettings"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmailSettings"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "speech": {
+          "$ref": "#/$defs/SpeechSettings",
+          "default": {
+            "stt_model": null,
+            "stt_endpoint": null,
+            "sst_delay": "medium",
+            "tts_model": null,
+            "tts_endpoint": null,
+            "tts_voice": "alloy"
+          }
+        },
+        "embedding": {
+          "$ref": "#/$defs/EmbeddingSettings",
+          "default": {
+            "enabled": false,
+            "endpoint": null,
+            "model": "microsoft/harrier-oss-v1-0.6b",
+            "dimension": 1024,
+            "batch_size": 32,
+            "max_input_chars": 24000,
+            "timeout": 30.0,
+            "max_retries": 3,
+            "circuit_breaker_threshold": 5,
+            "circuit_breaker_reset_seconds": 60.0
+          }
         }
       },
-      "required": [
-        "email"
-      ],
       "title": "ServiceSettings",
       "type": "object"
     },
+    "SpecialRegistrationTokens": {
+      "properties": {
+        "token": {
+          "title": "Token",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        }
+      },
+      "required": [
+        "token",
+        "scope"
+      ],
+      "title": "SpecialRegistrationTokens",
+      "type": "object"
+    },
+    "SpeechSettings": {
+      "properties": {
+        "stt_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stt Model"
+        },
+        "stt_endpoint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stt Endpoint"
+        },
+        "sst_delay": {
+          "default": "medium",
+          "enum": [
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ],
+          "title": "Sst Delay",
+          "type": "string"
+        },
+        "tts_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tts Model"
+        },
+        "tts_endpoint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tts Endpoint"
+        },
+        "tts_voice": {
+          "default": "alloy",
+          "title": "Tts Voice",
+          "type": "string"
+        }
+      },
+      "title": "SpeechSettings",
+      "type": "object"
+    },
     "TimeDelta": {
+      "additionalProperties": false,
       "properties": {
         "days": {
           "default": 0,
@@ -258,15 +482,6 @@
           "default": 8880,
           "title": "Llm Port",
           "type": "integer"
-        },
-        "model_storage": {
-          "default": "local",
-          "enum": [
-            "local",
-            "s3_bucket"
-          ],
-          "title": "Model Storage",
-          "type": "string"
         },
         "available_models": {
           "items": {
@@ -332,51 +547,37 @@
     "Secrets": {
       "properties": {
         "openai_api_key": {
-          "anyOf": [
-            {
-              "format": "password",
-              "type": "string",
-              "writeOnly": true
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Openai Api Key"
+          "default": "",
+          "format": "password",
+          "title": "Openai Api Key",
+          "type": "string",
+          "writeOnly": true
         },
         "google_ai_api_key": {
-          "anyOf": [
-            {
-              "format": "password",
-              "type": "string",
-              "writeOnly": true
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Google Ai Api Key"
+          "default": "",
+          "format": "password",
+          "title": "Google Ai Api Key",
+          "type": "string",
+          "writeOnly": true
         },
         "openrouter_api_key": {
-          "anyOf": [
-            {
-              "format": "password",
-              "type": "string",
-              "writeOnly": true
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Openrouter Api Key"
+          "default": "",
+          "format": "password",
+          "title": "Openrouter Api Key",
+          "type": "string",
+          "writeOnly": true
         },
         "vllm_api_key": {
           "default": "",
           "format": "password",
           "title": "Vllm Api Key",
+          "type": "string",
+          "writeOnly": true
+        },
+        "alex_api_key": {
+          "default": "",
+          "format": "password",
+          "title": "Alex Api Key",
           "type": "string",
           "writeOnly": true
         }
@@ -411,10 +612,107 @@
       "type": "string"
     },
     "app": {
-      "$ref": "#/$defs/AppSettings"
+      "$ref": "#/$defs/AppSettings",
+      "default": {
+        "api_host": "127.0.0.1",
+        "api_port": 8666,
+        "app_host": "localhost",
+        "app_port": 5173,
+        "web_host": "localhost",
+        "web_port": 5174,
+        "jwt_interview_token_expiration": {
+          "days": 3,
+          "hours": 0,
+          "microseconds": 0,
+          "milliseconds": 0,
+          "minutes": 0,
+          "seconds": 0,
+          "weeks": 0
+        },
+        "jwt_invite_token_expiration": {
+          "days": 1,
+          "hours": 0,
+          "microseconds": 0,
+          "milliseconds": 0,
+          "minutes": 0,
+          "seconds": 0,
+          "weeks": 0
+        },
+        "interview_resume_link_expiration": {
+          "days": 7,
+          "hours": 0,
+          "microseconds": 0,
+          "milliseconds": 0,
+          "minutes": 0,
+          "seconds": 0,
+          "weeks": 0
+        },
+        "jwt_auth_token_expiration": {
+          "days": 0,
+          "hours": 0,
+          "microseconds": 0,
+          "milliseconds": 0,
+          "minutes": 15,
+          "seconds": 0,
+          "weeks": 0
+        },
+        "jwt_refresh_token_expiration": {
+          "days": 1,
+          "hours": 0,
+          "microseconds": 0,
+          "milliseconds": 0,
+          "minutes": 0,
+          "seconds": 0,
+          "weeks": 0
+        },
+        "jwt_refresh_token_extended_expiration": {
+          "days": 3,
+          "hours": 0,
+          "microseconds": 0,
+          "milliseconds": 0,
+          "minutes": 0,
+          "seconds": 0,
+          "weeks": 0
+        },
+        "registration_requires_token": true,
+        "special_registration_tokens": [],
+        "email_verification_token_expiration": {
+          "days": 1,
+          "hours": 0,
+          "microseconds": 0,
+          "milliseconds": 0,
+          "minutes": 0,
+          "seconds": 0,
+          "weeks": 0
+        },
+        "login_code_expiration": {
+          "days": 0,
+          "hours": 0,
+          "microseconds": 0,
+          "milliseconds": 0,
+          "minutes": 10,
+          "seconds": 0,
+          "weeks": 0
+        },
+        "login_code_max_attempts": 5,
+        "code_resend_cooldown_seconds": 30,
+        "api_endpoint": "127.0.0.1:8666",
+        "app_endpoint": "localhost:5173",
+        "web_endpoint": "localhost:5174"
+      }
     },
     "database": {
-      "$ref": "#/$defs/DatabaseSettings"
+      "$ref": "#/$defs/DatabaseSettings",
+      "default": {
+        "db": "sqlite",
+        "db_path": "storage",
+        "enforce_foreign_keys": false,
+        "db_url": "localhost",
+        "db_port": "5432",
+        "db_name": "ainterviewer",
+        "database_file": "db.sqlite",
+        "connection_string": "sqlite:///storage/db.sqlite"
+      }
     },
     "services": {
       "$ref": "#/$defs/ServiceSettings"
@@ -440,7 +738,6 @@
       "default": {
         "llm_host": "0.0.0.0",
         "llm_port": 8880,
-        "model_storage": "local",
         "available_models": [
           "gpt-5-mini"
         ],
@@ -461,8 +758,6 @@
     }
   },
   "required": [
-    "app",
-    "database",
     "services"
   ],
   "title": "Settings",

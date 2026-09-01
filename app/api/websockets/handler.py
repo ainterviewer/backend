@@ -9,8 +9,6 @@ from ainterviewer.interfaces import (
 )
 from ainterviewer.types import MessageType
 
-from ...embed.main import EmbeddingTask, message_queue
-
 
 class WebsocketMessageHandler(IOProtocol):
     def __init__(self, websocket: WebSocket, project_id: UUID4, interview_id: UUID4):
@@ -20,15 +18,6 @@ class WebsocketMessageHandler(IOProtocol):
 
     async def send_data(self, data: OutgoingData | OutgoingMessage):
         await self.ws.send_json(data.model_dump())
-
-        if isinstance(data, OutgoingMessage):
-            # Add to embedding queue
-            embedding_task = EmbeddingTask(
-                message_id=data.message_id,
-                content=data.content,
-                priority=0,
-            )
-            await message_queue.enqueue(embedding_task)
 
     async def receive_message(
         self,
@@ -43,14 +32,6 @@ class WebsocketMessageHandler(IOProtocol):
                 message_type = (
                     MessageType.AUDIO if data.type == "audio" else MessageType.TEXT
                 )
-
-            # Add to embedding queue
-            embedding_task = EmbeddingTask(
-                message_id=message_id,
-                content=text,
-                priority=1,
-            )
-            await message_queue.enqueue(embedding_task)
 
         elif data.type == "image":
             # NOTE: The actual images are send over API, and the path is send

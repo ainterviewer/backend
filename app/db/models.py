@@ -22,6 +22,7 @@ from ainterviewer.interview_guides.extra import Consent, Welcome
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions, InterviewSubject
 from ainterviewer.types import (
+    EmbeddingKind,
     Feedback,
     Interviewer,
     InterviewStatus,
@@ -669,3 +670,165 @@ class MessageCommentPublic(_BaseModel):
     author: AuthorPublic = Field(validation_alias=AliasChoices("author", "user"))
     # Only ever populated on a root comment: threads are two levels deep.
     replies: list[MessageCommentPublic] = []
+
+
+##############
+# Embeddings #
+##############
+
+
+class EmbeddingSearchHit(_BaseModel):
+    """One semantic-search result, renderable on its own.
+
+    Carries the matched text and the interview context around it, because the
+    alternative is a request per hit: a QA-pair chunk spans several messages and
+    has no `message_id` to fetch, so there is nothing a client could resolve it
+    to. `message_id` is set for MESSAGE hits only, and is the handle for the
+    existing annotation, comment and message-context endpoints.
+    """
+
+    id: UUID4
+    # Cosine similarity in [-1, 1]; vectors are L2-normalised, so this is a
+    # plain dot product. Exposed so a client can show ranking confidence and
+    # cut off weak matches, which a bare ordering cannot support.
+    score: float
+    kind: EmbeddingKind
+    text: str | None
+
+    interview_id: UUID4
+    message_id: UUID4 | None
+    section: int | None
+    main_question: int | None
+    sub_question: int | None
+    language: LanguageCode
+
+    # Interview context, so a result row can say when and from whom without a
+    # follow-up request.
+    interview_created_at: datetime | None = None
+    interview_status: InterviewStatus | None = None
+    interview_type: InterviewType | None = None
+    participant_id: UUID4 | None = None
+    participant_pid: str | None = None
+
+    @classmethod
+    def from_hit(cls, embedding, score: float) -> EmbeddingSearchHit:
+        interview = embedding.interview
+        project_participant = interview.project_participant if interview else None
+        participant = project_participant.participant if project_participant else None
+
+        return cls(
+            id=embedding.id,
+            score=score,
+            kind=embedding.kind,
+            text=embedding.text,
+            interview_id=embedding.interview_id,
+            message_id=embedding.message_id,
+            section=embedding.section,
+            main_question=embedding.main_question,
+            sub_question=embedding.sub_question,
+            language=embedding.language,
+            interview_created_at=interview.created_at if interview else None,
+            interview_status=interview.status if interview else None,
+            interview_type=interview.type if interview else None,
+            participant_id=project_participant.id if project_participant else None,
+            participant_pid=participant.pid if participant else None,
+        )
+
+
+class EmbeddingSearchResponse(_BaseModel):
+    """Top-k results for one query.
+
+    Not paginated: k is chosen up front and the whole point of a ranked search
+    is that results past the cut-off are not worth a page.
+    """
+
+    query: str
+    kind: EmbeddingKind
+    task: str
+    # How many chunks the query was scored against after filtering. Lets a
+    # client tell "nothing matched" from "the filters left nothing to match".
+    candidates: int = 0
+    items: list[EmbeddingSearchHit] = []
+
+
+class EmbeddingSimilarResponse(_BaseModel):
+    """Neighbours of a chunk already in the corpus."""
+
+    source: EmbeddingSearchHit
+    candidates: int = 0
+    items: list[EmbeddingSearchHit] = []
+
+
+class EmbeddingStatus(_BaseModel):
+    """Whether a project's corpus is embedded, and whether it could be."""
+
+    enabled: bool
+    healthy: bool
+    model: str
+    dimension: int
+    # Stored vectors per `EmbeddingKind`, for this project.
+    coverage: dict[str, int] = {}
+    total: int = 0
+    # Live queue, process-wide rather than per project: chunks waiting to be
+    # embedded, and chunks dropped because the queue was full since startup.
+    # A non-zero drop count is not data loss -- the backfill re-derives them --
+    # but it does mean search results are behind.
+    queue_depth: int = 0
+    queue_dropped: int = 0
+
+
+class EmbeddingBackfillResponse(_BaseModel):
+    """What one backfill trigger put in flight."""
+
+    queued: int
+    # Chunks that needed embedding but did not fit in the queue. They are not
+    # lost -- the next trigger or a CLI run picks them up -- but they are not
+    # coming in this round either.
+    skipped: int
+    # Interviews whose stored history could not be reconstructed, usually a
+    # guide snapshot that no longer matches the messages recorded against it.
+    failed_interviews: list[str] = []
+    queue_depth: int
+
+
+class EmbeddingClusterPoint(_BaseModel):
+    """One chunk's position in the scatter plot."""
+
+    id: UUID4
+    # None means HDBSCAN declined to place it. Outliers are kept rather than
+    # dropped: in interview data the unplaceable answers are often the ones
+    # worth reading.
+    cluster: int | None
+    # HDBSCAN's confidence that the point belongs to its cluster, 0 for outliers.
+    probability: float
+    x: float
+    y: float
+    preview: str | None = None
+
+
+class EmbeddingCluster(_BaseModel):
+    id: int
+    size: int
+    # Members nearest the cluster centre, in full: the material for naming it.
+    representatives: list[EmbeddingSearchHit] = []
+    # Share of members from the single most common interview question. Near 1.0
+    # means the cluster is really just that question -- a QA-pair chunk repeats
+    # its question verbatim for every respondent, so uncentred clustering tends
+    # to recover the interview guide. Read this before reading the clusters.
+    question_purity: float | None = None
+
+
+class EmbeddingClusterResponse(_BaseModel):
+    kind: EmbeddingKind
+    n_points: int
+    n_clusters: int
+    n_outliers: int
+    # Dimensions clustering ran in. The scatter shows the first two of them.
+    components: int
+    # Share of total variance the two plotted axes carry. Typically low for text
+    # embeddings: the plot is a navigation aid, not evidence. Points far apart
+    # on screen are genuinely far apart; points close together may not be.
+    explained_variance_2d: float
+    centered_by_question: bool
+    clusters: list[EmbeddingCluster] = []
+    points: list[EmbeddingClusterPoint] = []

@@ -2,6 +2,7 @@ from .analysis import AnalysisRepository
 from .assistance import AssistanceRepository
 from .auth import AuthRepository
 from .base import BaseRepository
+from .embedding import EmbeddingRepository
 from .interview import InterviewRepository
 from .newsletter import NewsletterRepository
 from .participant import ParticipantRepository
@@ -15,6 +16,7 @@ __all__ = [
     "AssistanceRepository",
     "AuthRepository",
     "BaseRepository",
+    "EmbeddingRepository",
     "InterviewRepository",
     "NewsletterRepository",
     "ParticipantRepository",

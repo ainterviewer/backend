@@ -8,6 +8,7 @@ from sqlalchemy import (
     JSON,
     ForeignKey,
     Index,
+    LargeBinary,
     MetaData,
     Text,
     UniqueConstraint,
@@ -30,6 +31,7 @@ from ainterviewer.synthesize.interviewees import (
     InterviewSubject,
 )
 from ainterviewer.types import (
+    EmbeddingKind,
     Feedback,
     Interviewer,
     InterviewStatus,
@@ -47,6 +49,7 @@ from ._extra import PydanticJSONB
 from .types import (
     AccessRequestStatus,
     AnnotationType,
+    EmbeddingTask,
     InterviewType,
     LanguageType,
     VerificationPurpose,
@@ -711,6 +714,9 @@ class InterviewTable(Base):
     resume_tokens: Mapped[list["InterviewResumeTokenTable"]] = relationship(
         back_populates="interview", cascade="all, delete-orphan"
     )
+    embeddings: Mapped[list["EmbeddingTable"]] = relationship(
+        back_populates="interview", cascade="all, delete-orphan"
+    )
 
     @hybrid_property
     def n_messages(self) -> int:
@@ -844,6 +850,9 @@ class MessageTable(Base):
         back_populates="message",
         cascade="all, delete-orphan",
         order_by="MessageCommentTable.created_at",
+    )
+    embeddings: Mapped[list["EmbeddingTable"]] = relationship(
+        back_populates="message", cascade="all, delete-orphan"
     )
 
     @hybrid_property
@@ -1128,4 +1137,91 @@ class AssistanceMessageChunkTable(Base):
     # Relationships
     session: Mapped["AssistanceSessionTable"] = relationship(
         back_populates="message_chunks"
+    )
+
+
+##############
+# Embeddings #
+##############
+
+
+class EmbeddingTable(Base):
+    """One embedding vector for one unit of interview text.
+
+    The unit is given by ``kind`` (`EmbeddingKind`): a single respondent
+    message, a whole question group with its probes, or an entire interview.
+    Which text qualifies, and how it is rendered, is decided in the library
+    (`ainterviewer.embedding`) so that the live interview loop and the backfill
+    produce byte-identical chunks -- otherwise ``content_hash`` would differ
+    between them and every backfill would re-embed everything.
+
+    ``chunk_key`` rather than a composite unique constraint: the natural key
+    involves columns that are NULL for some kinds (``message_id`` on a QA pair,
+    the structural coordinates on an interview), and both SQLite and PostgreSQL
+    treat NULLs as distinct in a UNIQUE constraint -- so a composite constraint
+    would silently fail to deduplicate exactly the rows that need it most. The
+    key is built by `EmbeddingRepository.chunk_key`.
+
+    ``content_hash`` is the hash of the text actually sent to the model, after
+    truncation. Together with ``model`` it is what makes re-running the backfill
+    cheap: a chunk whose text and model are unchanged is skipped, and one whose
+    text has changed is re-embedded.
+    """
+
+    __tablename__ = "embedding"
+    __table_args__ = (
+        UniqueConstraint("chunk_key", name="uq_embedding_chunk_key"),
+        # Every search is scoped to a project and one kind; the vectors for that
+        # slice are read in bulk and scored in process.
+        Index("ix_embedding_project_id_kind_task", "project_id", "kind", "task"),
+        Index("ix_embedding_interview_id", "interview_id"),
+        Index("ix_embedding_content_hash", "content_hash"),
+    )
+
+    kind: Mapped[EmbeddingKind] = mapped_column(SQLEnum(EmbeddingKind))
+    task: Mapped[EmbeddingTask] = mapped_column(
+        SQLEnum(EmbeddingTask), default=EmbeddingTask.DOCUMENT
+    )
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE")
+    )
+    interview_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("interview.id", ondelete="CASCADE")
+    )
+    # Set for MESSAGE chunks only; a QA pair spans several messages and an
+    # interview chunk spans all of them.
+    message_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("message.id", ondelete="CASCADE"), default=None
+    )
+
+    # The interview-guide coordinates the chunk covers. NULL on an interview
+    # chunk; sub_question is NULL on a QA pair, which spans the whole group.
+    section: Mapped[int | None] = mapped_column(default=None)
+    main_question: Mapped[int | None] = mapped_column(default=None)
+    sub_question: Mapped[int | None] = mapped_column(default=None)
+
+    language: Mapped[LanguageCode] = mapped_column(LanguageType, default="EN")
+    model: Mapped[str] = mapped_column()
+    # The `ChunkPolicy.format_version` the text was produced under. A stored
+    # vector is a function of the model *and* of the rules that decided what
+    # text to feed it, so a policy change has to be visible here -- otherwise a
+    # corpus silently ends up half in one format and half in another.
+    format_version: Mapped[str] = mapped_column(default="1", server_default="1")
+    dim: Mapped[int] = mapped_column()
+    chunk_key: Mapped[str] = mapped_column(Text)
+    content_hash: Mapped[str] = mapped_column()
+    # The embedded text itself, exactly as the model saw it. Stored rather than
+    # re-derived because a QA-pair chunk spans several messages and has no
+    # message row to join back to: without this a search result cannot be
+    # rendered at all. The whole corpus is ~1.25MB of text against ~8.7MB of
+    # vectors, so keeping it costs nothing worth counting.
+    text: Mapped[str | None] = mapped_column(Text, default=None)
+    vector: Mapped[bytes] = mapped_column(LargeBinary)
+    created_at: Mapped[datetime.datetime] = mapped_column(default=now)
+
+    # Relationships
+    interview: Mapped["InterviewTable"] = relationship(back_populates="embeddings")
+    message: Mapped[Optional["MessageTable"]] = relationship(
+        back_populates="embeddings"
     )

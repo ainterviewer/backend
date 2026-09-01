@@ -28,6 +28,23 @@ class VerificationPurpose(StrEnum):
     LOGIN = "login"
 
 
+class EmbeddingTask(StrEnum):
+    """Which instruction template a stored vector was produced under.
+
+    Only `DOCUMENT` is ever written today, and it means "no instruction at
+    all": the embedding model takes its task on the query side, so one
+    document-side vector serves retrieval, classification and reranking alike
+    (see `app/embed/templates.py`). The column exists so that a symmetric task
+    -- clustering or semantic similarity, where there is no query/document
+    split and a task-prefixed variant might measurably help -- can be added as
+    a second vector per chunk without a migration, and so that a mixed index is
+    never searched by accident.
+    """
+
+    DOCUMENT = "document"
+    CLUSTERING = "clustering"
+
+
 @final
 class LanguageType(TypeDecorator):
     """Custom SQLAlchemy type that validates and transforms language codes"""

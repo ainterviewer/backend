@@ -167,15 +167,150 @@ The backend is tightly coupled with the `ainterviewer` library (sibling package 
 - Configured via `DATABASE_URL` environment variable
 - Use `db = "postgres"` in config.toml
 
-### Async Task Queue Pattern
+### Embeddings
 
-**Embedding Queue (`app/embed/main.py`)**
+Interview text is vectorised by a
+[text-embeddings-inference](https://github.com/huggingface/text-embeddings-inference)
+server (`microsoft/harrier-oss-v1-0.6b`, 1024d), configured under
+`[services.embedding]` / `APP_SERVICE__EMBEDDING__*` and **disabled by
+default**: with `enabled = false` nothing is embedded and an unreachable server
+changes nothing about how interviews run.
 
-- Priority queue for message embeddings (higher priority first, FIFO within same priority)
-- User messages: priority=1, AI messages: priority=0
-- Decouples message delivery from embedding generation
-- Task structure: `message_id`, `content`, `priority`, `retry_count`
-- Ready for scaling with Redis/RabbitMQ
+**One vector per chunk, not one per task.** The model is asymmetric on the query
+side only -- its card specifies `"Instruct: {task_description}\nQuery: {query}"`
+for queries and encodes passages with no prefix at all. So a passage is embedded
+once, task-free, and the downstream task lives entirely in how the *query* is
+templated (`app/embed/templates.py`). `EmbeddingTable.task` exists so a
+symmetric-task variant (clustering, STS) could be added as a second vector per
+chunk without a migration, but only `DOCUMENT` is ever written. Do not
+reintroduce a per-task fan-out on the document side; it multiplies storage and
+inference for no measurable gain against this model.
+
+**What gets embedded is decided in the library**, in `ainterviewer.embedding`:
+
+- `MESSAGE` -- respondent free text only. Interviewer turns are recoverable
+  through their QA pair, and closed-ended survey answers are excluded outright:
+  a likert value drawn from a handful of option strings produces near-identical
+  vectors in bulk that crowd out real answers and drag clustering toward the
+  survey scaffolding. Count those, don't embed them.
+- `QA_PAIR` -- the primary analytic unit: a main question, its answer and every
+  probe, but only when the group drew at least one free-text answer. A survey
+  answer still appears *inside* a qualifying pair as context.
+- `INTERVIEW` -- the whole transcript, for interview-level retrieval.
+
+*Assembly* lives in the library because both producers need it and one of them
+is inside the library: the interview loop emitting chunks live, and
+`app/embed/backfill.py` re-deriving them from stored messages through
+`InterviewHistory.process_history`. Two implementations would drift, and
+`content_hash` -- which is what stops the backfill re-embedding everything on
+every run -- is only stable if the rendered text is byte-identical between them.
+
+*Policy* is separate and replaceable. The list above is `DefaultChunkPolicy`,
+not a law: whether a closed-ended survey answer deserves a vector is a
+research-methodology judgement, so every such decision sits on the `ChunkPolicy`
+protocol and can be swapped by passing `chunk_policy=` to `AInterviewer` and
+`policy=` to the backfill. **A consumer must pass the same policy to both**, or
+the live path and the backfill produce different text for the same chunk.
+
+`ChunkPolicy.format_version` rides on every chunk and is stored in
+`EmbeddingTable.format_version`. A stored vector is a function of the model
+*and* of the rules that chose and rendered its text, so `needs_embedding`
+compares both the content hash and the format version -- the hash alone cannot
+see a policy change that alters which chunks are included without changing how
+the survivors render. Bump `CHUNK_FORMAT_VERSION` whenever the default policy's
+output changes, and the next backfill re-embeds exactly what went stale.
+
+**Synthetic test interviews are never embedded.** `app/synthesize/core.py`
+simply passes no `embedder` to `AInterviewer`, so the synthetic path
+structurally cannot emit chunks, and the backfill filters
+`InterviewType.SYNTHETIC_TEST`. This is not a nicety: they are 64% of the
+message corpus, and mixing model output into an analysis corpus would let
+generated answers surface as if a respondent had said them.
+
+**Search is an exact brute-force scan** (`EmbeddingRepository.search`), not the
+`sqlite-vector` ANN index. `vector_quantize_scan` returns a *global* top-k that
+cannot be filtered -- there is no way to scope it to a project, let alone a date
+range -- so over-fetching and filtering afterwards would give no guarantee of
+returning k results. Stored vectors are L2-normalised raw float32, so scoring is
+one matrix product and cosine is a plain dot product. At the current corpus size
+this is single-digit milliseconds with every SQL filter available; `search` is
+the seam to put an ANN index behind if one project ever passes ~50k chunks.
+
+**The live path is deliberately lossy.** `AInterviewer` emits chunks through
+`QueueEmbedder` into an in-memory `ChunkQueue`; `EmbeddingWorker` (started in
+the `lifespan` in `app/main.py`) batches them and stores them. `embed_chunk`
+never blocks and never raises -- if the queue is full or the server is down the
+chunk is dropped and counted in `queue_dropped`. That is a freshness cost, not
+data loss, because the backfill re-derives every chunk from the stored messages.
+Blocking there would cost a respondent their session. The same reasoning covers
+the gaps the live path cannot see: an abandoned interview never completes its
+last question group, and a resumed one replays without re-emitting. **The
+backfill is not a one-off migration tool** -- run it on a schedule.
+
+Two ways to run it, for two different situations:
+
+```bash
+uv run python -m app.embed.cli status              # reachability + vector counts
+uv run python -m app.embed.cli backfill --dry-run  # count chunks, call nothing
+uv run python -m app.embed.cli backfill            # embed inline, blocking
+```
+
+`POST /projects/{id}/analysis/embeddings/backfill` is the in-app equivalent, but
+it only *derives* the chunks (database work, seconds) and queues them for the
+worker; embedding them is minutes of network work against a CPU box. Do not
+reach for `BackgroundTasks` here -- it holds a threadpool worker for the whole
+job, which for a full project means half an hour. Poll
+`GET /projects/{id}/analysis/embeddings/status`; `queue_depth` reaching zero is
+what "done" looks like.
+
+Search is `GET /projects/{id}/analysis/embeddings/search`, `ProjectViewer`-gated
+like the rest of the analysis surface. `task` picks the query instruction and
+`kind` the unit searched; results carry the cosine score so a client can cut off
+weak matches. A 409 means the query's dimension no longer matches the stored
+vectors -- the model changed and the corpus needs re-embedding.
+
+`GET …/embeddings/{embedding_id}/similar` is "more like this". It reuses the
+stored vector, so it costs no inference and works while the embedding server is
+down.
+
+**Filters are applied in SQL, before scoring** (`EmbeddingFilters`), which is
+the advantage an exact scan has over an ANN index: asking for 10 results from
+one participant returns 10 of theirs, not whichever of the global top 10 happen
+to be theirs. `candidates` in the response reports how many chunks were scored,
+so a client can tell "nothing matched" from "the filters left nothing to match".
+
+**Clustering** is `GET …/embeddings/clusters` (`app/embed/clustering.py`):
+HDBSCAN over the first 50 principal components, with the scatter taken from the
+first two columns of that *same* projection rather than a separate fit, so the
+picture is a sub-projection of the space the clusters were found in. HDBSCAN
+rather than k-means because exploratory work does not know `k` up front and
+because unplaceable points come back as outliers instead of being forced into
+the nearest blob. Nothing is stored -- a full recompute is ~200ms at this
+corpus size, which keeps `min_cluster_size` an interactive control.
+
+The trap, and it is not subtle: **a QA-pair chunk repeats its interview question
+verbatim, and every respondent was asked the same one.** Uncentred, that shared
+text dominates and clustering recovers the interview guide rather than anything
+respondents said -- measured on the real corpus, clusters came out 79-100% pure
+by question, against 28-77% for message chunks. So every cluster reports
+`question_purity`, and `center_by_question=true` subtracts each question's mean
+vector first (92% -> 55% mean purity on that same corpus). Centering costs no
+re-embedding; it is arithmetic on stored vectors. Do not remove the purity
+figure to tidy the response -- it is the only thing that makes the failure
+visible rather than something an analyst discovers a month later.
+
+`explained_variance_2d` is the companion honesty signal: for text embeddings it
+runs around 30%, so the plot is a navigation aid, not evidence. Points far apart
+on screen really are far apart; points close together may not be.
+
+`EmbeddingTable.text` holds the embedded text in full rather than a preview. It
+has to: a QA-pair chunk spans several messages and carries no `message_id`, so
+there is nothing a client could resolve it to, and a truncated preview cuts the
+average pair mid-sentence. Search hits also carry their interview's timestamp,
+status, type and participant, so a result list costs one request rather than one
+per row. `uv run python -m app.embed.cli rehydrate-text` fills the column in for
+rows stored before it existed, matching on content hash so no vector is
+recomputed and no text can land beside a vector made from something else.
 
 ### Configuration Management
 
@@ -368,7 +503,10 @@ await self.message_queue.put(
 
 ## Known Issues & TODOs
 
-- No test suite currently exists (pytest is a dev dependency but no tests are written)
+- No general test suite: `tests/test_clustering.py` covers the embedding
+  clustering logic (pure, synthetic data, no database or network) and is the
+  only one so far. The `ainterviewer` library has its own suite under
+  `../lib/tests`.
 - OpenAPI SDK generation pattern needs full implementation (see the TODO at the top of `app/main.py`)
 - `create_interview` falls back to the project's default language when a
   respondent requests one the project has no localization for, instead of

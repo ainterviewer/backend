@@ -18,6 +18,7 @@ from .api import main as api
 from .api.websockets import main as websockets
 from .db import InterviewDataBase
 from .dependencies import engine
+from .embed.worker import embedding_worker
 from .settings import app_settings
 
 # =========== #
@@ -59,7 +60,12 @@ async def lifespan(app: FastAPI):
         db = InterviewDataBase(session)
         db.on_startup()
 
+    # No-op unless embedding is enabled and has an endpoint.
+    await embedding_worker.start()
+
     yield
+
+    await embedding_worker.stop()
 
     with Session(engine) as session:
         db = InterviewDataBase(session)

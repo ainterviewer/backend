@@ -30,6 +30,7 @@ from ..models import (
     MessagePublic,
 )
 from ..tables import (
+    EmbeddingTable,
     IntervieweeTable,
     InterviewResumeTokenTable,
     InterviewTable,
@@ -144,22 +145,24 @@ class InterviewRepository(BaseRepository):
         )
         self.session.execute(statement).scalar_one()
 
-        # Children first, then the interviews, in a single transaction. All
-        # three child tables declare ON DELETE CASCADE, but SQLite only
+        # Children first, then the interviews, in a single transaction. Every
+        # child table here declares ON DELETE CASCADE, but SQLite only
         # enforces foreign keys on connections that ran `PRAGMA
         # foreign_keys=ON` and the app does not currently enable it, so the
         # cascade cannot be relied on -- leaving these out is what orphaned the
         # task and interviewee rows already in the database. This order is
         # correct whether or not the cascade fires.
         # Annotations and comments hang off the messages rather than the
-        # interview, so they go before the messages do.
+        # interview, so they go before the messages do. Embeddings lead the
+        # loop for the same reason: a per-message vector points at a message
+        # row.
         self._delete_message_children(
             select(MessageTable.id).where(
                 MessageTable.project_id == project_id,
                 MessageTable.interview_id.in_(interview_ids),
             )
         )
-        for table in (MessageTable, TaskTable, IntervieweeTable):
+        for table in (EmbeddingTable, MessageTable, TaskTable, IntervieweeTable):
             self.session.execute(
                 delete(table).where(
                     table.project_id == project_id,

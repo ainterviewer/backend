@@ -138,11 +138,48 @@ class SpeechSettings(BaseModel):
     tts_voice: str = "alloy"
 
 
+class EmbeddingSettings(BaseModel):
+    """Text-embedding-inference server used to vectorise interview text.
+
+    Disabled by default: with `enabled = false` nothing is embedded and no
+    embedder is handed to the interview loop, so a missing or unreachable
+    server changes nothing about how interviews run.
+    """
+
+    enabled: bool = False
+    endpoint: str | None = None
+    model: str = "microsoft/harrier-oss-v1-0.6b"
+    dimension: int = 1024
+
+    # The server's `max_client_batch_size`; sending more in one request is
+    # rejected rather than split.
+    batch_size: int = 32
+
+    # Truncation guard, in characters. The server was launched with
+    # `--max-batch-tokens 8192 --auto-truncate`, so anything longer is silently
+    # cut off at the far end; truncating here instead means it is logged and the
+    # stored `content_hash` matches the text actually embedded. ~3 chars/token
+    # is conservative across the languages in use.
+    max_input_chars: int = 24000
+
+    # Generous on purpose: an interview-level chunk runs to the full 8k-token
+    # input, and the reference deployment runs this model on CPU, where a batch
+    # of those takes far longer than any interactive request would.
+    timeout: float = 120.0
+    max_retries: int = 3
+
+    # Consecutive failures before the client stops calling out and starts
+    # failing fast, so a dead box degrades search rather than hanging requests.
+    circuit_breaker_threshold: int = 5
+    circuit_breaker_reset_seconds: float = 60.0
+
+
 class ServiceSettings(BaseSettings):
     """Different extra services required to run the app"""
 
     email: EmailSettings | None = None
     speech: SpeechSettings = SpeechSettings()
+    embedding: EmbeddingSettings = EmbeddingSettings()
 
     model_config = BaseSettingsConfigDict(env_prefix="APP_SERVICE__")
 

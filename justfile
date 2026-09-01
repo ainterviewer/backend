@@ -40,6 +40,17 @@ seed-release ENV="prod" VERSION="":
     uv run python -m app.db.cli add-release-manifest "$(cat "$MANIFEST")"
     echo "Seeded local dev database from $MANIFEST"
 
+# Embedding server reachability and stored vector counts.
+[group("Embeddings")]
+embed-status:
+    uv run python -m app.embed.cli status
+
+# Embed every chunk that has no current vector. Idempotent; safe to re-run.
+# Pass --dry-run to count chunks without calling the model.
+[group("Embeddings")]
+embed-backfill *ARGS:
+    uv run python -m app.embed.cli backfill {{ ARGS }}
+
 [group("Release & Publish")]
 bump TYPE: && publish
     #!/usr/bin/env bash

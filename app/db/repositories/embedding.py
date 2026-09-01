@@ -1,0 +1,540 @@
+"""Storage and search for embedding vectors."""
+
+import hashlib
+import logging
+from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
+from uuid import UUID
+
+import numpy as np
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.exc import NoResultFound
+from sqlalchemy.orm import joinedload
+
+from ainterviewer.interfaces import EmbeddingChunk
+from ainterviewer.types import EmbeddingKind, InterviewStatus
+
+from ..tables import (
+    EmbeddingTable,
+    InterviewTable,
+    MessageTable,
+    ProjectParticipantTable,
+)
+from ..types import EmbeddingTask, InterviewType
+from .base import BaseRepository
+
+# Stored vectors are raw little-endian float32, `dim` of them. They are L2
+# normalised by the embedding server, so a dot product *is* the cosine
+# similarity and nothing needs to renormalise on the way out.
+VECTOR_DTYPE = np.float32
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class EmbeddingFilters:
+    """Everything a search can be narrowed by, beyond the vector itself.
+
+    All of it is ordinary SQL applied *before* scoring, which is the advantage
+    an exact scan has over an ANN index: the candidate set is whatever the
+    filters say it is, and k results means k results.
+    """
+
+    interview_ids: list[UUID] | None = None
+    language: str | None = None
+    status: InterviewStatus | None = None
+    participant_id: UUID | None = None
+    created_after: datetime | None = None
+    created_before: datetime | None = None
+    include_synthetic: bool = False
+
+
+@dataclass(frozen=True)
+class EmbeddingSearchHit:
+    embedding: EmbeddingTable
+    score: float
+
+
+@dataclass(frozen=True)
+class PendingEmbedding:
+    """A chunk that has been embedded and is ready to store."""
+
+    chunk: EmbeddingChunk
+    text: str
+    vector: list[float]
+
+
+def encode_vector(vector: list[float] | np.ndarray) -> bytes:
+    return np.asarray(vector, dtype=VECTOR_DTYPE).tobytes()
+
+
+def decode_vector(blob: bytes) -> np.ndarray:
+    return np.frombuffer(blob, dtype=VECTOR_DTYPE)
+
+
+class EmbeddingRepository(BaseRepository):
+    """Reads and writes `EmbeddingTable`.
+
+    Search is an exact brute-force scan: the candidate vectors for one project
+    and kind are read, stacked, and scored with a single matrix product. That is
+    a deliberate choice over the `sqlite-vector` ANN index, which returns a
+    *global* top-k and cannot be filtered -- there is no way to scope
+    `vector_quantize_scan` to a project, let alone to a date range or an
+    annotation. Over-fetching and filtering afterwards gives no guarantee of
+    returning k results. At this corpus size the scan costs single-digit
+    milliseconds and every SQL filter stays available; if one project ever grows
+    past roughly 50k chunks, this method is the seam to put an ANN index behind.
+    """
+
+    # ------------------------------------------------------------------ #
+    # Keys                                                               #
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def chunk_key(chunk: EmbeddingChunk, task: EmbeddingTask, model: str) -> str:
+        """The identity of a chunk variant, as one string.
+
+        A composite unique constraint cannot do this job: `message_id` and the
+        structural coordinates are NULL for some kinds, and NULLs compare as
+        distinct in a UNIQUE constraint on both SQLite and PostgreSQL, so the
+        constraint would stop deduplicating precisely where it is needed.
+        """
+        parts = [
+            chunk.kind.value,
+            str(chunk.interview_id),
+            "" if chunk.message_id is None else str(chunk.message_id),
+            "" if chunk.section is None else str(chunk.section),
+            "" if chunk.main_question is None else str(chunk.main_question),
+            "" if chunk.sub_question is None else str(chunk.sub_question),
+            task.value,
+            model,
+        ]
+        return "|".join(parts)
+
+    @staticmethod
+    def content_hash(text: str) -> str:
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+    # ------------------------------------------------------------------ #
+    # Writing                                                            #
+    # ------------------------------------------------------------------ #
+
+    def get_existing_state(
+        self,
+        chunk_keys: list[str],
+    ) -> dict[str, tuple[str, str]]:
+        """Map chunk_key -> (content_hash, format_version) for stored keys."""
+        if not chunk_keys:
+            return {}
+
+        rows = self.session.execute(
+            select(
+                EmbeddingTable.chunk_key,
+                EmbeddingTable.content_hash,
+                EmbeddingTable.format_version,
+            ).where(EmbeddingTable.chunk_key.in_(chunk_keys))
+        ).all()
+        return {key: (content_hash, version) for key, content_hash, version in rows}
+
+    def needs_embedding(
+        self,
+        chunks: list[EmbeddingChunk],
+        *,
+        task: EmbeddingTask,
+        model: str,
+    ) -> list[EmbeddingChunk]:
+        """Filter `chunks` down to those with no current vector.
+
+        A chunk is current when a row exists for its key whose `content_hash`
+        matches the text it would be embedded from now *and* whose
+        `format_version` matches the policy that produced it. The hash alone is
+        not enough: a policy can change which chunks are included without
+        changing how the ones that survive are rendered, and those rows would
+        otherwise look current forever.
+        """
+        keys = [self.chunk_key(chunk, task, model) for chunk in chunks]
+        stored = self.get_existing_state(keys)
+
+        return [
+            chunk
+            for chunk, key in zip(chunks, keys)
+            if stored.get(key) != (self.content_hash(chunk.text), chunk.format_version)
+        ]
+
+    def store(
+        self,
+        pending: list[PendingEmbedding],
+        *,
+        task: EmbeddingTask = EmbeddingTask.DOCUMENT,
+        model: str,
+        commit: bool = True,
+    ) -> int:
+        """Insert or replace vectors. Returns the number of rows written."""
+        if not pending:
+            return 0
+
+        keys = [self.chunk_key(item.chunk, task, model) for item in pending]
+
+        # Replace rather than update in place: the row is small, and a stale
+        # vector left behind by a partial update would be indistinguishable
+        # from a current one.
+        self.session.execute(
+            delete(EmbeddingTable).where(EmbeddingTable.chunk_key.in_(keys))
+        )
+
+        written = 0
+
+        for item, key in zip(pending, keys):
+            chunk = item.chunk
+            message_id = self._resolve_message_id(chunk)
+
+            if chunk.kind == EmbeddingKind.MESSAGE and message_id is None:
+                # A per-message vector that points at no message would be
+                # unreachable from the transcript and undeletable with it.
+                # Dropping it is better than storing it detached.
+                logger.warning(
+                    "No message row for interview %s message_id %s; "
+                    "skipping its embedding",
+                    chunk.interview_id,
+                    chunk.message_id,
+                )
+                continue
+
+            written += 1
+            self.session.add(
+                EmbeddingTable(
+                    kind=chunk.kind,
+                    task=task,
+                    project_id=chunk.project_id,
+                    interview_id=chunk.interview_id,
+                    message_id=message_id,
+                    section=chunk.section,
+                    main_question=chunk.main_question,
+                    sub_question=chunk.sub_question,
+                    language=chunk.language,
+                    model=model,
+                    format_version=chunk.format_version,
+                    dim=len(item.vector),
+                    chunk_key=key,
+                    content_hash=self.content_hash(item.text),
+                    text=item.text,
+                    vector=encode_vector(item.vector),
+                )
+            )
+
+        if commit:
+            self.session.commit()
+
+        return written
+
+    def _resolve_message_id(self, chunk: EmbeddingChunk) -> UUID | None:
+        """Resolve a MESSAGE chunk's per-interview counter to a message row.
+
+        Chunks identify themselves structurally because `InterviewHistory` holds
+        no row ids (see `EmbeddingChunk`). `(interview_id, message_id)` is unique
+        on `message`, so this is exact rather than a best guess.
+        """
+        if chunk.kind != EmbeddingKind.MESSAGE or chunk.message_id is None:
+            return None
+
+        return self.session.execute(
+            select(MessageTable.id).where(
+                MessageTable.interview_id == chunk.interview_id,
+                MessageTable.message_id == chunk.message_id,
+            )
+        ).scalar_one_or_none()
+
+    def delete_for_interviews(self, interview_ids: list[UUID]) -> int:
+        if not interview_ids:
+            return 0
+        result = self.session.execute(
+            delete(EmbeddingTable).where(EmbeddingTable.interview_id.in_(interview_ids))
+        )
+        return result.rowcount or 0  # ty: ignore[unresolved-attribute]
+
+    # ------------------------------------------------------------------ #
+    # Reading                                                            #
+    # ------------------------------------------------------------------ #
+
+    def _candidate_statement(
+        self,
+        *,
+        project_id: UUID,
+        kind: EmbeddingKind,
+        task: EmbeddingTask,
+        filters: EmbeddingFilters,
+    ):
+        """Select (id, vector) for everything in scope.
+
+        Only the two columns the scan needs: the full text and metadata are
+        fetched for the k winners afterwards, so a large candidate set costs a
+        vector read each, not a row read each.
+        """
+        statement = select(EmbeddingTable.id, EmbeddingTable.vector).where(
+            EmbeddingTable.project_id == project_id,
+            EmbeddingTable.kind == kind,
+            EmbeddingTable.task == task,
+        )
+
+        if filters.interview_ids is not None:
+            statement = statement.where(
+                EmbeddingTable.interview_id.in_(filters.interview_ids)
+            )
+
+        if filters.language is not None:
+            statement = statement.where(EmbeddingTable.language == filters.language)
+
+        interview_conditions = []
+        if not filters.include_synthetic:
+            interview_conditions.append(
+                InterviewTable.type != InterviewType.SYNTHETIC_TEST
+            )
+        if filters.status is not None:
+            interview_conditions.append(InterviewTable.status == filters.status)
+        if filters.participant_id is not None:
+            interview_conditions.append(
+                InterviewTable.participant_id == filters.participant_id
+            )
+        if filters.created_after is not None:
+            interview_conditions.append(
+                InterviewTable.created_at >= filters.created_after
+            )
+        if filters.created_before is not None:
+            interview_conditions.append(
+                InterviewTable.created_at <= filters.created_before
+            )
+
+        if interview_conditions:
+            statement = statement.where(
+                EmbeddingTable.interview_id.in_(
+                    select(InterviewTable.id).where(*interview_conditions)
+                )
+            )
+
+        return statement
+
+    def previews(self, ids: list[UUID], chars: int) -> dict[UUID, str]:
+        """Short excerpts, for hover text on a plot of many points.
+
+        A scatter wants a line per point, not the whole chunk: sending the full
+        text of every point would multiply the payload by an order of magnitude
+        for text almost none of which is read.
+        """
+        if not ids:
+            return {}
+
+        rows = self.session.execute(
+            select(EmbeddingTable.id, func.substr(EmbeddingTable.text, 1, chars)).where(
+                EmbeddingTable.id.in_(ids)
+            )
+        ).all()
+        return {row[0]: row[1] for row in rows if row[1]}
+
+    def hydrate(self, ids: list[UUID]) -> dict[UUID, EmbeddingTable]:
+        """Public form of `_hydrate`, for callers holding ids from a scan."""
+        return self._hydrate(ids)
+
+    def _hydrate(self, ids: list[UUID]) -> dict[UUID, EmbeddingTable]:
+        """Load the winning rows with the interview and participant a result row
+        needs, so a client is not left making one request per hit."""
+        return {
+            embedding.id: embedding
+            for embedding in self.session.execute(
+                select(EmbeddingTable)
+                .where(EmbeddingTable.id.in_(ids))
+                .options(
+                    joinedload(EmbeddingTable.interview)
+                    .joinedload(InterviewTable.project_participant)
+                    .joinedload(ProjectParticipantTable.participant)
+                )
+            )
+            .unique()
+            .scalars()
+        }
+
+    def _rank(
+        self,
+        rows: Sequence[Any],
+        query_vector: list[float] | np.ndarray,
+        k: int,
+        exclude: UUID | None = None,
+    ) -> list[EmbeddingSearchHit]:
+        if exclude is not None:
+            rows = [row for row in rows if row[0] != exclude]
+        if not rows:
+            return []
+
+        query = np.asarray(query_vector, dtype=VECTOR_DTYPE)
+        matrix = np.frombuffer(
+            b"".join(blob for _, blob in rows), dtype=VECTOR_DTYPE
+        ).reshape(len(rows), -1)
+
+        if matrix.shape[1] != query.shape[0]:
+            raise ValueError(
+                f"Query has {query.shape[0]} dimensions but stored vectors have "
+                f"{matrix.shape[1]}; the model or its dimension has changed and "
+                "the corpus needs re-embedding"
+            )
+
+        scores = matrix @ query
+
+        k = min(k, len(rows))
+        # argpartition finds the top k without sorting the whole array; the
+        # slice is then sorted so the caller gets them best-first.
+        top = np.argpartition(-scores, k - 1)[:k]
+        top = top[np.argsort(-scores[top])]
+
+        embeddings = self._hydrate([rows[i][0] for i in top])
+
+        return [
+            EmbeddingSearchHit(embedding=embeddings[rows[i][0]], score=float(scores[i]))
+            for i in top
+            if rows[i][0] in embeddings
+        ]
+
+    def search(
+        self,
+        *,
+        project_id: UUID,
+        query_vector: list[float] | np.ndarray,
+        kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
+        task: EmbeddingTask = EmbeddingTask.DOCUMENT,
+        k: int = 10,
+        filters: EmbeddingFilters | None = None,
+    ) -> list[EmbeddingSearchHit]:
+        """Exact nearest-neighbour search within one project and chunk kind."""
+        rows = self.session.execute(
+            self._candidate_statement(
+                project_id=project_id,
+                kind=kind,
+                task=task,
+                filters=filters or EmbeddingFilters(),
+            )
+        ).all()
+
+        return self._rank(rows, query_vector, k)
+
+    def similar_to(
+        self,
+        *,
+        embedding_id: UUID,
+        k: int = 10,
+        filters: EmbeddingFilters | None = None,
+    ) -> tuple[EmbeddingTable, list[EmbeddingSearchHit]]:
+        """Nearest neighbours of a chunk already in the corpus.
+
+        Costs no inference at all -- the query vector is the stored one -- which
+        is what makes "more like this" the cheapest exploratory gesture
+        available. Searches within the source's own project and kind, and never
+        returns the source itself.
+        """
+        source = self.session.get(EmbeddingTable, embedding_id)
+        if source is None:
+            raise NoResultFound(f"No embedding {embedding_id}")
+
+        rows = self.session.execute(
+            self._candidate_statement(
+                project_id=source.project_id,
+                kind=source.kind,
+                task=source.task,
+                filters=filters or EmbeddingFilters(),
+            )
+        ).all()
+
+        return source, self._rank(
+            rows, decode_vector(source.vector), k, exclude=source.id
+        )
+
+    def vectors_for(
+        self,
+        *,
+        project_id: UUID,
+        kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
+        task: EmbeddingTask = EmbeddingTask.DOCUMENT,
+        filters: EmbeddingFilters | None = None,
+    ) -> tuple[list[UUID], np.ndarray, list[tuple[int | None, int | None]]]:
+        """Every vector in scope, stacked, with the interview-guide coordinates
+        each one came from. The input to clustering.
+
+        The coordinates are returned alongside because clustering needs to know
+        which chunks answer the same question -- both to report how far a
+        cluster is from being just that question, and to centre them out.
+        """
+        statement = self._candidate_statement(
+            project_id=project_id,
+            kind=kind,
+            task=task,
+            filters=filters or EmbeddingFilters(),
+        ).add_columns(EmbeddingTable.section, EmbeddingTable.main_question)
+
+        rows = self.session.execute(statement).all()
+
+        if not rows:
+            return [], np.empty((0, 0), dtype=VECTOR_DTYPE), []
+
+        matrix = np.frombuffer(
+            b"".join(row[1] for row in rows), dtype=VECTOR_DTYPE
+        ).reshape(len(rows), -1)
+
+        return (
+            [row[0] for row in rows],
+            matrix,
+            [(row[2], row[3]) for row in rows],
+        )
+
+    def set_text(self, chunk_key: str, text: str) -> bool:
+        """Fill in the stored text for a row that predates the column.
+
+        Only ever called where the content hash already matches, so this cannot
+        put text next to a vector that was made from something else.
+        """
+        result = self.session.execute(
+            update(EmbeddingTable)
+            .where(
+                EmbeddingTable.chunk_key == chunk_key,
+                EmbeddingTable.content_hash == self.content_hash(text),
+                EmbeddingTable.text.is_(None),
+            )
+            .values(text=text)
+        )
+        return bool(result.rowcount)  # ty: ignore[unresolved-attribute]
+
+    def count_candidates(
+        self,
+        *,
+        project_id: UUID,
+        kind: EmbeddingKind,
+        task: EmbeddingTask = EmbeddingTask.DOCUMENT,
+        filters: EmbeddingFilters | None = None,
+    ) -> int:
+        """How many chunks a search would score against.
+
+        Distinguishes "nothing matched" from "the filters left nothing to
+        match", which is otherwise invisible to a client staring at an empty
+        result list.
+        """
+        statement = self._candidate_statement(
+            project_id=project_id,
+            kind=kind,
+            task=task,
+            filters=filters or EmbeddingFilters(),
+        ).with_only_columns(func.count(EmbeddingTable.id))
+
+        return self.session.execute(statement).scalar_one() or 0
+
+    def coverage(self, project_id: UUID) -> dict[str, int]:
+        """Stored vector counts per kind, for one project."""
+        rows = self.session.execute(
+            select(EmbeddingTable.kind, func.count(EmbeddingTable.id))
+            .where(EmbeddingTable.project_id == project_id)
+            .group_by(EmbeddingTable.kind)
+        ).all()
+        return {kind.value: count for kind, count in rows}
+
+    def count(self) -> int:
+        return (
+            self.session.execute(select(func.count(EmbeddingTable.id))).scalar_one()
+            or 0
+        )
