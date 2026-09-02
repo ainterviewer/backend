@@ -14,8 +14,11 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import joinedload
 
 from ainterviewer.interfaces import EmbeddingChunk
-from ainterviewer.types import EmbeddingKind, InterviewStatus
+from ainterviewer.lpm.types import CustomToken
+from ainterviewer.types import EmbeddingKind, InterviewStatus, MessageRole
 
+from ...types import TurnRole
+from ..models import EmbeddingTurn
 from ..tables import (
     EmbeddingTable,
     InterviewTable,
@@ -336,6 +339,118 @@ class EmbeddingRepository(BaseRepository):
         """Public form of `_hydrate`, for callers holding ids from a scan."""
         return self._hydrate(ids)
 
+    def turns_for(
+        self, embeddings: Sequence[EmbeddingTable]
+    ) -> dict[UUID, list[EmbeddingTurn]]:
+        """The messages behind each chunk, as speaker turns.
+
+        Rendering a result the way the interview read it needs to know who said
+        what, and the stored chunk text cannot say: it is one string built for
+        the model, and splitting it back on its ``Q:``/``A:`` prefixes is a
+        parse of prose that any respondent can break by starting a sentence
+        with "Q:". The message rows carry the roles structurally, so they are
+        the source here.
+
+        INTERVIEW chunks get no turns. A whole transcript rendered as bubbles in
+        a result list is the transcript view, which every hit already links to,
+        and shipping one per hit would dwarf the rest of the response.
+
+        One query for every hit on the page, grouped in Python: the alternative
+        is a query per chunk, and a page of ten results with three
+        representatives per cluster makes that dozens of round trips.
+        """
+        wanted = [
+            embedding
+            for embedding in embeddings
+            if embedding.kind in (EmbeddingKind.QA_PAIR, EmbeddingKind.MESSAGE)
+        ]
+        if not wanted:
+            return {}
+
+        rows = self.session.execute(
+            select(
+                MessageTable.id,
+                MessageTable.interview_id,
+                MessageTable.role,
+                MessageTable.content,
+                MessageTable.section,
+                MessageTable.main_question,
+                MessageTable.survey_item,
+                MessageTable.skipped_by_condition,
+            )
+            .where(
+                MessageTable.interview_id.in_({e.interview_id for e in wanted}),
+                MessageTable.role != MessageRole.SYSTEM,
+                MessageTable.section.is_not(None),
+                MessageTable.main_question.is_not(None),
+            )
+            .order_by(MessageTable.interview_id, MessageTable.message_id)
+        ).all()
+
+        # (interview, section, main_question) -> the group's messages, in order.
+        # Keyed on the question group rather than on the interview because that
+        # is the unit both remaining kinds are about: a QA pair *is* the group,
+        # and a message is one turn inside one.
+        grouped: dict[tuple[UUID, int, int], list[Any]] = {}
+        for row in rows:
+            if row.skipped_by_condition or not row.content.strip():
+                continue
+            if row.content.strip() in CustomToken:
+                continue
+            grouped.setdefault(
+                (row.interview_id, row.section, row.main_question), []
+            ).append(row)
+
+        turns: dict[UUID, list[EmbeddingTurn]] = {}
+        for embedding in wanted:
+            if embedding.section is None or embedding.main_question is None:
+                continue
+            group = grouped.get(
+                (embedding.interview_id, embedding.section, embedding.main_question)
+            )
+            if not group:
+                continue
+
+            rendered: list[EmbeddingTurn] = []
+            # An interviewer turn's survey item is what makes the answer after
+            # it a click rather than a sentence, and it is the question row that
+            # carries it.
+            pending_item: str | None = None
+            for row in group:
+                respondent = MessageRole(row.role) == MessageRole.USER
+                item = row.survey_item.type if row.survey_item else None
+                rendered.append(
+                    EmbeddingTurn(
+                        role=(
+                            TurnRole.RESPONDENT if respondent else TurnRole.INTERVIEWER
+                        ),
+                        text=row.content.strip(),
+                        survey_label=(item or pending_item) if respondent else None,
+                        # Only a MESSAGE chunk singles a turn out; for a QA pair
+                        # the whole group is the chunk.
+                        match=(
+                            embedding.kind == EmbeddingKind.MESSAGE
+                            and row.id == embedding.message_id
+                        ),
+                    )
+                )
+                pending_item = None if respondent else item
+
+            if embedding.kind == EmbeddingKind.MESSAGE:
+                # Everything after the embedded message answers a later probe
+                # and is not what this chunk says; what came before it is the
+                # question, and is.
+                matched = next(
+                    (i for i, turn in enumerate(rendered) if turn.match), None
+                )
+                if matched is None:
+                    continue
+                rendered = rendered[: matched + 1]
+
+            turns[embedding.id] = rendered
+
+        return turns
+
     def _hydrate(self, ids: list[UUID]) -> dict[UUID, EmbeddingTable]:
         """Load the winning rows with the interview and participant a result row
         needs, so a client is not left making one request per hit."""
@@ -454,20 +569,27 @@ class EmbeddingRepository(BaseRepository):
         kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
         task: EmbeddingTask = EmbeddingTask.DOCUMENT,
         filters: EmbeddingFilters | None = None,
-    ) -> tuple[list[UUID], np.ndarray, list[tuple[int | None, int | None]]]:
+    ) -> tuple[list[UUID], np.ndarray, list[tuple[int | None, int | None, int | None]]]:
         """Every vector in scope, stacked, with the interview-guide coordinates
         each one came from. The input to clustering.
 
         The coordinates are returned alongside because clustering needs to know
         which chunks answer the same question -- both to report how far a
-        cluster is from being just that question, and to centre them out.
+        cluster is from being just that question, and to centre them out -- and
+        because the same scatter can then be coloured by the guide instead of by
+        what clustering found, which is the comparison that says whether a
+        cluster is a theme or just a question.
         """
         statement = self._candidate_statement(
             project_id=project_id,
             kind=kind,
             task=task,
             filters=filters or EmbeddingFilters(),
-        ).add_columns(EmbeddingTable.section, EmbeddingTable.main_question)
+        ).add_columns(
+            EmbeddingTable.section,
+            EmbeddingTable.main_question,
+            EmbeddingTable.sub_question,
+        )
 
         rows = self.session.execute(statement).all()
 
@@ -481,7 +603,7 @@ class EmbeddingRepository(BaseRepository):
         return (
             [row[0] for row in rows],
             matrix,
-            [(row[2], row[3]) for row in rows],
+            [(row[2], row[3], row[4]) for row in rows],
         )
 
     def set_text(self, chunk_key: str, text: str) -> bool:

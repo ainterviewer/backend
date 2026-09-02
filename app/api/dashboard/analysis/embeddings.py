@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import UUID4
+from sqlalchemy import select
 from sqlalchemy.exc import NoResultFound
 
 from ainterviewer.types import EmbeddingKind, InterviewStatus
@@ -12,12 +13,14 @@ from ....db.models import (
     EmbeddingCluster,
     EmbeddingClusterPoint,
     EmbeddingClusterResponse,
+    EmbeddingGroup,
     EmbeddingSearchHit,
     EmbeddingSearchResponse,
     EmbeddingSimilarResponse,
     EmbeddingStatus,
 )
 from ....db.repositories.embedding import EmbeddingFilters
+from ....db.tables import ProjectLocalizationTable
 from ....dependencies import DBSession, ProjectEditor, ProjectViewer
 from ....embed.backfill import pending_chunks
 from ....embed.client import EmbeddingUnavailable, embedding_client
@@ -28,6 +31,7 @@ from ....embed.clustering import (
 from ....embed.queue import chunk_queue
 from ....embed.templates import QueryTask
 from ....settings import app_settings
+from ....types import GroupKind
 
 router = APIRouter()
 
@@ -101,6 +105,8 @@ async def search_embeddings(
         # i.e. the model changed and the corpus has not been re-embedded.
         raise HTTPException(409, detail=str(error))
 
+    turns = db.embeddings.turns_for([hit.embedding for hit in hits])
+
     return EmbeddingSearchResponse(
         query=query,
         kind=kind,
@@ -108,7 +114,12 @@ async def search_embeddings(
         candidates=db.embeddings.count_candidates(
             project_id=project_id, kind=kind, filters=filter_params.filters
         ),
-        items=[EmbeddingSearchHit.from_hit(hit.embedding, hit.score) for hit in hits],
+        items=[
+            EmbeddingSearchHit.from_hit(
+                hit.embedding, hit.score, turns.get(hit.embedding.id)
+            )
+            for hit in hits
+        ],
     )
 
 
@@ -141,16 +152,107 @@ async def find_similar_embeddings(
         # not be reachable through it.
         raise HTTPException(404, detail="Embedding not found")
 
+    turns = db.embeddings.turns_for([source, *(hit.embedding for hit in hits)])
+
     return EmbeddingSimilarResponse(
-        source=EmbeddingSearchHit.from_hit(source, 1.0),
+        source=EmbeddingSearchHit.from_hit(source, 1.0, turns.get(source.id)),
         candidates=db.embeddings.count_candidates(
             project_id=project_id, kind=source.kind, filters=filter_params.filters
         ),
-        items=[EmbeddingSearchHit.from_hit(hit.embedding, hit.score) for hit in hits],
+        items=[
+            EmbeddingSearchHit.from_hit(
+                hit.embedding, hit.score, turns.get(hit.embedding.id)
+            )
+            for hit in hits
+        ],
     )
 
 
 PREVIEW_CHARS = 240
+
+# Guide question text is a label on a legend row, not a card: enough to
+# recognise the question, not to re-read it.
+GROUP_TEXT_CHARS = 120
+
+
+def _guide_groups(
+    session,
+    project_id: UUID4,
+    coordinates: list[tuple[int | None, int | None, int | None]],
+) -> list[EmbeddingGroup]:
+    """The guide groups the plotted points fall into, questions and sections.
+
+    Sized from the points rather than from the guide: a question nobody
+    answered is not a colour on this map, and an empty legend row would be one.
+    The wording comes from the project's default localization, which is the
+    current draft -- interviews ran against per-interview snapshots, so a
+    question the draft has since dropped keeps its number and loses only its
+    text.
+
+    The indices on a chunk are positions in the order the respondent was
+    actually asked, which for a shuffled section is not the guide's authored
+    order; pairing them with the draft is therefore "the Nth question of
+    section M" rather than a specific authored question. The same
+    approximation the report and monitoring pages make.
+    """
+    question_sizes: dict[tuple[int, int], int] = {}
+    section_sizes: dict[int, int] = {}
+    for section, main_question, _ in coordinates:
+        if section is None:
+            continue
+        section_sizes[section] = section_sizes.get(section, 0) + 1
+        if main_question is not None:
+            key = (section, main_question)
+            question_sizes[key] = question_sizes.get(key, 0) + 1
+
+    if not section_sizes:
+        return []
+
+    guide = session.execute(
+        select(ProjectLocalizationTable.interview_guide).where(
+            ProjectLocalizationTable.project_id == project_id,
+            ProjectLocalizationTable.is_default.is_(True),
+        )
+    ).scalar_one_or_none()
+
+    section_text: dict[int, str] = {}
+    question_text: dict[tuple[int, int], str] = {}
+    if guide is not None:
+        for section_idx, section in enumerate(guide.question_sections):
+            if section.description:
+                section_text[section_idx] = section.description
+            for question_idx, question in enumerate(section.questions):
+                question_text[(section_idx, question_idx)] = question.main_question
+
+    def shorten(text: str | None) -> str | None:
+        if not text:
+            return None
+        text = " ".join(text.split())
+        if len(text) <= GROUP_TEXT_CHARS:
+            return text
+        return text[: GROUP_TEXT_CHARS - 1].rstrip() + "\u2026"
+
+    groups = [
+        EmbeddingGroup(
+            kind=GroupKind.SECTION,
+            key=str(section),
+            label=f"Section {section + 1}",
+            text=shorten(section_text.get(section)),
+            size=size,
+        )
+        for section, size in sorted(section_sizes.items())
+    ]
+    groups.extend(
+        EmbeddingGroup(
+            kind=GroupKind.QUESTION,
+            key=f"{section}.{main_question}",
+            label=f"Q{section + 1}.{main_question + 1}",
+            text=shorten(question_text.get((section, main_question))),
+            size=size,
+        )
+        for (section, main_question), size in sorted(question_sizes.items())
+    )
+    return groups
 
 
 @router.get("/projects/{project_id}/analysis/embeddings/clusters")
@@ -194,7 +296,10 @@ async def cluster_embeddings(
         min_cluster_size=min_cluster_size,
         min_samples=min_samples,
         n_representatives=n_representatives,
-        group_keys=groups,
+        # The question a chunk belongs to, not the probe within it: a MESSAGE
+        # chunk carries a sub_question, and centring per probe would subtract a
+        # different mean from every turn of the same question.
+        group_keys=[(section, main) for section, main, _ in groups],
         center_by_group=center_by_question,
     )
 
@@ -204,6 +309,11 @@ async def cluster_embeddings(
     }
     representatives = db.embeddings.hydrate(list(wanted))
     previews = db.embeddings.previews(ids, PREVIEW_CHARS)
+    turns = db.embeddings.turns_for(list(representatives.values()))
+
+    # The guide coordinates every plotted point came from, so the scatter can
+    # be coloured by the interview guide as well as by the clustering.
+    coordinates = dict(zip(ids, groups))
 
     return EmbeddingClusterResponse(
         kind=kind,
@@ -219,13 +329,20 @@ async def cluster_embeddings(
                 size=cluster.size,
                 question_purity=cluster.question_purity,
                 representatives=[
-                    EmbeddingSearchHit.from_hit(representatives[embedding_id], 1.0)
+                    EmbeddingSearchHit.from_hit(
+                        representatives[embedding_id], 1.0, turns.get(embedding_id)
+                    )
                     for embedding_id in cluster.representatives
                     if embedding_id in representatives
                 ],
             )
             for cluster in result.clusters
         ],
+        groups=_guide_groups(
+            db.session,
+            project_id,
+            [coordinates[point.embedding_id] for point in result.points],
+        ),
         points=[
             EmbeddingClusterPoint(
                 id=point.embedding_id,
@@ -234,6 +351,9 @@ async def cluster_embeddings(
                 x=point.x,
                 y=point.y,
                 preview=previews.get(point.embedding_id),
+                section=coordinates[point.embedding_id][0],
+                main_question=coordinates[point.embedding_id][1],
+                sub_question=coordinates[point.embedding_id][2],
             )
             for point in result.points
         ],

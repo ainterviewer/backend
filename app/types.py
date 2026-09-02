@@ -73,6 +73,31 @@ class InterviewType(StrEnum):
     SYNTHETIC = "synthetic"
 
 
+class TurnRole(StrEnum):
+    """Who is speaking in a rendered chunk of interview text.
+
+    Coarser than `MessageRole` on purpose: a reader of a search result cares
+    whether a line was asked or answered, not whether the asking was done by
+    the agent or by a scripted guide message.
+    """
+
+    INTERVIEWER = "interviewer"
+    RESPONDENT = "respondent"
+
+
+class GroupKind(StrEnum):
+    """What a cluster map's points are grouped by.
+
+    `CLUSTER` is what HDBSCAN found; the other two are the interview guide's own
+    structure, which is not discovered but declared -- and is the baseline the
+    clusters are worth reading against.
+    """
+
+    CLUSTER = "cluster"
+    QUESTION = "question"
+    SECTION = "section"
+
+
 class WSChatRole(StrEnum):
     USER = "user"
     INTERVIEWER = "interviewer"

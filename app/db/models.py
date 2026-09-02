@@ -36,7 +36,15 @@ from ainterviewer.types import (
 from ainterviewer.utils import now
 
 from ..settings import app_settings
-from ..types import CollaboratorRole, ExternalParam, ProjectStatus, Scope, TestRunStatus
+from ..types import (
+    CollaboratorRole,
+    ExternalParam,
+    GroupKind,
+    ProjectStatus,
+    Scope,
+    TestRunStatus,
+    TurnRole,
+)
 from ._extra import CustomEmailStr
 from .types import AccessRequestStatus, AnnotationType, InterviewType
 
@@ -677,6 +685,26 @@ class MessageCommentPublic(_BaseModel):
 ##############
 
 
+class EmbeddingTurn(_BaseModel):
+    """One speaker turn inside a chunk, as it was said in the interview.
+
+    A chunk's stored `text` is the rendering the *model* saw -- one string with
+    ``Q:``/``A:`` prefixes -- and re-splitting it on those prefixes would be a
+    parse of prose that a respondent can break by starting a sentence with
+    "Q:". These come from the message rows instead, so the roles are structural
+    and a result reads the way the conversation did.
+    """
+
+    role: TurnRole
+    text: str
+    # The survey item type, when the answer was a chosen option rather than
+    # written text. The distinction matters to a reader: an identical "Agree"
+    # from forty respondents is a click, not a consensus.
+    survey_label: str | None = None
+    # The one turn a MESSAGE hit is actually about; its neighbours are context.
+    match: bool = False
+
+
 class EmbeddingSearchHit(_BaseModel):
     """One semantic-search result, renderable on its own.
 
@@ -710,8 +738,19 @@ class EmbeddingSearchHit(_BaseModel):
     participant_id: UUID4 | None = None
     participant_pid: str | None = None
 
+    # The chunk as a conversation, when the messages behind it could be found.
+    # Empty is a normal state, not an error -- an interview whose message rows
+    # no longer line up with the chunk's coordinates still has its `text`, and
+    # a client renders that instead.
+    turns: list[EmbeddingTurn] = []
+
     @classmethod
-    def from_hit(cls, embedding, score: float) -> EmbeddingSearchHit:
+    def from_hit(
+        cls,
+        embedding,
+        score: float,
+        turns: list[EmbeddingTurn] | None = None,
+    ) -> EmbeddingSearchHit:
         interview = embedding.interview
         project_participant = interview.project_participant if interview else None
         participant = project_participant.participant if project_participant else None
@@ -732,6 +771,7 @@ class EmbeddingSearchHit(_BaseModel):
             interview_type=interview.type if interview else None,
             participant_id=project_participant.id if project_participant else None,
             participant_pid=participant.pid if participant else None,
+            turns=turns or [],
         )
 
 
@@ -804,6 +844,12 @@ class EmbeddingClusterPoint(_BaseModel):
     x: float
     y: float
     preview: str | None = None
+    # The interview-guide coordinates the chunk came from, so the same scatter
+    # can be coloured by what the guide asked rather than by what clustering
+    # found. NULL on an interview chunk, which spans the whole guide.
+    section: int | None = None
+    main_question: int | None = None
+    sub_question: int | None = None
 
 
 class EmbeddingCluster(_BaseModel):
@@ -816,6 +862,27 @@ class EmbeddingCluster(_BaseModel):
     # its question verbatim for every respondent, so uncentred clustering tends
     # to recover the interview guide. Read this before reading the clusters.
     question_purity: float | None = None
+
+
+class EmbeddingGroup(_BaseModel):
+    """A named set of points to colour the scatter by.
+
+    Questions and sections come from the guide rather than from the data, so
+    unlike a cluster they arrive already named -- which is what makes them the
+    baseline worth reading the clusters against.
+    """
+
+    kind: GroupKind
+    # `"<section>"` for a section, `"<section>.<main_question>"` for a question.
+    # A string because it is a compound key and clients use it as a dictionary
+    # key, not as a number.
+    key: str
+    # As the guide numbers it: "Q2.1" or "Section 2".
+    label: str
+    # The guide's own wording, when the question still exists in the current
+    # draft. NULL for a question an interview asked under an older snapshot.
+    text: str | None = None
+    size: int
 
 
 class EmbeddingClusterResponse(_BaseModel):
@@ -831,4 +898,9 @@ class EmbeddingClusterResponse(_BaseModel):
     explained_variance_2d: float
     centered_by_question: bool
     clusters: list[EmbeddingCluster] = []
+    # Every guide group the plotted points fall into, questions and sections
+    # alike, ordered as the guide orders them. Sent alongside the clusters
+    # rather than behind a parameter: it is derived from the same points, costs
+    # one guide read, and lets a client switch grouping without a round trip.
+    groups: list[EmbeddingGroup] = []
     points: list[EmbeddingClusterPoint] = []
