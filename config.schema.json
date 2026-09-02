@@ -125,6 +125,9 @@
           "default": 30,
           "title": "Code Resend Cooldown Seconds",
           "type": "integer"
+        },
+        "last_active_debounce": {
+          "$ref": "#/$defs/TimeDelta"
         }
       },
       "title": "AppSettings",
@@ -265,8 +268,13 @@
           "type": "integer"
         },
         "timeout": {
-          "default": 30.0,
+          "default": 120.0,
           "title": "Timeout",
+          "type": "number"
+        },
+        "connect_timeout": {
+          "default": 5.0,
+          "title": "Connect Timeout",
           "type": "number"
         },
         "max_retries": {
@@ -331,7 +339,8 @@
             "dimension": 1024,
             "batch_size": 32,
             "max_input_chars": 24000,
-            "timeout": 30.0,
+            "timeout": 120.0,
+            "connect_timeout": 5.0,
             "max_retries": 3,
             "circuit_breaker_threshold": 5,
             "circuit_breaker_reset_seconds": 60.0
@@ -696,6 +705,15 @@
         },
         "login_code_max_attempts": 5,
         "code_resend_cooldown_seconds": 30,
+        "last_active_debounce": {
+          "days": 0,
+          "hours": 0,
+          "microseconds": 0,
+          "milliseconds": 0,
+          "minutes": 10,
+          "seconds": 0,
+          "weeks": 0
+        },
         "api_endpoint": "127.0.0.1:8666",
         "app_endpoint": "localhost:5173",
         "web_endpoint": "localhost:5174"

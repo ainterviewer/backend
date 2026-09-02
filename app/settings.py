@@ -176,6 +176,18 @@ class EmbeddingSettings(BaseModel):
     # input, and the reference deployment runs this model on CPU, where a batch
     # of those takes far longer than any interactive request would.
     timeout: float = 120.0
+
+    # How long to wait on a server that is not answering at all. Split out from
+    # `timeout` because the two measure different things: a dropped SYN -- a box
+    # that is down, or firewalled -- never gets faster by waiting, while a live
+    # server chewing through a batch legitimately needs the two minutes above.
+    # Left at 120s for both, an unreachable host turns every status read into a
+    # two-minute hang and the pages behind it into blank loading states.
+    #
+    # Doubles as the whole budget for `/health`, which is a liveness probe: a
+    # server that cannot answer it in this long is unusable either way.
+    connect_timeout: float = 5.0
+
     max_retries: int = 3
 
     # Consecutive failures before the client stops calling out and starts

@@ -52,7 +52,10 @@ class EmbeddingClient:
                 raise EmbeddingUnavailable("No embedding endpoint configured")
             self._client = httpx.AsyncClient(
                 base_url=self.settings.endpoint,
-                timeout=self.settings.timeout,
+                timeout=httpx.Timeout(
+                    self.settings.timeout,
+                    connect=self.settings.connect_timeout,
+                ),
             )
         return self._client
 
@@ -62,14 +65,26 @@ class EmbeddingClient:
             self._client = None
 
     async def health(self) -> bool:
-        """Whether the server is reachable. Never raises."""
+        """Whether the server is reachable. Never raises, and never hangs.
+
+        Answered from the circuit breaker while it is open: the last few calls
+        already established the server is down, and a status read is not the
+        place to check again at the cost of a timeout. Otherwise probed under
+        `connect_timeout` rather than the inference timeout -- callers put this
+        in front of a page, so an unreachable box has to come back as `False`
+        in seconds, not minutes.
+        """
         if not self.enabled:
             return False
+        if self.circuit_open:
+            return False
         try:
-            response = await self._http().get("/health")
-            return response.status_code == 200
+            response = await self._http().get(
+                "/health", timeout=self.settings.connect_timeout
+            )
         except Exception:
             return False
+        return response.status_code == 200
 
     # ------------------------------------------------------------------ #
     # Circuit breaker                                                    #
