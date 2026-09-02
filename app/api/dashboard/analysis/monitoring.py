@@ -7,7 +7,7 @@ from fastapi import APIRouter, Query
 from pydantic import UUID4, BaseModel
 from sqlalchemy import case, func, or_, select
 
-from ainterviewer.types import InterviewStatus
+from ainterviewer.types import InterviewStatus, LanguageCode
 
 from ....db.tables import (
     InterviewTable,
@@ -39,7 +39,7 @@ class InterviewStatusCount(BaseModel):
 class LanguageCount(BaseModel):
     """Count of interviews conducted in a given language."""
 
-    language: str
+    language: LanguageCode
     count: int
 
 

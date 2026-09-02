@@ -35,7 +35,12 @@ from ainterviewer.interview_guides.survey_items import (
     TimeItem,
 )
 from ainterviewer.lpm.types import CustomToken
-from ainterviewer.types import InterviewStatus, MessageRole, MessageType
+from ainterviewer.types import (
+    InterviewStatus,
+    LanguageCode,
+    MessageRole,
+    MessageType,
+)
 
 from ....db.tables import InterviewTable, MessageTable, ProjectLocalizationTable
 from ....db.types import InterviewType
@@ -104,13 +109,13 @@ class CategoryCount(BaseModel):
     # How `count` splits across the languages the interviews ran in, keyed by
     # language code. What the bar is stacked by when the cohort spans more
     # than one language.
-    by_language: dict[str, int] = Field(default_factory=dict)
+    by_language: dict[LanguageCode, int] = Field(default_factory=dict)
 
 
 class DistributionBucket(HistogramBucket):
     """A histogram bucket carrying the same per-language split as a bar."""
 
-    by_language: dict[str, int] = Field(default_factory=dict)
+    by_language: dict[LanguageCode, int] = Field(default_factory=dict)
 
 
 class AnswerSample(BaseModel):
@@ -122,7 +127,7 @@ class AnswerSample(BaseModel):
     """
 
     value: float
-    language: str
+    language: LanguageCode
 
 
 class NumericStats(BaseModel):
@@ -228,7 +233,7 @@ class _Answer(NamedTuple):
     """
 
     content: str
-    language: str
+    language: LanguageCode
     options: list[str] | None
 
 

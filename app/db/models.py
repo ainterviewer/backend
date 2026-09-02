@@ -812,7 +812,7 @@ class EmbeddingStatus(_BaseModel):
     # Stored vectors per language code, most-embedded first. Reported here so a
     # client can offer a language filter whose options are the project's, not
     # whatever the last query happened to return.
-    languages: dict[str, int] = {}
+    languages: dict[LanguageCode, int] = {}
     total: int = 0
     # Live queue, process-wide rather than per project: chunks waiting to be
     # embedded, and chunks dropped because the queue was full since startup.
@@ -859,7 +859,7 @@ class EmbeddingClusterPoint(_BaseModel):
     # coordinates: on a multilingual project the model separates languages
     # before it separates topics, and colouring by this is how that becomes
     # visible instead of being mistaken for two themes.
-    language: str
+    language: LanguageCode
 
 
 class EmbeddingCluster(_BaseModel):
