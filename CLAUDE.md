@@ -266,7 +266,14 @@ what "done" looks like.
 Search is `GET /projects/{id}/analysis/embeddings/search`, `ProjectViewer`-gated
 like the rest of the analysis surface. `task` picks the query instruction and
 `kind` the unit searched; results carry the cosine score so a client can cut off
-weak matches. A 409 means the query's dimension no longer matches the stored
+weak matches. It pages with `limit`/`offset` like the rest of the dashboard's
+lists, capped at `offset + limit <= MAX_SEARCH_DEPTH` (1000) -- a ranked scan
+scores every chunk in scope, so `total` is the length of the ranking and not a
+count of matches, and without the cap the endpoint is a way to page a whole
+project out one screen at a time. Each page re-embeds the query and re-scores
+the candidates rather than caching a ranking: it is the same millisecond-scale
+matrix product the first page does, and it keeps a page a function of the query
+and the corpus alone. A 409 means the query's dimension no longer matches the stored
 vectors -- the model changed and the corpus needs re-embedding.
 
 `GET …/embeddings/{embedding_id}/similar` is "more like this". It reuses the

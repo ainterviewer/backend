@@ -777,10 +777,12 @@ class EmbeddingSearchHit(_BaseModel):
 
 
 class EmbeddingSearchResponse(_BaseModel):
-    """Top-k results for one query.
+    """One page of results for one query.
 
-    Not paginated: k is chosen up front and the whole point of a ranked search
-    is that results past the cut-off are not worth a page.
+    Paged with `limit`/`offset` like the rest of the dashboard's lists, but
+    `total` is not a promise that every row is worth reading: the tail of a
+    ranked scan is whatever scored least, not a further set of matches. The
+    scores are in the response so a client can cut its own cut-off.
     """
 
     query: str
@@ -789,14 +791,21 @@ class EmbeddingSearchResponse(_BaseModel):
     # How many chunks the query was scored against after filtering. Lets a
     # client tell "nothing matched" from "the filters left nothing to match".
     candidates: int = 0
+    # How many of those could be returned at all, i.e. the length of the
+    # ranking `offset` walks. Equal to `candidates` here; one fewer on
+    # `/similar`, which never returns its own source.
+    total: int = 0
+    offset: int = 0
     items: list[EmbeddingSearchHit] = []
 
 
 class EmbeddingSimilarResponse(_BaseModel):
-    """Neighbours of a chunk already in the corpus."""
+    """One page of the neighbours of a chunk already in the corpus."""
 
     source: EmbeddingSearchHit
     candidates: int = 0
+    total: int = 0
+    offset: int = 0
     items: list[EmbeddingSearchHit] = []
 
 

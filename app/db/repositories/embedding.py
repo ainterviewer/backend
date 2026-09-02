@@ -42,7 +42,7 @@ class EmbeddingFilters:
 
     All of it is ordinary SQL applied *before* scoring, which is the advantage
     an exact scan has over an ANN index: the candidate set is whatever the
-    filters say it is, and k results means k results.
+    filters say it is, and a page of ten is ten of them.
     """
 
     interview_ids: list[UUID] | None = None
@@ -61,6 +61,23 @@ class EmbeddingFilters:
 class EmbeddingSearchHit:
     embedding: EmbeddingTable
     score: float
+
+
+@dataclass(frozen=True)
+class EmbeddingSearchPage:
+    """One page of a ranked scan, with the size of the ranking behind it.
+
+    Both counts come from the scan itself rather than a second `COUNT(*)`: the
+    candidate rows are already in memory to be scored, so counting them is free
+    and cannot disagree with what was ranked. `scored` is every chunk the query
+    was compared against; `total` is how many of those could be returned, which
+    is one fewer whenever the source chunk of a "more like this" survived the
+    filters.
+    """
+
+    hits: list[EmbeddingSearchHit]
+    scored: int
+    total: int
 
 
 @dataclass(frozen=True)
@@ -501,13 +518,23 @@ class EmbeddingRepository(BaseRepository):
         self,
         rows: Sequence[Any],
         query_vector: list[float] | np.ndarray,
-        k: int,
+        limit: int,
+        offset: int = 0,
         exclude: UUID | None = None,
-    ) -> list[EmbeddingSearchHit]:
+    ) -> EmbeddingSearchPage:
+        """Score every candidate, return one page of the ranking.
+
+        Paging re-scores the whole candidate set on every request. That is the
+        same work the first page does -- one matrix product over a few thousand
+        rows, single-digit milliseconds -- and it keeps a page a pure function
+        of the query and the corpus, with no ranking to cache, invalidate or
+        pin to a session.
+        """
+        scored = len(rows)
         if exclude is not None:
             rows = [row for row in rows if row[0] != exclude]
-        if not rows:
-            return []
+        if not rows or offset >= len(rows):
+            return EmbeddingSearchPage(hits=[], scored=scored, total=len(rows))
 
         query = np.asarray(query_vector, dtype=VECTOR_DTYPE)
         matrix = np.frombuffer(
@@ -523,19 +550,27 @@ class EmbeddingRepository(BaseRepository):
 
         scores = matrix @ query
 
-        k = min(k, len(rows))
-        # argpartition finds the top k without sorting the whole array; the
-        # slice is then sorted so the caller gets them best-first.
-        top = np.argpartition(-scores, k - 1)[:k]
-        top = top[np.argsort(-scores[top])]
+        # Deep enough to reach the far end of the requested page, no deeper:
+        # argpartition finds the top `depth` without sorting the whole array,
+        # the slice is sorted so the caller gets them best-first, and the page
+        # is taken off the front of that.
+        depth = min(offset + limit, len(rows))
+        top = np.argpartition(-scores, depth - 1)[:depth]
+        top = top[np.argsort(-scores[top])][offset:]
 
         embeddings = self._hydrate([rows[i][0] for i in top])
 
-        return [
-            EmbeddingSearchHit(embedding=embeddings[rows[i][0]], score=float(scores[i]))
-            for i in top
-            if rows[i][0] in embeddings
-        ]
+        return EmbeddingSearchPage(
+            hits=[
+                EmbeddingSearchHit(
+                    embedding=embeddings[rows[i][0]], score=float(scores[i])
+                )
+                for i in top
+                if rows[i][0] in embeddings
+            ],
+            scored=scored,
+            total=len(rows),
+        )
 
     def search(
         self,
@@ -544,9 +579,10 @@ class EmbeddingRepository(BaseRepository):
         query_vector: list[float] | np.ndarray,
         kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
         task: EmbeddingTask = EmbeddingTask.DOCUMENT,
-        k: int = 10,
+        limit: int = 10,
+        offset: int = 0,
         filters: EmbeddingFilters | None = None,
-    ) -> list[EmbeddingSearchHit]:
+    ) -> EmbeddingSearchPage:
         """Exact nearest-neighbour search within one project and chunk kind."""
         rows = self.session.execute(
             self._candidate_statement(
@@ -557,15 +593,16 @@ class EmbeddingRepository(BaseRepository):
             )
         ).all()
 
-        return self._rank(rows, query_vector, k)
+        return self._rank(rows, query_vector, limit, offset)
 
     def similar_to(
         self,
         *,
         embedding_id: UUID,
-        k: int = 10,
+        limit: int = 10,
+        offset: int = 0,
         filters: EmbeddingFilters | None = None,
-    ) -> tuple[EmbeddingTable, list[EmbeddingSearchHit]]:
+    ) -> tuple[EmbeddingTable, EmbeddingSearchPage]:
         """Nearest neighbours of a chunk already in the corpus.
 
         Costs no inference at all -- the query vector is the stored one -- which
@@ -587,7 +624,7 @@ class EmbeddingRepository(BaseRepository):
         ).all()
 
         return source, self._rank(
-            rows, decode_vector(source.vector), k, exclude=source.id
+            rows, decode_vector(source.vector), limit, offset, exclude=source.id
         )
 
     def vectors_for(
@@ -651,29 +688,6 @@ class EmbeddingRepository(BaseRepository):
             .values(text=text)
         )
         return bool(result.rowcount)  # ty: ignore[unresolved-attribute]
-
-    def count_candidates(
-        self,
-        *,
-        project_id: UUID,
-        kind: EmbeddingKind,
-        task: EmbeddingTask = EmbeddingTask.DOCUMENT,
-        filters: EmbeddingFilters | None = None,
-    ) -> int:
-        """How many chunks a search would score against.
-
-        Distinguishes "nothing matched" from "the filters left nothing to
-        match", which is otherwise invisible to a client staring at an empty
-        result list.
-        """
-        statement = self._candidate_statement(
-            project_id=project_id,
-            kind=kind,
-            task=task,
-            filters=filters or EmbeddingFilters(),
-        ).with_only_columns(func.count(EmbeddingTable.id))
-
-        return self.session.execute(statement).scalar_one() or 0
 
     def coverage(self, project_id: UUID) -> dict[str, int]:
         """Stored vector counts per kind, for one project."""

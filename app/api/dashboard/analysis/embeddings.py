@@ -78,16 +78,49 @@ class SearchFilterParams:
         )
 
 
+# How far into a ranking `offset` may reach. A ranked scan has no natural end
+# -- every chunk in scope gets a score -- so without a bound a client can page
+# a whole project out through an endpoint meant for retrieval. A thousand rows
+# in is already well past where scores stop meaning anything; a corpus is read
+# with the export or the cluster map, not with the search endpoint.
+MAX_SEARCH_DEPTH = 1000
+
+
+class SearchPageParams:
+    """`limit`/`offset` for the two ranked endpoints.
+
+    Named as the dashboard's other lists name them, but deliberately not
+    `PaginatedQueryParams`: that carries `column` and `order`, and a ranked
+    scan has exactly one order -- by score -- which a caller cannot choose.
+    """
+
+    def __init__(
+        self,
+        limit: Annotated[int, Query(ge=1, le=100)] = 10,
+        offset: Annotated[int, Query(ge=0)] = 0,
+    ):
+        if offset + limit > MAX_SEARCH_DEPTH:
+            raise HTTPException(
+                422,
+                detail=(
+                    f"offset + limit may not exceed {MAX_SEARCH_DEPTH}; results "
+                    "that far down a ranked list are noise, not further matches"
+                ),
+            )
+        self.limit = limit
+        self.offset = offset
+
+
 @router.get("/projects/{project_id}/analysis/embeddings/search")
 async def search_embeddings(
     project_id: UUID4,
     db: DBSession,
     jwt: ProjectViewer,
     filter_params: Annotated[SearchFilterParams, Depends()],
+    page: Annotated[SearchPageParams, Depends()],
     query: Annotated[str, Query(min_length=1, max_length=2000)],
     kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
     task: QueryTask = QueryTask.RETRIEVAL,
-    k: Annotated[int, Query(ge=1, le=100)] = 10,
 ) -> EmbeddingSearchResponse:
     """Semantic search over one project's embedded interview text.
 
@@ -95,6 +128,13 @@ async def search_embeddings(
     vectors are task-free, so switching tasks costs a query embedding and
     nothing else. `kind` picks the unit searched -- QA pairs by default, since a
     lone answer is often too short to mean anything out of context.
+
+    Paged with `limit`/`offset`, which together may not reach further than
+    `MAX_SEARCH_DEPTH` into the ranking. Every page re-embeds the query and
+    re-scores the candidate set, which is what keeps a page a function of the
+    query and the corpus rather than of a cached ranking -- and `total` is the
+    length of that ranking, not a count of things worth reading. Deep pages of
+    a semantic search are the chunks that scored least.
     """
     if not embedding_client.enabled:
         raise HTTPException(503, detail="Embedding is not enabled on this deployment")
@@ -105,11 +145,12 @@ async def search_embeddings(
         raise HTTPException(503, detail=f"Embedding server unavailable: {error}")
 
     try:
-        hits = db.embeddings.search(
+        result = db.embeddings.search(
             project_id=project_id,
             query_vector=query_vector,
             kind=kind,
-            k=k,
+            limit=page.limit,
+            offset=page.offset,
             filters=filter_params.filters,
         )
     except ValueError as error:
@@ -117,20 +158,20 @@ async def search_embeddings(
         # i.e. the model changed and the corpus has not been re-embedded.
         raise HTTPException(409, detail=str(error))
 
-    turns = db.embeddings.turns_for([hit.embedding for hit in hits])
+    turns = db.embeddings.turns_for([hit.embedding for hit in result.hits])
 
     return EmbeddingSearchResponse(
         query=query,
         kind=kind,
         task=task,
-        candidates=db.embeddings.count_candidates(
-            project_id=project_id, kind=kind, filters=filter_params.filters
-        ),
+        candidates=result.scored,
+        total=result.total,
+        offset=page.offset,
         items=[
             EmbeddingSearchHit.from_hit(
                 hit.embedding, hit.score, turns.get(hit.embedding.id)
             )
-            for hit in hits
+            for hit in result.hits
         ],
     )
 
@@ -142,17 +183,23 @@ async def find_similar_embeddings(
     db: DBSession,
     jwt: ProjectViewer,
     filter_params: Annotated[SearchFilterParams, Depends()],
-    k: Annotated[int, Query(ge=1, le=100)] = 10,
+    page: Annotated[SearchPageParams, Depends()],
 ) -> EmbeddingSimilarResponse:
     """Chunks most like an existing one -- "more like this".
 
     Costs no inference: the query vector is the one already stored, so this
     works even when the embedding server is down. Searches within the source's
-    own kind and never returns the source itself.
+    own kind and never returns the source itself, which is why `total` is one
+    below `candidates` whenever the source survives the filters.
+
+    Paged with `limit`/`offset` on the same terms as the search endpoint.
     """
     try:
-        source, hits = db.embeddings.similar_to(
-            embedding_id=embedding_id, k=k, filters=filter_params.filters
+        source, result = db.embeddings.similar_to(
+            embedding_id=embedding_id,
+            limit=page.limit,
+            offset=page.offset,
+            filters=filter_params.filters,
         )
     except NoResultFound:
         raise HTTPException(404, detail="Embedding not found")
@@ -164,18 +211,18 @@ async def find_similar_embeddings(
         # not be reachable through it.
         raise HTTPException(404, detail="Embedding not found")
 
-    turns = db.embeddings.turns_for([source, *(hit.embedding for hit in hits)])
+    turns = db.embeddings.turns_for([source, *(hit.embedding for hit in result.hits)])
 
     return EmbeddingSimilarResponse(
         source=EmbeddingSearchHit.from_hit(source, 1.0, turns.get(source.id)),
-        candidates=db.embeddings.count_candidates(
-            project_id=project_id, kind=source.kind, filters=filter_params.filters
-        ),
+        candidates=result.scored,
+        total=result.total,
+        offset=page.offset,
         items=[
             EmbeddingSearchHit.from_hit(
                 hit.embedding, hit.score, turns.get(hit.embedding.id)
             )
-            for hit in hits
+            for hit in result.hits
         ],
     )
 
