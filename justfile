@@ -73,8 +73,8 @@ publish:
     # Prepend this release's section; --prepend needs the file to exist.
     touch CHANGELOG.md
     uvx git-cliff@2.13.1 --unreleased --tag "v${VERSION}" --prepend CHANGELOG.md
-    git add uv.lock pyproject.toml CHANGELOG.md
-    git commit -m "chore(release): v${VERSION}"
+
+    git commit --only uv.lock pyproject.toml CHANGELOG.md -m "chore(release): v${VERSION}"
     git tag -a "v${VERSION}" -m "v${VERSION}"
     git push --follow-tags
 
