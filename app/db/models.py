@@ -809,6 +809,10 @@ class EmbeddingStatus(_BaseModel):
     dimension: int
     # Stored vectors per `EmbeddingKind`, for this project.
     coverage: dict[str, int] = {}
+    # Stored vectors per language code, most-embedded first. Reported here so a
+    # client can offer a language filter whose options are the project's, not
+    # whatever the last query happened to return.
+    languages: dict[str, int] = {}
     total: int = 0
     # Live queue, process-wide rather than per project: chunks waiting to be
     # embedded, and chunks dropped because the queue was full since startup.

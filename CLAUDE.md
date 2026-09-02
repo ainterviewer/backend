@@ -279,6 +279,24 @@ one participant returns 10 of theirs, not whichever of the global top 10 happen
 to be theirs. `candidates` in the response reports how many chunks were scored,
 so a client can tell "nothing matched" from "the filters left nothing to match".
 
+The same ordering matters more for clustering than for search: a filtered-out
+chunk is never *fitted*, so scoping to one language removes that dimension
+outright rather than subtracting its mean. On the Danish/English project,
+`language=DA` + `center_by_question` reached 0.47 question purity against 0.50
+for centering both axes over the whole corpus -- filtering is the better
+analysis whenever the corpus can afford it. What it costs is the corpus:
+`language=EN` there is 246 message chunks and collapses to two clusters, and no
+filter can answer whether the two languages talk about a thing the same way.
+Filter to analyse a language; centre to compare across them.
+
+`language` is repeatable (`?language=DA&language=EN`) and validated against the
+`LANGUAGES` constant via `LanguageFilter` (`app/api/request_models.py`). Both
+halves of that matter: a multilingual project is usually analysed over the
+languages with enough respondents to say anything, and a bare `LanguageCode`
+only checks the shape -- "DK" is Denmark's country code, passes, and matches
+nothing, which reads as "no Danish data" rather than as a typo. A malformed code
+used to reach the column type and surface as a `StatementError` 500.
+
 **Clustering** is `GET …/embeddings/clusters` (`app/embed/clustering.py`):
 HDBSCAN in a reduced space, with the scatter taken from the first two dimensions
 of that *same* space rather than a separate fit, so the picture is always a

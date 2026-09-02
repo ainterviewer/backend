@@ -37,6 +37,7 @@ from ....embed.queue import chunk_queue
 from ....embed.templates import QueryTask
 from ....settings import app_settings
 from ....types import GroupKind, Projection
+from ...request_models import LanguageFilter
 
 router = APIRouter()
 
@@ -47,12 +48,18 @@ class SearchFilterParams:
     Filtering happens in SQL before anything is scored, so these narrow the
     candidate set rather than the result list -- asking for 10 results from one
     participant returns 10 of theirs, not whichever of the global top 10
-    happened to be theirs.
+    happened to be theirs. For clustering the same is true of the reduction:
+    filtered-out chunks are never fitted, so scoping to one language removes
+    that dimension outright rather than subtracting its mean.
+
+    `language` is repeatable (`?language=DA&language=EN`), because a
+    multilingual project is usually analysed over the languages that have
+    enough respondents to say anything -- rarely all of them, rarely just one.
     """
 
     def __init__(
         self,
-        language: str | None = None,
+        language: Annotated[list[LanguageFilter] | None, Query()] = None,
         status: InterviewStatus | None = None,
         participant_id: UUID4 | None = None,
         created_after: datetime | None = None,
@@ -62,7 +69,7 @@ class SearchFilterParams:
     ):
         self.filters = EmbeddingFilters(
             interview_ids=interview_id,
-            language=language,
+            languages=language,
             status=status,
             participant_id=participant_id,
             created_after=created_after,
@@ -475,6 +482,7 @@ async def get_embedding_status(
         model=settings.model,
         dimension=settings.dimension,
         coverage=coverage,
+        languages=db.embeddings.languages(project_id),
         total=sum(coverage.values()),
         queue_depth=chunk_queue.depth,
         queue_dropped=chunk_queue.dropped,

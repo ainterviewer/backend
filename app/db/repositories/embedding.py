@@ -46,7 +46,10 @@ class EmbeddingFilters:
     """
 
     interview_ids: list[UUID] | None = None
-    language: str | None = None
+    #: Restrict to these languages. A list rather than one code because a
+    #: multilingual project is often analysed two languages at a time -- the
+    #: ones with enough respondents to say anything -- not all or one.
+    languages: list[str] | None = None
     status: InterviewStatus | None = None
     participant_id: UUID | None = None
     created_after: datetime | None = None
@@ -311,8 +314,8 @@ class EmbeddingRepository(BaseRepository):
                 EmbeddingTable.interview_id.in_(filters.interview_ids)
             )
 
-        if filters.language is not None:
-            statement = statement.where(EmbeddingTable.language == filters.language)
+        if filters.languages:
+            statement = statement.where(EmbeddingTable.language.in_(filters.languages))
 
         interview_conditions = []
         if not filters.include_synthetic:
@@ -680,6 +683,23 @@ class EmbeddingRepository(BaseRepository):
             .group_by(EmbeddingTable.kind)
         ).all()
         return {kind.value: count for kind, count in rows}
+
+    def languages(self, project_id: UUID) -> dict[str, int]:
+        """Stored vector counts per language, for one project.
+
+        Counted here rather than derived by the client from a result set: a
+        client holds whatever one projection returned under whatever filters
+        were active, so it cannot tell a language the project does not have
+        from one the current filters excluded -- and a language filter built
+        on that would delete its own options as soon as it was used.
+        """
+        rows = self.session.execute(
+            select(EmbeddingTable.language, func.count(EmbeddingTable.id))
+            .where(EmbeddingTable.project_id == project_id)
+            .group_by(EmbeddingTable.language)
+            .order_by(func.count(EmbeddingTable.id).desc())
+        ).all()
+        return {language: count for language, count in rows}
 
     def count(self) -> int:
         return (

@@ -1,14 +1,43 @@
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import Query
-from pydantic import UUID4, BaseModel, EmailStr, Field, field_validator
+from pydantic import (
+    UUID4,
+    AfterValidator,
+    BaseModel,
+    EmailStr,
+    Field,
+    field_validator,
+)
 
+from ainterviewer.constants import LANGUAGES
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
 from ainterviewer.types import Feedback, Interviewer, LanguageCode, TestType
 
 from ..db.types import InterviewType
 from ..types import ExternalParam, ProjectStatus
+
+KNOWN_LANGUAGE_CODES = frozenset(entry["code"] for entry in LANGUAGES)
+
+
+def _known_language(code: str) -> str:
+    """Reject a well-formed code that names no language.
+
+    `LanguageCode` only checks the shape, which lets a plausible wrong answer
+    through: "DK" is Denmark's country code and not a language, so filtering on
+    it matches nothing and looks like "this project has no Danish data" rather
+    than like a typo.
+    """
+    if code not in KNOWN_LANGUAGE_CODES:
+        raise ValueError(f"Unknown language code: {code}")
+    return code
+
+
+#: A language code as a *filter* value, validated against the known set so a
+#: bad one is a 422 rather than an empty result set or a 500 from the column
+#: type. Uppercased on the way in, since `LanguageCode` carries `to_upper`.
+LanguageFilter = Annotated[LanguageCode, AfterValidator(_known_language)]
 
 
 class PaginatedQueryParams(BaseModel):
