@@ -120,7 +120,7 @@ def _create_and_store_refresh_token(
 
 
 def _issue_session(
-    db,
+    db: DBSession,
     user: UserPrivate,
     extended: bool,
     detail: str = "Successfully logged in",
@@ -561,6 +561,13 @@ async def refresh(
 
     # Look up user for fresh scope (in case it changed since last login)
     user = db.users.get_user_by_id(stored.user_id)
+
+    # A refresh means a client is alive, not that a human did something --
+    # a backgrounded tab refreshes on its own. Good enough for session
+    # liveness, debounced so it isn't a write on every refresh.
+    db.users.touch_last_active(
+        user.id, app_settings.app.last_active_debounce.to_timedelta()
+    )
 
     # Issue new token pair, same family
     new_access = create_auth_token(user_id=user.id, scope=user.scope)

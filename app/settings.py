@@ -71,6 +71,13 @@ class AppSettings(BaseModel):
     login_code_max_attempts: int = 5
     code_resend_cooldown_seconds: int = 30
 
+    # Debounce for the last_active touch on /refresh. A client with the app
+    # open refreshes every jwt_auth_token_expiration, so without this the
+    # column would be rewritten on that cadence for no extra resolution.
+    last_active_debounce: TimeDelta = Field(
+        default_factory=lambda: TimeDelta(minutes=10)
+    )
+
     @computed_field
     def api_endpoint(self) -> str:
         return f"{self.api_host}:{self.api_port}"

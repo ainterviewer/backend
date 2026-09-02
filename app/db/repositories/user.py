@@ -111,6 +111,33 @@ class UserRepository(BaseRepository):
         self.session.execute(statement)
         self.session.commit()
 
+    def touch_last_active(self, id: UUID4, min_interval: timedelta) -> bool:
+        """Move ``last_active`` to now, but only if it is already stale.
+
+        Called from the token-refresh path, which fires on the access token's
+        cadence rather than on anything a human did, so the staleness check is
+        what keeps it from being a write per refresh. The comparison is done in
+        SQL so it stays one statement and no row has to be read back.
+
+        Returns whether the row was actually updated.
+        """
+        timestamp = now()
+        statement = (
+            update(UserTable)
+            .where(
+                UserTable.id == id,
+                UserTable.last_active < timestamp - min_interval,
+            )
+            .values(last_active=timestamp)
+            # The default "evaluate" strategy re-runs the WHERE clause in
+            # Python against loaded objects, where last_active comes back
+            # naive and the comparison against an aware now() raises.
+            .execution_options(synchronize_session=False)
+        )
+        result = self.session.execute(statement)
+        self.session.commit()
+        return result.rowcount > 0  # ty:ignore[unresolved-attribute]
+
     def get_user_private(
         self,
         email: str | None = None,
