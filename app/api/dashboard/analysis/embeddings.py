@@ -5,7 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import UUID4
 from sqlalchemy import select
 from sqlalchemy.exc import NoResultFound
+from starlette.concurrency import run_in_threadpool
 
+from ainterviewer.constants import LANGUAGES
 from ainterviewer.types import EmbeddingKind, InterviewStatus
 
 from ....db.models import (
@@ -19,19 +21,22 @@ from ....db.models import (
     EmbeddingSimilarResponse,
     EmbeddingStatus,
 )
-from ....db.repositories.embedding import EmbeddingFilters
+from ....db.repositories.embedding import ChunkCoordinates, EmbeddingFilters
 from ....db.tables import ProjectLocalizationTable
 from ....dependencies import DBSession, ProjectEditor, ProjectViewer
 from ....embed.backfill import pending_chunks
 from ....embed.client import EmbeddingUnavailable, embedding_client
 from ....embed.clustering import (
     DEFAULT_MIN_CLUSTER_SIZE,
+    DEFAULT_MIN_DIST,
+    DEFAULT_N_NEIGHBORS,
+    GroupAxis,
     cluster_vectors,
 )
 from ....embed.queue import chunk_queue
 from ....embed.templates import QueryTask
 from ....settings import app_settings
-from ....types import GroupKind
+from ....types import GroupKind, Projection
 
 router = APIRouter()
 
@@ -175,12 +180,23 @@ PREVIEW_CHARS = 240
 GROUP_TEXT_CHARS = 120
 
 
-def _guide_groups(
+LANGUAGE_NAMES = {entry["code"]: entry["name"] for entry in LANGUAGES}
+
+
+def _point_groups(
     session,
     project_id: UUID4,
-    coordinates: list[tuple[int | None, int | None, int | None]],
+    coordinates: list[ChunkCoordinates],
 ) -> list[EmbeddingGroup]:
-    """The guide groups the plotted points fall into, questions and sections.
+    """The declared groups the plotted points fall into: sections, questions,
+    languages.
+
+    These are the baseline the clusters are read against. If colouring by one of
+    them reproduces the clustering, the clustering found scaffolding -- the
+    guide, or the respondent's language -- and not a theme. The language rows
+    exist because that failure is otherwise invisible: on a Danish/English
+    project the two biggest clusters were simply the two languages, and nothing
+    in the response said so.
 
     Sized from the points rather than from the guide: a question nobody
     answered is not a colour on this map, and an empty legend row would be one.
@@ -197,16 +213,32 @@ def _guide_groups(
     """
     question_sizes: dict[tuple[int, int], int] = {}
     section_sizes: dict[int, int] = {}
-    for section, main_question, _ in coordinates:
-        if section is None:
+    language_sizes: dict[str, int] = {}
+    for point in coordinates:
+        language_sizes[point.language] = language_sizes.get(point.language, 0) + 1
+        if point.section is None:
             continue
-        section_sizes[section] = section_sizes.get(section, 0) + 1
-        if main_question is not None:
-            key = (section, main_question)
+        section_sizes[point.section] = section_sizes.get(point.section, 0) + 1
+        if point.main_question is not None:
+            key = (point.section, point.main_question)
             question_sizes[key] = question_sizes.get(key, 0) + 1
 
+    # Language needs no guide, so it is built before the early return: an
+    # INTERVIEW chunk carries no guide coordinates at all, and its map should
+    # still be colourable by language.
+    language_groups = [
+        EmbeddingGroup(
+            kind=GroupKind.LANGUAGE,
+            key=code,
+            label=code,
+            text=LANGUAGE_NAMES.get(code),
+            size=size,
+        )
+        for code, size in sorted(language_sizes.items(), key=lambda kv: -kv[1])
+    ]
+
     if not section_sizes:
-        return []
+        return language_groups
 
     guide = session.execute(
         select(ProjectLocalizationTable.interview_guide).where(
@@ -252,6 +284,7 @@ def _guide_groups(
         )
         for (section, main_question), size in sorted(question_sizes.items())
     )
+    groups.extend(language_groups)
     return groups
 
 
@@ -262,45 +295,102 @@ async def cluster_embeddings(
     jwt: ProjectViewer,
     filter_params: Annotated[SearchFilterParams, Depends()],
     kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
+    projection: Projection = Projection.UMAP,
     min_cluster_size: Annotated[int, Query(ge=2, le=500)] = DEFAULT_MIN_CLUSTER_SIZE,
     min_samples: Annotated[int | None, Query(ge=1, le=500)] = None,
+    n_neighbors: Annotated[int, Query(ge=2, le=200)] = DEFAULT_N_NEIGHBORS,
+    min_dist: Annotated[float, Query(ge=0.0, le=1.0)] = DEFAULT_MIN_DIST,
     center_by_question: bool = False,
+    center_by_language: bool = False,
     n_representatives: Annotated[int, Query(ge=1, le=10)] = 3,
 ) -> EmbeddingClusterResponse:
     """Cluster a project's chunks and project them to 2D.
 
-    HDBSCAN over the first 50 principal components, with the scatter taken from
-    the first two of that same projection -- so the picture is a sub-projection
-    of the space the clusters were found in, not a separate fit. HDBSCAN rather
-    than k-means because exploratory work does not know `k` up front, and
-    because points it cannot place come back as outliers instead of being forced
-    into the nearest blob.
+    HDBSCAN in whatever space `projection` reduces to, with the scatter taken
+    from the first two dimensions of that *same* space -- so the picture is
+    always a sub-projection of where the clusters were found, never a separate
+    fit. HDBSCAN rather than k-means because exploratory work does not know `k`
+    up front, and because points it cannot place come back as outliers instead
+    of being forced into the nearest blob.
 
-    **Read `question_purity` before reading the clusters.** A QA-pair chunk
-    repeats its interview question verbatim, and every respondent was asked the
-    same one, so uncentred clustering tends to recover the interview guide
-    rather than what anyone said. `center_by_question=true` subtracts each
-    question's mean vector first, which removes that shared component and costs
-    no re-embedding.
+    `projection=umap` (the default) reduces non-linearly to 2 dimensions and
+    clusters in them. It separates neighbourhoods far more sharply than PCA,
+    which is what makes the picture readable, but it costs seconds rather than
+    milliseconds, reports no `explained_variance_2d`, and can manufacture a
+    split between neighbourhoods that are not really apart -- check a suspicious
+    cluster's representatives before believing it. **Distances on a UMAP
+    scatter carry no meaning**: read which points sit together, never how far
+    apart two clusters are or how large one looks. `projection=pca` is the fast
+    linear alternative, and the one to use when the plot's geometry has to mean
+    something.
 
-    Computed per request -- milliseconds at this corpus size -- so
-    `min_cluster_size` is an interactive control, not a migration.
+    `n_neighbors` and `min_dist` are read under UMAP only -- the first trades
+    local detail against global structure, the second how tightly points may
+    pack.
+
+    **Read the purities before reading the clusters.** Two things an embedding
+    encodes that are scaffolding rather than content, both of which clustering
+    will happily recover instead of a theme:
+
+    - A QA-pair chunk repeats its interview question verbatim, and every
+      respondent was asked the same one. `question_purity` near 1.0 means the
+      cluster is a question; `center_by_question=true` subtracts each question's
+      mean vector first.
+    - A multilingual project embeds every language into one space, and the model
+      separates languages before it separates topics -- on a Danish/English
+      project the two largest clusters were simply Danish and English.
+      `language_purity` near 1.0 means the cluster is a language;
+      `center_by_language=true` subtracts each language's mean vector.
+
+    Both centre on the composite key when set together, subtracting the mean of
+    each language-within-question cell, which removes both confounds in one pass
+    and costs no re-embedding. The cost is thinner cells: a cell of one chunk
+    becomes the zero vector and collects at the origin. Filtering to a single
+    `language` is the blunter alternative -- it analyses one language properly
+    instead of comparing across them.
+
+    `groups` carries a `language` row per language in scope alongside the guide
+    rows, so the same scatter can be coloured by language directly. That is
+    usually the fastest way to see whether a split is real.
+
+    Computed per request rather than stored, so `min_cluster_size` stays an
+    interactive control rather than a migration.
     """
-    ids, matrix, groups = db.embeddings.vectors_for(
+    ids, matrix, coordinates = db.embeddings.vectors_for(
         project_id=project_id, kind=kind, filters=filter_params.filters
     )
 
-    result = cluster_vectors(
-        ids,
-        matrix,
-        min_cluster_size=min_cluster_size,
-        min_samples=min_samples,
-        n_representatives=n_representatives,
+    axes = [
         # The question a chunk belongs to, not the probe within it: a MESSAGE
         # chunk carries a sub_question, and centring per probe would subtract a
         # different mean from every turn of the same question.
-        group_keys=[(section, main) for section, main, _ in groups],
-        center_by_group=center_by_question,
+        GroupAxis(
+            name=GroupKind.QUESTION,
+            keys=[point.question for point in coordinates],
+            center=center_by_question,
+        ),
+        GroupAxis(
+            name=GroupKind.LANGUAGE,
+            keys=[point.language for point in coordinates],
+            center=center_by_language,
+        ),
+    ]
+
+    # Off the event loop: a UMAP fit is seconds of CPU (and a one-off numba
+    # compile on a process's first call), which would otherwise stall every
+    # other request in flight. PCA does not need this, but a branch that
+    # sometimes blocks the loop is worse than one thread hop.
+    result = await run_in_threadpool(
+        cluster_vectors,
+        ids,
+        matrix,
+        projection=projection,
+        min_cluster_size=min_cluster_size,
+        min_samples=min_samples,
+        n_neighbors=n_neighbors,
+        min_dist=min_dist,
+        n_representatives=n_representatives,
+        axes=axes,
     )
 
     # One hydration for every id any part of the response names.
@@ -311,23 +401,27 @@ async def cluster_embeddings(
     previews = db.embeddings.previews(ids, PREVIEW_CHARS)
     turns = db.embeddings.turns_for(list(representatives.values()))
 
-    # The guide coordinates every plotted point came from, so the scatter can
-    # be coloured by the interview guide as well as by the clustering.
-    coordinates = dict(zip(ids, groups))
+    # What every plotted point is, beyond where clustering put it -- so the
+    # scatter can be coloured by the guide or by language as well as by the
+    # clustering.
+    by_id = dict(zip(ids, coordinates))
 
     return EmbeddingClusterResponse(
         kind=kind,
         n_points=len(result.points),
         n_clusters=len(result.clusters),
         n_outliers=result.n_outliers,
+        projection=result.projection,
         components=result.components,
         explained_variance_2d=result.explained_variance_2d,
         centered_by_question=center_by_question,
+        centered_by_language=center_by_language,
         clusters=[
             EmbeddingCluster(
                 id=cluster.id,
                 size=cluster.size,
-                question_purity=cluster.question_purity,
+                question_purity=cluster.purity.get(GroupKind.QUESTION),
+                language_purity=cluster.purity.get(GroupKind.LANGUAGE),
                 representatives=[
                     EmbeddingSearchHit.from_hit(
                         representatives[embedding_id], 1.0, turns.get(embedding_id)
@@ -338,10 +432,10 @@ async def cluster_embeddings(
             )
             for cluster in result.clusters
         ],
-        groups=_guide_groups(
+        groups=_point_groups(
             db.session,
             project_id,
-            [coordinates[point.embedding_id] for point in result.points],
+            [by_id[point.embedding_id] for point in result.points],
         ),
         points=[
             EmbeddingClusterPoint(
@@ -351,9 +445,10 @@ async def cluster_embeddings(
                 x=point.x,
                 y=point.y,
                 preview=previews.get(point.embedding_id),
-                section=coordinates[point.embedding_id][0],
-                main_question=coordinates[point.embedding_id][1],
-                sub_question=coordinates[point.embedding_id][2],
+                section=by_id[point.embedding_id].section,
+                main_question=by_id[point.embedding_id].main_question,
+                sub_question=by_id[point.embedding_id].sub_question,
+                language=by_id[point.embedding_id].language,
             )
             for point in result.points
         ],

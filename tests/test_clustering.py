@@ -8,9 +8,11 @@ import numpy as np
 import pytest
 
 from app.embed.clustering import (
+    GroupAxis,
     center_by_groups,
     cluster_vectors,
 )
+from app.types import Projection
 
 RNG = np.random.default_rng(0)
 
@@ -74,6 +76,7 @@ class TestClusterVectors:
         ids, matrix = corpus()
         result = cluster_vectors(ids, matrix, n_components=50, min_cluster_size=5)
 
+        assert result.projection is Projection.PCA
         assert result.components == min(50, len(ids), matrix.shape[1])
         assert 0.0 <= result.explained_variance_2d <= 1.0
 
@@ -111,23 +114,42 @@ class TestClusterVectors:
         assert sizes == sorted(sizes, reverse=True)
 
 
-class TestQuestionPurity:
-    def test_none_without_groups(self):
+class TestPurity:
+    def test_empty_without_axes(self):
         ids, matrix = corpus()
         result = cluster_vectors(ids, matrix, min_cluster_size=5)
 
-        assert all(c.question_purity is None for c in result.clusters)
+        assert all(c.purity == {} for c in result.clusters)
 
     def test_detects_clusters_that_are_really_one_question(self):
         """The failure mode this exists to expose: QA-pair chunks repeat their
         interview question verbatim, so blobs form per question."""
         ids, matrix = corpus(n_groups=3, per_group=20)
-        groups = [(0, i // 20) for i in range(len(ids))]
+        axis = GroupAxis("question", [(0, i // 20) for i in range(len(ids))])
 
-        result = cluster_vectors(ids, matrix, min_cluster_size=5, group_keys=groups)
+        result = cluster_vectors(ids, matrix, min_cluster_size=5, axes=[axis])
 
         assert result.clusters
-        assert all(c.question_purity == pytest.approx(1.0) for c in result.clusters)
+        assert all(c.purity["question"] == pytest.approx(1.0) for c in result.clusters)
+
+    def test_reports_every_axis_independently(self):
+        """An axis is reported whether or not it is centred, and a cluster can
+        be pure on one axis while crossing another -- which is the whole point
+        of reporting them separately."""
+        ids, matrix = corpus(n_groups=3, per_group=20)
+        question = GroupAxis("question", [(0, i // 20) for i in range(len(ids))])
+        # Alternating, so it cuts across the blobs rather than following them.
+        language = GroupAxis("language", ["DA" if i % 2 else "EN" for i in range(60)])
+
+        result = cluster_vectors(
+            ids, matrix, min_cluster_size=5, axes=[question, language]
+        )
+
+        assert result.clusters
+        for cluster in result.clusters:
+            assert set(cluster.purity) == {"question", "language"}
+            assert cluster.purity["question"] == pytest.approx(1.0)
+            assert cluster.purity["language"] < 0.75
 
 
 class TestCenterByGroups:
@@ -182,16 +204,163 @@ class TestCenterByGroups:
         matrix = np.vstack(rows)
         ids = [f"id-{i}" for i in range(len(matrix))]
 
-        raw = cluster_vectors(ids, matrix, min_cluster_size=5, group_keys=groups)
+        raw = cluster_vectors(
+            ids, matrix, min_cluster_size=5, axes=[GroupAxis("question", groups)]
+        )
         centered = cluster_vectors(
-            ids, matrix, min_cluster_size=5, group_keys=groups, center_by_group=True
+            ids,
+            matrix,
+            min_cluster_size=5,
+            axes=[GroupAxis("question", groups, center=True)],
         )
 
-        raw_purity = sum(c.question_purity for c in raw.clusters) / len(raw.clusters)
-        centered_purity = sum(c.question_purity for c in centered.clusters) / len(
+        raw_purity = sum(c.purity["question"] for c in raw.clusters) / len(raw.clusters)
+        centered_purity = sum(c.purity["question"] for c in centered.clusters) / len(
             centered.clusters
         )
 
         # Uncentred, clusters are questions. Centred, they cross questions.
         assert raw_purity == pytest.approx(1.0)
         assert centered_purity < 0.6
+
+
+class TestUmapProjection:
+    """UMAP is the non-linear alternative: the scatter *is* the clustering
+    space, two dimensions wide, and there is no variance ratio to report.
+
+    Kept to a handful of cases on purpose -- a UMAP fit is seconds, and the
+    behaviour that matters here is the contract, not the layout it happens to
+    produce.
+    """
+
+    def test_clusters_in_the_two_plotted_dimensions(self):
+        ids, matrix = corpus(n_groups=3, per_group=20)
+        result = cluster_vectors(
+            ids, matrix, projection=Projection.UMAP, min_cluster_size=5
+        )
+
+        assert result.projection is Projection.UMAP
+        # Two, and only two: unlike PCA there is nothing behind the picture.
+        assert result.components == 2
+        # No linear variance to account for, so nothing is claimed.
+        assert result.explained_variance_2d is None
+        assert [p.embedding_id for p in result.points] == ids
+        assert sum(c.size for c in result.clusters) + result.n_outliers == len(ids)
+
+    def test_separates_blobs_at_least_as_well_as_pca(self):
+        ids, matrix = corpus(n_groups=4, per_group=20)
+        result = cluster_vectors(
+            ids, matrix, projection=Projection.UMAP, min_cluster_size=5
+        )
+
+        assert len(result.clusters) == 4
+
+    def test_deterministic(self):
+        """Seeded, so an analyst can compare two runs of the same corpus.
+
+        Worth asserting rather than assuming: UMAP is stochastic by default and
+        drops to a single thread precisely to honour the seed.
+        """
+        ids, matrix = corpus(n_groups=3, per_group=20)
+        first = cluster_vectors(
+            ids, matrix, projection=Projection.UMAP, min_cluster_size=5
+        )
+        second = cluster_vectors(
+            ids, matrix, projection=Projection.UMAP, min_cluster_size=5
+        )
+
+        assert [p.x for p in first.points] == [p.x for p in second.points]
+        assert [p.cluster for p in first.points] == [p.cluster for p in second.points]
+
+    def test_too_few_points_still_projects(self):
+        """Fewer points than UMAP's default neighbourhood: it must clamp rather
+        than raise, since a filter can leave a project with three chunks."""
+        ids, matrix = corpus(n_groups=1, per_group=4)
+        result = cluster_vectors(
+            ids, matrix, projection=Projection.UMAP, min_cluster_size=5
+        )
+
+        assert len(result.points) == 4
+        assert result.n_outliers == 4
+
+    def test_empty_input_reports_its_projection(self):
+        result = cluster_vectors([], np.empty((0, 0)), projection=Projection.UMAP)
+
+        assert result.projection is Projection.UMAP
+        assert result.points == []
+
+
+class TestCenteringOnSeveralAxes:
+    """Centering on question *and* language must remove both confounds, which
+    means using their composite key rather than one pass per axis."""
+
+    @staticmethod
+    def confounded_corpus(dim: int = 64):
+        """Three questions x two languages, with two content directions shared
+        across every cell.
+
+        The content is what an analyst wants back; the question and language
+        offsets are scaffolding, and both are made larger than the content so
+        that uncentred clustering cannot help but recover them.
+        """
+        question_centres = RNG.normal(0, 1, size=(3, dim)) * 5
+        language_offsets = RNG.normal(0, 1, size=(2, dim)) * 5
+        content_axis = RNG.normal(0, 1, size=(2, dim))
+
+        rows, questions, languages = [], [], []
+        for q, centre in enumerate(question_centres):
+            for lang in (0, 1):
+                for i in range(15):
+                    rows.append(
+                        centre
+                        + language_offsets[lang]
+                        + content_axis[i % 2]
+                        + RNG.normal(0, 0.05, dim)
+                    )
+                    questions.append((0, q))
+                    languages.append("DA" if lang else "EN")
+
+        matrix = np.vstack(rows)
+        ids = [f"id-{i}" for i in range(len(matrix))]
+        return ids, matrix, questions, languages
+
+    def run(self, center_question: bool, center_language: bool):
+        ids, matrix, questions, languages = self.confounded_corpus()
+        result = cluster_vectors(
+            ids,
+            matrix,
+            min_cluster_size=5,
+            axes=[
+                GroupAxis("question", questions, center=center_question),
+                GroupAxis("language", languages, center=center_language),
+            ],
+        )
+        assert result.clusters
+        n = len(result.clusters)
+        return (
+            sum(c.purity["question"] for c in result.clusters) / n,
+            sum(c.purity["language"] for c in result.clusters) / n,
+        )
+
+    def test_uncentred_recovers_the_scaffolding(self):
+        question, language = self.run(False, False)
+
+        assert question == pytest.approx(1.0)
+        assert language == pytest.approx(1.0)
+
+    def test_centring_one_axis_leaves_the_other(self):
+        """Centring only by question does not fix language.
+
+        This is the case that produced the Danish/English clusters on the real
+        corpus: `center_by_question` was on, and the two biggest clusters were
+        still just the two languages.
+        """
+        _, language = self.run(True, False)
+
+        assert language == pytest.approx(1.0)
+
+    def test_centring_both_removes_both(self):
+        question, language = self.run(True, True)
+
+        assert question < 0.75
+        assert language < 0.75

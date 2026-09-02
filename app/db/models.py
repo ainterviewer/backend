@@ -40,6 +40,7 @@ from ..types import (
     CollaboratorRole,
     ExternalParam,
     GroupKind,
+    Projection,
     ProjectStatus,
     Scope,
     TestRunStatus,
@@ -850,6 +851,11 @@ class EmbeddingClusterPoint(_BaseModel):
     section: int | None = None
     main_question: int | None = None
     sub_question: int | None = None
+    # The interview's language. Sent for the same reason as the guide
+    # coordinates: on a multilingual project the model separates languages
+    # before it separates topics, and colouring by this is how that becomes
+    # visible instead of being mistaken for two themes.
+    language: str
 
 
 class EmbeddingCluster(_BaseModel):
@@ -862,6 +868,12 @@ class EmbeddingCluster(_BaseModel):
     # its question verbatim for every respondent, so uncentred clustering tends
     # to recover the interview guide. Read this before reading the clusters.
     question_purity: float | None = None
+    # Share of members from the single most common language. Near 1.0 on a
+    # project that ran in more than one means the cluster is a language: the
+    # model separates Danish from English more strongly than it separates
+    # anything either of them says. Always 1.0 when only one language is in
+    # scope, where it means nothing -- read it against `groups`.
+    language_purity: float | None = None
 
 
 class EmbeddingGroup(_BaseModel):
@@ -890,13 +902,24 @@ class EmbeddingClusterResponse(_BaseModel):
     n_points: int
     n_clusters: int
     n_outliers: int
-    # Dimensions clustering ran in. The scatter shows the first two of them.
+    # How the vectors were reduced. Under "pca" the scatter is a linear
+    # projection, so distances on it are comparable everywhere; under "umap"
+    # only adjacency is meaningful -- who sits next to whom, never how far
+    # apart two clusters are or how big one looks.
+    projection: Projection
+    # Dimensions clustering ran in. The scatter shows the first two of them,
+    # and under "umap" there are only those two.
     components: int
     # Share of total variance the two plotted axes carry. Typically low for text
     # embeddings: the plot is a navigation aid, not evidence. Points far apart
     # on screen are genuinely far apart; points close together may not be.
-    explained_variance_2d: float
+    # NULL under "umap", which has no such quantity.
+    explained_variance_2d: float | None = None
     centered_by_question: bool
+    # Whether each language's mean vector was subtracted before projection. On a
+    # multilingual project this is what stops the biggest clusters from simply
+    # being the languages.
+    centered_by_language: bool = False
     clusters: list[EmbeddingCluster] = []
     # Every guide group the plotted points fall into, questions and sections
     # alike, ordered as the guide orders them. Sent alongside the clusters

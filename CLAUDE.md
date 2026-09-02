@@ -280,28 +280,79 @@ to be theirs. `candidates` in the response reports how many chunks were scored,
 so a client can tell "nothing matched" from "the filters left nothing to match".
 
 **Clustering** is `GET …/embeddings/clusters` (`app/embed/clustering.py`):
-HDBSCAN over the first 50 principal components, with the scatter taken from the
-first two columns of that *same* projection rather than a separate fit, so the
-picture is a sub-projection of the space the clusters were found in. HDBSCAN
-rather than k-means because exploratory work does not know `k` up front and
-because unplaceable points come back as outliers instead of being forced into
-the nearest blob. Nothing is stored -- a full recompute is ~200ms at this
-corpus size, which keeps `min_cluster_size` an interactive control.
+HDBSCAN in a reduced space, with the scatter taken from the first two dimensions
+of that *same* space rather than a separate fit, so the picture is always a
+sub-projection of where the clusters were found. HDBSCAN rather than k-means
+because exploratory work does not know `k` up front and because unplaceable
+points come back as outliers instead of being forced into the nearest blob.
+Nothing is stored.
 
-The trap, and it is not subtle: **a QA-pair chunk repeats its interview question
-verbatim, and every respondent was asked the same one.** Uncentred, that shared
-text dominates and clustering recovers the interview guide rather than anything
-respondents said -- measured on the real corpus, clusters came out 79-100% pure
-by question, against 28-77% for message chunks. So every cluster reports
-`question_purity`, and `center_by_question=true` subtracts each question's mean
-vector first (92% -> 55% mean purity on that same corpus). Centering costs no
-re-embedding; it is arithmetic on stored vectors. Do not remove the purity
-figure to tidy the response -- it is the only thing that makes the failure
-visible rather than something an analyst discovers a month later.
+`projection` chooses how the dimensions come down, and the invariant above holds
+either way:
 
-`explained_variance_2d` is the companion honesty signal: for text embeddings it
-runs around 30%, so the plot is a navigation aid, not evidence. Points far apart
-on screen really are far apart; points close together may not be.
+- `pca` reduces linearly to 50 components and plots the first two of them.
+  PCA's components are nested, so those two columns *are* a 2-component PCA. A
+  full recompute is ~200ms, which keeps `min_cluster_size` genuinely
+  interactive. Its weakness is the reason UMAP was added: 50 dimensions is
+  still high enough for distances to concentrate, and HDBSCAN returned few
+  large blobs.
+- `umap` (the default) reduces non-linearly to 2 dimensions -- through a PCA to
+  50 first, which denoises and makes the neighbour search affordable -- and
+  clusters in those two. Neighbourhoods separate far more sharply, which is what
+  makes the picture readable. Three costs, all visible in the response: seconds
+  rather than milliseconds (plus a one-off numba compile the first time a
+  process runs one, which is why `umap` is imported inside `_project` and not at
+  module scope), `explained_variance_2d` comes back NULL, and clustering in two
+  dimensions can manufacture a split between neighbourhoods that are not really
+  apart. **Distances on a UMAP scatter mean nothing** -- read which points sit
+  together, never how far apart two clusters are or how big one looks. Reach for
+  `pca` when the geometry has to mean something.
+
+`n_neighbors` and `min_dist` are UMAP's own knobs and are ignored under PCA.
+`min_dist` defaults to 0.0 rather than UMAP's 0.1: HDBSCAN separates on density,
+and slack between points blurs exactly the gaps it needs. The UMAP seed is fixed
+(`UMAP_RANDOM_STATE`) so the same corpus gives the same picture twice, which
+costs single-threading -- comparability is worth more here than the seconds.
+
+The route runs `cluster_vectors` through `run_in_threadpool`. A seconds-long
+UMAP fit inside an `async def` would stall every other request in flight.
+
+**Some of what these vectors encode is scaffolding, not content**, and left
+alone it is what clustering finds. Two confounds, both measured on the real
+corpus, both handled the same way -- named as a `GroupAxis`, always *reported*
+as a per-cluster purity, and optionally *removed* by centering:
+
+- **Question.** A QA-pair chunk repeats its interview question verbatim, and
+  every respondent was asked the same one. Uncentred, clusters came out 79-100%
+  pure by question, against 28-77% for message chunks. `center_by_question=true`
+  takes that to 55%.
+- **Language.** A multilingual project embeds every language into one space, and
+  the model separates languages before it separates topics. On the Danish/
+  English project, `center_by_question` alone gave six clusters of which the two
+  largest (628 and 241 chunks) were simply Danish and English -- mean
+  `language_purity` 0.99. `center_by_language=true` as well: 52 clusters, mean
+  language purity 0.76, question purity 0.50.
+
+Setting both centres on the **composite** key, subtracting the mean of each
+language-within-question cell. That is stronger than either alone -- centering
+by question does nothing about language, because a question group spans both
+languages and the language axis survives inside it. The cost is thinner cells:
+outliers went 1/915 to 255/915 on that corpus, because a cell of one chunk
+becomes the zero vector. Filtering to a single `language` is the blunter
+alternative and analyses one language properly instead of comparing across them.
+
+Do not remove the purity figures to tidy the response -- they are the only thing
+that makes these failures visible rather than something an analyst discovers a
+month later. The language confound went unnoticed until someone read the
+clusters by eye. `groups` now also carries a `language` row per language in
+scope, so the scatter can be coloured by language directly; that is the fastest
+way to see whether a split is real.
+
+`explained_variance_2d` is the companion honesty signal **under `pca`**: for text
+embeddings it runs around 30%, so the plot is a navigation aid, not evidence.
+Points far apart on screen really are far apart; points close together may not
+be. It is NULL under `umap`, which has no such quantity -- and there, not even
+"far apart on screen means far apart" holds.
 
 `EmbeddingTable.text` holds the embedded text in full rather than a preview. It
 has to: a QA-pair chunk spans several messages and carries no `message_id`, so

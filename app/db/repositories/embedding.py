@@ -61,6 +61,31 @@ class EmbeddingSearchHit:
 
 
 @dataclass(frozen=True)
+class ChunkCoordinates:
+    """Where a chunk sits in the interview guide, and what language it is in.
+
+    Everything about a chunk that clustering can group by without reading its
+    text. Carried alongside the vectors because a cluster only means something
+    read against these: a cluster that is one question, or one language, has
+    found the scaffolding rather than anything a respondent said.
+    """
+
+    section: int | None
+    main_question: int | None
+    sub_question: int | None
+    language: str
+
+    @property
+    def question(self) -> tuple[int | None, int | None]:
+        """The question a chunk belongs to, not the probe within it.
+
+        A MESSAGE chunk carries a `sub_question`; grouping by it would put every
+        turn of one question in a group of its own.
+        """
+        return (self.section, self.main_question)
+
+
+@dataclass(frozen=True)
 class PendingEmbedding:
     """A chunk that has been embedded and is ready to store."""
 
@@ -569,16 +594,16 @@ class EmbeddingRepository(BaseRepository):
         kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
         task: EmbeddingTask = EmbeddingTask.DOCUMENT,
         filters: EmbeddingFilters | None = None,
-    ) -> tuple[list[UUID], np.ndarray, list[tuple[int | None, int | None, int | None]]]:
-        """Every vector in scope, stacked, with the interview-guide coordinates
-        each one came from. The input to clustering.
+    ) -> tuple[list[UUID], np.ndarray, list[ChunkCoordinates]]:
+        """Every vector in scope, stacked, with each one's coordinates. The
+        input to clustering.
 
         The coordinates are returned alongside because clustering needs to know
-        which chunks answer the same question -- both to report how far a
-        cluster is from being just that question, and to centre them out -- and
+        which chunks share a question or a language -- both to report how far a
+        cluster is from being just that group, and to centre it out -- and
         because the same scatter can then be coloured by the guide instead of by
         what clustering found, which is the comparison that says whether a
-        cluster is a theme or just a question.
+        cluster is a theme or just scaffolding.
         """
         statement = self._candidate_statement(
             project_id=project_id,
@@ -589,6 +614,7 @@ class EmbeddingRepository(BaseRepository):
             EmbeddingTable.section,
             EmbeddingTable.main_question,
             EmbeddingTable.sub_question,
+            EmbeddingTable.language,
         )
 
         rows = self.session.execute(statement).all()
@@ -603,7 +629,7 @@ class EmbeddingRepository(BaseRepository):
         return (
             [row[0] for row in rows],
             matrix,
-            [(row[2], row[3], row[4]) for row in rows],
+            [ChunkCoordinates(row[2], row[3], row[4], str(row[5])) for row in rows],
         )
 
     def set_text(self, chunk_key: str, text: str) -> bool:

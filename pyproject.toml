@@ -36,6 +36,7 @@ dependencies = [
   "sqlalchemy>=2.0.43",
   "sqliteai-vector>=0.9.52",
   "typer>=0.20.0",
+  "umap-learn>=0.5.12",
   "uvicorn[standard]>=0.34.3",
   "websockets>=16.0",
   "xlsxwriter>=3.2.3",
