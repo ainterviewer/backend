@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Literal
 
 from pydantic import BaseModel, Field, SecretStr, computed_field
@@ -14,6 +15,8 @@ from ainterviewer.settings import BaseSettingsConfigDict
 from ainterviewer.types import DatabaseType, TimeDelta
 
 from .types import Scope
+
+os.environ.setdefault("ANY_LLM_UNIFIED_EXCEPTIONS", "1")
 
 
 class SpecialRegistrationTokens(BaseModel):

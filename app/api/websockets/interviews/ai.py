@@ -7,7 +7,24 @@
 # improves unstable connections
 
 import asyncio
+from typing import Literal
 
+from any_llm.exceptions import (
+    AnyLLMError,
+    AuthenticationError,
+    ContentFilterError,
+    ContextLengthExceededError,
+    GatewayTimeoutError,
+    InsufficientFundsError,
+    InvalidRequestError,
+    MissingApiKeyError,
+    ModelNotFoundError,
+    ProviderError,
+    RateLimitError,
+    UnsupportedParameterError,
+    UnsupportedProviderError,
+    UpstreamProviderError,
+)
 from fastapi import (
     APIRouter,
     Query,
@@ -36,6 +53,88 @@ router = APIRouter(prefix="/ws", tags=["interviews"])
 
 class RestartInterview(Exception):
     pass
+
+
+# What the respondent is told, and therefore whether the frontend retries. The
+# wire vocabulary is `OutgoingData.error`, so the two codes below carry the
+# whole distinction: wait and we will try again, or this interview is over.
+InterviewError = Literal["InstanceInitializing", "InferenceError"]
+
+# Passes on its own: the provider is busy, briefly unreachable, or still coming
+# up. ProviderError is any-llm's catch-all for 5xx, timeouts and connection
+# failures, which belong here for the same reason.
+_TRANSIENT_ERRORS = (
+    RateLimitError,
+    GatewayTimeoutError,
+    UpstreamProviderError,
+    ProviderError,
+)
+
+# Rooted in how the project or the deployment is configured, or in the request
+# itself. Retrying reproduces it exactly, so the interview stops instead.
+_FATAL_ERRORS = (
+    ModelNotFoundError,
+    AuthenticationError,
+    MissingApiKeyError,
+    UnsupportedProviderError,
+    UnsupportedParameterError,
+    InsufficientFundsError,
+    ContextLengthExceededError,
+    ContentFilterError,
+    InvalidRequestError,
+)
+
+
+def _classify(exc: Exception) -> InterviewError:
+    """Decide whether an interview failure is worth waiting out.
+
+    Relies on any-llm's unified exception types, which `app.settings` turns on
+    process-wide. Anything that is not an AnyLLMError at all came from our own
+    code rather than from a provider, and is treated as fatal: a bug does not
+    become less of one on the second attempt.
+    """
+    if "EC2 instance initializing" in str(exc):
+        return "InstanceInitializing"
+
+    if isinstance(exc, _FATAL_ERRORS):
+        return "InferenceError"
+
+    if isinstance(exc, _TRANSIENT_ERRORS):
+        return "InstanceInitializing"
+
+    return "InferenceError"
+
+
+def _log_failure(exc: Exception, error: InterviewError, interview_id) -> None:
+    """Say what happened in the detail the person fixing it will need."""
+    if isinstance(exc, ModelNotFoundError):
+        # Nearly always a project pointing at a model the provider has retired.
+        logger.error(
+            "Interview %s cannot run: the configured model was rejected by the provider (%s)",
+            interview_id,
+            exc,
+        )
+    elif isinstance(exc, (AuthenticationError, MissingApiKeyError)):
+        logger.error(
+            "Interview %s cannot run: provider %s rejected our credentials (%s)",
+            interview_id,
+            getattr(exc, "provider_name", "unknown"),
+            exc,
+        )
+    elif isinstance(exc, AnyLLMError):
+        # Provider-side and already classified; the type and status say enough
+        # without a traceback through library frames.
+        logger.warning(
+            "Interview %s hit a %s from provider %s (status %s): %s -- reported as %s",
+            interview_id,
+            type(exc).__name__,
+            getattr(exc, "provider_name", "unknown"),
+            getattr(exc, "status_code", None),
+            exc,
+            error,
+        )
+    else:
+        logger.exception("Unhandled error in interview %s", interview_id)
 
 
 @router.websocket("/ai")
@@ -170,17 +269,17 @@ async def _run_interview(
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        # TODO: Add more errors or handle it in a different way.
-        if "EC2 instance initializing" in str(e):
-            logger.warning(
-                "Interview started with local LLM as model, but inference server is not available."
-            )
+        # Every failure has to reach the client as a frame. An exception that
+        # escapes here closes the socket with nothing on it, which the frontend
+        # cannot tell apart from a dropped connection: it reconnects, the stored
+        # history replays, the same failure repeats, and the respondent sits in
+        # an endless "reconnecting" with no error. So classify, report, and let
+        # the socket close cleanly -- the detail stays in the log, where the
+        # person who can act on it will look.
+        error = _classify(e)
+        _log_failure(e, error, interview_id)
 
-            await websocket.send_json(
-                OutgoingData(error="InstanceInitializing").model_dump()
-            )
-        elif str(e) == "Internal Server Error":
-            logger.error("Error fetching VLLM provider from inference proxy.")
-            await websocket.send_json(OutgoingData(error="InferenceError").model_dump())
-        else:
-            raise
+        try:
+            await websocket.send_json(OutgoingData(error=error).model_dump())
+        except Exception:
+            logger.debug("Interview failure could not be reported: websocket closed")
