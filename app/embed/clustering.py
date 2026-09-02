@@ -73,6 +73,7 @@ is seconds, which keeps it usable but not instant.
 """
 
 import logging
+import warnings
 from collections import Counter
 from collections.abc import Hashable, Sequence
 from dataclasses import dataclass, field
@@ -224,6 +225,18 @@ def _project(
     # seconds of import and a JIT compile that a deployment never running a
     # UMAP clustering should not pay for at startup.
     from umap import UMAP
+
+    # `random_state` is deliberate (see UMAP_RANDOM_STATE), and UMAP warns on
+    # every fit that it therefore single-threads. Filtered once, by message, so
+    # nothing else UMAP has to say is lost -- a module-level filter rather than
+    # a `catch_warnings` block because this runs in a threadpool, where
+    # mutating the global filter state per call would race other threads.
+    warnings.filterwarnings(
+        "ignore",
+        message="n_jobs value .* overridden to 1 by setting random_state",
+        category=UserWarning,
+        module="umap",
+    )
 
     # UMAP needs at least two neighbours, and cannot ask for more than there
     # are other points to ask about.
