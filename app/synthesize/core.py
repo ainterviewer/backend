@@ -20,7 +20,7 @@ from websockets.exceptions import ConnectionClosedOK
 
 import ainterviewer
 from ainterviewer.agents import AnsweringAgent
-from ainterviewer.interfaces import OutgoingData, OutgoingMessage, ReceivedData
+from ainterviewer.interfaces import OutgoingData, OutgoingMessage
 from ainterviewer.lpm.types import CustomToken
 from ainterviewer.synthesize.interviewees import (
     BackgroundInfoOptions,
@@ -188,9 +188,13 @@ async def _send_response(
 
         await asyncio.sleep(sleep_time)
 
-    await websocket.send(
-        ReceivedData(type="message", content=response_text).model_dump_json()
-    )
+    # NOTE:
+    # Send the wire payload directly rather than round-tripping through
+    # `ReceivedData`. This is the *client* half of the socket, and the server
+    # parses what it sends back into that same model -- so any `mode="before"`
+    # validator on it would be applied twice to synthetic answers. That is how
+    # the old `escape_html` validator produced `&amp;#x27;` in stored messages.
+    await websocket.send(json.dumps({"type": "message", "content": response_text}))
 
 
 async def add_interviewee(
