@@ -55,6 +55,11 @@ class SearchFilterParams:
     `language` is repeatable (`?language=DA&language=EN`), because a
     multilingual project is usually analysed over the languages that have
     enough respondents to say anything -- rarely all of them, rarely just one.
+
+    `question` is repeatable in the same way and written `?question=0,2` --
+    zero-based `section,main_question`, the spelling the annotate view already
+    uses so one filter means the same thing in both places. A whole section is
+    asked for by listing its questions.
     """
 
     def __init__(
@@ -66,6 +71,7 @@ class SearchFilterParams:
         created_before: datetime | None = None,
         interview_id: Annotated[list[UUID4] | None, Query()] = None,
         include_synthetic: bool = False,
+        question: Annotated[list[str] | None, Query()] = None,
     ):
         self.filters = EmbeddingFilters(
             interview_ids=interview_id,
@@ -75,7 +81,57 @@ class SearchFilterParams:
             created_after=created_after,
             created_before=created_before,
             include_synthetic=include_synthetic,
+            questions=_parse_questions(question),
         )
+
+
+def _parse_questions(raw: list[str] | None) -> list[tuple[int, int]] | None:
+    """`["0,2", "1,0"]` to `[(0, 2), (1, 0)]`, or 422 saying which one was bad.
+
+    Guide coordinates are a pair and FastAPI has no query type for one, so they
+    arrive as text and are checked here. Rejecting the malformed value by name
+    beats a filter that silently matches nothing -- the difference between a
+    typo and an empty corpus is not something a reader can see on the map.
+    """
+    if not raw:
+        return None
+
+    questions: list[tuple[int, int]] = []
+    for value in raw:
+        parts = value.split(",")
+        if len(parts) != 2:
+            raise HTTPException(
+                422,
+                detail=(
+                    f"question {value!r} is not a 'section,main_question' pair, "
+                    "e.g. '0,2'"
+                ),
+            )
+        try:
+            section, main_question = (int(part) for part in parts)
+        except ValueError:
+            raise HTTPException(
+                422,
+                detail=(
+                    f"question {value!r} is not a 'section,main_question' pair "
+                    "of whole numbers, e.g. '0,2'"
+                ),
+            ) from None
+        if section < 0 or main_question < 0:
+            raise HTTPException(
+                422,
+                detail=(
+                    f"question {value!r} has a negative index; guide "
+                    "coordinates are zero-based and count up"
+                ),
+            )
+        pair = (section, main_question)
+        # Deduplicated because the same question arriving twice would widen
+        # nothing and only lengthen the OR the scan is filtered by.
+        if pair not in questions:
+            questions.append(pair)
+
+    return questions
 
 
 # How far into a ranking `offset` may reach. A ranked scan has no natural end

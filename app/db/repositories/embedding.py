@@ -9,7 +9,7 @@ from typing import Any
 from uuid import UUID
 
 import numpy as np
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import joinedload
 
@@ -55,6 +55,20 @@ class EmbeddingFilters:
     created_after: datetime | None = None
     created_before: datetime | None = None
     include_synthetic: bool = False
+    #: Restrict to these places in the interview guide, as ``(section,
+    #: main_question)`` pairs -- the same coordinates :class:`ChunkCoordinates`
+    #: groups by, and the same pairs the annotate view filters messages with.
+    #:
+    #: A section is selected by listing every one of its questions rather than
+    #: by a separate section filter: the caller already holds the guide and so
+    #: knows what a section contains, and one shape of filter is easier to
+    #: reason about than two that can disagree.
+    #:
+    #: Note that INTERVIEW chunks carry no guide coordinates at all -- a whole
+    #: transcript spans the guide -- so any question filter excludes them
+    #: entirely. That is the honest answer rather than a bug: there is no
+    #: subset of an interview-level vector belonging to one question.
+    questions: list[tuple[int, int]] | None = None
 
 
 @dataclass(frozen=True)
@@ -333,6 +347,23 @@ class EmbeddingRepository(BaseRepository):
 
         if filters.languages:
             statement = statement.where(EmbeddingTable.language.in_(filters.languages))
+
+        if filters.questions:
+            # An OR of pairs rather than a row-value `IN`: the list is a handful
+            # of questions picked by hand, so the planner sees the same thing
+            # either way, and this stays true on every backend rather than only
+            # the one that supports row constructors.
+            statement = statement.where(
+                or_(
+                    *(
+                        and_(
+                            EmbeddingTable.section == section,
+                            EmbeddingTable.main_question == main_question,
+                        )
+                        for section, main_question in filters.questions
+                    )
+                )
+            )
 
         interview_conditions = []
         if not filters.include_synthetic:
