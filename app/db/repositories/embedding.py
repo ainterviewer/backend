@@ -11,7 +11,7 @@ from uuid import UUID, uuid5
 import numpy as np
 from sqlalchemy import Text, and_, case, cast, delete, func, or_, select, update
 from sqlalchemy.exc import NoResultFound
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import Session, joinedload
 
 from ainterviewer.interfaces import EmbeddingChunk
 from ainterviewer.interview_guides import Image
@@ -33,6 +33,7 @@ from ..keyword_query import (
     parse,
 )
 from ..models import EmbeddingTurn, TranscriptTurn
+from ..survey_answers import SurveyFilter, matching_interviews
 from ..tables import (
     EmbeddingTable,
     InterviewTable,
@@ -92,6 +93,15 @@ class EmbeddingFilters:
     #: `kids -school`, `(dog OR cat) AND "my neighbour"`. See
     #: :mod:`app.db.keyword_query` for the grammar. Always case-insensitive.
     keyword: str | None = None
+    #: Which survey answers an interview's respondent must have given, or None
+    #: for no survey filter.
+    #:
+    #: A cohort filter and not a message filter: it keeps every chunk of every
+    #: interview whose respondent answered this way, whatever question the chunk
+    #: is an answer to. "What did the dissatisfied ones talk about" is the
+    #: question it exists for, and picking out the satisfaction answers
+    #: themselves would answer a different one.
+    survey: SurveyFilter | None = None
     #: Which side of the exchange a bare term is matched against.
     #:
     #: "answer" is the default and the historical behaviour: a chunk restates
@@ -269,6 +279,13 @@ class EmbeddingRepository(BaseRepository):
     milliseconds and every SQL filter stays available; if one project ever grows
     past roughly 50k chunks, this method is the seam to put an ANN index behind.
     """
+
+    def __init__(self, session: Session):
+        super().__init__(session)
+        # Survey filters resolved during this request, keyed by project and
+        # filter. A repository lives for one request, so this never has to be
+        # invalidated -- see `_survey_interviews`.
+        self._survey_cache: dict[tuple, set[UUID]] = {}
 
     # ------------------------------------------------------------------ #
     # Keys                                                               #
@@ -648,6 +665,41 @@ class EmbeddingRepository(BaseRepository):
     #: UUID so the same chunk keeps the same id across processes and restarts.
     BROWSE_NAMESPACE = UUID("6f2a1c7e-0b3d-4f5a-9c8e-1d2b3a4c5d6e")
 
+    def _survey_interviews(
+        self, project_id: UUID, filters: EmbeddingFilters
+    ) -> set[UUID] | None:
+        """The interviews the survey filter allows, or None where it asks for nothing.
+
+        Resolved once per request and remembered: browsing applies the same
+        filter in two places, and the map's scan and its count are two more.
+        The answer depends only on the project and the filter, so the cache is
+        keyed on those and not on which caller asked.
+        """
+        if not filters.survey:
+            return None
+
+        key = (project_id, filters.include_synthetic, filters.survey.key)
+        if key not in self._survey_cache:
+            self._survey_cache[key] = matching_interviews(
+                self.session,
+                project_id,
+                filters.survey,
+                include_synthetic=filters.include_synthetic,
+            )
+        return self._survey_cache[key]
+
+    def _survey_conditions(self, project_id: UUID, filters: EmbeddingFilters) -> list:
+        """The survey filter as conditions on `InterviewTable`, empty for none.
+
+        An empty result is `id IN ()` rather than no condition at all: nobody
+        answered that way, and the honest answer to a filter nobody matches is
+        no chunks -- not every chunk.
+        """
+        allowed = self._survey_interviews(project_id, filters)
+        if allowed is None:
+            return []
+        return [InterviewTable.id.in_(sorted(allowed))]
+
     def _interview_scope(self, project_id: UUID, filters: EmbeddingFilters):
         """The interviews in scope, as a select of ids.
 
@@ -670,6 +722,7 @@ class EmbeddingRepository(BaseRepository):
             conditions.append(InterviewTable.language.in_(filters.languages))
         if filters.interview_ids is not None:
             conditions.append(InterviewTable.id.in_(filters.interview_ids))
+        conditions.extend(self._survey_conditions(project_id, filters))
         return select(InterviewTable.id).where(*conditions)
 
     def browse(
@@ -947,6 +1000,8 @@ class EmbeddingRepository(BaseRepository):
             interview_conditions.append(
                 InterviewTable.created_at <= filters.created_before
             )
+
+        interview_conditions.extend(self._survey_conditions(project_id, filters))
 
         if interview_conditions:
             statement = statement.where(

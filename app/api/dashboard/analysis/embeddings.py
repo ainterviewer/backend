@@ -1,5 +1,7 @@
+import re
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import UUID4
@@ -8,9 +10,11 @@ from sqlalchemy.exc import NoResultFound
 from starlette.concurrency import run_in_threadpool
 
 from ainterviewer.constants import LANGUAGES
+from ainterviewer.interview_guides import SurveyItem
+from ainterviewer.interview_guides.survey_items import CheckboxItem
 from ainterviewer.types import EmbeddingKind, InterviewStatus
 
-from ....db.keyword_query import KeywordQueryError, Scope, parse
+from ....db.keyword_query import MARKUP_PATTERN, KeywordQueryError, Scope, parse
 from ....db.models import (
     EmbeddingBackfillResponse,
     EmbeddingBrowseResponse,
@@ -23,8 +27,26 @@ from ....db.models import (
     EmbeddingSimilarResponse,
     EmbeddingStatus,
     InterviewTranscript,
+    SurveyFacet,
+    SurveyFacets,
+    SurveyFacetValue,
 )
 from ....db.repositories.embedding import ChunkCoordinates, EmbeddingFilters
+from ....db.survey_answers import (
+    CATEGORICAL_TYPES,
+    NUMERIC_TYPES,
+    TEMPORAL_TYPES,
+    Coordinate,
+    OptionValue,
+    Range,
+    SurveyFilter,
+    TextValue,
+    Value,
+    answer_rows,
+    normalize_answer,
+    options_of,
+    values_of,
+)
 from ....db.tables import ProjectLocalizationTable
 from ....dependencies import DBSession, ProjectEditor, ProjectViewer
 from ....embed.backfill import pending_chunks
@@ -77,6 +99,24 @@ class SearchFilterParams:
     the question it answers, so counting the interviewer's words by default would
     let the guide's own phrasing read as a finding.
 
+    `survey` filters by what the interview's respondent answered to a survey
+    item, and it is a *cohort* filter: every chunk of a matching interview
+    stays, whatever question it answers. Written `?survey=0,2=option:1` --
+    guide coordinate, then the value -- and repeatable, with the values of one
+    item OR-ed and different items AND-ed.
+
+    A value is named by its position in the option list (`option:1`) rather
+    than by its text, because the same item asked in two languages offers the
+    same choices translated: filtering by "Female" would silently drop everyone
+    interviewed in Danish. A write-in, which has no position, is named by its
+    text instead (`text:kayaking`).
+
+    `survey_range` is the same filter for the items whose answers are ordered
+    rather than chosen -- numbers, dates, times. Written
+    `?survey_range=0,3=25..34`, with either side allowed to be empty for an
+    open end, and the bounds spelled the way the answers are: a number, or an
+    ISO date, datetime or time.
+
     It is a boolean expression rather than a string to look for: `dog OR cat`,
     `kids -school`, `(dog OR cat) AND "my neighbour"`. `app.db.keyword_query`
     has the grammar. Matching is case-insensitive and by word, with `*` to open
@@ -97,6 +137,8 @@ class SearchFilterParams:
         question: Annotated[list[str] | None, Query()] = None,
         keyword: Annotated[str | None, Query(max_length=2000)] = None,
         keyword_scope: Scope = "answer",
+        survey: Annotated[list[str] | None, Query()] = None,
+        survey_range: Annotated[list[str] | None, Query()] = None,
     ):
         self.filters = EmbeddingFilters(
             interview_ids=interview_id,
@@ -109,6 +151,7 @@ class SearchFilterParams:
             questions=_parse_questions(question),
             keyword=_checked_keyword(keyword),
             keyword_scope=keyword_scope,
+            survey=_parse_survey(survey, survey_range),
         )
 
 
@@ -159,6 +202,105 @@ def _parse_questions(raw: list[str] | None) -> list[tuple[int, int]] | None:
             questions.append(pair)
 
     return questions
+
+
+def _survey_coordinate(param: str, value: str) -> tuple[Coordinate, str]:
+    """Split `"0,2=option:1"` into `((0, 2), "option:1")`, or 422 saying why not.
+
+    The coordinate is separated from the value by the first `=`, which no guide
+    coordinate can contain -- so a value holding one, as a write-in easily
+    might, still arrives whole.
+    """
+    coordinate, separator, rest = value.partition("=")
+    if not separator:
+        raise HTTPException(
+            422,
+            detail=(
+                f"{param} {value!r} is not a 'section,main_question=value' "
+                "selection, e.g. '0,2=option:1'"
+            ),
+        )
+    pairs = _parse_questions([coordinate])
+    if not pairs:
+        raise HTTPException(422, detail=f"{param} {value!r} names no question")
+    return pairs[0], rest
+
+
+def _parse_survey_values(raw: list[str] | None) -> dict[Coordinate, tuple[Value, ...]]:
+    """`["0,2=option:1", "0,2=text:kayaking"]` to the values chosen per item."""
+    chosen: dict[Coordinate, list[Value]] = {}
+    for entry in raw or []:
+        coordinate, rest = _survey_coordinate("survey", entry)
+        kind, separator, body = rest.partition(":")
+        if not separator or kind not in {"option", "text"}:
+            raise HTTPException(
+                422,
+                detail=(
+                    f"survey value {rest!r} is neither 'option:<n>' nor 'text:<answer>'"
+                ),
+            )
+
+        if kind == "option":
+            try:
+                position = int(body)
+            except ValueError:
+                raise HTTPException(
+                    422, detail=f"survey value {rest!r} has a non-numeric option"
+                ) from None
+            if position < 0:
+                raise HTTPException(
+                    422,
+                    detail=(
+                        f"survey value {rest!r} has a negative option; option "
+                        "positions are zero-based and count up"
+                    ),
+                )
+            value: Value = OptionValue(position)
+        else:
+            # Normalized here so the filter compares the way the answers were
+            # counted -- an option and a write-in only ever differ by whether
+            # the item had it, never by spacing or case.
+            value = TextValue(normalize_answer(body))
+
+        values = chosen.setdefault(coordinate, [])
+        # Deduplicated: the same value twice widens nothing.
+        if value not in values:
+            values.append(value)
+
+    return {coordinate: tuple(values) for coordinate, values in chosen.items()}
+
+
+def _parse_survey_ranges(raw: list[str] | None) -> dict[Coordinate, Range]:
+    """`["0,3=25..34"]` to a range per item, either end allowed to be open."""
+    ranges: dict[Coordinate, Range] = {}
+    for entry in raw or []:
+        coordinate, rest = _survey_coordinate("survey_range", entry)
+        low, separator, high = rest.partition("..")
+        if not separator:
+            raise HTTPException(
+                422,
+                detail=(
+                    f"survey_range {rest!r} is not a 'low..high' range; leave a "
+                    "side empty for an open end, e.g. '25..' or '..34'"
+                ),
+            )
+        if not low and not high:
+            # Both ends open is every answer, which is what asking for no
+            # filter looks like -- and a range nothing can fail is not one.
+            continue
+        ranges[coordinate] = Range(low=low or None, high=high or None)
+    return ranges
+
+
+def _parse_survey(
+    values: list[str] | None, ranges: list[str] | None
+) -> SurveyFilter | None:
+    """The survey filter both parameters describe, or None where neither asks
+    for anything."""
+    parsed = SurveyFilter(
+        values=_parse_survey_values(values), ranges=_parse_survey_ranges(ranges)
+    )
+    return parsed or None
 
 
 def _checked_keyword(raw: str | None) -> str | None:
@@ -333,6 +475,198 @@ async def browse_embeddings(
             EmbeddingSearchHit.from_hit(unit, None, turns.get(unit.id))
             for unit in result.units
         ],
+    )
+
+
+# The longest tail of write-in answers the picker is offered. A conversational
+# interview can put a distinct wording on nearly every respondent, and a filter
+# listing four hundred one-interview values is a filter nobody can read.
+MAX_WRITE_INS = 20
+
+_MARKUP = re.compile(MARKUP_PATTERN)
+
+
+def _facet_filter(item) -> tuple[Literal["values", "range"], bool] | None:
+    """How an item is filtered, or None where it cannot be.
+
+    A free-text question has no survey item and so nothing to offer: its
+    answers are what the keyword filter is for.
+    """
+    if isinstance(item, CATEGORICAL_TYPES):
+        return "values", isinstance(item, CheckboxItem)
+    if isinstance(item, NUMERIC_TYPES + TEMPORAL_TYPES):
+        return "range", False
+    return None
+
+
+def _facet_values(rows: list, options: list[str]) -> tuple[list[SurveyFacetValue], int]:
+    """Every answer on offer for one categorical item, and how many gave it.
+
+    Counted by interview and not by answer: the two only differ for a checkbox,
+    where one respondent holds several values, and a count that read higher
+    than the number of interviews it can return would be a count of the wrong
+    thing.
+
+    The authored options are always listed, in order and even at zero. The
+    write-ins follow, commonest first, because they have no order of their own
+    and no promise that there are few of them.
+    """
+    by_option: dict[int, set[UUID]] = {}
+    write_ins: dict[str, tuple[str, set[UUID]]] = {}
+
+    for row in rows:
+        for value in values_of(row):
+            if isinstance(value, OptionValue):
+                by_option.setdefault(value.index, set()).add(row.interview_id)
+            else:
+                # The first spelling seen is the one shown; the key is the
+                # normalized form, which is what the filter matches on.
+                _, seen = write_ins.setdefault(value.text, (value.text, set()))
+                seen.add(row.interview_id)
+
+    values = [
+        SurveyFacetValue(
+            option=position,
+            label=option,
+            count=len(by_option.get(position, ())),
+        )
+        for position, option in enumerate(options)
+    ]
+
+    # Positions past the authored list: the item offered more options when
+    # these interviews ran than the guide does now. Kept rather than dropped --
+    # somebody answered them -- and labelled by position, which is all that is
+    # left of them.
+    for position in sorted(set(by_option) - set(range(len(options)))):
+        values.append(
+            SurveyFacetValue(
+                option=position,
+                label=f"Option {position + 1}",
+                count=len(by_option[position]),
+            )
+        )
+
+    ranked = sorted(write_ins.values(), key=lambda entry: (-len(entry[1]), entry[0]))
+    values.extend(
+        SurveyFacetValue(option=None, label=label, count=len(seen))
+        for label, seen in ranked[:MAX_WRITE_INS]
+    )
+
+    answered = {row.interview_id for row in rows}
+    return values, len(answered)
+
+
+def survey_facets(session, project_id: UUID, include_synthetic: bool) -> SurveyFacets:
+    """The survey answers a project's interviews hold, as things to filter by.
+
+    A plain function rather than the endpoint itself so it can be read against
+    a database in a test, and so the session work happens in one place the
+    route can hand to a threadpool.
+
+    It reports the answers respondents *gave* rather than the options the guide
+    offers, for two reasons: a write-in has no authored option and would
+    otherwise be unfilterable, and a value with no interviews behind it is a
+    filter that empties the view with nothing on screen to explain why.
+    Authored options are still listed at zero, which says the same thing before
+    it happens.
+
+    Answers to a question the guide no longer has are still answers, and are
+    carried on the wording and options the interviews were actually asked with.
+    """
+    rows = answer_rows(session, project_id, include_synthetic=include_synthetic)
+
+    by_coordinate: dict[Coordinate, list] = {}
+    for row in rows:
+        by_coordinate.setdefault(row.coordinate, []).append(row)
+
+    # The current draft, for the authored wording and the option labels. The
+    # interviews ran against per-interview snapshots, so this is what the
+    # questions are *called* and not what they were.
+    guide = session.execute(
+        select(ProjectLocalizationTable.interview_guide).where(
+            ProjectLocalizationTable.project_id == project_id,
+            ProjectLocalizationTable.is_default.is_(True),
+        )
+    ).scalar_one_or_none()
+
+    authored: dict[Coordinate, tuple[str, SurveyItem | None]] = {}
+    if guide is not None:
+        for section_index, section in enumerate(guide.question_sections):
+            for question_index, question in enumerate(section.questions):
+                authored[(section_index, question_index)] = (
+                    question.main_question,
+                    question.survey_item,
+                )
+
+    items: list[SurveyFacet] = []
+    for coordinate in sorted(by_coordinate):
+        here = by_coordinate[coordinate]
+        observed = here[0].item
+        shape = _facet_filter(observed)
+        if shape is None:
+            continue
+        filter_kind, multiple = shape
+
+        question, draft_item = authored.get(coordinate, ("", None))
+        # Guide questions carry markup -- an underlined word, a link -- and the
+        # picker draws this as one truncated line of text, where a literal
+        # `<u>` is noise. The keyword filter strips the same tags out of the
+        # question side for the same reason: they are not words anybody said.
+        question = _MARKUP.sub("", question).strip()
+
+        facet = SurveyFacet(
+            section=coordinate[0],
+            main_question=coordinate[1],
+            question=question,
+            type=str(observed.type),
+            filter=filter_kind,
+            multiple=multiple,
+        )
+
+        if filter_kind == "values":
+            observed_options = options_of(observed) or []
+            draft_options = options_of(draft_item)
+            # The draft's wording is preferred, but only while it describes the
+            # same list: an item edited to offer a different number of options
+            # is no longer describing the answers these interviews gave, and
+            # labelling position 2 with whatever now sits there would put a
+            # word in a respondent's mouth.
+            options = (
+                draft_options
+                if draft_options is not None
+                and len(draft_options) == len(observed_options)
+                else observed_options
+            )
+            facet.values, facet.n_answered = _facet_values(here, options)
+        else:
+            ordered = sorted(row.content.strip() for row in here)
+            facet.low, facet.high = (
+                (ordered[0], ordered[-1]) if ordered else (None, None)
+            )
+            facet.n_answered = len({row.interview_id for row in here})
+
+        items.append(facet)
+
+    return SurveyFacets(items=items)
+
+
+@router.get("/projects/{project_id}/analysis/embeddings/survey-facets")
+async def read_survey_facets(
+    project_id: UUID4,
+    db: DBSession,
+    jwt: ProjectViewer,
+    include_synthetic: bool = False,
+) -> SurveyFacets:
+    """What the cohort filter in the explore view is built from.
+
+    Deliberately not narrowed by the filters the view currently has applied.
+    The counts would then move as the reader filters, and an option that
+    reached zero would vanish from under the selection that produced it --
+    leaving no way back. The language filter is offered from the whole corpus
+    for the same reason.
+    """
+    return await run_in_threadpool(
+        survey_facets, db.session, project_id, include_synthetic
     )
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+from typing import Literal
 from uuid import UUID
 
 from pydantic import (
@@ -934,6 +935,61 @@ class EmbeddingStatus(_BaseModel):
     # but it does mean search results are behind.
     queue_depth: int = 0
     queue_dropped: int = 0
+
+
+class SurveyFacetValue(_BaseModel):
+    """One answer on offer in the survey filter, with how many gave it."""
+
+    #: Position in the item's option list, or None for a write-in. What the
+    #: filter is expressed in: the same option is the same position in every
+    #: language the item was asked in, and its text is not.
+    option: int | None = None
+    #: What to show for it. The authored wording where the guide still has the
+    #: item, the respondent's own where it does not.
+    label: str
+    #: Interviews whose respondent gave this answer. Interviews rather than
+    #: answers because that is what the filter selects -- picking a value with
+    #: `count` beside it should not be able to return chunks from more
+    #: interviews than it named.
+    count: int
+
+
+class SurveyFacet(_BaseModel):
+    """One survey item, as something to filter a cohort by."""
+
+    section: int
+    main_question: int
+    #: The question as authored in the project's default localization, falling
+    #: back to the wording an interview actually asked.
+    question: str
+    #: The survey item's own type -- `radio`, `slider`, `date` and so on.
+    type: str
+    #: How it is filtered: `values` for a checklist of options, `range` for the
+    #: ordered ones. Derived from the type here rather than in the client, so
+    #: the two cannot disagree about what a control to draw for a `likert` is.
+    filter: Literal["values", "range"]
+    #: Whether one respondent can hold several of these values at once, which
+    #: is a checkbox. It changes what selecting two of them means.
+    multiple: bool = False
+    #: The answers actually given, commonest first among the write-ins.
+    #: Authored options are always listed, in their authored order, even at
+    #: zero -- "nobody chose this" is worth being able to see before filtering
+    #: by it.
+    values: list[SurveyFacetValue] = []
+    #: The lowest and highest answer, as text in the item's own spelling: a
+    #: number, or an ISO date, datetime or time. What the range control opens
+    #: on, so a slider does not have to guess its own ends.
+    low: str | None = None
+    high: str | None = None
+    #: Interviews that answered this item at all. The denominator the counts
+    #: above are read against.
+    n_answered: int = 0
+
+
+class SurveyFacets(_BaseModel):
+    """Every survey item a project's interviews carry an answer to."""
+
+    items: list[SurveyFacet] = []
 
 
 class EmbeddingBackfillResponse(_BaseModel):
