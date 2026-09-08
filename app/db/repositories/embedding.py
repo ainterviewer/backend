@@ -14,6 +14,7 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import joinedload
 
 from ainterviewer.interfaces import EmbeddingChunk
+from ainterviewer.interview_guides import Image
 from ainterviewer.lpm.types import CustomToken
 from ainterviewer.types import (
     EmbeddingKind,
@@ -24,13 +25,14 @@ from ainterviewer.types import (
 
 from ...types import TurnRole
 from ..keyword_query import (
+    MARKUP_PATTERN,
     Scope,
     compile_condition,
     excluded_spans,
     match_spans,
     parse,
 )
-from ..models import EmbeddingTurn
+from ..models import EmbeddingTurn, TranscriptTurn
 from ..tables import (
     EmbeddingTable,
     InterviewTable,
@@ -110,6 +112,23 @@ def _keyword_node(filters: EmbeddingFilters):
     if not filters.keyword or not filters.keyword.strip():
         return None
     return parse(filters.keyword)
+
+
+def _prose(column):
+    """`column` with its tags taken out, for matching against.
+
+    Guide text may carry markup, and a keyword scan run against the raw column
+    will match inside it -- `stress*` finds "Stressand" in a support page's
+    address. Selecting a row on that returns a result whose evidence a reader
+    cannot see, because `match_spans` drops the same span before it is marked.
+    Stripping here is what keeps the two answering the same question.
+
+    `regexp_replace` is Postgres's; `app.db.regexp` registers the same
+    signature on SQLite, exactly as it does for `REGEXP` itself. Rendered only
+    where a question-scoped term actually uses the column, so an answers-only
+    search pays nothing for it.
+    """
+    return func.regexp_replace(column, MARKUP_PATTERN, "", "g")
 
 
 @dataclass(frozen=True)
@@ -566,12 +585,19 @@ class EmbeddingRepository(BaseRepository):
         will not parse raises `KeywordQueryError`; the endpoint turns that into
         a 422 naming the problem, because searching for something other than
         what was typed is worse than refusing.
+
+        Only the question side is stripped of markup, because only guide text
+        can contain any: a respondent who types ``<b>`` is shown those
+        characters, so a term matching them matched something they can see.
         """
         node = _keyword_node(filters)
         if node is None:
             return None
         return compile_condition(
-            node, source.c.content, source.c.question_content, filters.keyword_scope
+            node,
+            source.c.content,
+            _prose(source.c.question_content),
+            filters.keyword_scope,
         )
 
     def _keyword_scope(
@@ -1056,7 +1082,7 @@ class EmbeddingRepository(BaseRepository):
                         ),
                         text=text,
                         matches=marks,
-                        excluded=excluded_spans(text, node, marks),
+                        excluded=excluded_spans(text, node, marks, side),
                         survey_label=(item or pending_item) if respondent else None,
                         # Only a MESSAGE chunk singles a turn out; for a QA pair
                         # the whole group is the chunk.
@@ -1091,6 +1117,100 @@ class EmbeddingRepository(BaseRepository):
                 rendered = rendered[start : matched + 1]
 
             turns[embedding.id] = rendered
+
+        return turns
+
+    def transcript(
+        self,
+        project_id: UUID,
+        interview_id: UUID,
+        keyword: str | None = None,
+        keyword_scope: Scope = "answer",
+    ) -> list[TranscriptTurn]:
+        """One interview, whole, as speaker turns with the keyword marked.
+
+        `turns_for` renders the messages behind a *chunk*; this renders the
+        messages behind an interview, which is the same rows read without the
+        grouping. Kept apart rather than generalised because the two differ in
+        what they leave out: a chunk keeps only its own question group and only what
+        a card has room for, while a transcript keeps everything -- turns said
+        before the first question, questions the guide skipped, the control
+        tokens between sections, and each survey item in full. A card is a
+        summary and can afford to drop those; a transcript is the record.
+
+        Scoped by `project_id` as well as `interview_id`. The caller has been
+        authorised for the project, not for the interview, so an interview
+        belonging to another project has to read as absent rather than as
+        forbidden.
+
+        Raises `NoResultFound` where the interview is not this project's.
+        """
+        exists = self.session.execute(
+            select(InterviewTable.id).where(
+                InterviewTable.id == interview_id,
+                InterviewTable.project_id == project_id,
+            )
+        ).first()
+        if exists is None:
+            raise NoResultFound(f"Interview {interview_id} not found in this project")
+
+        rows = self.session.execute(
+            select(
+                MessageTable.id,
+                MessageTable.role,
+                MessageTable.content,
+                MessageTable.section,
+                MessageTable.main_question,
+                MessageTable.sub_question,
+                MessageTable.survey_item,
+                MessageTable.skipped_by_condition,
+                MessageTable.image,
+            )
+            .where(
+                MessageTable.interview_id == interview_id,
+                MessageTable.role != MessageRole.SYSTEM,
+            )
+            .order_by(MessageTable.message_id)
+        ).all()
+
+        node = parse(keyword) if keyword and keyword.strip() else None
+
+        turns: list[TranscriptTurn] = []
+        # The item is stored on the interviewer's message and read on the
+        # respondent's, because what a reader judges is the answer and the
+        # options it was chosen from together. The transcript page moves it the
+        # same way; doing it here means both do it once.
+        pending_item = None
+        for row in rows:
+            if not row.content.strip():
+                continue
+
+            respondent = MessageRole(row.role) == MessageRole.USER
+            item = row.survey_item
+            text = row.content.strip()
+            # Marked against the stripped text, because that is what the
+            # offsets index into -- the same reason `turns_for` strips first.
+            side = "answer" if respondent else "question"
+            marks = match_spans(text, node, side, keyword_scope)
+            carried = item or pending_item if respondent else None
+            image = row.image if isinstance(row.image, Image) else None
+            turns.append(
+                TranscriptTurn(
+                    id=row.id,
+                    role=TurnRole.RESPONDENT if respondent else TurnRole.INTERVIEWER,
+                    text=text,
+                    matches=marks,
+                    excluded=excluded_spans(text, node, marks, side),
+                    survey_label=carried.type if carried else None,
+                    survey_item=carried,
+                    image=image,
+                    skipped=row.skipped_by_condition,
+                    section=row.section,
+                    main_question=row.main_question,
+                    sub_question=row.sub_question,
+                )
+            )
+            pending_item = None if respondent else item
 
         return turns
 

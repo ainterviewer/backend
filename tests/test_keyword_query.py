@@ -19,6 +19,8 @@ from app.db.keyword_query import (
     Not,
     Or,
     Term,
+    excluded_spans,
+    match_spans,
     parse,
     term_pattern,
     terms_of,
@@ -216,3 +218,56 @@ class TestErrors:
         with pytest.raises(KeywordQueryError) as raised:
             parse(query)
         assert "nested brackets" in raised.value.message
+
+
+class TestMarkup:
+    """Guide text may carry markup; nobody said the markup.
+
+    A keyword scan runs against the raw message, so `stress*` matches
+    "Stressand" inside a support page's address. Marking that claims a
+    respondent said a word they did not, and the SQL side drops the same runs
+    so a row is never selected on evidence a reader cannot see.
+    """
+
+    OUTRO = 'guidance about stress <a href="https://ku.dk/Stressand-x.aspx">KUnet</a>.'
+
+    def spans(self, text, query, side):
+        return match_spans(text, parse(query), side, "both")
+
+    def test_a_match_inside_a_tag_is_not_a_match(self):
+        found = self.spans(self.OUTRO, "stress*", "question")
+
+        assert [self.OUTRO[a:b] for a, b in found] == ["stress"]
+
+    def test_the_prose_around_a_tag_still_matches(self):
+        assert self.spans("say <b>this</b> now", "now", "question")
+
+    def test_a_term_matching_only_a_tag_name_finds_nothing(self):
+        # `<u>` is a real tag in this project's guide, and `u` is a term a
+        # boundary-matched query will happily find inside it.
+        assert self.spans("work <u>on average</u> per week", "u", "question") == []
+
+    def test_respondent_markup_is_text_and_still_matches(self):
+        """A respondent who types `<b>` is shown those characters, so a term
+        that matched them matched something they can see."""
+        assert self.spans("I wrote <b>bold</b> here", "b", "answer")
+
+    def test_an_excluded_word_is_reported_in_prose_but_not_in_a_tag(self):
+        """Both halves at once: the word the query excluded really is in the
+        sentence and is marked there, and the one in the URL is not."""
+        node = parse("KUnet -stress")
+        marks = match_spans(self.OUTRO, node, "question", "question")
+        excluded = excluded_spans(self.OUTRO, node, marks, "question")
+
+        assert [self.OUTRO[a:b] for a, b in excluded] == ["stress"]
+        assert all(b <= self.OUTRO.index("<a href") for _, b in excluded)
+
+    def test_a_quoted_attribute_may_contain_a_bracket(self):
+        """The reason the pattern is not `<[^>]*>`: a `>` inside quotes does
+        not end the tag, and treating it as if it did would leave half a tag
+        looking like prose."""
+        text = '<a title="a > b">stress</a>'
+
+        assert [text[a:b] for a, b in self.spans(text, "stress", "question")] == [
+            "stress"
+        ]

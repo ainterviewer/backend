@@ -722,6 +722,59 @@ class EmbeddingTurn(_BaseModel):
     excluded: list[tuple[int, int]] = Field(default_factory=list)
 
 
+class TranscriptTurn(EmbeddingTurn):
+    """One turn of a whole interview, for reading a hit in its context.
+
+    An `EmbeddingTurn` with the guide coordinates it was said at, so the reader
+    can be put back where they came from: the card that opened this knows its
+    own section and question, and the turns carrying theirs is what lets the
+    view scroll to them and shade them apart from the rest.
+
+    Inherits `matches`/`excluded` rather than restating them, so a transcript
+    renders through the same component a chunk does -- the search is still
+    marked once the reader has left the mosaic, which is most of the point of
+    reading the transcript at all.
+    """
+
+    #: The message row, so a client can single out one turn -- what a MESSAGE
+    #: chunk is about -- rather than the whole question group.
+    id: UUID
+    section: int | None = None
+    main_question: int | None = None
+    sub_question: int | None = None
+    #: The survey item in full, where the answer was a chosen option.
+    #:
+    #: `EmbeddingTurn.survey_label` carries only the item's *type*, which is all
+    #: a results card has room for. A transcript is read to judge an answer, and
+    #: an option cannot be judged apart from the options it was chosen from --
+    #: "Rarely" means nothing until you can see it was picked over "Never".
+    #:
+    #: Carried on the answer rather than on the question that posed it, the same
+    #: move the transcript page makes: the item belongs to the interviewer's
+    #: message in the database and to the respondent's on screen.
+    survey_item: SurveyItem | None = None
+    #: Asked but never reached, because a condition routed around it. Kept
+    #: rather than dropped: a question the guide skipped is part of how the
+    #: interview went, and the transcript page has always shown it faded.
+    skipped: bool = False
+    #: The image attached to the message, where there was one.
+    image: Image | None = None
+
+
+class InterviewTranscript(_BaseModel):
+    """A whole interview as turns, marked with what the keyword query found.
+
+    Separate from the messages endpoint the transcript *page* loads, which
+    serves annotations and comments and knows nothing about a keyword query.
+    This one exists so the explore view can open a transcript without a
+    navigation, and it answers only that: read it, see the search in it, go
+    back. Annotating is still the page's.
+    """
+
+    interview_id: UUID
+    turns: list[TranscriptTurn]
+
+
 class EmbeddingSearchHit(_BaseModel):
     """One semantic-search result, renderable on its own.
 

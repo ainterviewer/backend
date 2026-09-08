@@ -632,6 +632,53 @@ def _positive_terms(
     ]
 
 
+#: A tag, as the client's sanitiser reads one.
+#:
+#: Guide text -- and only guide text -- may carry markup, and the same run of
+#: characters is a tag in three places that must agree: here, where the marks
+#: are computed; in the SQL that decides whether a row matched at all; and in
+#: `frontend/src/lib/utils/sanitize.ts`, which renders it. Written once, in a
+#: spelling Python's `re` and Postgres's ARE both read the same way, and kept
+#: deliberately close to the sanitiser's own pattern -- quoted attribute values
+#: may contain ``>``, which a plain ``<[^>]*>`` would end the tag on.
+#:
+#: The rule the three share is that a tag-shaped run is markup and not prose.
+#: Nobody said ``href``, and a keyword scan happily finds a word inside a URL:
+#: on this corpus a search for ``stress*`` matches "Stressand" in a support
+#: page's address. Marking that would tell a reader somebody said a word that
+#: nobody said, and selecting on it would return a result with nothing in it to
+#: see.
+MARKUP_PATTERN = "</?[a-zA-Z][a-zA-Z0-9-]*(?:[^>\"']|\"[^\"]*\"|'[^']*')*>"
+
+_MARKUP = re.compile(MARKUP_PATTERN)
+
+
+def _markup_ranges(text: str) -> list[tuple[int, int]]:
+    """Where `text` is tag rather than prose."""
+    return [(found.start(), found.end()) for found in _MARKUP.finditer(text)]
+
+
+def _outside_markup(
+    spans: list[tuple[int, int]], text: str, applies: bool
+) -> list[tuple[int, int]]:
+    """`spans`, less any that overlap a tag.
+
+    `applies` is false for respondent text, which is never rendered as markup:
+    a respondent who types ``<b>`` is shown those characters, so a term that
+    matched them matched something they can see. Only guide text is markup.
+    """
+    if not applies:
+        return spans
+    holes = _markup_ranges(text)
+    if not holes:
+        return spans
+    return [
+        span
+        for span in spans
+        if not any(span[0] < end and start < span[1] for start, end in holes)
+    ]
+
+
 def match_spans(
     text: str, node: Node | None, side: Literal["answer", "question"], default: Scope
 ) -> list[tuple[int, int]]:
@@ -663,11 +710,14 @@ def match_spans(
     for found in re.finditer(combined, text, re.IGNORECASE | re.UNICODE):
         if found.end() > found.start():
             spans.append((found.start(), found.end()))
-    return _merged(spans)
+    return _outside_markup(_merged(spans), text, side == "question")
 
 
 def excluded_spans(
-    text: str, node: Node | None, matched: list[tuple[int, int]]
+    text: str,
+    node: Node | None,
+    matched: list[tuple[int, int]],
+    side: Literal["answer", "question"] = "answer",
 ) -> list[tuple[int, int]]:
     """Where `text` says something the query asked *not* to see.
 
@@ -680,6 +730,10 @@ def excluded_spans(
     what put this here".
 
     Anything already claimed as a match wins, so no character is marked twice.
+
+    `side` is taken only to know whether this text may be markup, the same
+    reason `match_spans` takes it: an excluded word found inside an ``href`` is
+    no more said than a matched one.
     """
     if node is None or not text:
         return []
@@ -696,11 +750,12 @@ def excluded_spans(
         for found in re.finditer(combined, text, re.IGNORECASE | re.UNICODE)
         if found.end() > found.start()
     ]
-    return [
+    kept = [
         span
         for span in _merged(spans)
         if not any(span[0] < end and start < span[1] for start, end in matched)
     ]
+    return _outside_markup(kept, text, side == "question")
 
 
 def _merged(spans: list[tuple[int, int]]) -> list[tuple[int, int]]:

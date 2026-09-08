@@ -22,6 +22,7 @@ from ....db.models import (
     EmbeddingSearchResponse,
     EmbeddingSimilarResponse,
     EmbeddingStatus,
+    InterviewTranscript,
 )
 from ....db.repositories.embedding import ChunkCoordinates, EmbeddingFilters
 from ....db.tables import ProjectLocalizationTable
@@ -333,6 +334,47 @@ async def browse_embeddings(
             for unit in result.units
         ],
     )
+
+
+@router.get(
+    "/projects/{project_id}/analysis/embeddings/interviews/{interview_id}/transcript"
+)
+async def read_interview_transcript(
+    project_id: UUID4,
+    interview_id: UUID4,
+    db: DBSession,
+    jwt: ProjectViewer,
+    keyword: Annotated[str | None, Query()] = None,
+    keyword_scope: Scope = "answer",
+) -> InterviewTranscript:
+    """One interview in full, with the keyword query marked in it.
+
+    The context around a hit. A card shows a question group; the question of
+    whether an answer means what it appears to mean is usually settled by what
+    was said just before or just after it, and that is a different unit than
+    anything the mosaic can show.
+
+    Deliberately not the messages endpoint the transcript page loads. That one
+    carries annotations, comments and audio, and knows nothing about a keyword
+    query; this one carries the query's marks and nothing else, because the
+    reader arriving here arrived from a search and the first thing they need is
+    to see where it hit. Annotating remains the page's, which this links to.
+
+    `keyword` is optional and validated the same way the search endpoints
+    validate it, so a query that cannot be read is a 422 here too rather than a
+    transcript quietly rendered with nothing marked.
+    """
+    try:
+        turns = db.embeddings.transcript(
+            project_id=project_id,
+            interview_id=interview_id,
+            keyword=_checked_keyword(keyword),
+            keyword_scope=keyword_scope,
+        )
+    except NoResultFound:
+        raise HTTPException(404, detail="Interview not found")
+
+    return InterviewTranscript(interview_id=interview_id, turns=turns)
 
 
 @router.get("/projects/{project_id}/analysis/embeddings/{embedding_id}/similar")

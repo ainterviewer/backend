@@ -11,6 +11,7 @@ import uuid
 
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 
 from ainterviewer.interview_guides import InterviewGuide
@@ -740,3 +741,200 @@ class TestResponseModel:
         unit = page.units[0]
 
         assert EmbeddingSearchHit.from_hit(unit, 0.5, None).score == 0.5
+
+
+class TestTranscript:
+    """The whole interview behind a hit, as the modal reads it.
+
+    `turns_for` renders a chunk; this renders everything, which is the whole
+    reason the two are separate methods -- what a transcript must *not* do is
+    drop the turns a chunk left out.
+    """
+
+    def transcript(self, session, interview_id, **kwargs):
+        return EmbeddingRepository(session).transcript(
+            project_id=PROJECT, interview_id=interview_id, **kwargs
+        )
+
+    def test_it_keeps_every_turn_not_only_the_chunk(self, session):
+        builder = Builder(session)
+        builder.exchange("Hvordan?", "godt", question=0)
+        builder.exchange("Og arbejde?", "travlt", question=1)
+        session.flush()
+
+        turns = self.transcript(session, builder.interview.id)
+
+        assert [turn.text for turn in turns] == [
+            "Hvordan?",
+            "godt",
+            "Og arbejde?",
+            "travlt",
+        ]
+
+    def test_it_carries_the_guide_coordinates(self, session):
+        """What the modal scrolls by: the card knows its own section and
+        question, and matching them against these is how it finds the place."""
+        builder = Builder(session)
+        builder.exchange("Hvordan?", "godt", section=1, question=2)
+        session.flush()
+
+        turns = self.transcript(session, builder.interview.id)
+
+        assert all(turn.section == 1 and turn.main_question == 2 for turn in turns)
+
+    def test_a_turn_before_the_first_question_survives(self, session):
+        """`turns_for` drops these -- a chunk is a question group and this one
+        belongs to none. A transcript is the conversation, so it keeps them."""
+        builder = Builder(session)
+        builder.say(MessageRole.ASSISTANT, "Velkommen.", section=None, question=None)
+        builder.exchange("Hvordan?", "godt")
+        session.flush()
+
+        turns = self.transcript(session, builder.interview.id)
+
+        assert turns[0].text == "Velkommen."
+        assert turns[0].section is None
+
+    def test_skipped_and_token_turns_are_kept(self, session):
+        """Unlike a chunk, which drops both. A question the guide routed around
+        and the token that closed a section are part of how the interview went,
+        and the transcript page has always shown them."""
+        builder = Builder(session)
+        builder.say(MessageRole.ASSISTANT, "Sprunget over", skipped_by_condition=True)
+        builder.say(MessageRole.ASSISTANT, next(iter(CustomToken)))
+        builder.exchange("Hvordan?", "godt")
+        session.flush()
+
+        turns = self.transcript(session, builder.interview.id)
+
+        assert [turn.text for turn in turns] == [
+            "Sprunget over",
+            next(iter(CustomToken)),
+            "Hvordan?",
+            "godt",
+        ]
+        assert turns[0].skipped is True
+        assert turns[2].skipped is False
+
+    def test_a_survey_item_moves_onto_the_answer(self, session):
+        """Stored on the question, read on the answer: what a reader judges is
+        the option *and* the options it was chosen from."""
+        item = NumberItem(min=1, max=5)
+        builder = Builder(session)
+        builder.exchange("Hvor ofte?", "3", survey_item=item)
+        session.flush()
+
+        question, answer = self.transcript(session, builder.interview.id)
+
+        assert question.survey_item is None
+        assert answer.survey_item == item
+        assert answer.survey_label == item.type
+
+    def test_the_keyword_is_marked_in_the_answers(self, session):
+        builder = Builder(session)
+        builder.exchange("Er du stresset?", "ja jeg er stresset")
+        session.flush()
+
+        turns = self.transcript(session, builder.interview.id, keyword="stresset")
+
+        question, answer = turns
+        # Scope is "answer" by default, so the interviewer saying the word is
+        # not a match -- the same rule the mosaic marks by.
+        assert question.matches == []
+        assert answer.matches == [(10, 18)]
+
+    def test_the_scope_reaches_the_questions(self, session):
+        builder = Builder(session)
+        builder.exchange("Er du stresset?", "ja")
+        session.flush()
+
+        turns = self.transcript(
+            session, builder.interview.id, keyword="stresset", keyword_scope="question"
+        )
+
+        assert turns[0].matches == [(6, 14)]
+
+    def test_an_excluded_word_is_reported_separately(self, session):
+        builder = Builder(session)
+        builder.exchange("Og?", "børn men ikke arbejde")
+        session.flush()
+
+        turns = self.transcript(session, builder.interview.id, keyword="børn -arbejde")
+
+        answer = turns[1]
+        assert answer.matches == [(0, 4)]
+        assert answer.excluded == [(14, 21)]
+
+    def test_another_project_s_interview_is_absent_not_forbidden(self, session):
+        """The route is authorised on the project, so an interview belonging
+        elsewhere must not be readable through it."""
+        builder = Builder(session)
+        builder.exchange("Hvordan?", "godt")
+        session.flush()
+
+        with pytest.raises(NoResultFound):
+            EmbeddingRepository(session).transcript(
+                project_id=uuid.uuid4(), interview_id=builder.interview.id
+            )
+
+    def test_a_query_that_cannot_be_read_is_refused(self, session):
+        builder = Builder(session)
+        builder.exchange("Hvordan?", "godt")
+        session.flush()
+
+        with pytest.raises(KeywordQueryError):
+            self.transcript(session, builder.interview.id, keyword="(stress")
+
+
+class TestMarkupIsNotProse:
+    """The SQL half of the rule `TestMarkup` pins in Python.
+
+    Two expressions of one idea -- `match_spans` drops a span inside a tag, and
+    the keyword condition strips tags before matching -- and they have to agree
+    or a search returns a row with nothing in it to see.
+    """
+
+    def question(self, session, text):
+        builder = Builder(session)
+        builder.exchange(text, "et svar")
+        session.flush()
+        return builder
+
+    def hits(self, session, keyword, scope="question"):
+        return browse(
+            session,
+            EmbeddingKind.QA_PAIR,
+            keyword=keyword,
+            keyword_scope=scope,
+        ).units
+
+    def test_a_word_inside_an_href_does_not_select_the_row(self, session):
+        self.question(
+            session,
+            'Læs mere <a href="https://ku.dk/Stressand-x.aspx">her</a>?',
+        )
+
+        assert self.hits(session, "stress*") == []
+
+    def test_the_prose_in_the_same_question_still_selects_it(self, session):
+        self.question(
+            session,
+            'Er du stresset? <a href="https://ku.dk/Stressand-x.aspx">her</a>',
+        )
+
+        assert len(self.hits(session, "stress*")) == 1
+
+    def test_a_tag_name_is_not_a_word(self, session):
+        # `<u>` is in this project's own guide, and a boundary-matched `u`
+        # finds it: `<` and `>` are both non-word characters.
+        self.question(session, "Hvor mange timer <u>i gennemsnit</u>?")
+
+        assert self.hits(session, "u") == []
+
+    def test_a_respondent_writing_a_tag_is_writing_text(self, session):
+        """Answers are never rendered as markup, so they are not stripped."""
+        builder = Builder(session)
+        builder.exchange("Og?", "jeg skrev <b>fed</b> tekst")
+        session.flush()
+
+        assert len(self.hits(session, "b", scope="answer")) == 1
