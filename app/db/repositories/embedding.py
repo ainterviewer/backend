@@ -23,6 +23,13 @@ from ainterviewer.types import (
 )
 
 from ...types import TurnRole
+from ..keyword_query import (
+    Scope,
+    compile_condition,
+    excluded_spans,
+    match_spans,
+    parse,
+)
 from ..models import EmbeddingTurn
 from ..tables import (
     EmbeddingTable,
@@ -78,11 +85,31 @@ class EmbeddingFilters:
     #: text. Always evaluated against ``message.content`` rather than against
     #: the stored chunk text, so it means the same thing on an embedded project
     #: and an un-embedded one -- the browse path has no chunk text to match.
+    #:
+    #: A boolean query rather than a literal string: `dog OR cat`,
+    #: `kids -school`, `(dog OR cat) AND "my neighbour"`. See
+    #: :mod:`app.db.keyword_query` for the grammar. Always case-insensitive.
     keyword: str | None = None
-    #: Match the whole message rather than any part of it. The annotate view's
-    #: `exact_match`, under the same name and with the same meaning.
-    keyword_exact: bool = False
-    keyword_case_sensitive: bool = False
+    #: Which side of the exchange a bare term is matched against.
+    #:
+    #: "answer" is the default and the historical behaviour: a chunk restates
+    #: the question it answers, so counting a word the interviewer said would
+    #: let the guide's own phrasing look like a finding. "question" and "both"
+    #: are asked for deliberately, and `q:`/`a:` in the query override this for
+    #: a single term.
+    keyword_scope: Scope = "answer"
+
+
+def _keyword_node(filters: EmbeddingFilters):
+    """The keyword query as a tree, or None where it asks for nothing.
+
+    One place, because the condition that selects rows and the spans that mark
+    them have to be reading the same query -- that is the whole reason
+    highlighting moved to the server.
+    """
+    if not filters.keyword or not filters.keyword.strip():
+        return None
+    return parse(filters.keyword)
 
 
 @dataclass(frozen=True)
@@ -427,6 +454,23 @@ class EmbeddingRepository(BaseRepository):
         survey_flag = case(
             (self._has_survey_item(MessageTable.survey_item), 1), else_=0
         )
+        # The interviewer turn before a respondent one is the question it
+        # answers -- the same row `turns_for` renders above the answer, and the
+        # same definition `Turn.is_free_text` uses. Lagged over every message
+        # before any filtering, for the reason above.
+        # ASSISTANT is the interviewer; `turns_for` draws the same line, by
+        # calling everything that is not USER an interviewer turn.
+        interviewer_flag = case(
+            (MessageTable.role == MessageRole.ASSISTANT, 1), else_=0
+        )
+        previous_content = func.lag(MessageTable.content).over(
+            partition_by=MessageTable.interview_id,
+            order_by=MessageTable.message_id,
+        )
+        previous_is_interviewer = func.lag(interviewer_flag).over(
+            partition_by=MessageTable.interview_id,
+            order_by=MessageTable.message_id,
+        )
         return (
             select(
                 MessageTable.id,
@@ -446,6 +490,12 @@ class EmbeddingRepository(BaseRepository):
                     order_by=MessageTable.message_id,
                 )
                 .label("question_survey_flag"),
+                # NULL where the row before was not an interviewer turn -- a
+                # respondent writing twice running answers no new question, and
+                # a question-scoped term must not match the previous answer.
+                case(
+                    (previous_is_interviewer == 1, previous_content), else_=None
+                ).label("question_content"),
             )
             .where(MessageTable.project_id == project_id)
             .subquery()
@@ -500,39 +550,29 @@ class EmbeddingRepository(BaseRepository):
         )
 
     @staticmethod
-    def _keyword_condition(filters: EmbeddingFilters, content):
-        """The keyword as a condition on a message's content, or None.
+    def _keyword_condition(filters: EmbeddingFilters, source):
+        """The keyword query as a condition on a message row, or None.
 
-        Always against the message rather than the chunk: a chunk's text is a
+        Against the messages rather than the chunk: a chunk's text is a
         rendering built for the model, the question restated included, so
         matching it would let a word in the interviewer's question count as a
-        respondent having said it. The message is what somebody actually wrote.
+        respondent having said it whether or not the reader asked for questions
+        to be searched. The two sides are kept apart here -- `content` is what
+        the respondent wrote, `question_content` the interviewer turn that drew
+        it -- so the scope means something.
+
+        The string is a boolean query, not a literal -- `parse` reads the
+        operators and `compile_condition` turns the tree into SQL. A query that
+        will not parse raises `KeywordQueryError`; the endpoint turns that into
+        a 422 naming the problem, because searching for something other than
+        what was typed is worse than refusing.
         """
-        if not filters.keyword or not filters.keyword.strip():
+        node = _keyword_node(filters)
+        if node is None:
             return None
-
-        needle = filters.keyword.strip()
-
-        if filters.keyword_exact:
-            # Whole message, not whole word: the meaning `exact_match` already
-            # has in the annotate view, so one control means one thing.
-            if filters.keyword_case_sensitive:
-                return func.trim(content) == needle
-            return func.lower(func.trim(content)) == needle.lower()
-
-        # The escape character escapes itself first, so a respondent writing
-        # "100%" is searched for as a percent sign rather than as anything at
-        # all. The annotate view does not do this and its `%` matches
-        # everything; that is a bug there rather than a convention here.
-        escaped = needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        pattern = f"%{escaped}%"
-        # `like`/`ilike` as the annotate view spells it. Worth knowing that
-        # SQLite ignores the difference -- its LIKE is case-insensitive for
-        # ASCII whatever you ask -- so case sensitivity is a Postgres-only
-        # promise, and dev runs on SQLite.
-        if filters.keyword_case_sensitive:
-            return content.like(pattern, escape="\\")
-        return content.ilike(pattern, escape="\\")
+        return compile_condition(
+            node, source.c.content, source.c.question_content, filters.keyword_scope
+        )
 
     def _keyword_scope(
         self, project_id: UUID, filters: EmbeddingFilters, kind: EmbeddingKind
@@ -548,7 +588,7 @@ class EmbeddingRepository(BaseRepository):
         is scanned. This one only asks whether the unit contains the word.
         """
         source = self._message_source(project_id)
-        condition = self._keyword_condition(filters, source.c.content)
+        condition = self._keyword_condition(filters, source)
         if condition is None:
             return None
 
@@ -634,7 +674,7 @@ class EmbeddingRepository(BaseRepository):
             source.c.interview_id.in_(self._interview_scope(project_id, filters)),
         ]
 
-        keyword = self._keyword_condition(filters, source.c.content)
+        keyword = self._keyword_condition(filters, source)
         if keyword is not None:
             message_scope.append(keyword)
 
@@ -913,7 +953,9 @@ class EmbeddingRepository(BaseRepository):
         return self._hydrate(ids)
 
     def turns_for(
-        self, embeddings: Sequence[ChunkLike]
+        self,
+        embeddings: Sequence[ChunkLike],
+        filters: EmbeddingFilters | None = None,
     ) -> dict[UUID, list[EmbeddingTurn]]:
         """The messages behind each chunk, as speaker turns.
 
@@ -923,6 +965,12 @@ class EmbeddingRepository(BaseRepository):
         parse of prose that any respondent can break by starting a sentence
         with "Q:". The message rows carry the roles structurally, so they are
         the source here.
+
+        `filters` is taken only for its keyword, so each turn can carry where it
+        says what was searched for. The alternative -- letting the client
+        re-derive the marks from the query string -- is a second matcher with
+        its own idea of what a letter is, marking the text as rendered rather
+        than the column the query actually ran against.
 
         INTERVIEW chunks get no turns. A whole transcript rendered as bubbles in
         a result list is the transcript view, which every hit already links to,
@@ -974,6 +1022,9 @@ class EmbeddingRepository(BaseRepository):
                 (row.interview_id, row.section, row.main_question), []
             ).append(row)
 
+        node = _keyword_node(filters) if filters else None
+        scope: Scope = filters.keyword_scope if filters else "answer"
+
         turns: dict[UUID, list[EmbeddingTurn]] = {}
         for embedding in wanted:
             if embedding.section is None or embedding.main_question is None:
@@ -992,12 +1043,20 @@ class EmbeddingRepository(BaseRepository):
             for row in group:
                 respondent = MessageRole(row.role) == MessageRole.USER
                 item = row.survey_item.type if row.survey_item else None
+                text = row.content.strip()
+                # Against the text as it is rendered, because that is what the
+                # offsets index into: the turn is stripped here, so marking the
+                # raw column would be off by whatever whitespace it began with.
+                side = "answer" if respondent else "question"
+                marks = match_spans(text, node, side, scope)
                 rendered.append(
                     EmbeddingTurn(
                         role=(
                             TurnRole.RESPONDENT if respondent else TurnRole.INTERVIEWER
                         ),
-                        text=row.content.strip(),
+                        text=text,
+                        matches=marks,
+                        excluded=excluded_spans(text, node, marks),
                         survey_label=(item or pending_item) if respondent else None,
                         # Only a MESSAGE chunk singles a turn out; for a QA pair
                         # the whole group is the chunk.

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+from uuid import UUID
 
 from pydantic import (
     UUID4,
@@ -704,6 +705,21 @@ class EmbeddingTurn(_BaseModel):
     survey_label: str | None = None
     # The one turn a MESSAGE hit is actually about; its neighbours are context.
     match: bool = False
+    # Where in `text` the keyword query matched, as `(start, end)` character
+    # offsets into this string, already merged and in order.
+    #
+    # Reported rather than left to the client because the scope decides it: with
+    # the search set to answers, the same word in the interviewer's question is
+    # not a match, and only the side that ran the query knows that. Offsets and
+    # not marked-up text -- the client escapes what it renders.
+    matches: list[tuple[int, int]] = Field(default_factory=list)
+    # Where in `text` a term the query *excluded* appears anyway, same offsets.
+    #
+    # A negated term can survive on screen two ways: in text the scope never
+    # searched, or in a sibling turn of a grouped chunk, since the condition is
+    # checked per message and then lifted to the group. Reported separately so a
+    # reader can see why a result looks like it contradicts its own query.
+    excluded: list[tuple[int, int]] = Field(default_factory=list)
 
 
 class EmbeddingSearchHit(_BaseModel):
@@ -716,7 +732,12 @@ class EmbeddingSearchHit(_BaseModel):
     existing annotation, comment and message-context endpoints.
     """
 
-    id: UUID4
+    # `UUID` rather than `UUID4`: a browsed unit that was never embedded has no
+    # row of its own, so its id is derived from its coordinates with `uuid5` --
+    # deterministic, so the same chunk keeps the same id across processes, and
+    # therefore version 5. Demanding version 4 here rejected exactly the rows
+    # this endpoint exists to serve.
+    id: UUID
     # Cosine similarity in [-1, 1]; vectors are L2-normalised, so this is a
     # plain dot product. Exposed so a client can show ranking confidence and
     # cut off weak matches, which a bare ordering cannot support.

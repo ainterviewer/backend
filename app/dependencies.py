@@ -13,6 +13,7 @@ from ainterviewer.types import LanguageCode
 from .auth import AssistanceSessionToken, AuthToken, InterviewToken
 from .db import InterviewDataBase
 from .db.pragmas import register_pragmas
+from .db.regexp import register_regexp
 from .db.vectors import register_vector_extension
 from .settings import app_settings
 from .types import CollaboratorRole, Scope
@@ -41,6 +42,7 @@ register_vector_extension(engine)
 register_pragmas(
     engine, enforce_foreign_keys=app_settings.database.enforce_foreign_keys
 )
+register_regexp(engine)
 
 
 def get_db() -> Generator[InterviewDataBase, None, None]:

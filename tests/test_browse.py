@@ -17,6 +17,9 @@ from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.interview_guides.survey_items import NumberItem
 from ainterviewer.lpm.types import CustomToken
 from ainterviewer.types import EmbeddingKind, MessageRole, MessageType
+from app.db.keyword_query import KeywordQueryError
+from app.db.models import EmbeddingSearchHit
+from app.db.regexp import register_regexp
 from app.db.repositories.embedding import EmbeddingFilters, EmbeddingRepository
 from app.db.tables import Base, InterviewTable, MessageTable
 from app.db.types import InterviewType
@@ -27,6 +30,10 @@ PROJECT = uuid.uuid4()
 @pytest.fixture
 def session():
     engine = create_engine("sqlite://")
+    # Keyword search compiles to a regular expression, and SQLite has no
+    # REGEXP of its own -- the app registers one per connection and so must
+    # anything that queries with it.
+    register_regexp(engine)
     Base.metadata.create_all(engine)
     with Session(engine) as session:
         yield session
@@ -204,15 +211,26 @@ class TestKeyword:
 
         assert browse(session, EmbeddingKind.MESSAGE, keyword="a_b").total == 1
 
-    def test_exact_match_is_the_whole_message(self, session):
+    def test_matches_words_not_substrings(self, session):
+        """`kat` is not `katalog`. The forgiving substring match is still there
+        behind a `*`, but it has to be asked for -- searching for a short word
+        and getting every longer word containing it is the more common
+        surprise."""
         builder = Builder(session)
-        builder.exchange("Agree?", "Yes")
-        builder.exchange("Really?", "Yes, entirely.")
+        builder.exchange("And then?", "We read the catalogue.")
         session.flush()
 
-        page = browse(session, EmbeddingKind.MESSAGE, keyword="yes", keyword_exact=True)
+        assert browse(session, EmbeddingKind.MESSAGE, keyword="cat").total == 0
+        assert browse(session, EmbeddingKind.MESSAGE, keyword="cat*").total == 1
+        assert browse(session, EmbeddingKind.MESSAGE, keyword="catalogue").total == 1
 
-        assert page.total == 1
+    def test_punctuation_does_not_break_a_word_match(self, session):
+        """A word at the end of a sentence is still that word."""
+        builder = Builder(session)
+        builder.exchange("Agree?", "Yes, entirely.")
+        session.flush()
+
+        assert browse(session, EmbeddingKind.MESSAGE, keyword="yes").total == 1
 
     def test_lifts_to_the_group_for_qa_pairs(self, session):
         """A pair matches when a message inside it does."""
@@ -222,6 +240,149 @@ class TestKeyword:
         session.flush()
 
         assert browse(session, EmbeddingKind.QA_PAIR, keyword="funding").total == 1
+
+
+class TestBooleanKeywords:
+    """The keyword box is a query language, not a string to look for.
+
+    The grammar itself is tested in `test_keyword_query.py`; these check that it
+    reaches the database and means there what it means there."""
+
+    @pytest.fixture
+    def corpus(self, session):
+        builder = Builder(session)
+        builder.exchange("Pets?", "We have a dog.")
+        builder.exchange("Any more?", "A cat, and a puppy.")
+        builder.exchange("Anything else?", "Just the goldfish.")
+        session.flush()
+        return session
+
+    def count(self, session, keyword):
+        return browse(session, EmbeddingKind.MESSAGE, keyword=keyword).total
+
+    def test_or_widens(self, corpus):
+        assert self.count(corpus, "dog") == 1
+        assert self.count(corpus, "dog OR cat") == 2
+
+    def test_adjacent_terms_mean_and(self, corpus):
+        assert self.count(corpus, "cat puppy") == 1
+        assert self.count(corpus, "dog puppy") == 0
+
+    def test_not_excludes(self, corpus):
+        assert self.count(corpus, "cat AND NOT puppy") == 0
+        assert self.count(corpus, "cat -goldfish") == 1
+
+    def test_brackets_group(self, corpus):
+        assert self.count(corpus, "(dog OR cat) AND puppy") == 1
+        assert self.count(corpus, "dog OR (cat AND puppy)") == 2
+
+    def test_a_phrase_is_its_words_in_order(self, session):
+        builder = Builder(session)
+        builder.exchange("Who?", "My neighbour said so.")
+        builder.exchange("Who else?", "A neighbour of my mother.")
+        session.flush()
+
+        assert self.count(session, '"my neighbour"') == 1
+        assert self.count(session, "my neighbour") == 2
+
+    def test_a_phrase_matches_across_a_line_break(self, session):
+        builder = Builder(session)
+        builder.exchange("Who?", "My\n   neighbour said so.")
+        session.flush()
+
+        assert self.count(session, '"my neighbour"') == 1
+
+    def test_operators_are_case_insensitive(self, corpus):
+        assert self.count(corpus, "dog or cat") == 2
+
+    def test_a_quoted_operator_is_a_word(self, session):
+        builder = Builder(session)
+        builder.exchange("And?", "Or so they said.")
+        session.flush()
+
+        assert self.count(session, '"or"') == 1
+
+    def test_a_malformed_query_raises_rather_than_matching(self, session):
+        with pytest.raises(KeywordQueryError):
+            self.count(session, "(dog OR cat")
+
+
+class TestKeywordScope:
+    """Which side of the exchange a term is looked for in.
+
+    The default is the answer, and deliberately so: a chunk restates the
+    question it answers, so counting the interviewer's words by default would
+    let the guide's own phrasing read as a finding."""
+
+    @pytest.fixture
+    def corpus(self, session):
+        builder = Builder(session)
+        builder.exchange("Fortæl om din stress", "Jeg var meget træt")
+        builder.exchange("Og dit arbejde?", "Det gik fint")
+        session.flush()
+        return session
+
+    def count(self, session, keyword, scope="answer", kind=EmbeddingKind.MESSAGE):
+        return browse(session, kind, keyword=keyword, keyword_scope=scope).total
+
+    def test_answers_only_by_default(self, corpus):
+        assert self.count(corpus, "stress") == 0
+        assert self.count(corpus, "træt") == 1
+
+    def test_questions_can_be_asked_for(self, corpus):
+        assert self.count(corpus, "stress", "question") == 1
+        assert self.count(corpus, "træt", "question") == 0
+
+    def test_both_takes_either_side(self, corpus):
+        assert self.count(corpus, "stress", "both") == 1
+        assert self.count(corpus, "træt", "both") == 1
+
+    def test_a_question_match_returns_the_answer_that_followed(self, corpus):
+        """A message chunk is a respondent message. The question matched, so
+        the answer to it is the finding, rendered under the question that drew
+        it."""
+        page = browse(
+            corpus,
+            EmbeddingKind.MESSAGE,
+            keyword="stress",
+            keyword_scope="question",
+        )
+        turns = EmbeddingRepository(corpus).turns_for(
+            page.units, EmbeddingFilters(keyword="stress", keyword_scope="question")
+        )
+
+        assert page.total == 1
+        assert [turn.text for turn in turns[page.units[0].id]] == [
+            "Fortæl om din stress",
+            "Jeg var meget træt",
+        ]
+
+    def test_a_prefix_overrides_the_scope(self, corpus):
+        # The whole point of the prefixes: a scope no single toggle can express.
+        assert self.count(corpus, "q:stress a:træt") == 1
+        assert self.count(corpus, "q:arbejde a:træt") == 0
+
+    def test_a_prefix_works_against_the_other_default(self, corpus):
+        assert self.count(corpus, "a:træt", "question") == 1
+
+    def test_a_quoted_operator_survives_a_prefix(self, session):
+        builder = Builder(session)
+        builder.exchange("Or what?", "Ja")
+        session.flush()
+
+        # `q:or` is the word "or" in the question, not a dangling operator.
+        assert self.count(session, "q:or") == 1
+
+    def test_a_respondent_writing_twice_answers_no_new_question(self, session):
+        """The row before a respondent turn is only a question when an
+        interviewer said it."""
+        builder = Builder(session)
+        builder.exchange("Fortæl om stress", "Jeg var træt")
+        builder.say(MessageRole.USER, "og desuden urolig")
+        session.flush()
+
+        # Both answers are in scope; only the first has a question above it.
+        assert self.count(session, "stress", "question") == 1
 
 
 class TestFilters:
@@ -412,3 +573,170 @@ class TestMessageTurns:
         matched = [turn for turn in turns[page.units[0].id] if turn.match]
 
         assert [turn.text for turn in matched] == ["Slowly."]
+
+
+class TestMatchSpans:
+    """Where a turn says what was searched for.
+
+    Reported by the server so that the thing which decided a row is on screen is
+    the thing that marks it -- the scope in particular is only knowable here."""
+
+    @pytest.fixture
+    def corpus(self, session):
+        builder = Builder(session)
+        builder.exchange("Fortæl om din stress", "Jeg var meget træt af stress")
+        session.flush()
+        return session
+
+    def spans(self, session, keyword, scope="answer"):
+        filters = EmbeddingFilters(keyword=keyword, keyword_scope=scope)
+        page = browse(
+            session, EmbeddingKind.MESSAGE, keyword=keyword, keyword_scope=scope
+        )
+        turns = EmbeddingRepository(session).turns_for(page.units, filters)
+        return [
+            [(turn.text[start:end]) for start, end in turn.matches]
+            for turn in turns[page.units[0].id]
+        ]
+
+    def test_marks_the_answer_it_matched(self, corpus):
+        assert self.spans(corpus, "træt") == [[], ["træt"]]
+
+    def test_leaves_the_question_alone_when_scoped_to_answers(self, corpus):
+        """The same word is in the question, and under this scope it is not a
+        match -- marking it would claim the search found something it did not."""
+        assert self.spans(corpus, "stress") == [[], ["stress"]]
+
+    def test_marks_the_question_when_asked_to(self, corpus):
+        assert self.spans(corpus, "stress", "question") == [["stress"], []]
+
+    def test_marks_both_sides_when_scoped_to_both(self, corpus):
+        assert self.spans(corpus, "stress", "both") == [["stress"], ["stress"]]
+
+    def test_a_prefix_places_the_mark(self, corpus):
+        assert self.spans(corpus, "q:stress") == [["stress"], []]
+
+    def test_marks_whole_words_for_a_wildcard(self, session):
+        """The database matched the prefix; marking six letters and leaving the
+        rest of the word dark would point at a fragment nobody searched for."""
+        builder = Builder(session)
+        builder.exchange("Og?", "på arbejdspladsen")
+        session.flush()
+
+        assert self.spans(session, "arbejd*") == [[], ["arbejdspladsen"]]
+
+    def test_excluded_terms_are_not_marked(self, session):
+        """The answer says "børn" and not "skole", so it is a hit. "skole" is on
+        screen in the question above it, and marking it would point at the
+        reason a chunk was *excluded*, inside one that was not."""
+        builder = Builder(session)
+        builder.exchange("Noget om skole?", "vores børn")
+        session.flush()
+
+        assert self.spans(session, "børn -skole") == [[], ["børn"]]
+
+    def test_no_keyword_marks_nothing(self, session):
+        builder = Builder(session)
+        builder.exchange("Og?", "et svar")
+        session.flush()
+
+        page = browse(session, EmbeddingKind.MESSAGE)
+        turns = EmbeddingRepository(session).turns_for(page.units)
+
+        assert all(turn.matches == [] for turn in turns[page.units[0].id])
+
+
+class TestExcludedSpans:
+    """Where a term the query excluded shows up on the card anyway.
+
+    It can, in two ways, and both are worth seeing rather than hiding: in text
+    the scope never searched, and in a sibling turn of a grouped chunk, because
+    the condition is checked per message and then lifted to the group."""
+
+    def spans(self, session, keyword, kind=EmbeddingKind.MESSAGE, scope="answer"):
+        filters = EmbeddingFilters(keyword=keyword, keyword_scope=scope)
+        page = browse(session, kind, keyword=keyword, keyword_scope=scope)
+        turns = EmbeddingRepository(session).turns_for(page.units, filters)
+        return [
+            (
+                [turn.text[a:b] for a, b in turn.matches],
+                [turn.text[a:b] for a, b in turn.excluded],
+            )
+            for turn in turns[page.units[0].id]
+        ]
+
+    def test_marks_an_excluded_word_in_unsearched_text(self, session):
+        """The scope is Answers, so the question was never searched -- but the
+        word is on screen, and it is one the reader asked not to see."""
+        builder = Builder(session)
+        builder.exchange("Noget om skole?", "vores børn")
+        session.flush()
+
+        assert self.spans(session, "børn -skole") == [([], ["skole"]), (["børn"], [])]
+
+    def test_marks_an_excluded_word_in_a_sibling_turn(self, session):
+        """A pair qualifies when one message says børn and not skole. Another
+        answer in the same pair is free to say skole, and does."""
+        builder = Builder(session)
+        builder.exchange("Og?", "vores børn")
+        builder.exchange("Og videre?", "meget skole")
+        session.flush()
+
+        marked = self.spans(session, "børn -skole", EmbeddingKind.QA_PAIR)
+
+        assert (["børn"], []) in marked
+        assert ([], ["skole"]) in marked
+
+    def test_a_match_wins_over_an_exclusion(self, session):
+        """No character is marked twice, whatever a contradictory query asks."""
+        builder = Builder(session)
+        builder.exchange("Og?", "vores børn")
+        session.flush()
+
+        for matches, excluded in self.spans(session, "børn OR -børn"):
+            assert not (matches and excluded)
+
+    def test_nothing_excluded_without_a_negation(self, session):
+        builder = Builder(session)
+        builder.exchange("Og?", "vores børn")
+        session.flush()
+
+        assert all(excluded == [] for _, excluded in self.spans(session, "børn"))
+
+
+class TestResponseModel:
+    """Browsed units have to survive the response model, not just the query.
+
+    The rest of this file calls the repository directly, which is why an
+    un-embedded unit's id being rejected by `EmbeddingSearchHit` went unseen:
+    every test passed and every request 500'd."""
+
+    def test_an_unembedded_unit_serialises(self, session):
+        """Its id is a `uuid5` of its coordinates -- deterministic, so version 5.
+        The model asked for version 4 and rejected exactly the rows browsing
+        exists to serve."""
+        builder = Builder(session)
+        builder.exchange("Og?", "et svar")
+        session.flush()
+
+        page = browse(session, EmbeddingKind.MESSAGE)
+        turns = EmbeddingRepository(session).turns_for(page.units)
+        unit = page.units[0]
+
+        hit = EmbeddingSearchHit.from_hit(unit, None, turns.get(unit.id))
+
+        assert hit.id == unit.id
+        assert hit.embedded is False
+        assert hit.score is None
+
+    def test_an_embedded_unit_still_serialises(self, session):
+        """The other half of the same contract: a real embedding row keeps its
+        own version-4 id."""
+        builder = Builder(session)
+        builder.exchange("Og?", "et svar")
+        session.flush()
+
+        page = browse(session, EmbeddingKind.MESSAGE)
+        unit = page.units[0]
+
+        assert EmbeddingSearchHit.from_hit(unit, 0.5, None).score == 0.5

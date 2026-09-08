@@ -10,6 +10,7 @@ from starlette.concurrency import run_in_threadpool
 from ainterviewer.constants import LANGUAGES
 from ainterviewer.types import EmbeddingKind, InterviewStatus
 
+from ....db.keyword_query import KeywordQueryError, Scope, parse
 from ....db.models import (
     EmbeddingBackfillResponse,
     EmbeddingBrowseResponse,
@@ -62,12 +63,25 @@ class SearchFilterParams:
     uses so one filter means the same thing in both places. A whole section is
     asked for by listing its questions.
 
-    `keyword`, with `exact_match` and `case_sensitive`, is the literal half of
-    searching, and it is a filter rather than a query: it narrows the candidate
-    set, and whatever semantic query there is then ranks what survives. Matched
-    against respondent messages, never against chunk text -- a chunk restates
-    the question it answers, and a word the interviewer said is not a word the
-    respondent said.
+    `keyword` is the literal half of searching, and it is a filter rather than a
+    query: it narrows the candidate set, and whatever semantic query there is
+    then ranks what survives. Matched against respondent messages, never against
+    chunk text -- a chunk restates the question it answers, and a word the
+    interviewer said is not a word the respondent said.
+
+    `keyword_scope` says which side of the exchange a bare term is matched
+    against -- `answer` (the default and the historical behaviour), `question`,
+    or `both` -- and `q:`/`a:` inside the query override it for a single term.
+    Matching the question at all is deliberate rather than free: a chunk restates
+    the question it answers, so counting the interviewer's words by default would
+    let the guide's own phrasing read as a finding.
+
+    It is a boolean expression rather than a string to look for: `dog OR cat`,
+    `kids -school`, `(dog OR cat) AND "my neighbour"`. `app.db.keyword_query`
+    has the grammar. Matching is case-insensitive and by word, with `*` to open
+    an edge (`kat*`) and quotes for a phrase. A query that will not parse is a
+    422 saying what is wrong and where, rather than a search for something other
+    than what was asked for.
     """
 
     def __init__(
@@ -81,8 +95,7 @@ class SearchFilterParams:
         include_synthetic: bool = False,
         question: Annotated[list[str] | None, Query()] = None,
         keyword: Annotated[str | None, Query(max_length=2000)] = None,
-        exact_match: bool = False,
-        case_sensitive: bool = False,
+        keyword_scope: Scope = "answer",
     ):
         self.filters = EmbeddingFilters(
             interview_ids=interview_id,
@@ -93,9 +106,8 @@ class SearchFilterParams:
             created_before=created_before,
             include_synthetic=include_synthetic,
             questions=_parse_questions(question),
-            keyword=keyword,
-            keyword_exact=exact_match,
-            keyword_case_sensitive=case_sensitive,
+            keyword=_checked_keyword(keyword),
+            keyword_scope=keyword_scope,
         )
 
 
@@ -146,6 +158,35 @@ def _parse_questions(raw: list[str] | None) -> list[tuple[int, int]] | None:
             questions.append(pair)
 
     return questions
+
+
+def _checked_keyword(raw: str | None) -> str | None:
+    """The keyword query, parsed here so a bad one is a 422 and not a 500.
+
+    Parsed and thrown away rather than passed on as a tree: the repository takes
+    a string and parses it itself, so that a caller which never touches this
+    endpoint -- a script, a test -- gets the same language. Parsing twice costs
+    nothing next to the scan, and it buys an error raised where FastAPI can turn
+    it into a response.
+
+    The detail is an object rather than a sentence because the client points at
+    the offending character with it.
+    """
+    if raw is None or not raw.strip():
+        return raw
+
+    try:
+        parse(raw)
+    except KeywordQueryError as error:
+        raise HTTPException(
+            422,
+            detail={
+                "error": "invalid_keyword_query",
+                "message": error.message,
+                "position": error.position,
+            },
+        ) from None
+    return raw
 
 
 # How far into a ranking `offset` may reach. A ranked scan has no natural end
@@ -228,7 +269,9 @@ async def search_embeddings(
         # i.e. the model changed and the corpus has not been re-embedded.
         raise HTTPException(409, detail=str(error))
 
-    turns = db.embeddings.turns_for([hit.embedding for hit in result.hits])
+    turns = db.embeddings.turns_for(
+        [hit.embedding for hit in result.hits], filter_params.filters
+    )
 
     return EmbeddingSearchResponse(
         query=query,
@@ -279,7 +322,7 @@ async def browse_embeddings(
         offset=page.offset,
     )
 
-    turns = db.embeddings.turns_for(result.units)
+    turns = db.embeddings.turns_for(result.units, filter_params.filters)
 
     return EmbeddingBrowseResponse(
         kind=kind,
@@ -327,7 +370,9 @@ async def find_similar_embeddings(
         # not be reachable through it.
         raise HTTPException(404, detail="Embedding not found")
 
-    turns = db.embeddings.turns_for([source, *(hit.embedding for hit in result.hits)])
+    turns = db.embeddings.turns_for(
+        [source, *(hit.embedding for hit in result.hits)], filter_params.filters
+    )
 
     return EmbeddingSimilarResponse(
         source=EmbeddingSearchHit.from_hit(source, 1.0, turns.get(source.id)),
@@ -569,7 +614,9 @@ async def cluster_embeddings(
     }
     representatives = db.embeddings.hydrate(list(wanted))
     previews = db.embeddings.previews(ids, PREVIEW_CHARS)
-    turns = db.embeddings.turns_for(list(representatives.values()))
+    turns = db.embeddings.turns_for(
+        list(representatives.values()), filter_params.filters
+    )
 
     # What every plotted point is, beyond where clustering put it -- so the
     # scatter can be coloured by the guide or by language as well as by the
