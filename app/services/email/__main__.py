@@ -65,7 +65,14 @@ def send_test_email():
         )
     )
 
-    print("Email sent successfully!" if result else "Failed to send email!")
+    # `send` reports per-recipient refusals in a dict and the transaction in a
+    # string; the pair itself is always truthy, so the dict is what says whether
+    # anything actually went out.
+    refused, response = result
+    if refused:
+        print("Failed to send email!", refused)
+    else:
+        print("Email sent successfully!", response)
 
 
 if __name__ == "__main__":

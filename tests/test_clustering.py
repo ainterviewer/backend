@@ -4,6 +4,8 @@ Synthetic vectors throughout: no database, no inference server, and no
 dependence on what happens to be in anyone's corpus.
 """
 
+from uuid import UUID
+
 import numpy as np
 import pytest
 
@@ -24,11 +26,21 @@ def blob(centre: np.ndarray, n: int, spread: float = 0.02) -> np.ndarray:
     return points / np.linalg.norm(points, axis=1, keepdims=True)
 
 
+def ids_for(n: int, offset: int = 0) -> list[UUID]:
+    """`n` distinct embedding ids.
+
+    Real UUIDs rather than strings that merely stand in for them: the ids go
+    back out in the result unchanged, so the tests type them the way callers
+    hold them. `offset` keeps a second batch from colliding with the first.
+    """
+    return [UUID(int=offset + i) for i in range(n)]
+
+
 def corpus(n_groups: int = 3, per_group: int = 20, dim: int = 64):
     centres = RNG.normal(0, 1, size=(n_groups, dim))
     centres /= np.linalg.norm(centres, axis=1, keepdims=True)
     matrix = np.vstack([blob(c, per_group) for c in centres])
-    ids = [f"id-{i}" for i in range(len(matrix))]
+    ids = ids_for(len(matrix))
     return ids, matrix
 
 
@@ -60,7 +72,7 @@ class TestClusterVectors:
         noise = RNG.normal(0, 1, size=(15, matrix.shape[1]))
         noise /= np.linalg.norm(noise, axis=1, keepdims=True)
         matrix = np.vstack([matrix, noise])
-        ids = ids + [f"noise-{i}" for i in range(len(noise))]
+        ids = ids + ids_for(len(noise), offset=len(ids))
 
         result = cluster_vectors(ids, matrix, min_cluster_size=5)
         outliers = [p for p in result.points if p.cluster is None]
@@ -78,6 +90,7 @@ class TestClusterVectors:
 
         assert result.projection is Projection.PCA
         assert result.components == min(50, len(ids), matrix.shape[1])
+        assert result.explained_variance_2d is not None
         assert 0.0 <= result.explained_variance_2d <= 1.0
 
     def test_deterministic(self):
@@ -99,7 +112,7 @@ class TestClusterVectors:
             assert all(placed[r] == cluster.id for r in cluster.representatives)
 
     def test_too_few_points_still_projects(self):
-        ids, matrix = ["a", "b"], RNG.normal(0, 1, size=(2, 16))
+        ids, matrix = ids_for(2), RNG.normal(0, 1, size=(2, 16))
         result = cluster_vectors(ids, matrix, min_cluster_size=5)
 
         assert len(result.points) == 2
@@ -202,7 +215,7 @@ class TestCenterByGroups:
                 groups.append((0, q))
 
         matrix = np.vstack(rows)
-        ids = [f"id-{i}" for i in range(len(matrix))]
+        ids = ids_for(len(matrix))
 
         raw = cluster_vectors(
             ids, matrix, min_cluster_size=5, axes=[GroupAxis("question", groups)]
@@ -321,7 +334,7 @@ class TestCenteringOnSeveralAxes:
                     languages.append("DA" if lang else "EN")
 
         matrix = np.vstack(rows)
-        ids = [f"id-{i}" for i in range(len(matrix))]
+        ids = ids_for(len(matrix))
         return ids, matrix, questions, languages
 
     def run(self, center_question: bool, center_language: bool):
@@ -364,3 +377,65 @@ class TestCenteringOnSeveralAxes:
 
         assert question < 0.75
         assert language < 0.75
+
+
+class TestSmallCorpora:
+    """Sizes a narrow filter leaves behind.
+
+    A keyword and a language together can cut a corpus to a handful of chunks,
+    which is an ordinary thing for a reader to type and must not be a 500.
+    """
+
+    @pytest.mark.parametrize("n", [1, 2, 3])
+    def test_umap_falls_back_rather_than_raising(self, n):
+        """Below four points UMAP's spectral init asks ARPACK for as many
+        eigenvectors as there are points, which used to surface as a 500 from
+        deep inside scipy."""
+        ids, matrix = corpus(n_groups=1, per_group=n)
+
+        result = cluster_vectors(ids, matrix, projection=Projection.UMAP)
+
+        assert len(result.points) == n
+
+    @pytest.mark.parametrize("n", [1, 2, 3])
+    def test_pca_survives_the_same_sizes(self, n):
+        ids, matrix = corpus(n_groups=1, per_group=n)
+
+        result = cluster_vectors(ids, matrix, projection=Projection.PCA)
+
+        assert len(result.points) == n
+
+    def test_one_point_plots_somewhere(self, n=1):
+        """There is no spread to decompose, so it goes to the origin rather
+        than taking the whole page down."""
+        ids, matrix = corpus(n_groups=1, per_group=1)
+
+        result = cluster_vectors(ids, matrix, projection=Projection.UMAP)
+
+        assert result.points[0].x == 0.0
+        assert result.points[0].y == 0.0
+
+    def test_four_points_still_reach_umap(self):
+        """The floor is a floor, not a new default: at four points the real
+        projection runs."""
+        ids, matrix = corpus(n_groups=2, per_group=2)
+
+        result = cluster_vectors(ids, matrix, projection=Projection.UMAP)
+
+        # UMAP reports no share-of-variance; a PCA fallback would have.
+        assert result.explained_variance_2d is None
+        assert len(result.points) == 4
+
+    def test_no_variance_left_reports_no_figure(self):
+        """Centring by question removes everything when each point is the only
+        answer to its own question, so the share of variance is 0/0. That has
+        to leave the response as "no figure" rather than as a NaN, which is not
+        valid JSON and renders as "NaN% of the spread shown"."""
+        ids, matrix = corpus(n_groups=1, per_group=6)
+        axis = GroupAxis(name="question", keys=[str(i) for i in range(6)], center=True)
+
+        result = cluster_vectors(
+            ids, matrix, projection=Projection.PCA, min_cluster_size=2, axes=[axis]
+        )
+
+        assert result.explained_variance_2d is None

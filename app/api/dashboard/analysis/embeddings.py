@@ -12,6 +12,7 @@ from ainterviewer.types import EmbeddingKind, InterviewStatus
 
 from ....db.models import (
     EmbeddingBackfillResponse,
+    EmbeddingBrowseResponse,
     EmbeddingCluster,
     EmbeddingClusterPoint,
     EmbeddingClusterResponse,
@@ -60,6 +61,13 @@ class SearchFilterParams:
     zero-based `section,main_question`, the spelling the annotate view already
     uses so one filter means the same thing in both places. A whole section is
     asked for by listing its questions.
+
+    `keyword`, with `exact_match` and `case_sensitive`, is the literal half of
+    searching, and it is a filter rather than a query: it narrows the candidate
+    set, and whatever semantic query there is then ranks what survives. Matched
+    against respondent messages, never against chunk text -- a chunk restates
+    the question it answers, and a word the interviewer said is not a word the
+    respondent said.
     """
 
     def __init__(
@@ -72,6 +80,9 @@ class SearchFilterParams:
         interview_id: Annotated[list[UUID4] | None, Query()] = None,
         include_synthetic: bool = False,
         question: Annotated[list[str] | None, Query()] = None,
+        keyword: Annotated[str | None, Query(max_length=2000)] = None,
+        exact_match: bool = False,
+        case_sensitive: bool = False,
     ):
         self.filters = EmbeddingFilters(
             interview_ids=interview_id,
@@ -82,6 +93,9 @@ class SearchFilterParams:
             created_before=created_before,
             include_synthetic=include_synthetic,
             questions=_parse_questions(question),
+            keyword=keyword,
+            keyword_exact=exact_match,
+            keyword_case_sensitive=case_sensitive,
         )
 
 
@@ -228,6 +242,52 @@ async def search_embeddings(
                 hit.embedding, hit.score, turns.get(hit.embedding.id)
             )
             for hit in result.hits
+        ],
+    )
+
+
+@router.get("/projects/{project_id}/analysis/embeddings/browse")
+async def browse_embeddings(
+    project_id: UUID4,
+    db: DBSession,
+    jwt: ProjectViewer,
+    filter_params: Annotated[SearchFilterParams, Depends()],
+    page: Annotated[SearchPageParams, Depends()],
+    kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
+) -> EmbeddingBrowseResponse:
+    """The corpus in guide order, with no query and no vectors.
+
+    The resting state of the list view, and the one endpoint here that does not
+    need the corpus to have been embedded: it reads message rows and groups them
+    into the requested unit itself. That is deliberate. Keyword search and
+    structural filtering are things a researcher should be able to do on the day
+    they finish collecting, not after somebody remembers to run a backfill.
+
+    Where the project *has* been embedded, each unit is matched back to its
+    stored vector, so a row browsed here can still be asked what it is near.
+    `embedded` on each item says whether that is available.
+
+    Paged with `limit`/`offset` like the ranked endpoints, but `total` means
+    something stronger here: nothing was scored, so every row it counts is a row
+    that matched the filters rather than the tail of a ranking.
+    """
+    result = db.embeddings.browse(
+        project_id=project_id,
+        kind=kind,
+        filters=filter_params.filters,
+        limit=page.limit,
+        offset=page.offset,
+    )
+
+    turns = db.embeddings.turns_for(result.units)
+
+    return EmbeddingBrowseResponse(
+        kind=kind,
+        total=result.total,
+        offset=page.offset,
+        items=[
+            EmbeddingSearchHit.from_hit(unit, None, turns.get(unit.id))
+            for unit in result.units
         ],
     )
 

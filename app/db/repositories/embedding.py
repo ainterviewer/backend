@@ -5,17 +5,22 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
-from uuid import UUID
+from typing import Any, Protocol
+from uuid import UUID, uuid5
 
 import numpy as np
-from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy import Text, and_, case, cast, delete, func, or_, select, update
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import joinedload
 
 from ainterviewer.interfaces import EmbeddingChunk
 from ainterviewer.lpm.types import CustomToken
-from ainterviewer.types import EmbeddingKind, InterviewStatus, MessageRole
+from ainterviewer.types import (
+    EmbeddingKind,
+    InterviewStatus,
+    MessageRole,
+    MessageType,
+)
 
 from ...types import TurnRole
 from ..models import EmbeddingTurn
@@ -69,6 +74,15 @@ class EmbeddingFilters:
     #: entirely. That is the honest answer rather than a bug: there is no
     #: subset of an interview-level vector belonging to one question.
     questions: list[tuple[int, int]] | None = None
+    #: Restrict to chunks whose underlying respondent messages contain this
+    #: text. Always evaluated against ``message.content`` rather than against
+    #: the stored chunk text, so it means the same thing on an embedded project
+    #: and an un-embedded one -- the browse path has no chunk text to match.
+    keyword: str | None = None
+    #: Match the whole message rather than any part of it. The annotate view's
+    #: `exact_match`, under the same name and with the same meaning.
+    keyword_exact: bool = False
+    keyword_case_sensitive: bool = False
 
 
 @dataclass(frozen=True)
@@ -91,6 +105,66 @@ class EmbeddingSearchPage:
 
     hits: list[EmbeddingSearchHit]
     scored: int
+    total: int
+
+
+class ChunkLike(Protocol):
+    """The coordinates a chunk must carry to be rendered as turns.
+
+    `turns_for` reads coordinates, never rows: it is given both real
+    `EmbeddingTable` rows and the `BrowseUnit`s assembled for un-embedded
+    corpora, and demanding the table type would tie transcript rendering to
+    having been embedded -- exactly the tie browsing exists to cut.
+    """
+
+    @property
+    def id(self) -> UUID: ...
+    @property
+    def kind(self) -> EmbeddingKind: ...
+    @property
+    def interview_id(self) -> UUID: ...
+    @property
+    def message_id(self) -> UUID | None: ...
+    @property
+    def section(self) -> int | None: ...
+    @property
+    def main_question(self) -> int | None: ...
+
+
+@dataclass
+class BrowseUnit:
+    """One unit of the corpus assembled from message rows rather than vectors.
+
+    Deliberately shaped like an `EmbeddingTable` row, because `turns_for` and
+    `EmbeddingSearchHit.from_hit` only ever read attributes: giving browsing the
+    same attribute names lets both reuse the rendering the search path already
+    has, instead of growing a second one that can disagree with it.
+
+    ``id`` is the real embedding id when the unit has been embedded, and a
+    deterministic UUID5 of its coordinates when it has not -- stable across
+    requests, so a client can select and page without a row changing identity.
+    ``embedded`` is what says which, and so whether "more like this" can be
+    asked of it at all.
+    """
+
+    id: UUID
+    kind: EmbeddingKind
+    interview_id: UUID
+    message_id: UUID | None
+    section: int | None
+    main_question: int | None
+    sub_question: int | None
+    language: str
+    text: str | None
+    interview: Any
+    embedded: bool
+
+
+@dataclass(frozen=True)
+class BrowsePage:
+    """One page of a browse, and how many units it was cut from."""
+
+    units: list[BrowseUnit]
     total: int
 
 
@@ -320,6 +394,425 @@ class EmbeddingRepository(BaseRepository):
     # Reading                                                            #
     # ------------------------------------------------------------------ #
 
+    # ------------------------------------------------------------------ #
+    # Browsing (no vectors)                                              #
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _has_survey_item(column):
+        """Whether a message carries a survey item.
+
+        Not `column.is_(None)`, which never matches: `PydanticJSONB` writes JSON
+        ``null`` rather than SQL NULL, so every row is non-NULL and the obvious
+        test silently selects nothing. Checked as text because that is the one
+        reading both a JSON null and a real object answer honestly.
+        """
+        return and_(column.is_not(None), cast(column, Text) != "null")
+
+    def _message_source(self, project_id: UUID):
+        """Every message of a project, each carrying its question's survey flag.
+
+        The window is what makes the policy expressible in SQL at all. Whether a
+        respondent turn is free text depends on the *question* that drew it --
+        `Turn.is_free_text` reads the survey item off the question, not off the
+        answer -- and in the message table that question is the row before it.
+        So the lag runs over every message in the interview, before any
+        filtering: filter first and the row before a respondent turn would be
+        whichever row happened to survive, which is not the question.
+
+        A boolean is lagged rather than the column itself, because `lag` returns
+        the raw stored value and skips the column type's own decoding -- the
+        JSONB would arrive as the string "null" and compare equal to nothing.
+        """
+        survey_flag = case(
+            (self._has_survey_item(MessageTable.survey_item), 1), else_=0
+        )
+        return (
+            select(
+                MessageTable.id,
+                MessageTable.interview_id,
+                MessageTable.message_id,
+                MessageTable.role,
+                MessageTable.message_type,
+                MessageTable.content,
+                MessageTable.section,
+                MessageTable.main_question,
+                MessageTable.sub_question,
+                MessageTable.skipped_by_condition,
+                survey_flag.label("survey_flag"),
+                func.lag(survey_flag)
+                .over(
+                    partition_by=MessageTable.interview_id,
+                    order_by=MessageTable.message_id,
+                )
+                .label("question_survey_flag"),
+            )
+            .where(MessageTable.project_id == project_id)
+            .subquery()
+        )
+
+    @staticmethod
+    def _embeddable_conditions(source):
+        """The SQL mirror of `DefaultChunkPolicy.should_embed_message`.
+
+        A second expression of a rule that already lives in the library, which
+        is a real cost and worth naming: the policy is written against
+        `InterviewHistory` domain objects and browsing has only message rows.
+        It is worth paying because browsing has to work on a project nobody has
+        embedded -- otherwise keyword search would be a feature you unlock by
+        running a backfill, which is not what it is.
+
+        `TestChunkPolicy` in `tests/test_browse.py` pins the two together, case
+        by case: every rule the library's policy decides is restated there
+        against this. When the policy moves and this does not, those are what
+        say so.
+        """
+        return (
+            source.c.role == MessageRole.USER,
+            source.c.message_type.in_([MessageType.TEXT, MessageType.AUDIO]),
+            source.c.skipped_by_condition.is_(False),
+            source.c.section.is_not(None),
+            source.c.main_question.is_not(None),
+            func.trim(source.c.content) != "",
+            func.trim(source.c.content).not_in([token.value for token in CustomToken]),
+        )
+
+    @staticmethod
+    def _free_text_conditions(source):
+        """`Turn.is_free_text`, which is a stricter thing than "embeddable".
+
+        A closed answer is still a message and is still embedded as one -- the
+        message policy has no survey check -- but a question group made only of
+        closed answers is survey scaffolding, and embedding it produces
+        near-duplicate vectors that crowd out real answers. So this decides
+        which *groups* exist, not which messages do, and the two levels
+        deliberately disagree.
+
+        The first message of an interview has no row before it, so its lag is
+        NULL: no question, and so no survey item on one.
+        """
+        return (
+            source.c.survey_flag == 0,
+            or_(
+                source.c.question_survey_flag.is_(None),
+                source.c.question_survey_flag == 0,
+            ),
+        )
+
+    @staticmethod
+    def _keyword_condition(filters: EmbeddingFilters, content):
+        """The keyword as a condition on a message's content, or None.
+
+        Always against the message rather than the chunk: a chunk's text is a
+        rendering built for the model, the question restated included, so
+        matching it would let a word in the interviewer's question count as a
+        respondent having said it. The message is what somebody actually wrote.
+        """
+        if not filters.keyword or not filters.keyword.strip():
+            return None
+
+        needle = filters.keyword.strip()
+
+        if filters.keyword_exact:
+            # Whole message, not whole word: the meaning `exact_match` already
+            # has in the annotate view, so one control means one thing.
+            if filters.keyword_case_sensitive:
+                return func.trim(content) == needle
+            return func.lower(func.trim(content)) == needle.lower()
+
+        # The escape character escapes itself first, so a respondent writing
+        # "100%" is searched for as a percent sign rather than as anything at
+        # all. The annotate view does not do this and its `%` matches
+        # everything; that is a bug there rather than a convention here.
+        escaped = needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{escaped}%"
+        # `like`/`ilike` as the annotate view spells it. Worth knowing that
+        # SQLite ignores the difference -- its LIKE is case-insensitive for
+        # ASCII whatever you ask -- so case sensitivity is a Postgres-only
+        # promise, and dev runs on SQLite.
+        if filters.keyword_case_sensitive:
+            return content.like(pattern, escape="\\")
+        return content.ilike(pattern, escape="\\")
+
+    def _keyword_scope(
+        self, project_id: UUID, filters: EmbeddingFilters, kind: EmbeddingKind
+    ):
+        """The keyword, lifted from messages to whichever unit is being scanned.
+
+        A chunk matches when a message inside it does, so the shape of the
+        condition follows what the chunk spans: one message, one question group,
+        or a whole interview.
+
+        Embeddable rather than free-text messages: whether a unit *exists* is
+        the chunk policy's question and is already settled by the time anything
+        is scanned. This one only asks whether the unit contains the word.
+        """
+        source = self._message_source(project_id)
+        condition = self._keyword_condition(filters, source.c.content)
+        if condition is None:
+            return None
+
+        matched = select(
+            source.c.id,
+            source.c.interview_id,
+            source.c.section,
+            source.c.main_question,
+        ).where(*self._embeddable_conditions(source), condition)
+
+        if kind == EmbeddingKind.MESSAGE:
+            return EmbeddingTable.message_id.in_(select(matched.subquery().c.id))
+        if kind == EmbeddingKind.INTERVIEW:
+            return EmbeddingTable.interview_id.in_(
+                select(matched.subquery().c.interview_id)
+            )
+
+        # A QA pair has no id of its own; it *is* its coordinates.
+        group = matched.subquery()
+        return (
+            select(group.c.id)
+            .where(
+                group.c.interview_id == EmbeddingTable.interview_id,
+                group.c.section == EmbeddingTable.section,
+                group.c.main_question == EmbeddingTable.main_question,
+            )
+            .exists()
+        )
+
+    #: Namespace for the synthetic ids of un-embedded browse units. A fixed
+    #: UUID so the same chunk keeps the same id across processes and restarts.
+    BROWSE_NAMESPACE = UUID("6f2a1c7e-0b3d-4f5a-9c8e-1d2b3a4c5d6e")
+
+    def _interview_scope(self, project_id: UUID, filters: EmbeddingFilters):
+        """The interviews in scope, as a select of ids.
+
+        The same conditions `_candidate_statement` applies, expressed once here
+        so browsing and scanning cannot drift on what "completed, Danish, not a
+        test run" means.
+        """
+        conditions = [InterviewTable.project_id == project_id]
+        if not filters.include_synthetic:
+            conditions.append(InterviewTable.type != InterviewType.SYNTHETIC_TEST)
+        if filters.status is not None:
+            conditions.append(InterviewTable.status == filters.status)
+        if filters.participant_id is not None:
+            conditions.append(InterviewTable.participant_id == filters.participant_id)
+        if filters.created_after is not None:
+            conditions.append(InterviewTable.created_at >= filters.created_after)
+        if filters.created_before is not None:
+            conditions.append(InterviewTable.created_at <= filters.created_before)
+        if filters.languages:
+            conditions.append(InterviewTable.language.in_(filters.languages))
+        if filters.interview_ids is not None:
+            conditions.append(InterviewTable.id.in_(filters.interview_ids))
+        return select(InterviewTable.id).where(*conditions)
+
+    def browse(
+        self,
+        *,
+        project_id: UUID,
+        kind: EmbeddingKind,
+        filters: EmbeddingFilters,
+        limit: int,
+        offset: int,
+    ) -> BrowsePage:
+        """A page of the corpus in guide order, with no query and no vectors.
+
+        This is the half of the list view that has to work on a project nobody
+        has embedded: it reads message rows, groups them into whichever unit was
+        asked for, and never touches a vector. Where the corpus *has* been
+        embedded the units are matched back to their embedding rows, so a hit
+        can still be asked what it is near.
+
+        Ordered by interview and then by position in the guide. A browse has no
+        score to rank by, and the alternative to a declared order is a different
+        page 2 every time the planner changes its mind.
+        """
+        source = self._message_source(project_id)
+
+        message_scope = [
+            *self._embeddable_conditions(source),
+            source.c.interview_id.in_(self._interview_scope(project_id, filters)),
+        ]
+
+        keyword = self._keyword_condition(filters, source.c.content)
+        if keyword is not None:
+            message_scope.append(keyword)
+
+        if filters.questions:
+            message_scope.append(
+                or_(
+                    *(
+                        and_(
+                            source.c.section == section,
+                            source.c.main_question == main_question,
+                        )
+                        for section, main_question in filters.questions
+                    )
+                )
+            )
+
+        # What one row of the listing is, per unit. A MESSAGE is a message; a QA
+        # pair is a question group; an interview is an interview. The two
+        # grouped kinds additionally require free text somewhere inside them,
+        # because that is what makes the group a chunk rather than survey
+        # scaffolding -- the distinction a single message is not subject to.
+        if kind == EmbeddingKind.MESSAGE:
+            grouped = select(
+                source.c.interview_id,
+                source.c.message_id,
+                source.c.id,
+                source.c.section,
+                source.c.main_question,
+                source.c.sub_question,
+            ).where(*message_scope)
+            order = [source.c.interview_id, source.c.message_id]
+        elif kind == EmbeddingKind.QA_PAIR:
+            grouped = (
+                select(
+                    source.c.interview_id,
+                    source.c.section,
+                    source.c.main_question,
+                )
+                .where(*message_scope, *self._free_text_conditions(source))
+                .group_by(
+                    source.c.interview_id,
+                    source.c.section,
+                    source.c.main_question,
+                )
+            )
+            order = [
+                source.c.interview_id,
+                source.c.section,
+                source.c.main_question,
+            ]
+        else:
+            grouped = (
+                select(source.c.interview_id)
+                .where(*message_scope, *self._free_text_conditions(source))
+                .group_by(source.c.interview_id)
+            )
+            order = [source.c.interview_id]
+
+        total = self.session.execute(
+            select(func.count()).select_from(grouped.subquery())
+        ).scalar_one()
+
+        rows = self.session.execute(
+            grouped.order_by(*order).limit(limit).offset(offset)
+        ).all()
+
+        return BrowsePage(units=self._units_for(project_id, kind, rows), total=total)
+
+    def _units_for(
+        self, project_id: UUID, kind: EmbeddingKind, rows
+    ) -> list[BrowseUnit]:
+        """The page's rows as units, with their interviews and any embeddings.
+
+        Two queries for the whole page rather than two per row: the interviews
+        carry the participant a result card names, and the embeddings carry the
+        id that makes "more like this" reachable.
+        """
+        if not rows:
+            return []
+
+        interview_ids = {row.interview_id for row in rows}
+        interviews = {
+            interview.id: interview
+            for interview in self.session.execute(
+                select(InterviewTable)
+                .options(
+                    joinedload(InterviewTable.project_participant).joinedload(
+                        ProjectParticipantTable.participant
+                    )
+                )
+                .where(InterviewTable.id.in_(interview_ids))
+            )
+            .unique()
+            .scalars()
+        }
+
+        # The embedding rows for exactly these units, keyed the way the unit is
+        # identified. A miss is the normal state on an un-embedded project and
+        # not an error: it costs the row its "more like this", nothing else.
+        embeddings = {
+            self._unit_key(
+                kind,
+                row.interview_id,
+                row.message_id,
+                row.section,
+                row.main_question,
+            ): row
+            for row in self.session.execute(
+                select(
+                    EmbeddingTable.id,
+                    EmbeddingTable.text,
+                    EmbeddingTable.interview_id,
+                    EmbeddingTable.message_id,
+                    EmbeddingTable.section,
+                    EmbeddingTable.main_question,
+                ).where(
+                    EmbeddingTable.project_id == project_id,
+                    EmbeddingTable.kind == kind,
+                    EmbeddingTable.task == EmbeddingTask.DOCUMENT,
+                    EmbeddingTable.interview_id.in_(interview_ids),
+                )
+            ).all()
+        }
+
+        units: list[BrowseUnit] = []
+        for row in rows:
+            interview = interviews.get(row.interview_id)
+            if interview is None:
+                continue
+
+            message_id = (
+                getattr(row, "id", None) if kind == EmbeddingKind.MESSAGE else None
+            )
+            section = getattr(row, "section", None)
+            main_question = getattr(row, "main_question", None)
+            sub_question = getattr(row, "sub_question", None)
+
+            key = self._unit_key(
+                kind, row.interview_id, message_id, section, main_question
+            )
+            embedding = embeddings.get(key)
+
+            units.append(
+                BrowseUnit(
+                    id=embedding.id if embedding else uuid5(self.BROWSE_NAMESPACE, key),
+                    kind=kind,
+                    interview_id=row.interview_id,
+                    message_id=message_id,
+                    section=section,
+                    main_question=main_question,
+                    sub_question=sub_question,
+                    language=interview.language,
+                    text=embedding.text if embedding else None,
+                    interview=interview,
+                    embedded=embedding is not None,
+                )
+            )
+
+        return units
+
+    @staticmethod
+    def _unit_key(
+        kind: EmbeddingKind,
+        interview_id: UUID,
+        message_id: UUID | None,
+        section: int | None,
+        main_question: int | None,
+    ) -> str:
+        """What identifies a unit, per kind: a message, a question group, or an
+        interview. Deliberately not `chunk_key`, which is built from the chunk
+        the embedder produced and so does not exist for a unit nobody embedded.
+        """
+        if kind == EmbeddingKind.MESSAGE:
+            return f"message:{interview_id}:{message_id}"
+        if kind == EmbeddingKind.QA_PAIR:
+            return f"qa_pair:{interview_id}:{section}:{main_question}"
+        return f"interview:{interview_id}"
+
     def _candidate_statement(
         self,
         *,
@@ -347,6 +840,10 @@ class EmbeddingRepository(BaseRepository):
 
         if filters.languages:
             statement = statement.where(EmbeddingTable.language.in_(filters.languages))
+
+        keyword = self._keyword_scope(project_id, filters, kind)
+        if keyword is not None:
+            statement = statement.where(keyword)
 
         if filters.questions:
             # An OR of pairs rather than a row-value `IN`: the list is a handful
@@ -416,7 +913,7 @@ class EmbeddingRepository(BaseRepository):
         return self._hydrate(ids)
 
     def turns_for(
-        self, embeddings: Sequence[EmbeddingTable]
+        self, embeddings: Sequence[ChunkLike]
     ) -> dict[UUID, list[EmbeddingTurn]]:
         """The messages behind each chunk, as speaker turns.
 
@@ -513,15 +1010,26 @@ class EmbeddingRepository(BaseRepository):
                 pending_item = None if respondent else item
 
             if embedding.kind == EmbeddingKind.MESSAGE:
-                # Everything after the embedded message answers a later probe
-                # and is not what this chunk says; what came before it is the
-                # question, and is.
+                # The probe that drew this message, and the message. Nothing
+                # else: everything earlier in the group belongs to the *other*
+                # messages in it, and a group of three probes rendered as three
+                # growing prefixes of one conversation is the same text three
+                # times over -- which is what a list of message chunks was.
+                #
+                # One turn back rather than the whole run of them, because a
+                # probe is what a respondent was answering. Where there is no
+                # interviewer turn before it -- a respondent writing twice in a
+                # row -- the message stands alone rather than borrowing the
+                # question of the message above it.
                 matched = next(
                     (i for i, turn in enumerate(rendered) if turn.match), None
                 )
                 if matched is None:
                     continue
-                rendered = rendered[: matched + 1]
+                start = matched
+                if start > 0 and rendered[start - 1].role == TurnRole.INTERVIEWER:
+                    start -= 1
+                rendered = rendered[start : matched + 1]
 
             turns[embedding.id] = rendered
 

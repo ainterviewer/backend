@@ -720,7 +720,16 @@ class EmbeddingSearchHit(_BaseModel):
     # Cosine similarity in [-1, 1]; vectors are L2-normalised, so this is a
     # plain dot product. Exposed so a client can show ranking confidence and
     # cut off weak matches, which a bare ordering cannot support.
-    score: float
+    #
+    # None on a browsed row, which was not ranked against anything: a browse is
+    # the corpus in guide order, and inventing a score for it would invite a
+    # reader to compare numbers that mean nothing.
+    score: float | None = None
+    # Whether this unit has a stored vector. False only when browsing a corpus
+    # that was never embedded -- the row still reads, but there is nothing to
+    # ask it what it is near, so a client hides "more like this" rather than
+    # offering a button that 404s.
+    embedded: bool = True
     kind: EmbeddingKind
     text: str | None
 
@@ -749,9 +758,15 @@ class EmbeddingSearchHit(_BaseModel):
     def from_hit(
         cls,
         embedding,
-        score: float,
+        score: float | None,
         turns: list[EmbeddingTurn] | None = None,
     ) -> EmbeddingSearchHit:
+        """One row, from either an embedding or a browsed unit.
+
+        `BrowseUnit` is shaped to answer the same attributes deliberately, so
+        browsing renders through this rather than through a parallel model that
+        would drift from it card by card.
+        """
         interview = embedding.interview
         project_participant = interview.project_participant if interview else None
         participant = project_participant.participant if project_participant else None
@@ -759,6 +774,7 @@ class EmbeddingSearchHit(_BaseModel):
         return cls(
             id=embedding.id,
             score=score,
+            embedded=getattr(embedding, "embedded", True),
             kind=embedding.kind,
             text=embedding.text,
             interview_id=embedding.interview_id,
@@ -804,6 +820,21 @@ class EmbeddingSimilarResponse(_BaseModel):
 
     source: EmbeddingSearchHit
     candidates: int = 0
+    total: int = 0
+    offset: int = 0
+    items: list[EmbeddingSearchHit] = []
+
+
+class EmbeddingBrowseResponse(_BaseModel):
+    """One page of the corpus with no query behind it.
+
+    The list view's resting state: the filters alone decide what is in it, and
+    guide order decides the sequence. `total` here *is* a count of things worth
+    reading, unlike the ranked endpoints -- nothing was scored, so nothing is
+    tailing off.
+    """
+
+    kind: EmbeddingKind
     total: int = 0
     offset: int = 0
     items: list[EmbeddingSearchHit] = []

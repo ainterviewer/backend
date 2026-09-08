@@ -168,11 +168,11 @@ async def stream_messages(
                 async with node.stream(agent_run.ctx) as events:
                     async for event in events:
                         if isinstance(event, FunctionToolResultEvent) and isinstance(
-                            event.result, ToolReturnPart
+                            event.part, ToolReturnPart
                         ):
-                            content = event.result.content
-                            timestamp = event.result.timestamp.isoformat()
-                            if event.result.tool_name == "create_new_section":
+                            content = event.part.content
+                            timestamp = event.part.timestamp.isoformat()
+                            if event.part.tool_name == "create_new_section":
                                 assert isinstance(content, QuestionSection)
                                 yield (
                                     ChatMessage(
@@ -185,7 +185,7 @@ async def stream_messages(
                                     .encode("utf-8")
                                     + b"\n"
                                 )
-                            elif event.result.tool_name == "create_new_question":
+                            elif event.part.tool_name == "create_new_question":
                                 assert isinstance(content, Question)
                                 yield (
                                     ChatMessage(

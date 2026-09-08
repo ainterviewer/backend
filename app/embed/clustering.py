@@ -73,6 +73,7 @@ is seconds, which keeps it usable but not instant.
 """
 
 import logging
+import math
 import warnings
 from collections import Counter
 from collections.abc import Hashable, Sequence
@@ -194,6 +195,15 @@ def center_by_groups(matrix: np.ndarray, group_keys: Sequence[Hashable]) -> np.n
     return centered
 
 
+#: Fewest points PCA can be asked for a two-dimensional picture of.
+MIN_PCA_SAMPLES = 2
+
+#: Fewest points UMAP's spectral initialisation can run on: it solves for
+#: `n_components + 1` eigenvectors and ARPACK needs strictly fewer than there
+#: are points.
+MIN_UMAP_SAMPLES = 4
+
+
 def _project(
     features: np.ndarray,
     projection: Projection,
@@ -211,6 +221,13 @@ def _project(
     """
     n_samples, n_features = features.shape
 
+    # A single point has no spread to decompose, and PCA is asked for two
+    # components whatever it is given -- so it raises rather than returning the
+    # one axis it could find. A filter narrow enough to leave one chunk is a
+    # normal thing for a reader to type, so it plots at the origin instead.
+    if n_samples < MIN_PCA_SAMPLES:
+        return np.zeros((n_samples, 2), dtype=np.float64), None
+
     # Neither reducer can produce more components than it has samples or
     # features, and the 2D scatter needs at least two.
     components = max(2, min(n_components, n_samples, n_features))
@@ -218,8 +235,30 @@ def _project(
     pca = PCA(n_components=components, svd_solver="full")
     reduced = pca.fit_transform(features)
 
+    # NaN rather than a share, when there is no variance to take a share of:
+    # centring by question leaves nothing behind if every point is the only
+    # answer to its own question, which a narrow filter makes easy to reach.
+    # Reported as "no figure" explicitly, rather than left to whatever JSON
+    # does with a NaN -- a caption reading "NaN% of the spread shown" is worse
+    # than the one that says distances cannot be read.
+    share = float(pca.explained_variance_ratio_[:2].sum())
+    explained_2d = None if math.isnan(share) else share
+
     if projection is Projection.PCA:
-        return reduced, float(pca.explained_variance_ratio_[:2].sum())
+        return reduced, explained_2d
+
+    # UMAP initialises from a spectral embedding, which solves for one more
+    # eigenvector than the dimensions it is laying out -- three, here. ARPACK
+    # requires strictly fewer than there are points, so four points is the
+    # floor, and below it scipy raises `k >= N` from somewhere unrecognisable.
+    #
+    # The PCA above is returned instead of failing. There is no neighbourhood
+    # structure for UMAP to recover from three points, so nothing is lost, and
+    # the variance figure comes back with it because it describes what was
+    # actually computed -- reporting UMAP's "no figure available" here would
+    # caption a linear projection as one whose distances cannot be read.
+    if n_samples < MIN_UMAP_SAMPLES:
+        return reduced[:, :2], explained_2d
 
     # Imported here, not at module scope: umap drags in numba, which costs
     # seconds of import and a JIT compile that a deployment never running a
