@@ -12,20 +12,36 @@ from ....db.models import (
     MessageAnnotationPublic,
     MessagePublic,
 )
-from ....dependencies import DBSession, UserToken
+from ....dependencies import (
+    DBSession,
+    ProjectAnnotator,
+    ProjectEditor,
+    ProjectViewer,
+    UserToken,
+)
 
 router = APIRouter()
 
 
-def _require_annotation_author(
-    db: DBSession, annotation_id: UUID4, jwt: UserToken
+def _require_modify_rights(
+    db: DBSession, project_id: UUID4, annotation_id: UUID4, jwt: UserToken
 ) -> None:
+    """Its author, or somebody who moderates the project.
+
+    The role check on the endpoint has already established that the caller is
+    on this project at all -- which is why an annotation written by a
+    collaborator who has since been removed is no longer theirs to edit. This
+    decides who among the project's own people may act on another member's
+    coding.
+    """
     try:
-        is_author = db.analysis.is_annotation_author(annotation_id, jwt.user_id)
+        allowed = db.analysis.can_modify_annotation(
+            project_id, annotation_id, jwt.user_id, jwt.scope
+        )
     except NoResultFound:
         raise HTTPException(404, detail="Annotation not found")
 
-    if not is_author:
+    if not allowed:
         raise HTTPException(403, detail="Not allowed to modify this annotation")
 
 
@@ -34,6 +50,7 @@ async def get_analysis_categories(
     project_id: UUID4,
     db: DBSession,
     jwt: UserToken,
+    _: ProjectViewer,
 ) -> list[AnalysisCategoryPublic]:
     return db.analysis.get_analysis_categories(project_id)
 
@@ -44,6 +61,7 @@ async def create_analysis_category(
     category: AnalysisCategoryCreate,
     db: DBSession,
     jwt: UserToken,
+    _: ProjectEditor,
 ):
     if project_id != category.project_id:
         raise HTTPException(400, detail="project_id mismatch between route and payload")
@@ -51,40 +69,57 @@ async def create_analysis_category(
     return db.analysis.create_analysis_category(category)
 
 
-@router.put("/analysis/categories/{category_id}")
+@router.put("/projects/{project_id}/analysis/categories/{category_id}")
 async def update_analysis_category(
+    project_id: UUID4,
     category_id: UUID4,
     category: AnalysisCategoryCreate,
     db: DBSession,
     jwt: UserToken,
+    _: ProjectEditor,
 ) -> AnalysisCategoryPublic:
-    return db.analysis.update_analysis_category(category_id, category)
+    try:
+        return db.analysis.update_analysis_category(project_id, category_id, category)
+    except NoResultFound:
+        raise HTTPException(404, detail="Category not found")
 
 
-@router.delete("/analysis/categories/{category_id}")
+@router.delete("/projects/{project_id}/analysis/categories/{category_id}")
 async def delete_analysis_category(
+    project_id: UUID4,
     category_id: UUID4,
     db: DBSession,
     jwt: UserToken,
+    _: ProjectEditor,
 ):
-    db.analysis.delete_analysis_category(category_id)
+    try:
+        db.analysis.delete_analysis_category(project_id, category_id)
+    except NoResultFound:
+        raise HTTPException(404, detail="Category not found")
 
 
-@router.get("/messages/{message_id}/annotations")
+@router.get("/projects/{project_id}/messages/{message_id}/annotations")
 async def get_message_annotations(
+    project_id: UUID4,
     message_id: UUID4,
     db: DBSession,
     jwt: UserToken,
+    _: ProjectViewer,
 ) -> list[MessageAnnotationPublic]:
-    return db.analysis.get_message_annotations(message_id)
+    try:
+        return db.analysis.get_message_annotations(project_id, message_id)
+    except NoResultFound:
+        raise HTTPException(404, detail="Message not found")
 
 
-@router.post("/messages/{message_id}/annotations")
+@router.post("/projects/{project_id}/messages/{message_id}/annotations")
 async def add_message_annotation(
+    project_id: UUID4,
     message_id: UUID4,
     annotation: MessageAnnotationCreate,
     db: DBSession,
     jwt: UserToken,
+    _: ProjectAnnotator,
 ) -> MessageAnnotationPublic:
     if annotation.user_id != jwt.user_id:
         raise HTTPException(400, detail="user_id mismatch between user and payload")
@@ -92,31 +127,43 @@ async def add_message_annotation(
     if annotation.message_id != message_id:
         raise HTTPException(400, detail="message_id mismatch between route and payload")
 
-    return db.analysis.add_message_annotation(annotation)
+    try:
+        return db.analysis.add_message_annotation(project_id, annotation)
+    except NoResultFound as error:
+        raise HTTPException(404, detail=str(error))
 
 
-@router.put("/analysis/annotations/{annotation_id}")
+@router.put("/projects/{project_id}/analysis/annotations/{annotation_id}")
 async def update_message_annotation(
+    project_id: UUID4,
     annotation_id: UUID4,
     annotation: MessageAnnotationCreate,
     db: DBSession,
     jwt: UserToken,
+    _: ProjectAnnotator,
 ) -> MessageAnnotationPublic:
     if annotation.user_id != jwt.user_id:
         raise HTTPException(400, detail="user_id mismatch between user and payload")
 
-    _require_annotation_author(db, annotation_id, jwt)
-    return db.analysis.update_message_annotation(annotation_id, annotation)
+    _require_modify_rights(db, project_id, annotation_id, jwt)
+    try:
+        return db.analysis.update_message_annotation(
+            project_id, annotation_id, annotation
+        )
+    except NoResultFound as error:
+        raise HTTPException(404, detail=str(error))
 
 
-@router.delete("/analysis/annotations/{annotation_id}")
+@router.delete("/projects/{project_id}/analysis/annotations/{annotation_id}")
 async def delete_message_annotation(
+    project_id: UUID4,
     annotation_id: UUID4,
     db: DBSession,
     jwt: UserToken,
+    _: ProjectAnnotator,
 ):
-    _require_annotation_author(db, annotation_id, jwt)
-    db.analysis.delete_message_annotation(annotation_id)
+    _require_modify_rights(db, project_id, annotation_id, jwt)
+    db.analysis.delete_message_annotation(project_id, annotation_id)
 
 
 @router.post("/analysis/{project_id}/messages/count")
@@ -125,6 +172,7 @@ async def get_filtered_messages_count(
     filters: FilteredMessagesRequest,
     db: DBSession,
     jwt: UserToken,
+    _: ProjectViewer,
 ) -> int:
     return db.analysis.count_filtered_messages(
         project_id,
@@ -142,6 +190,7 @@ async def get_filtered_messages(
     filters: FilteredMessagesRequest,
     db: DBSession,
     jwt: UserToken,
+    _: ProjectViewer,
     skip: Annotated[int, Query()] = 0,
     limit: Annotated[int, Query()] = 20,
 ) -> list[MessagePublic]:
@@ -167,6 +216,7 @@ async def get_message_context_before(
     message_id: UUID4,
     db: DBSession,
     jwt: UserToken,
+    _: ProjectViewer,
 ) -> list[MessagePublic]:
     return db.analysis.get_message_context(
         project_id,
@@ -185,6 +235,7 @@ async def get_message_context_after(
     message_id: UUID4,
     db: DBSession,
     jwt: UserToken,
+    _: ProjectViewer,
 ) -> list[MessagePublic]:
     return db.analysis.get_message_context(
         project_id,

@@ -17,7 +17,7 @@ from ....db.tables import (
     ProjectParticipantTable,
 )
 from ....db.types import InterviewType
-from ....dependencies import DBSession, DemoToken
+from ....dependencies import DBSession, DemoToken, ProjectViewer
 from .histogram import (
     HistogramBucket,
     ValueCount,
@@ -207,6 +207,7 @@ def get_project_monitoring_stats(
     project_id: UUID4,
     db: DBSession,
     jwt: DemoToken,
+    _: ProjectViewer,
     interview_types: Annotated[
         list[InterviewType],
         Query(default_factory=lambda: [InterviewType.DISTRIBUTED]),

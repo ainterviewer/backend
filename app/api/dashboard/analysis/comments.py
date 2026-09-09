@@ -18,14 +18,23 @@ from ....db.models import (
     MessageCommentUpdate,
 )
 from ....db.repositories.errors import CommentThreadError
-from ....dependencies import DBSession, UserToken
+from ....dependencies import (
+    DBSession,
+    ProjectAnnotator,
+    ProjectViewer,
+    UserToken,
+)
 
 router = APIRouter()
 
 
-def _require_modify_rights(db: DBSession, comment_id: UUID4, jwt: UserToken) -> None:
+def _require_modify_rights(
+    db: DBSession, project_id: UUID4, comment_id: UUID4, jwt: UserToken
+) -> None:
     try:
-        allowed = db.analysis.can_modify_comment(comment_id, jwt.user_id, jwt.scope)
+        allowed = db.analysis.can_modify_comment(
+            project_id, comment_id, jwt.user_id, jwt.scope
+        )
     except NoResultFound:
         raise HTTPException(404, detail="Comment not found")
 
@@ -33,44 +42,59 @@ def _require_modify_rights(db: DBSession, comment_id: UUID4, jwt: UserToken) -> 
         raise HTTPException(403, detail="Not allowed to modify this comment")
 
 
-@router.get("/messages/{message_id}/comments")
+@router.get("/projects/{project_id}/messages/{message_id}/comments")
 async def get_message_comments(
+    project_id: UUID4,
     message_id: UUID4,
     db: DBSession,
     jwt: UserToken,
+    _: ProjectViewer,
 ) -> list[MessageCommentPublic]:
-    return db.analysis.get_message_comments(message_id)
+    try:
+        return db.analysis.get_message_comments(project_id, message_id)
+    except NoResultFound:
+        raise HTTPException(404, detail="Message not found")
 
 
-@router.post("/messages/{message_id}/comments")
+@router.post("/projects/{project_id}/messages/{message_id}/comments")
 async def add_message_comment(
+    project_id: UUID4,
     message_id: UUID4,
     comment: MessageCommentCreate,
     db: DBSession,
     jwt: UserToken,
+    _: ProjectAnnotator,
 ) -> MessageCommentPublic:
     try:
-        return db.analysis.add_message_comment(message_id, jwt.user_id, comment)
+        return db.analysis.add_message_comment(
+            project_id, message_id, jwt.user_id, comment
+        )
+    except NoResultFound:
+        raise HTTPException(404, detail="Message not found")
     except CommentThreadError as error:
         raise HTTPException(400, detail=str(error))
 
 
-@router.put("/analysis/comments/{comment_id}")
+@router.put("/projects/{project_id}/analysis/comments/{comment_id}")
 async def update_message_comment(
+    project_id: UUID4,
     comment_id: UUID4,
     comment: MessageCommentUpdate,
     db: DBSession,
     jwt: UserToken,
+    _: ProjectAnnotator,
 ) -> MessageCommentPublic:
-    _require_modify_rights(db, comment_id, jwt)
-    return db.analysis.update_message_comment(comment_id, comment.body)
+    _require_modify_rights(db, project_id, comment_id, jwt)
+    return db.analysis.update_message_comment(project_id, comment_id, comment.body)
 
 
-@router.delete("/analysis/comments/{comment_id}")
+@router.delete("/projects/{project_id}/analysis/comments/{comment_id}")
 async def delete_message_comment(
+    project_id: UUID4,
     comment_id: UUID4,
     db: DBSession,
     jwt: UserToken,
+    _: ProjectAnnotator,
 ):
-    _require_modify_rights(db, comment_id, jwt)
-    db.analysis.delete_message_comment(comment_id)
+    _require_modify_rights(db, project_id, comment_id, jwt)
+    db.analysis.delete_message_comment(project_id, comment_id)

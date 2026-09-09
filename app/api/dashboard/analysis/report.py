@@ -44,7 +44,7 @@ from ainterviewer.types import (
 
 from ....db.tables import InterviewTable, MessageTable, ProjectLocalizationTable
 from ....db.types import InterviewType
-from ....dependencies import DBSession, DemoToken
+from ....dependencies import DBSession, DemoToken, ProjectViewer
 from .histogram import HistogramBucket, compute_histogram_buckets
 
 router = APIRouter(prefix="/report", tags=["report"])
@@ -614,6 +614,7 @@ def get_project_item_distributions(
     project_id: UUID4,
     db: DBSession,
     jwt: DemoToken,
+    _: ProjectViewer,
     interview_types: Annotated[
         list[InterviewType],
         Query(default_factory=lambda: [InterviewType.DISTRIBUTED]),

@@ -29,7 +29,95 @@ from .permissions import can_moderate_project
 
 
 class AnalysisRepository(BaseRepository):
-    """Repository for AnalysisCategory and MessageAnnotation operations."""
+    """Repository for AnalysisCategory and MessageAnnotation operations.
+
+    Everything here takes the project it acts in and filters on it. A message,
+    an annotation, a comment and a category all have ids of their own, and an
+    endpoint that took one on its word could be handed an id from a project the
+    caller has no business reading -- so the project is part of the query rather
+    than something checked beside it, and an id from elsewhere is simply not
+    found. See `app/api/dashboard/analysis` for the role check that runs first.
+    """
+
+    # ==================== Scoping ====================
+
+    def _require_message(self, project_id: UUID4, message_id: UUID4) -> None:
+        """Raise unless the message is one of this project's."""
+        found = self.session.execute(
+            select(MessageTable.id).where(
+                MessageTable.id == message_id,
+                MessageTable.project_id == project_id,
+            )
+        ).scalar_one_or_none()
+        if found is None:
+            raise NoResultFound("Message not found")
+
+    def _require_categories(self, project_id: UUID4, category_ids: list[UUID4]) -> None:
+        """Raise unless every category is one of this project's.
+
+        An annotation's values name the categories it codes the message with,
+        and those arrive in the payload rather than the URL. Without this a
+        caller could hang another project's category off their own annotation,
+        which both corrupts the coding and confirms that the category exists.
+        """
+        if not category_ids:
+            return
+
+        known = set(
+            self.session.execute(
+                select(AnalysisCategoryTable.id).where(
+                    AnalysisCategoryTable.id.in_(set(category_ids)),
+                    AnalysisCategoryTable.project_id == project_id,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if set(category_ids) - known:
+            raise NoResultFound("Category not found")
+
+    def _scoped_annotation(
+        self, project_id: UUID4, annotation_id: UUID4
+    ) -> MessageAnnotationTable:
+        annotation = self.session.execute(
+            select(MessageAnnotationTable)
+            .join(MessageTable, MessageTable.id == MessageAnnotationTable.message_id)
+            .where(
+                MessageAnnotationTable.id == annotation_id,
+                MessageTable.project_id == project_id,
+            )
+        ).scalar_one_or_none()
+        if annotation is None:
+            raise NoResultFound("Annotation not found")
+        return annotation
+
+    def _scoped_comment(
+        self, project_id: UUID4, comment_id: UUID4
+    ) -> MessageCommentTable:
+        comment = self.session.execute(
+            select(MessageCommentTable)
+            .join(MessageTable, MessageTable.id == MessageCommentTable.message_id)
+            .where(
+                MessageCommentTable.id == comment_id,
+                MessageTable.project_id == project_id,
+            )
+        ).scalar_one_or_none()
+        if comment is None:
+            raise NoResultFound("Comment not found")
+        return comment
+
+    def _scoped_category(
+        self, project_id: UUID4, category_id: UUID4
+    ) -> AnalysisCategoryTable:
+        category = self.session.execute(
+            select(AnalysisCategoryTable).where(
+                AnalysisCategoryTable.id == category_id,
+                AnalysisCategoryTable.project_id == project_id,
+            )
+        ).scalar_one_or_none()
+        if category is None:
+            raise NoResultFound("Category not found")
+        return category
 
     # ==================== Analysis Category Methods ====================
 
@@ -54,23 +142,28 @@ class AnalysisRepository(BaseRepository):
         return AnalysisCategoryPublic.model_validate(new_category)
 
     def update_analysis_category(
-        self, category_id: UUID4, category: AnalysisCategoryCreate
+        self, project_id: UUID4, category_id: UUID4, category: AnalysisCategoryCreate
     ) -> AnalysisCategoryPublic:
+        existing = self._scoped_category(project_id, category_id)
+
+        # `project_id` is part of the payload, so writing it back verbatim would
+        # let an update move a category into another project -- past the role
+        # check, which has already run against the project in the URL.
+        values = category.model_dump()
+        values["project_id"] = project_id
+
         statement = (
             update(AnalysisCategoryTable)
-            .where(AnalysisCategoryTable.id == category_id)
-            .values(**category.model_dump())
+            .where(AnalysisCategoryTable.id == existing.id)
+            .values(**values)
             .returning(AnalysisCategoryTable)
         )
         existing_category = self.session.execute(statement).scalar_one()
         self.session.commit()
         return AnalysisCategoryPublic.model_validate(existing_category)
 
-    def delete_analysis_category(self, category_id: UUID4):
-        statement = select(AnalysisCategoryTable).where(
-            AnalysisCategoryTable.id == category_id
-        )
-        category = self.session.execute(statement).scalar_one()
+    def delete_analysis_category(self, project_id: UUID4, category_id: UUID4):
+        category = self._scoped_category(project_id, category_id)
         self.session.delete(category)
         self.session.commit()
 
@@ -336,8 +429,9 @@ class AnalysisRepository(BaseRepository):
     # ==================== Message Annotation Methods ====================
 
     def get_message_annotations(
-        self, message_id: UUID4
+        self, project_id: UUID4, message_id: UUID4
     ) -> list[MessageAnnotationPublic]:
+        self._require_message(project_id, message_id)
         statement = (
             select(MessageAnnotationTable)
             .where(MessageAnnotationTable.message_id == message_id)
@@ -354,8 +448,13 @@ class AnalysisRepository(BaseRepository):
         ]
 
     def add_message_annotation(
-        self, annotation: MessageAnnotationCreate
+        self, project_id: UUID4, annotation: MessageAnnotationCreate
     ) -> MessageAnnotationPublic:
+        self._require_message(project_id, annotation.message_id)
+        self._require_categories(
+            project_id, [value.category_id for value in annotation.values]
+        )
+
         # Create annotation (envelope)
         new_annotation = MessageAnnotationTable(
             message_id=annotation.message_id,
@@ -382,8 +481,16 @@ class AnalysisRepository(BaseRepository):
         return MessageAnnotationPublic.model_validate(new_annotation)
 
     def update_message_annotation(
-        self, annotation_id: UUID4, annotation: MessageAnnotationCreate
+        self,
+        project_id: UUID4,
+        annotation_id: UUID4,
+        annotation: MessageAnnotationCreate,
     ) -> MessageAnnotationPublic:
+        self._scoped_annotation(project_id, annotation_id)
+        self._require_categories(
+            project_id, [value.category_id for value in annotation.values]
+        )
+
         # Touch the envelope so its updated_at reflects the value change
         statement = (
             update(MessageAnnotationTable)
@@ -420,30 +527,35 @@ class AnalysisRepository(BaseRepository):
 
         return MessageAnnotationPublic.model_validate(existing_annotation)
 
-    def is_annotation_author(self, annotation_id: UUID4, user_id: UUID4) -> bool:
-        """Whether the annotation exists and belongs to `user_id`.
+    def can_modify_annotation(
+        self, project_id: UUID4, annotation_id: UUID4, user_id: UUID4, scope: Scope
+    ) -> bool:
+        """Whether `user_id` may edit or delete this annotation.
 
-        A coding is one person's reading of a message, so only its author may
-        change or remove it -- unlike a comment, which project moderators can
-        also delete.
+        Its author always may. Beyond that it takes moderation rights over the
+        project -- the same rule comments follow, so that a project keeps a way
+        to clean up after a collaborator who has left. Membership itself is the
+        endpoint's role check; this decides who among the members may act on
+        somebody else's work.
         """
-        annotation = self.session.get(MessageAnnotationTable, annotation_id)
-        if annotation is None:
-            raise NoResultFound("Annotation not found")
-        return annotation.user_id == user_id
+        annotation = self._scoped_annotation(project_id, annotation_id)
+        if annotation.user_id == user_id:
+            return True
 
-    def delete_message_annotation(self, annotation_id: UUID4):
-        statement = select(MessageAnnotationTable).where(
-            MessageAnnotationTable.id == annotation_id
-        )
-        annotation = self.session.execute(statement).scalar_one()
+        return can_moderate_project(self.session, user_id, project_id, scope)
+
+    def delete_message_annotation(self, project_id: UUID4, annotation_id: UUID4):
+        annotation = self._scoped_annotation(project_id, annotation_id)
         self.session.delete(annotation)
         self.session.commit()
 
     # ==================== Message Comment Methods ====================
 
-    def get_message_comments(self, message_id: UUID4) -> list[MessageCommentPublic]:
+    def get_message_comments(
+        self, project_id: UUID4, message_id: UUID4
+    ) -> list[MessageCommentPublic]:
         """The message's discussion: root comments, each carrying its replies."""
+        self._require_message(project_id, message_id)
         statement = (
             select(MessageCommentTable)
             .where(
@@ -462,8 +574,14 @@ class AnalysisRepository(BaseRepository):
         return [MessageCommentPublic.model_validate(comment) for comment in comments]
 
     def add_message_comment(
-        self, message_id: UUID4, user_id: UUID4, comment: MessageCommentCreate
+        self,
+        project_id: UUID4,
+        message_id: UUID4,
+        user_id: UUID4,
+        comment: MessageCommentCreate,
     ) -> MessageCommentPublic:
+        self._require_message(project_id, message_id)
+
         if comment.parent_id is not None:
             parent = self.session.get(MessageCommentTable, comment.parent_id)
             if parent is None:
@@ -491,26 +609,22 @@ class AnalysisRepository(BaseRepository):
         return MessageCommentPublic.model_validate(new_comment)
 
     def update_message_comment(
-        self, comment_id: UUID4, body: str
+        self, project_id: UUID4, comment_id: UUID4, body: str
     ) -> MessageCommentPublic:
-        comment = self.session.get(MessageCommentTable, comment_id)
-        if comment is None:
-            raise NoResultFound("Comment not found")
+        comment = self._scoped_comment(project_id, comment_id)
         comment.body = body
         self.session.commit()
         self.session.refresh(comment)
         return MessageCommentPublic.model_validate(comment)
 
-    def delete_message_comment(self, comment_id: UUID4) -> None:
+    def delete_message_comment(self, project_id: UUID4, comment_id: UUID4) -> None:
         """Delete a comment, and its replies when it is a root.
 
         The replies are deleted here rather than left to ON DELETE CASCADE:
         SQLite does not enforce foreign keys in this application (see
         CLAUDE.md), so the cascade would leave them orphaned.
         """
-        comment = self.session.get(MessageCommentTable, comment_id)
-        if comment is None:
-            raise NoResultFound("Comment not found")
+        comment = self._scoped_comment(project_id, comment_id)
 
         if comment.parent_id is None:
             self.session.execute(
@@ -522,24 +636,17 @@ class AnalysisRepository(BaseRepository):
         self.session.commit()
 
     def can_modify_comment(
-        self, comment_id: UUID4, user_id: UUID4, scope: Scope
+        self, project_id: UUID4, comment_id: UUID4, user_id: UUID4, scope: Scope
     ) -> bool:
         """Whether `user_id` may edit or delete this comment.
 
         Its author always may. Beyond that it takes moderation rights over the
-        project the comment's message belongs to -- see `can_moderate_project`.
+        project -- see `can_moderate_project`. Membership itself is the
+        endpoint's role check; this decides who among the members may act on
+        somebody else's writing.
         """
-        comment = self.session.get(MessageCommentTable, comment_id)
-        if comment is None:
-            raise NoResultFound("Comment not found")
-
+        comment = self._scoped_comment(project_id, comment_id)
         if comment.user_id == user_id:
             return True
-
-        project_id = self.session.execute(
-            select(MessageTable.project_id).where(MessageTable.id == comment.message_id)
-        ).scalar_one_or_none()
-        if project_id is None:
-            return False
 
         return can_moderate_project(self.session, user_id, project_id, scope)
