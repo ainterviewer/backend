@@ -5,11 +5,22 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 from uuid import UUID, uuid5
 
 import numpy as np
-from sqlalchemy import Text, and_, case, cast, delete, func, or_, select, update
+from sqlalchemy import (
+    Text,
+    and_,
+    case,
+    cast,
+    delete,
+    distinct,
+    func,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session, joinedload
 
@@ -162,6 +173,10 @@ class EmbeddingSearchPage:
     hits: list[EmbeddingSearchHit]
     scored: int
     total: int
+    # How many distinct interviews `total` chunks come from. Counted over the
+    # candidate rows for the same reason the totals are: they are already in
+    # memory, so it cannot disagree with what was ranked.
+    interviews: int = 0
 
 
 class ChunkLike(Protocol):
@@ -216,12 +231,21 @@ class BrowseUnit:
     embedded: bool
 
 
+#: How a browse is ordered. Not offered for the ranked endpoints, where the
+#: score is the order and any other one would throw the answer away.
+BrowseOrder = Literal["random", "interview_asc", "interview_desc"]
+
+DEFAULT_BROWSE_ORDER: BrowseOrder = "random"
+
+
 @dataclass(frozen=True)
 class BrowsePage:
     """One page of a browse, and how many units it was cut from."""
 
     units: list[BrowseUnit]
     total: int
+    #: How many distinct interviews those units come from.
+    interviews: int = 0
 
 
 @dataclass(frozen=True)
@@ -725,6 +749,50 @@ class EmbeddingRepository(BaseRepository):
         conditions.extend(self._survey_conditions(project_id, filters))
         return select(InterviewTable.id).where(*conditions)
 
+    def _interview_order(self, column, order: BrowseOrder, seed: str):
+        """How the interviews themselves are sequenced, as ORDER BY terms.
+
+        Every order here begins with the interview and only then with the
+        guide, so a conversation's chunks stay adjacent whichever is chosen. It
+        is the interviews that move.
+
+        `random` hashes the interview id with the caller's seed. Random *by
+        interview* rather than by chunk on purpose: the point of shuffling is
+        that the reader does not always meet the same people first, and
+        scattering one interview's chunks across the mosaic would cost the
+        thing the numbering was added for -- seeing a conversation as a
+        conversation -- without buying any more independence.
+
+        The interview id is the last term either way, so two interviews that
+        hash alike, or that were started in the same instant, cannot swap
+        places between two pages of one list.
+        """
+        if order == "random":
+            return [func.md5(cast(column, Text).concat(seed)), column]
+
+        started = (
+            select(InterviewTable.created_at)
+            .where(InterviewTable.id == column)
+            .scalar_subquery()
+        )
+        if order == "interview_desc":
+            return [started.desc(), column.desc()]
+        return [started.asc(), column.asc()]
+
+    def interviews_in_scope(
+        self, project_id: UUID, filters: EmbeddingFilters
+    ) -> set[UUID]:
+        """The interviews the filters leave, as ids.
+
+        The same scope the corpus is cut to, resolved rather than composed into
+        a larger query, so that something which counts *interviews* -- the
+        cohort filter's own tallies -- can be counted over exactly the
+        interviews the reader is looking at.
+        """
+        return set(
+            self.session.execute(self._interview_scope(project_id, filters)).scalars()
+        )
+
     def browse(
         self,
         *,
@@ -733,6 +801,8 @@ class EmbeddingRepository(BaseRepository):
         filters: EmbeddingFilters,
         limit: int,
         offset: int,
+        order: BrowseOrder = DEFAULT_BROWSE_ORDER,
+        seed: str = "",
     ) -> BrowsePage:
         """A page of the corpus in guide order, with no query and no vectors.
 
@@ -742,9 +812,11 @@ class EmbeddingRepository(BaseRepository):
         embedded the units are matched back to their embedding rows, so a hit
         can still be asked what it is near.
 
-        Ordered by interview and then by position in the guide. A browse has no
-        score to rank by, and the alternative to a declared order is a different
-        page 2 every time the planner changes its mind.
+        Ordered by interview and then by position in the guide -- which
+        interview comes first is what `order` decides, and `seed` is what makes
+        a shuffle hold still across the pages of one list. A browse has no score
+        to rank by, and the alternative to a declared order is a different page
+        2 every time the planner changes its mind.
         """
         source = self._message_source(project_id)
 
@@ -784,7 +856,7 @@ class EmbeddingRepository(BaseRepository):
                 source.c.main_question,
                 source.c.sub_question,
             ).where(*message_scope)
-            order = [source.c.interview_id, source.c.message_id]
+            within = [source.c.message_id]
         elif kind == EmbeddingKind.QA_PAIR:
             grouped = (
                 select(
@@ -799,28 +871,35 @@ class EmbeddingRepository(BaseRepository):
                     source.c.main_question,
                 )
             )
-            order = [
-                source.c.interview_id,
-                source.c.section,
-                source.c.main_question,
-            ]
+            within = [source.c.section, source.c.main_question]
         else:
             grouped = (
                 select(source.c.interview_id)
                 .where(*message_scope, *self._free_text_conditions(source))
                 .group_by(source.c.interview_id)
             )
-            order = [source.c.interview_id]
+            within = []
 
-        total = self.session.execute(
-            select(func.count()).select_from(grouped.subquery())
-        ).scalar_one()
+        counted = grouped.subquery()
+        total, interviews = self.session.execute(
+            select(
+                func.count(), func.count(distinct(counted.c.interview_id))
+            ).select_from(counted)
+        ).one()
 
         rows = self.session.execute(
-            grouped.order_by(*order).limit(limit).offset(offset)
+            grouped.order_by(
+                *self._interview_order(source.c.interview_id, order, seed), *within
+            )
+            .limit(limit)
+            .offset(offset)
         ).all()
 
-        return BrowsePage(units=self._units_for(project_id, kind, rows), total=total)
+        return BrowsePage(
+            units=self._units_for(project_id, kind, rows),
+            total=total,
+            interviews=interviews,
+        )
 
     def _units_for(
         self, project_id: UUID, kind: EmbeddingKind, rows
@@ -1033,6 +1112,31 @@ class EmbeddingRepository(BaseRepository):
         """Public form of `_hydrate`, for callers holding ids from a scan."""
         return self._hydrate(ids)
 
+    def interview_numbers(self, project_id: UUID) -> dict[UUID, int]:
+        """Each interview's position in its project, counting from one.
+
+        Numbered over every interview the project has, not over the ones a
+        request left standing: the number exists so a reader can say "these two
+        cards are the same interview" and have that hold across searches, and a
+        rank computed inside a filtered set would renumber itself whenever the
+        filters moved.
+
+        Ordered by when the interview was started, with the id breaking ties so
+        two interviews created in the same instant cannot swap numbers between
+        requests. One row per interview rather than a count per hit, because the
+        page needs the numbers of at most a few dozen and the alternative is a
+        correlated subquery on every one of them.
+        """
+        rows = self.session.execute(
+            select(
+                InterviewTable.id,
+                func.row_number().over(
+                    order_by=(InterviewTable.created_at, InterviewTable.id)
+                ),
+            ).where(InterviewTable.project_id == project_id)
+        ).all()
+        return {row[0]: row[1] for row in rows}
+
     def turns_for(
         self,
         embeddings: Sequence[ChunkLike],
@@ -1077,6 +1181,7 @@ class EmbeddingRepository(BaseRepository):
                 MessageTable.content,
                 MessageTable.section,
                 MessageTable.main_question,
+                MessageTable.sub_question,
                 MessageTable.survey_item,
                 MessageTable.skipped_by_condition,
             )
@@ -1145,6 +1250,14 @@ class EmbeddingRepository(BaseRepository):
                             embedding.kind == EmbeddingKind.MESSAGE
                             and row.id == embedding.message_id
                         ),
+                        # Its own place in the guide, not the group's. Every
+                        # turn here shares the group's section and question by
+                        # construction, but the probes under it are what a
+                        # reader is telling apart -- `3.2.1` from `3.2.2` --
+                        # and that is the sub-question.
+                        section=row.section,
+                        main_question=row.main_question,
+                        sub_question=row.sub_question,
                     )
                 )
                 pending_item = None if respondent else item
@@ -1306,12 +1419,17 @@ class EmbeddingRepository(BaseRepository):
         scored = len(rows)
         if exclude is not None:
             rows = [row for row in rows if row[0] != exclude]
+        # The candidate rows carry their interview, so the spread of the
+        # ranking is a set over rows already read rather than a second query.
+        interviews = len({row[2] for row in rows})
         if not rows or offset >= len(rows):
-            return EmbeddingSearchPage(hits=[], scored=scored, total=len(rows))
+            return EmbeddingSearchPage(
+                hits=[], scored=scored, total=len(rows), interviews=interviews
+            )
 
         query = np.asarray(query_vector, dtype=VECTOR_DTYPE)
         matrix = np.frombuffer(
-            b"".join(blob for _, blob in rows), dtype=VECTOR_DTYPE
+            b"".join(row[1] for row in rows), dtype=VECTOR_DTYPE
         ).reshape(len(rows), -1)
 
         if matrix.shape[1] != query.shape[0]:
@@ -1343,6 +1461,7 @@ class EmbeddingRepository(BaseRepository):
             ],
             scored=scored,
             total=len(rows),
+            interviews=interviews,
         )
 
     def search(
@@ -1363,7 +1482,7 @@ class EmbeddingRepository(BaseRepository):
                 kind=kind,
                 task=task,
                 filters=filters or EmbeddingFilters(),
-            )
+            ).add_columns(EmbeddingTable.interview_id)
         ).all()
 
         return self._rank(rows, query_vector, limit, offset)
@@ -1393,7 +1512,7 @@ class EmbeddingRepository(BaseRepository):
                 kind=source.kind,
                 task=source.task,
                 filters=filters or EmbeddingFilters(),
-            )
+            ).add_columns(EmbeddingTable.interview_id)
         ).all()
 
         return source, self._rank(

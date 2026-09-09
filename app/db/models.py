@@ -721,15 +721,28 @@ class EmbeddingTurn(_BaseModel):
     # checked per message and then lifted to the group. Reported separately so a
     # reader can see why a result looks like it contradicts its own query.
     excluded: list[tuple[int, int]] = Field(default_factory=list)
+    # Where in the guide this turn was said, so a message can be numbered the
+    # way the transcript numbers it -- `3.2` for a main question, `3.2.1` for
+    # the first probe under it.
+    #
+    # Carried per turn rather than read off the chunk, even though a chunk's
+    # turns all sit under one question by construction: the probes inside a
+    # question group are exactly what differ, and a card that stamped the
+    # group's number on all of them would say `3.2` three times where the
+    # transcript says `3.2.1`, `3.2.2`, `3.2.3`. An INTERVIEW chunk spans the
+    # whole guide and has no number of its own at all.
+    section: int | None = None
+    main_question: int | None = None
+    sub_question: int | None = None
 
 
 class TranscriptTurn(EmbeddingTurn):
     """One turn of a whole interview, for reading a hit in its context.
 
-    An `EmbeddingTurn` with the guide coordinates it was said at, so the reader
-    can be put back where they came from: the card that opened this knows its
-    own section and question, and the turns carrying theirs is what lets the
-    view scroll to them and shade them apart from the rest.
+    An `EmbeddingTurn` with everything a chunk has no room for: the message
+    row's own id, the survey item in full, the image, and whether the guide
+    skipped past it. The coordinates it is scrolled to are the base model's
+    now, since a card numbers its messages from them too.
 
     Inherits `matches`/`excluded` rather than restating them, so a transcript
     renders through the same component a chunk does -- the search is still
@@ -740,9 +753,6 @@ class TranscriptTurn(EmbeddingTurn):
     #: The message row, so a client can single out one turn -- what a MESSAGE
     #: chunk is about -- rather than the whole question group.
     id: UUID
-    section: int | None = None
-    main_question: int | None = None
-    sub_question: int | None = None
     #: The survey item in full, where the answer was a chosen option.
     #:
     #: `EmbeddingTurn.survey_label` carries only the item's *type*, which is all
@@ -822,6 +832,20 @@ class EmbeddingSearchHit(_BaseModel):
     interview_type: InterviewType | None = None
     participant_id: UUID4 | None = None
     participant_pid: str | None = None
+    # Which interview this is within its project, counting from one in the
+    # order they were started.
+    #
+    # A number rather than the id, because the reader's question is "are these
+    # two cards the same person" and a UUID cannot be held in the eye long
+    # enough to answer it. Numbered over the whole project rather than over the
+    # result set, so it means the same thing in every search, in the transcript
+    # it opens, and tomorrow -- a number that renumbered itself per query would
+    # be worse than none, since it would look like it identified something.
+    #
+    # Not a substitute for `participant_pid`: a pid identifies a person across
+    # projects and is often absent, while this identifies an interview within
+    # one project and is always there.
+    interview_number: int | None = None
 
     # The chunk as a conversation, when the messages behind it could be found.
     # Empty is a normal state, not an error -- an interview whose message rows
@@ -835,6 +859,7 @@ class EmbeddingSearchHit(_BaseModel):
         embedding,
         score: float | None,
         turns: list[EmbeddingTurn] | None = None,
+        number: int | None = None,
     ) -> EmbeddingSearchHit:
         """One row, from either an embedding or a browsed unit.
 
@@ -863,6 +888,7 @@ class EmbeddingSearchHit(_BaseModel):
             interview_type=interview.type if interview else None,
             participant_id=project_participant.id if project_participant else None,
             participant_pid=participant.pid if participant else None,
+            interview_number=number,
             turns=turns or [],
         )
 
@@ -886,6 +912,13 @@ class EmbeddingSearchResponse(_BaseModel):
     # ranking `offset` walks. Equal to `candidates` here; one fewer on
     # `/similar`, which never returns its own source.
     total: int = 0
+    # How many distinct interviews the counted chunks come from.
+    #
+    # Counted over everything that matched rather than over the page, which is
+    # the only version that holds still: a client counting the interviews in
+    # what it has loaded would show a number that climbs with every "Load
+    # more", and a reader would read that as the corpus growing.
+    interviews: int = 0
     offset: int = 0
     items: list[EmbeddingSearchHit] = []
 
@@ -896,6 +929,13 @@ class EmbeddingSimilarResponse(_BaseModel):
     source: EmbeddingSearchHit
     candidates: int = 0
     total: int = 0
+    # How many distinct interviews the counted chunks come from.
+    #
+    # Counted over everything that matched rather than over the page, which is
+    # the only version that holds still: a client counting the interviews in
+    # what it has loaded would show a number that climbs with every "Load
+    # more", and a reader would read that as the corpus growing.
+    interviews: int = 0
     offset: int = 0
     items: list[EmbeddingSearchHit] = []
 
@@ -911,6 +951,13 @@ class EmbeddingBrowseResponse(_BaseModel):
 
     kind: EmbeddingKind
     total: int = 0
+    # How many distinct interviews the counted chunks come from.
+    #
+    # Counted over everything that matched rather than over the page, which is
+    # the only version that holds still: a client counting the interviews in
+    # what it has loaded would show a number that climbs with every "Load
+    # more", and a reader would read that as the corpus growing.
+    interviews: int = 0
     offset: int = 0
     items: list[EmbeddingSearchHit] = []
 

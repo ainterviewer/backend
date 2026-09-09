@@ -1,4 +1,6 @@
 import re
+from collections.abc import Iterable
+from dataclasses import replace
 from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
@@ -31,7 +33,12 @@ from ....db.models import (
     SurveyFacets,
     SurveyFacetValue,
 )
-from ....db.repositories.embedding import ChunkCoordinates, EmbeddingFilters
+from ....db.repositories.embedding import (
+    DEFAULT_BROWSE_ORDER,
+    BrowseOrder,
+    ChunkCoordinates,
+    EmbeddingFilters,
+)
 from ....db.survey_answers import (
     CATEGORICAL_TYPES,
     NUMERIC_TYPES,
@@ -43,6 +50,7 @@ from ....db.survey_answers import (
     TextValue,
     Value,
     answer_rows,
+    matching_interviews,
     normalize_answer,
     options_of,
     values_of,
@@ -415,6 +423,7 @@ async def search_embeddings(
     turns = db.embeddings.turns_for(
         [hit.embedding for hit in result.hits], filter_params.filters
     )
+    numbers = db.embeddings.interview_numbers(project_id)
 
     return EmbeddingSearchResponse(
         query=query,
@@ -422,10 +431,14 @@ async def search_embeddings(
         task=task,
         candidates=result.scored,
         total=result.total,
+        interviews=result.interviews,
         offset=page.offset,
         items=[
             EmbeddingSearchHit.from_hit(
-                hit.embedding, hit.score, turns.get(hit.embedding.id)
+                hit.embedding,
+                hit.score,
+                turns.get(hit.embedding.id),
+                numbers.get(hit.embedding.interview_id),
             )
             for hit in result.hits
         ],
@@ -440,6 +453,8 @@ async def browse_embeddings(
     filter_params: Annotated[SearchFilterParams, Depends()],
     page: Annotated[SearchPageParams, Depends()],
     kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
+    order: BrowseOrder = DEFAULT_BROWSE_ORDER,
+    seed: Annotated[str, Query(max_length=64, pattern=r"^[A-Za-z0-9_-]*$")] = "",
 ) -> EmbeddingBrowseResponse:
     """The corpus in guide order, with no query and no vectors.
 
@@ -456,6 +471,14 @@ async def browse_embeddings(
     Paged with `limit`/`offset` like the ranked endpoints, but `total` means
     something stronger here: nothing was scored, so every row it counts is a row
     that matched the filters rather than the tail of a ranking.
+
+    `order` defaults to `random`, which is a claim about reading rather than
+    about data: a researcher reads the top of this list far more carefully than
+    the bottom, so a fixed order means the same interviews are always the
+    closely-read ones. `seed` is what makes a shuffle survive paging -- the
+    same seed is the same order, so page two continues page one -- and a client
+    that draws a fresh seed per page load gets a fresh shuffle per visit.
+    Ignored by the other orders, which need no seed to be stable.
     """
     result = db.embeddings.browse(
         project_id=project_id,
@@ -463,16 +486,22 @@ async def browse_embeddings(
         filters=filter_params.filters,
         limit=page.limit,
         offset=page.offset,
+        order=order,
+        seed=seed,
     )
 
     turns = db.embeddings.turns_for(result.units, filter_params.filters)
+    numbers = db.embeddings.interview_numbers(project_id)
 
     return EmbeddingBrowseResponse(
         kind=kind,
         total=result.total,
+        interviews=result.interviews,
         offset=page.offset,
         items=[
-            EmbeddingSearchHit.from_hit(unit, None, turns.get(unit.id))
+            EmbeddingSearchHit.from_hit(
+                unit, None, turns.get(unit.id), numbers.get(unit.interview_id)
+            )
             for unit in result.units
         ],
     )
@@ -556,7 +585,61 @@ def _facet_values(rows: list, options: list[str]) -> tuple[list[SurveyFacetValue
     return values, len(answered)
 
 
-def survey_facets(session, project_id: UUID, include_synthetic: bool) -> SurveyFacets:
+def _facet_cohorts(
+    session,
+    project_id: UUID,
+    coordinates: Iterable[Coordinate],
+    survey: SurveyFilter | None,
+    scope: set[UUID],
+    include_synthetic: bool,
+) -> dict[Coordinate, set[UUID]]:
+    """Which interviews each item is counted over.
+
+    Every filter applies except the item's own selection. That exception is the
+    whole design: counted with it, choosing "Male" would take every other
+    option in the same item to zero and leave the reader inside a selection
+    they can no longer see out of -- the count that would tell them what
+    widening to "Non-binary" costs is exactly the one their current choice has
+    erased. Counted without it, the gender item still reads 56/62/3/1 over the
+    completed interviews, and the *age* item reads the ages of completed men.
+
+    One resolved set per selected item, intersected per facet, rather than one
+    query per facet: the selections are a handful and the sets are small.
+    """
+    if survey is None or not survey:
+        return {coordinate: scope for coordinate in coordinates}
+
+    each: dict[Coordinate, set[UUID]] = {}
+    for selected in survey.coordinates:
+        one = SurveyFilter(
+            values={selected: survey.values[selected]}
+            if selected in survey.values
+            else {},
+            ranges={selected: survey.ranges[selected]}
+            if selected in survey.ranges
+            else {},
+        )
+        each[selected] = matching_interviews(
+            session, project_id, one, include_synthetic=include_synthetic
+        )
+
+    cohorts: dict[Coordinate, set[UUID]] = {}
+    for coordinate in coordinates:
+        cohort = set(scope)
+        for selected, matched in each.items():
+            if selected != coordinate:
+                cohort &= matched
+        cohorts[coordinate] = cohort
+    return cohorts
+
+
+def survey_facets(
+    session,
+    project_id: UUID,
+    include_synthetic: bool,
+    scope: set[UUID] | None = None,
+    survey: SurveyFilter | None = None,
+) -> SurveyFacets:
     """The survey answers a project's interviews hold, as things to filter by.
 
     A plain function rather than the endpoint itself so it can be read against
@@ -572,6 +655,13 @@ def survey_facets(session, project_id: UUID, include_synthetic: bool) -> SurveyF
 
     Answers to a question the guide no longer has are still answers, and are
     carried on the wording and options the interviews were actually asked with.
+
+    `scope` is the interviews the view's other filters leave, and `survey` the
+    cohort filter currently applied; together they decide what each item is
+    counted over -- see `_facet_cohorts`. The *items* and their options are
+    still drawn from the whole project, so a filter never removes the control
+    that would undo it: an option nobody in the cohort chose reads zero rather
+    than disappearing.
     """
     rows = answer_rows(session, project_id, include_synthetic=include_synthetic)
 
@@ -598,10 +688,24 @@ def survey_facets(session, project_id: UUID, include_synthetic: bool) -> SurveyF
                     question.survey_item,
                 )
 
+    cohorts = _facet_cohorts(
+        session,
+        project_id,
+        by_coordinate,
+        survey,
+        {row.interview_id for row in rows} if scope is None else scope,
+        include_synthetic,
+    )
+
     items: list[SurveyFacet] = []
     for coordinate in sorted(by_coordinate):
-        here = by_coordinate[coordinate]
-        observed = here[0].item
+        offered = by_coordinate[coordinate]
+        # The item is described from every answer ever given to it and counted
+        # over the cohort only: what the question *is* does not depend on who
+        # is currently being looked at.
+        cohort = cohorts[coordinate]
+        here = [row for row in offered if row.interview_id in cohort]
+        observed = offered[0].item
         shape = _facet_filter(observed)
         if shape is None:
             continue
@@ -655,18 +759,40 @@ async def read_survey_facets(
     project_id: UUID4,
     db: DBSession,
     jwt: ProjectViewer,
-    include_synthetic: bool = False,
+    filter_params: Annotated[SearchFilterParams, Depends()],
 ) -> SurveyFacets:
     """What the cohort filter in the explore view is built from.
 
-    Deliberately not narrowed by the filters the view currently has applied.
-    The counts would then move as the reader filters, and an option that
-    reached zero would vanish from under the selection that produced it --
-    leaving no way back. The language filter is offered from the whole corpus
-    for the same reason.
+    The *items and their options* come from the whole project, always: a filter
+    must never remove the control that would undo it, so an option nobody left
+    in view chose reads zero rather than disappearing, and the language filter
+    is offered from the whole corpus for the same reason.
+
+    The *counts* are of the cohort the view is currently showing -- the
+    interview filters, and the selections made in the other survey items. A
+    count that ignored them said 62 male interviews beside a list drawn from 52,
+    which reads as a bug in one of the two numbers rather than as two different
+    questions. Each item is exempt from its own selection; `_facet_cohorts` has
+    why.
+
+    The keyword and question filters are deliberately not applied: they choose
+    chunks, not people, and "interviews holding a matching chunk" is a
+    different unit than the one every other number here is counted in.
     """
+    filters = replace(filter_params.filters, keyword=None, questions=None)
+    # The scope is built *without* the survey filter, and the survey filter is
+    # handed over separately: an item is exempt from its own selection, and a
+    # scope that had already applied every selection would leave nothing for
+    # that exemption to give back.
+    scope = db.embeddings.interviews_in_scope(project_id, replace(filters, survey=None))
+
     return await run_in_threadpool(
-        survey_facets, db.session, project_id, include_synthetic
+        survey_facets,
+        db.session,
+        project_id,
+        filters.include_synthetic,
+        scope,
+        filters.survey,
     )
 
 
@@ -749,15 +875,22 @@ async def find_similar_embeddings(
     turns = db.embeddings.turns_for(
         [source, *(hit.embedding for hit in result.hits)], filter_params.filters
     )
+    numbers = db.embeddings.interview_numbers(project_id)
 
     return EmbeddingSimilarResponse(
-        source=EmbeddingSearchHit.from_hit(source, 1.0, turns.get(source.id)),
+        source=EmbeddingSearchHit.from_hit(
+            source, 1.0, turns.get(source.id), numbers.get(source.interview_id)
+        ),
         candidates=result.scored,
         total=result.total,
+        interviews=result.interviews,
         offset=page.offset,
         items=[
             EmbeddingSearchHit.from_hit(
-                hit.embedding, hit.score, turns.get(hit.embedding.id)
+                hit.embedding,
+                hit.score,
+                turns.get(hit.embedding.id),
+                numbers.get(hit.embedding.interview_id),
             )
             for hit in result.hits
         ],
@@ -993,6 +1126,7 @@ async def cluster_embeddings(
     turns = db.embeddings.turns_for(
         list(representatives.values()), filter_params.filters
     )
+    numbers = db.embeddings.interview_numbers(project_id)
 
     # What every plotted point is, beyond where clustering put it -- so the
     # scatter can be coloured by the guide or by language as well as by the
@@ -1017,7 +1151,10 @@ async def cluster_embeddings(
                 language_purity=cluster.purity.get(GroupKind.LANGUAGE),
                 representatives=[
                     EmbeddingSearchHit.from_hit(
-                        representatives[embedding_id], 1.0, turns.get(embedding_id)
+                        representatives[embedding_id],
+                        1.0,
+                        turns.get(embedding_id),
+                        numbers.get(representatives[embedding_id].interview_id),
                     )
                     for embedding_id in cluster.representatives
                     if embedding_id in representatives

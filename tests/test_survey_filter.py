@@ -338,31 +338,32 @@ class TestWhichAnswersCount:
         assert answer_rows(session, PROJECT) == []
 
 
+def guide(session, *items):
+    """A default localization holding one section of survey questions."""
+    session.add(
+        ProjectLocalizationTable(
+            id=uuid.uuid4(),
+            project_id=PROJECT,
+            language="en",
+            is_default=True,
+            interview_guide=InterviewGuide(
+                question_sections=[
+                    QuestionSection(
+                        description="About you",
+                        questions=[
+                            Question(main_question=prompt, survey_item=item)
+                            for prompt, item in items
+                        ],
+                    )
+                ]
+            ),
+        )
+    )
+
+
 class TestFacets:
     """What the picker is offered. Counts are interviews, because interviews
     are what selecting a value returns."""
-
-    def guide(self, session, *items):
-        """A default localization holding one section of survey questions."""
-        session.add(
-            ProjectLocalizationTable(
-                id=uuid.uuid4(),
-                project_id=PROJECT,
-                language="en",
-                is_default=True,
-                interview_guide=InterviewGuide(
-                    question_sections=[
-                        QuestionSection(
-                            description="About you",
-                            questions=[
-                                Question(main_question=prompt, survey_item=item)
-                                for prompt, item in items
-                            ],
-                        )
-                    ]
-                ),
-            )
-        )
 
     def facets(self, session, **kwargs):
         return survey_facets(session, PROJECT, kwargs.pop("include_synthetic", False))
@@ -370,7 +371,7 @@ class TestFacets:
     def test_an_option_nobody_chose_is_still_offered(self, session):
         """ "Nobody picked this" is a result, and seeing it beforehand is what
         keeps a filter from emptying the view for no visible reason."""
-        self.guide(session, ("What is your gender?", GENDER))
+        guide(session, ("What is your gender?", GENDER))
         respondent(session, "Female")
         session.flush()
 
@@ -382,7 +383,7 @@ class TestFacets:
         ]
 
     def test_it_is_labelled_from_the_guide(self, session):
-        self.guide(session, ("What is your gender?", GENDER))
+        guide(session, ("What is your gender?", GENDER))
         respondent(session, "Female")
         session.flush()
 
@@ -406,7 +407,7 @@ class TestFacets:
         ]
 
     def test_a_write_in_is_offered_after_the_authored_options(self, session):
-        self.guide(session, ("What is your gender?", GENDER))
+        guide(session, ("What is your gender?", GENDER))
         respondent(session, "Genderqueer")
         session.flush()
 
@@ -418,7 +419,7 @@ class TestFacets:
     def test_a_checkbox_counts_interviews_and_not_answers(self, session):
         """One respondent holding two values is one interview each value can
         return, not two."""
-        self.guide(session, ("How do you travel?", TRANSPORT))
+        guide(session, ("How do you travel?", TRANSPORT))
         builder = Builder(session)
         builder.exchange("How do you travel?", "Bike, Bus", survey_item=TRANSPORT)
         session.flush()
@@ -429,7 +430,7 @@ class TestFacets:
         assert facet.n_answered == 1
 
     def test_a_number_is_offered_as_the_range_it_spans(self, session):
-        self.guide(session, ("Your age?", AGE))
+        guide(session, ("Your age?", AGE))
         for age in ("24", "31", "64"):
             builder = Builder(session)
             builder.exchange("Your age?", age, survey_item=AGE)
@@ -504,3 +505,124 @@ class TestParsingTheWireFormat:
         with pytest.raises(HTTPException) as raised:
             _parse_survey(values, ranges)
         assert raised.value.status_code == 422
+
+
+class TestFacetCohorts:
+    """What the counts beside each option are counted over.
+
+    The picker sits beside a list that says how many interviews it is drawn
+    from. When the two disagree the reader has no way to tell which of them is
+    wrong, so the counts follow the filters -- with one exception, which is the
+    whole of what these are about.
+    """
+
+    def facets(self, session, scope=None, survey=None, include_synthetic=False):
+        return survey_facets(session, PROJECT, include_synthetic, scope, survey).items
+
+    def scope(self, session, **filters):
+        return EmbeddingRepository(session).interviews_in_scope(
+            PROJECT, EmbeddingFilters(**filters)
+        )
+
+    def counts(self, facet):
+        return {value.label: value.count for value in facet.values}
+
+    def test_the_counts_follow_the_interview_filter(self, session):
+        guide(session, ("What is your gender?", GENDER))
+        respondent(session, "Female", status="completed")
+        respondent(session, "Male", status="completed")
+        respondent(session, "Male", status="active")
+        session.flush()
+
+        scope = self.scope(session, status="completed")
+        [facet] = self.facets(session, scope=scope)
+
+        assert self.counts(facet) == {"Female": 1, "Male": 1, "Non-binary": 0}
+        assert facet.n_answered == 2
+
+    def test_an_item_does_not_narrow_its_own_counts(self, session):
+        """The exception the design rests on. Counted with its own selection,
+        picking "Male" would take the other options to zero and leave the
+        reader unable to see what widening the choice would cost."""
+        guide(session, ("What is your gender?", GENDER))
+        respondent(session, "Female")
+        respondent(session, "Male")
+        session.flush()
+
+        chosen = survey(values={(0, 0): (OptionValue(index=1),)})
+        [facet] = self.facets(session, scope=self.scope(session), survey=chosen)
+
+        assert self.counts(facet) == {"Female": 1, "Male": 1, "Non-binary": 0}
+
+    def test_one_item_narrows_another(self, session):
+        """Two items, so there is a cross-count to make: the transport item is
+        counted over the men, and the gender item over everybody."""
+        guide(
+            session,
+            ("What is your gender?", GENDER),
+            ("How do you travel?", TRANSPORT),
+        )
+        for gender, transport in (("Female", "Bike"), ("Male", "Bus"), ("Male", "Car")):
+            builder = Builder(session)
+            builder.exchange("What is your gender?", gender, survey_item=GENDER)
+            builder.exchange(
+                "How do you travel?", transport, question=1, survey_item=TRANSPORT
+            )
+        session.flush()
+
+        chosen = survey(values={(0, 0): (OptionValue(index=1),)})
+        gender, travel = self.facets(session, scope=self.scope(session), survey=chosen)
+
+        assert self.counts(gender) == {"Female": 1, "Male": 2, "Non-binary": 0}
+        assert self.counts(travel) == {"Bike": 0, "Bus": 1, "Car": 1}
+
+    def test_an_option_the_cohort_leaves_empty_is_still_offered(self, session):
+        """Zero rather than absent: a filter must never remove the control that
+        would undo it."""
+        guide(session, ("What is your gender?", GENDER))
+        respondent(session, "Female", status="completed")
+        respondent(session, "Male", status="active")
+        session.flush()
+
+        [facet] = self.facets(session, scope=self.scope(session, status="completed"))
+
+        assert self.counts(facet) == {"Female": 1, "Male": 0, "Non-binary": 0}
+
+    def test_a_range_is_read_off_the_cohort_too(self, session):
+        guide(session, ("How old are you?", AGE))
+        for age, status in (("25", "completed"), ("60", "active")):
+            builder = Builder(session, status=status)
+            builder.exchange("How old are you?", age, survey_item=AGE)
+        session.flush()
+
+        [facet] = self.facets(session, scope=self.scope(session, status="completed"))
+
+        assert (facet.low, facet.high) == ("25", "25")
+
+    def test_the_scope_the_endpoint_builds_leaves_room_for_the_exemption(self, session):
+        """The composition, not just the pieces. Building the scope with the
+        survey filter already applied and then handing the same filter over for
+        cross-counting takes every other option to zero -- the exemption has
+        nothing left to give back. This is that mistake, spelled as a test."""
+        guide(session, ("What is your gender?", GENDER))
+        respondent(session, "Female", status="completed")
+        respondent(session, "Male", status="completed")
+        session.flush()
+
+        chosen = survey(values={(0, 0): (OptionValue(index=1),)})
+        # As `read_survey_facets` composes it: every filter but the survey one.
+        scope = self.scope(session, status="completed")
+        [facet] = self.facets(session, scope=scope, survey=chosen)
+
+        assert self.counts(facet) == {"Female": 1, "Male": 1, "Non-binary": 0}
+
+    def test_no_scope_is_the_whole_project(self, session):
+        """The picker is also read where nothing is filtering it."""
+        guide(session, ("What is your gender?", GENDER))
+        respondent(session, "Female")
+        respondent(session, "Male")
+        session.flush()
+
+        [facet] = self.facets(session)
+
+        assert self.counts(facet) == {"Female": 1, "Male": 1, "Non-binary": 0}

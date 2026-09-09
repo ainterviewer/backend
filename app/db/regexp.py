@@ -16,8 +16,16 @@ purpose -- see `app.db.keyword_query.compile_condition`.
 has it, SQLite does not, and the keyword condition needs it to take the markup
 out of guide text before matching. The argument order and the `g` flag are
 Postgres's, so one SQLAlchemy expression renders on both.
+
+`md5` is the third of the same kind. Browsing the corpus in a *shuffled* order
+needs a sort key that is random-looking but stable for the length of a reading
+session, and hashing the row's interview with a per-session seed is that key:
+the same seed gives the same order on every page of the same list, and a new
+seed gives a new one. `ORDER BY random()` cannot do this -- it re-rolls per
+query, so page two would be drawn from a different shuffle than page one.
 """
 
+import hashlib
 import logging
 import re
 import sqlite3
@@ -84,10 +92,22 @@ def _regexp_replace(
     return compiled.sub(replacement, value, count=0 if "g" in (flags or "") else 1)
 
 
-def register_regexp(engine: Engine) -> None:
-    """Make `REGEXP` and `regexp_replace` work on every new connection.
+def _md5(value: str | None) -> str | None:
+    """Postgres's `md5(text)`, which SQLite has no equivalent of.
 
-    A no-op on other dialects, which have both already.
+    A hash rather than a cheaper mixer because it is what both engines can be
+    made to spell the same way; nothing here is a security claim, and the value
+    is only ever used as a sort key.
+    """
+    if value is None:
+        return None
+    return hashlib.md5(value.encode("utf-8")).hexdigest()
+
+
+def register_regexp(engine: Engine) -> None:
+    """Make `REGEXP`, `regexp_replace` and `md5` work on every new connection.
+
+    A no-op on other dialects, which have all three already.
     """
     if engine.dialect.name != "sqlite":
         return
@@ -97,6 +117,7 @@ def register_regexp(engine: Engine) -> None:
         for name, arity, function in (
             ("regexp", 2, _regexp),
             ("regexp_replace", 4, _regexp_replace),
+            ("md5", 1, _md5),
         ):
             try:
                 # Deterministic so SQLite may use it in an index or a partial

@@ -8,6 +8,7 @@ same thing.
 """
 
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import create_engine
@@ -938,3 +939,247 @@ class TestMarkupIsNotProse:
         session.flush()
 
         assert len(self.hits(session, "b", scope="answer")) == 1
+
+
+class TestInterviewCounts:
+    """How many interviews a result set is drawn from, and which one a card is.
+
+    A count of chunks says how much there is to read; it says nothing about
+    whether it came from forty people or from one who talked a lot, which is
+    the difference between a finding and an anecdote.
+    """
+
+    def test_the_count_is_of_interviews_not_chunks(self, session):
+        first = Builder(session)
+        first.exchange("How is it going?", "Slowly.", question=0)
+        first.exchange("And now?", "Still slowly.", question=1)
+        Builder(session).exchange("How is it going?", "Fine.", question=0)
+        session.flush()
+
+        page = browse(session, EmbeddingKind.QA_PAIR)
+
+        assert page.total == 3
+        assert page.interviews == 2
+
+    def test_it_counts_everything_matched_not_the_page(self, session):
+        for _ in range(4):
+            Builder(session).exchange("How is it going?", "Slowly.")
+        session.flush()
+
+        page = EmbeddingRepository(session).browse(
+            project_id=PROJECT,
+            kind=EmbeddingKind.QA_PAIR,
+            filters=EmbeddingFilters(),
+            limit=1,
+            offset=0,
+        )
+
+        assert len(page.units) == 1
+        assert page.interviews == 4
+
+    def test_a_filter_that_drops_an_interview_drops_it_from_the_count(self, session):
+        Builder(session).exchange("How is it going?", "Slowly.")
+        Builder(session).exchange("How is it going?", "The funding ran out.")
+        session.flush()
+
+        assert browse(session, EmbeddingKind.QA_PAIR, keyword="funding").interviews == 1
+
+    def test_interviews_are_numbered_in_the_order_they_started(self, session):
+        first = Builder(session, created_at=datetime(2026, 1, 1, tzinfo=UTC))
+        second = Builder(session, created_at=datetime(2026, 2, 1, tzinfo=UTC))
+        session.flush()
+
+        numbers = EmbeddingRepository(session).interview_numbers(PROJECT)
+
+        assert numbers[first.interview.id] == 1
+        assert numbers[second.interview.id] == 2
+
+    def test_the_number_does_not_move_when_a_filter_does(self, session):
+        """The whole point of the number: it identifies an interview across
+        searches, so it cannot be a rank within the current result set."""
+        Builder(session, created_at=datetime(2026, 1, 1, tzinfo=UTC)).exchange(
+            "Q?", "Slowly."
+        )
+        second = Builder(session, created_at=datetime(2026, 2, 1, tzinfo=UTC))
+        second.exchange("Q?", "The funding ran out.")
+        session.flush()
+
+        numbers = EmbeddingRepository(session).interview_numbers(PROJECT)
+        matched = browse(session, EmbeddingKind.QA_PAIR, keyword="funding").units
+
+        assert [numbers[unit.interview_id] for unit in matched] == [2]
+
+    def test_an_interview_no_filter_admits_is_still_numbered(self, session):
+        """Numbering runs over the project, not over what a request left: a
+        test run being hidden must not renumber the interviews after it."""
+        Builder(
+            session,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            type=InterviewType.SYNTHETIC_TEST,
+        )
+        real = Builder(session, created_at=datetime(2026, 2, 1, tzinfo=UTC))
+        session.flush()
+
+        assert (
+            EmbeddingRepository(session).interview_numbers(PROJECT)[real.interview.id]
+            == 2
+        )
+
+
+class TestTurnCoordinates:
+    """Where each turn of a chunk sits in the guide.
+
+    A card numbers its messages the way the transcript does, and inside one
+    question group the probes are what differ -- so the number has to come from
+    the turn rather than from the chunk it belongs to.
+    """
+
+    def test_every_turn_carries_its_place_in_the_guide(self, session):
+        builder = Builder(session)
+        builder.exchange("How is it going?", "Slowly.", section=2, question=1)
+        session.flush()
+
+        page = browse(session, EmbeddingKind.QA_PAIR)
+        turns = EmbeddingRepository(session).turns_for(page.units)[page.units[0].id]
+
+        assert [(turn.section, turn.main_question) for turn in turns] == [
+            (2, 1),
+            (2, 1),
+        ]
+
+    def test_probes_inside_one_group_are_numbered_apart(self, session):
+        builder = Builder(session)
+        builder.exchange("How is it going?", "Slowly.", sub_question=1)
+        builder.exchange("Why is that?", "The funding ran out.", sub_question=2)
+        session.flush()
+
+        page = browse(session, EmbeddingKind.QA_PAIR)
+        turns = EmbeddingRepository(session).turns_for(page.units)[page.units[0].id]
+
+        assert [turn.sub_question for turn in turns] == [1, 1, 2, 2]
+
+    def test_a_turn_the_guide_never_numbered_carries_nothing(self, session):
+        builder = Builder(session)
+        builder.exchange("How is it going?", "Slowly.")
+        session.flush()
+
+        page = browse(session, EmbeddingKind.QA_PAIR)
+        turns = EmbeddingRepository(session).turns_for(page.units)[page.units[0].id]
+
+        assert [turn.sub_question for turn in turns] == [None, None]
+
+
+class TestBrowseOrder:
+    """Which interview a reader meets first.
+
+    A researcher reads the top of a list more carefully than the bottom, so a
+    fixed order quietly decides whose answers get the close reading. These are
+    about that, not about the SQL.
+    """
+
+    @pytest.fixture
+    def corpus(self, session):
+        """Five interviews, started a day apart, one Q&A pair each."""
+        interviews = []
+        for day in range(1, 6):
+            builder = Builder(session, created_at=datetime(2026, 1, day, tzinfo=UTC))
+            builder.exchange("How is it going?", f"Answer {day}")
+            interviews.append(builder.interview.id)
+        session.flush()
+        return interviews
+
+    def order(self, session, order, seed=""):
+        page = EmbeddingRepository(session).browse(
+            project_id=PROJECT,
+            kind=EmbeddingKind.QA_PAIR,
+            filters=EmbeddingFilters(),
+            limit=100,
+            offset=0,
+            order=order,
+            seed=seed,
+        )
+        return [unit.interview_id for unit in page.units]
+
+    def test_ascending_is_the_order_they_were_started(self, session, corpus):
+        assert self.order(session, "interview_asc") == corpus
+
+    def test_descending_is_the_reverse(self, session, corpus):
+        assert self.order(session, "interview_desc") == list(reversed(corpus))
+
+    def test_a_seed_is_an_order(self, session, corpus):
+        """The same seed twice is the same list twice, which is what paging
+        rests on: page two has to continue page one, not a new shuffle."""
+        assert self.order(session, "random", "abc") == self.order(
+            session, "random", "abc"
+        )
+
+    def test_a_different_seed_is_a_different_order(self, session, corpus):
+        """Several seeds rather than two, because five interviews can land in
+        the same order under two seeds by chance -- one time in 120, which is
+        often enough to fail a suite. The claim is only that the seed is read
+        at all: a shuffle that ignored it would give one order for all four."""
+        orders = {
+            tuple(str(interview) for interview in self.order(session, "random", seed))
+            for seed in ("a", "b", "c", "d")
+        }
+
+        assert len(orders) > 1
+
+    def test_a_shuffle_is_still_the_whole_corpus(self, session, corpus):
+        assert sorted(map(str, self.order(session, "random", "abc"))) == sorted(
+            map(str, corpus)
+        )
+
+    def test_paging_a_shuffle_does_not_repeat_or_skip(self, session, corpus):
+        repository = EmbeddingRepository(session)
+        seen = []
+        for offset in (0, 2, 4):
+            page = repository.browse(
+                project_id=PROJECT,
+                kind=EmbeddingKind.QA_PAIR,
+                filters=EmbeddingFilters(),
+                limit=2,
+                offset=offset,
+                order="random",
+                seed="abc",
+            )
+            seen.extend(unit.interview_id for unit in page.units)
+
+        assert seen == self.order(session, "random", "abc")
+
+    def test_an_interview_s_chunks_stay_together_when_shuffled(self, session):
+        """Interviews move; a conversation does not come apart. Reading one
+        interview's answers in sequence is what the card numbers are for."""
+        for day in range(1, 4):
+            builder = Builder(session, created_at=datetime(2026, 1, day, tzinfo=UTC))
+            for question in range(3):
+                builder.exchange("Q?", f"A{question}", question=question)
+        session.flush()
+
+        order = self.order(session, "random", "abc")
+        runs = [
+            interview
+            for index, interview in enumerate(order)
+            if index == 0 or interview != order[index - 1]
+        ]
+
+        assert len(order) == 9
+        assert len(runs) == 3
+
+    def test_the_guide_still_orders_what_is_inside_one(self, session):
+        builder = Builder(session, created_at=datetime(2026, 1, 1, tzinfo=UTC))
+        for question in (2, 0, 1):
+            builder.exchange("Q?", f"A{question}", question=question)
+        session.flush()
+
+        page = EmbeddingRepository(session).browse(
+            project_id=PROJECT,
+            kind=EmbeddingKind.QA_PAIR,
+            filters=EmbeddingFilters(),
+            limit=100,
+            offset=0,
+            order="random",
+            seed="abc",
+        )
+
+        assert [unit.main_question for unit in page.units] == [0, 1, 2]
