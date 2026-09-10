@@ -1183,3 +1183,114 @@ class TestBrowseOrder:
         )
 
         assert [unit.main_question for unit in page.units] == [0, 1, 2]
+
+
+class TestSections:
+    """The unit between a question group and a whole interview.
+
+    It exists for a guide that opens a section with a closed question and then
+    asks the open ones about it: at QA-pair level the closed answer is dropped
+    as scaffolding and the open answers have nothing saying what they are
+    about. A section keeps them together.
+    """
+
+    def section(self, session, **filters):
+        return EmbeddingRepository(session).browse(
+            project_id=PROJECT,
+            kind=EmbeddingKind.SECTION,
+            filters=EmbeddingFilters(**filters),
+            limit=100,
+            offset=0,
+        )
+
+    def test_a_section_is_one_unit(self, session):
+        builder = Builder(session)
+        builder.exchange("How is it going?", "Slowly.", section=0, question=0)
+        builder.exchange("And the funding?", "It ran out.", section=0, question=1)
+        session.flush()
+
+        page = self.section(session)
+
+        assert page.total == 1
+        assert (page.units[0].section, page.units[0].main_question) == (0, None)
+
+    def test_sections_are_separate_units(self, session):
+        builder = Builder(session)
+        builder.exchange("How is it going?", "Slowly.", section=0)
+        builder.exchange("And at home?", "Fine.", section=1)
+        session.flush()
+
+        assert [unit.section for unit in self.section(session).units] == [0, 1]
+
+    def test_it_renders_as_the_whole_section(self, session):
+        """Including the closed answer it opens with -- which is the unit's
+        entire reason for existing, and is not a chunk of its own."""
+        builder = Builder(session)
+        builder.exchange(
+            "How often were you stressed?",
+            "Always",
+            question=0,
+            survey_item=NumberItem(),
+            message_type=MessageType.SURVEY_ITEM,
+        )
+        builder.exchange("What caused it?", "Too many deadlines.", question=1)
+        session.flush()
+
+        page = self.section(session)
+        turns = EmbeddingRepository(session).turns_for(page.units)[page.units[0].id]
+
+        assert [turn.text for turn in turns] == [
+            "How often were you stressed?",
+            "Always",
+            "What caused it?",
+            "Too many deadlines.",
+        ]
+
+    def test_a_section_of_only_closed_answers_is_not_a_unit(self, session):
+        """The same rule a question group is held to, one level up. Otherwise a
+        section is the door the survey answers walk back in through."""
+        builder = Builder(session)
+        builder.exchange(
+            "What is your gender?",
+            "Male",
+            survey_item=NumberItem(),
+            message_type=MessageType.SURVEY_ITEM,
+        )
+        session.flush()
+
+        assert self.section(session).total == 0
+
+    def test_a_turn_of_another_section_stays_out(self, session):
+        builder = Builder(session)
+        builder.exchange("How is it going?", "Slowly.", section=0)
+        builder.exchange("And at home?", "Fine.", section=1)
+        session.flush()
+
+        page = self.section(session)
+        turns = EmbeddingRepository(session).turns_for(page.units)
+
+        assert [turn.text for turn in turns[page.units[0].id]] == [
+            "How is it going?",
+            "Slowly.",
+        ]
+
+    def test_a_keyword_selects_the_section_holding_it(self, session):
+        builder = Builder(session)
+        builder.exchange("How is it going?", "Slowly.", section=0)
+        builder.exchange("And the funding?", "The funding ran out.", section=1)
+        session.flush()
+
+        page = self.section(session, keyword="funding")
+
+        assert [unit.section for unit in page.units] == [1]
+
+    def test_the_counts_are_of_sections(self, session):
+        first = Builder(session)
+        first.exchange("How is it going?", "Slowly.", section=0)
+        first.exchange("And at home?", "Fine.", section=1)
+        Builder(session).exchange("How is it going?", "Quickly.", section=0)
+        session.flush()
+
+        page = self.section(session)
+
+        assert (page.total, page.interviews) == (3, 2)

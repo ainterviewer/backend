@@ -673,6 +673,20 @@ class EmbeddingRepository(BaseRepository):
                 select(matched.subquery().c.interview_id)
             )
 
+        if kind == EmbeddingKind.SECTION:
+            # Same shape as the QA pair below, one coordinate shorter: a
+            # section chunk carries no `main_question`, so matching on it would
+            # compare against NULL and quietly keep nothing.
+            inside = matched.subquery()
+            return (
+                select(inside.c.id)
+                .where(
+                    inside.c.interview_id == EmbeddingTable.interview_id,
+                    inside.c.section == EmbeddingTable.section,
+                )
+                .exists()
+            )
+
         # A QA pair has no id of its own; it *is* its coordinates.
         group = matched.subquery()
         return (
@@ -857,6 +871,18 @@ class EmbeddingRepository(BaseRepository):
                 source.c.sub_question,
             ).where(*message_scope)
             within = [source.c.message_id]
+        elif kind == EmbeddingKind.SECTION:
+            # One row per section that drew free text anywhere in it. The
+            # free-text test is the same one a question group is held to, one
+            # level up: a section of nothing but closed answers is structured
+            # data, and letting it through here would be the survey answers
+            # walking back in under a different unit.
+            grouped = (
+                select(source.c.interview_id, source.c.section)
+                .where(*message_scope, *self._free_text_conditions(source))
+                .group_by(source.c.interview_id, source.c.section)
+            )
+            within = [source.c.section]
         elif kind == EmbeddingKind.QA_PAIR:
             grouped = (
                 select(
@@ -1009,6 +1035,8 @@ class EmbeddingRepository(BaseRepository):
             return f"message:{interview_id}:{message_id}"
         if kind == EmbeddingKind.QA_PAIR:
             return f"qa_pair:{interview_id}:{section}:{main_question}"
+        if kind == EmbeddingKind.SECTION:
+            return f"section:{interview_id}:{section}"
         return f"interview:{interview_id}"
 
     def _candidate_statement(
@@ -1159,7 +1187,11 @@ class EmbeddingRepository(BaseRepository):
 
         INTERVIEW chunks get no turns. A whole transcript rendered as bubbles in
         a result list is the transcript view, which every hit already links to,
-        and shipping one per hit would dwarf the rest of the response.
+        and shipping one per hit would dwarf the rest of the response. A SECTION
+        does get them: it is the unit that exists to be read whole, since the
+        closed answer at the top of a section is the context for the open
+        questions under it, and a section runs to a few hundred characters
+        rather than a transcript's several thousand.
 
         One query for every hit on the page, grouped in Python: the alternative
         is a query per chunk, and a page of ten results with three
@@ -1168,7 +1200,8 @@ class EmbeddingRepository(BaseRepository):
         wanted = [
             embedding
             for embedding in embeddings
-            if embedding.kind in (EmbeddingKind.QA_PAIR, EmbeddingKind.MESSAGE)
+            if embedding.kind
+            in (EmbeddingKind.QA_PAIR, EmbeddingKind.MESSAGE, EmbeddingKind.SECTION)
         ]
         if not wanted:
             return {}
@@ -1194,11 +1227,15 @@ class EmbeddingRepository(BaseRepository):
             .order_by(MessageTable.interview_id, MessageTable.message_id)
         ).all()
 
-        # (interview, section, main_question) -> the group's messages, in order.
-        # Keyed on the question group rather than on the interview because that
-        # is the unit both remaining kinds are about: a QA pair *is* the group,
-        # and a message is one turn inside one.
+        # (interview, section, main_question) -> the group's messages, in order,
+        # and (interview, section) -> the whole section's.
+        #
+        # Two indexes over one pass because the kinds sit at two levels: a QA
+        # pair *is* a question group and a message is one turn inside one,
+        # while a section spans the groups -- which is the whole reason it
+        # exists, since the closed answer it opens with is a group of its own.
         grouped: dict[tuple[UUID, int, int], list[Any]] = {}
+        sections: dict[tuple[UUID, int], list[Any]] = {}
         for row in rows:
             if row.skipped_by_condition or not row.content.strip():
                 continue
@@ -1207,17 +1244,23 @@ class EmbeddingRepository(BaseRepository):
             grouped.setdefault(
                 (row.interview_id, row.section, row.main_question), []
             ).append(row)
+            sections.setdefault((row.interview_id, row.section), []).append(row)
 
         node = _keyword_node(filters) if filters else None
         scope: Scope = filters.keyword_scope if filters else "answer"
 
         turns: dict[UUID, list[EmbeddingTurn]] = {}
         for embedding in wanted:
-            if embedding.section is None or embedding.main_question is None:
+            if embedding.section is None:
                 continue
-            group = grouped.get(
-                (embedding.interview_id, embedding.section, embedding.main_question)
-            )
+            if embedding.kind == EmbeddingKind.SECTION:
+                group = sections.get((embedding.interview_id, embedding.section))
+            elif embedding.main_question is None:
+                continue
+            else:
+                group = grouped.get(
+                    (embedding.interview_id, embedding.section, embedding.main_question)
+                )
             if not group:
                 continue
 
