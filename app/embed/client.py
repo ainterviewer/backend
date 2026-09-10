@@ -44,14 +44,14 @@ class EmbeddingClient:
 
     @property
     def enabled(self) -> bool:
-        return self.settings.enabled and bool(self.settings.endpoint)
+        return self.settings.enabled and bool(self.settings.base_url)
 
     def _http(self) -> httpx.AsyncClient:
         if self._client is None:
-            if not self.settings.endpoint:
+            if not self.settings.base_url:
                 raise EmbeddingUnavailable("No embedding endpoint configured")
             self._client = httpx.AsyncClient(
-                base_url=self.settings.endpoint,
+                base_url=self.settings.base_url,
                 timeout=httpx.Timeout(
                     self.settings.timeout,
                     connect=self.settings.connect_timeout,
@@ -65,7 +65,12 @@ class EmbeddingClient:
             self._client = None
 
     async def health(self) -> bool:
-        """Whether the server is reachable. Never raises, and never hangs.
+        """Whether embeddings can be served right now. Never raises or hangs.
+
+        Asks the load balancer's pool-scoped probe rather than its own
+        `/health`: the proxy answers that one as long as the proxy itself is
+        up, which says nothing about whether any embedding instance is running
+        behind it.
 
         Answered from the circuit breaker while it is open: the last few calls
         already established the server is down, and a status read is not the
@@ -80,7 +85,7 @@ class EmbeddingClient:
             return False
         try:
             response = await self._http().get(
-                "/health", timeout=self.settings.connect_timeout
+                "/v1/embeddings/health", timeout=self.settings.connect_timeout
             )
         except Exception:
             return False
@@ -145,9 +150,31 @@ class EmbeddingClient:
         for attempt in range(self.settings.max_retries):
             try:
                 response = await self._http().post(
-                    "/embed",
-                    json={"inputs": inputs, "normalize": True, "truncate": True},
+                    "/v1/embeddings",
+                    json={
+                        "input": inputs,
+                        "model": self.settings.model,
+                        "encoding_format": "float",
+                    },
                 )
+                # A 503 carrying `Retry-After` is the load balancer saying an
+                # instance is on its way up. That is a wait, not a failure:
+                # counting it would let a routine scale-up open the circuit
+                # breaker and degrade search for the cooldown on top of the
+                # boot. Back off for as long as we are told, within reason.
+                if response.status_code == 503 and "retry-after" in response.headers:
+                    last_error = EmbeddingUnavailable(
+                        f"Embedding capacity starting: {response.text[:200]}"
+                    )
+                    if attempt < self.settings.max_retries - 1:
+                        await asyncio.sleep(
+                            min(
+                                self._retry_after(response.headers["retry-after"]),
+                                self.settings.max_retry_after,
+                            )
+                        )
+                    continue
+
                 # 4xx other than rate limiting is our bug (bad batch size,
                 # malformed payload) and will not fix itself on a retry.
                 if response.status_code == 429 or response.status_code >= 500:
@@ -159,7 +186,7 @@ class EmbeddingClient:
                         f"({response.status_code}): {response.text[:200]}"
                     )
 
-                vectors = response.json()
+                vectors = [item["embedding"] for item in response.json()["data"]]
                 self._record_success()
                 return vectors
 
@@ -176,6 +203,18 @@ class EmbeddingClient:
             f"Embedding server unreachable after {self.settings.max_retries} "
             f"attempts: {last_error}"
         ) from last_error
+
+    @staticmethod
+    def _retry_after(header: str) -> float:
+        """`Retry-After` in seconds, falling back to a short wait.
+
+        Only the delta-seconds form is handled: the load balancer sends that,
+        and an unparsable value should not turn a retryable 503 into a crash.
+        """
+        try:
+            return max(float(header), 0.0)
+        except ValueError:
+            return 5.0
 
     async def embed_documents(self, texts: list[str]) -> list[list[float]]:
         """Embed passages, document-side: no instruction prefix, by design.

@@ -12,6 +12,7 @@ from pydantic_settings import (
 )
 
 from ainterviewer.settings import BaseSettingsConfigDict
+from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import DatabaseType, TimeDelta
 
 from .types import Scope
@@ -190,10 +191,26 @@ class EmbeddingSettings(BaseModel):
 
     max_retries: int = 3
 
+    # Cap on how long a `Retry-After` from the load balancer is honoured. A
+    # cold instance is worth waiting out; an unbounded wait would let one
+    # header hold a request open far past any caller's patience.
+    max_retry_after: float = 30.0
+
     # Consecutive failures before the client stops calling out and starts
     # failing fast, so a dead box degrades search rather than hanging requests.
     circuit_breaker_threshold: int = 5
     circuit_breaker_reset_seconds: float = 60.0
+
+    @property
+    def base_url(self) -> str:
+        """Where embedding requests go.
+
+        Defaults to the shared EC2 load balancer. The proxy serves the
+        embedding pool behind the same address as the LLM pool, so there is
+        normally no second host to configure -- set `endpoint` only to reach a
+        server directly, bypassing the balancer.
+        """
+        return self.endpoint or lib_settings.llm.llm_endpoint
 
 
 class ServiceSettings(BaseSettings):
