@@ -4,6 +4,13 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.5.1] - 2026-09-10
+
+### Features
+
+- Improve embeddings service
+- Add chunks for interview kinds
+
 ## [0.5.0] - 2026-09-10
 
 ### Features
