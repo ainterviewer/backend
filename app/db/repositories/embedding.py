@@ -43,7 +43,7 @@ from ..keyword_query import (
     match_spans,
     parse,
 )
-from ..models import EmbeddingTurn, TranscriptTurn
+from ..models import INTERVIEW_PREVIEW_TURNS, ChunkTurns, EmbeddingTurn, TranscriptTurn
 from ..survey_answers import SurveyFilter, matching_interviews
 from ..tables import (
     EmbeddingTable,
@@ -1169,7 +1169,7 @@ class EmbeddingRepository(BaseRepository):
         self,
         embeddings: Sequence[ChunkLike],
         filters: EmbeddingFilters | None = None,
-    ) -> dict[UUID, list[EmbeddingTurn]]:
+    ) -> dict[UUID, ChunkTurns]:
         """The messages behind each chunk, as speaker turns.
 
         Rendering a result the way the interview read it needs to know who said
@@ -1185,13 +1185,20 @@ class EmbeddingRepository(BaseRepository):
         its own idea of what a letter is, marking the text as rendered rather
         than the column the query actually ran against.
 
-        INTERVIEW chunks get no turns. A whole transcript rendered as bubbles in
-        a result list is the transcript view, which every hit already links to,
-        and shipping one per hit would dwarf the rest of the response. A SECTION
-        does get them: it is the unit that exists to be read whole, since the
-        closed answer at the top of a section is the context for the open
-        questions under it, and a section runs to a few hundred characters
-        rather than a transcript's several thousand.
+        A SECTION gets its turns whole: it is the unit that exists to be read
+        that way, since the closed answer at the top of a section is the context
+        for the open questions under it, and a section runs to a few hundred
+        characters rather than a transcript's several thousand.
+
+        An INTERVIEW gets a window rather than the whole transcript -- shipping
+        one transcript per hit would dwarf the rest of the response, and ten of
+        them stacked is not a list anybody can scan. The window is
+        `INTERVIEW_PREVIEW_TURNS` long and opens on the first keyword match
+        where there is one, on the first turn otherwise: a reader who arrived
+        from a search is here to see the search, and a preview that always
+        showed the opening pleasantries would show the one part of an interview
+        that is the same in all of them. `ChunkTurns.total` carries the full
+        length either way, so the card can say what it is not showing.
 
         One query for every hit on the page, grouped in Python: the alternative
         is a query per chunk, and a page of ten results with three
@@ -1201,7 +1208,12 @@ class EmbeddingRepository(BaseRepository):
             embedding
             for embedding in embeddings
             if embedding.kind
-            in (EmbeddingKind.QA_PAIR, EmbeddingKind.MESSAGE, EmbeddingKind.SECTION)
+            in (
+                EmbeddingKind.QA_PAIR,
+                EmbeddingKind.MESSAGE,
+                EmbeddingKind.SECTION,
+                EmbeddingKind.INTERVIEW,
+            )
         ]
         if not wanted:
             return {}
@@ -1228,14 +1240,17 @@ class EmbeddingRepository(BaseRepository):
         ).all()
 
         # (interview, section, main_question) -> the group's messages, in order,
-        # and (interview, section) -> the whole section's.
+        # (interview, section) -> the whole section's, and interview -> all of
+        # them.
         #
-        # Two indexes over one pass because the kinds sit at two levels: a QA
-        # pair *is* a question group and a message is one turn inside one,
-        # while a section spans the groups -- which is the whole reason it
-        # exists, since the closed answer it opens with is a group of its own.
+        # Three indexes over one pass because the kinds sit at three levels: a
+        # QA pair *is* a question group and a message is one turn inside one,
+        # a section spans the groups -- which is the whole reason it exists,
+        # since the closed answer it opens with is a group of its own -- and an
+        # interview spans the sections.
         grouped: dict[tuple[UUID, int, int], list[Any]] = {}
         sections: dict[tuple[UUID, int], list[Any]] = {}
+        interviews: dict[UUID, list[Any]] = {}
         for row in rows:
             if row.skipped_by_condition or not row.content.strip():
                 continue
@@ -1245,15 +1260,20 @@ class EmbeddingRepository(BaseRepository):
                 (row.interview_id, row.section, row.main_question), []
             ).append(row)
             sections.setdefault((row.interview_id, row.section), []).append(row)
+            interviews.setdefault(row.interview_id, []).append(row)
 
         node = _keyword_node(filters) if filters else None
         scope: Scope = filters.keyword_scope if filters else "answer"
 
-        turns: dict[UUID, list[EmbeddingTurn]] = {}
+        turns: dict[UUID, ChunkTurns] = {}
         for embedding in wanted:
-            if embedding.section is None:
+            # Checked before the coordinates are read, not after: an INTERVIEW
+            # chunk spans the whole guide and so carries none of them.
+            if embedding.kind == EmbeddingKind.INTERVIEW:
+                group = interviews.get(embedding.interview_id)
+            elif embedding.section is None:
                 continue
-            if embedding.kind == EmbeddingKind.SECTION:
+            elif embedding.kind == EmbeddingKind.SECTION:
                 group = sections.get((embedding.interview_id, embedding.section))
             elif embedding.main_question is None:
                 continue
@@ -1327,7 +1347,22 @@ class EmbeddingRepository(BaseRepository):
                     start -= 1
                 rendered = rendered[start : matched + 1]
 
-            turns[embedding.id] = rendered
+            total = len(rendered)
+
+            if embedding.kind == EmbeddingKind.INTERVIEW:
+                # A window onto the conversation, opened where the reader's
+                # attention already is. The first marked turn where the search
+                # was a keyword one, backing up to the question that drew it so
+                # a marked answer is never shown without what it answers;
+                # otherwise the top, which is all "the start of this interview"
+                # can mean.
+                hit = next((i for i, turn in enumerate(rendered) if turn.matches), None)
+                start = hit if hit is not None else 0
+                if start > 0 and rendered[start - 1].role == TurnRole.INTERVIEWER:
+                    start -= 1
+                rendered = rendered[start : start + INTERVIEW_PREVIEW_TURNS]
+
+            turns[embedding.id] = ChunkTurns(turns=rendered, total=total)
 
         return turns
 

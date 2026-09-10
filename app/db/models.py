@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -786,6 +787,34 @@ class InterviewTranscript(_BaseModel):
     turns: list[TranscriptTurn]
 
 
+#: How much of an interview-level chunk a result card is given.
+#:
+#: An INTERVIEW chunk spans a whole transcript, and a page of ten of them
+#: rendered whole is not a list anybody can scan -- it is ten transcripts, and
+#: the reader already has a transcript view a click away. So the card gets a
+#: window onto the conversation rather than the conversation: enough turns to
+#: hear what kind of interview this is, with `ChunkTurns.total` saying how much
+#: was left behind so the card can be honest about being a window.
+#:
+#: Six is three exchanges, which is where an interview stops sounding like its
+#: opening pleasantries and starts sounding like itself.
+INTERVIEW_PREVIEW_TURNS = 6
+
+
+@dataclass(frozen=True)
+class ChunkTurns:
+    """The turns a card draws for one chunk, and how many the chunk holds.
+
+    The two are the same number for every kind but INTERVIEW, which is windowed
+    -- see `INTERVIEW_PREVIEW_TURNS`. Returned as a pair rather than as a bare
+    list so that a truncated card can say so: "6 of 47 turns" is a window, while
+    six turns with no count is a claim that the interview was six turns long.
+    """
+
+    turns: list[EmbeddingTurn]
+    total: int
+
+
 class EmbeddingSearchHit(_BaseModel):
     """One semantic-search result, renderable on its own.
 
@@ -853,12 +882,21 @@ class EmbeddingSearchHit(_BaseModel):
     # a client renders that instead.
     turns: list[EmbeddingTurn] = []
 
+    # How many turns the unit actually holds, when its messages could be found.
+    #
+    # The same as `len(turns)` for every kind but INTERVIEW, whose card gets a
+    # window onto the transcript rather than the transcript. A client draws the
+    # difference -- "6 of 47 turns" -- so that a windowed card reads as a window
+    # and not as a short interview. None where there were no messages to count,
+    # which is the same state as an empty `turns`.
+    n_turns: int | None = None
+
     @classmethod
     def from_hit(
         cls,
         embedding,
         score: float | None,
-        turns: list[EmbeddingTurn] | None = None,
+        turns: ChunkTurns | None = None,
         number: int | None = None,
     ) -> EmbeddingSearchHit:
         """One row, from either an embedding or a browsed unit.
@@ -889,7 +927,8 @@ class EmbeddingSearchHit(_BaseModel):
             participant_id=project_participant.id if project_participant else None,
             participant_pid=participant.pid if participant else None,
             interview_number=number,
-            turns=turns or [],
+            turns=turns.turns if turns else [],
+            n_turns=turns.total if turns else None,
         )
 
 

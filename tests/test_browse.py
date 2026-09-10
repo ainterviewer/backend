@@ -20,7 +20,7 @@ from ainterviewer.interview_guides.survey_items import NumberItem
 from ainterviewer.lpm.types import CustomToken
 from ainterviewer.types import EmbeddingKind, MessageRole, MessageType
 from app.db.keyword_query import KeywordQueryError
-from app.db.models import EmbeddingSearchHit
+from app.db.models import INTERVIEW_PREVIEW_TURNS, EmbeddingSearchHit
 from app.db.regexp import register_regexp
 from app.db.repositories.embedding import EmbeddingFilters, EmbeddingRepository
 from app.db.tables import Base, InterviewTable, MessageTable
@@ -354,7 +354,7 @@ class TestKeywordScope:
         )
 
         assert page.total == 1
-        assert [turn.text for turn in turns[page.units[0].id]] == [
+        assert [turn.text for turn in turns[page.units[0].id].turns] == [
             "Fortæl om din stress",
             "Jeg var meget træt",
         ]
@@ -455,7 +455,7 @@ class TestUnits:
         page = browse(session, EmbeddingKind.QA_PAIR)
         turns = EmbeddingRepository(session).turns_for(page.units)
 
-        assert [turn.text for turn in turns[page.units[0].id]] == [
+        assert [turn.text for turn in turns[page.units[0].id].turns] == [
             "How is it going?",
             "Slowly, but it is going.",
         ]
@@ -477,6 +477,74 @@ class TestUnits:
 
         assert page.total == 5
         assert [unit.main_question for unit in page.units] == [2, 3]
+
+
+class TestInterviewTurns:
+    """What an interview-level chunk renders as.
+
+    It used to render as nothing: `turns_for` skipped the kind outright, so the
+    card fell back to the chunk's stored `text` -- the ``Q:``/``A:`` string
+    built for the model -- and drew it as one flat paragraph. The unit that is
+    supposed to be a whole conversation was the only one on the page that did
+    not look like one.
+    """
+
+    def test_an_interview_reads_as_the_conversation(self, session):
+        builder = Builder(session)
+        builder.exchange("How is it going?", "Slowly.")
+        builder.exchange("Why is that?", "The funding ran out.", question=1)
+        session.flush()
+
+        page = browse(session, EmbeddingKind.INTERVIEW)
+        turns = EmbeddingRepository(session).turns_for(page.units)[page.units[0].id]
+
+        assert [turn.text for turn in turns.turns] == [
+            "How is it going?",
+            "Slowly.",
+            "Why is that?",
+            "The funding ran out.",
+        ]
+        assert turns.total == 4
+
+    def test_a_long_interview_is_windowed_and_says_so(self, session):
+        """A page of ten whole transcripts is not a list anybody can scan, so
+        the card gets a window -- and `total` so it can admit to being one."""
+        builder = Builder(session)
+        for index in range(10):
+            builder.exchange(f"Q{index}?", f"A{index}", question=index)
+        session.flush()
+
+        page = browse(session, EmbeddingKind.INTERVIEW)
+        turns = EmbeddingRepository(session).turns_for(page.units)[page.units[0].id]
+
+        assert len(turns.turns) == INTERVIEW_PREVIEW_TURNS
+        assert turns.total == 20
+        assert turns.turns[0].text == "Q0?"
+
+    def test_the_window_opens_on_the_keyword_match(self, session):
+        """A reader who arrived from a keyword search is here to see the
+        keyword. A window fixed to the top would show the opening pleasantries
+        -- the one part of an interview that is the same in all of them."""
+        builder = Builder(session)
+        for index in range(6):
+            builder.exchange(f"Q{index}?", f"A{index}", question=index)
+        builder.exchange("And the funding?", "The funding ran out.", question=6)
+        session.flush()
+
+        filters = EmbeddingFilters(keyword="funding")
+        page = browse(session, EmbeddingKind.INTERVIEW, keyword="funding")
+        turns = EmbeddingRepository(session).turns_for(page.units, filters)[
+            page.units[0].id
+        ]
+
+        # The question that drew the marked answer, not the answer alone: a
+        # match shown without what it answers is the thing the QA pair exists
+        # to prevent.
+        assert [turn.text for turn in turns.turns] == [
+            "And the funding?",
+            "The funding ran out.",
+        ]
+        assert turns.total == 14
 
 
 class TestMessageTurns:
@@ -503,7 +571,9 @@ class TestMessageTurns:
         )
         turns = repository.turns_for(page.units)
 
-        assert [[turn.text for turn in turns[unit.id]] for unit in page.units] == [
+        assert [
+            [turn.text for turn in turns[unit.id].turns] for unit in page.units
+        ] == [
             ["How is it going?", "Slowly."],
             ["Why is that?", "The funding ran out."],
         ]
@@ -529,7 +599,9 @@ class TestMessageTurns:
         turns = repository.turns_for(page.units)
 
         rendered = [
-            text for unit in page.units for text in (t.text for t in turns[unit.id])
+            text
+            for unit in page.units
+            for text in (t.text for t in turns[unit.id].turns)
         ]
 
         assert len(rendered) == len(set(rendered))
@@ -552,7 +624,7 @@ class TestMessageTurns:
         )
         turns = repository.turns_for(page.units)
 
-        assert [turn.text for turn in turns[page.units[-1].id]] == [
+        assert [turn.text for turn in turns[page.units[-1].id].turns] == [
             "And getting slower."
         ]
 
@@ -572,7 +644,7 @@ class TestMessageTurns:
             offset=0,
         )
         turns = repository.turns_for(page.units)
-        matched = [turn for turn in turns[page.units[0].id] if turn.match]
+        matched = [turn for turn in turns[page.units[0].id].turns if turn.match]
 
         assert [turn.text for turn in matched] == ["Slowly."]
 
@@ -598,7 +670,7 @@ class TestMatchSpans:
         turns = EmbeddingRepository(session).turns_for(page.units, filters)
         return [
             [(turn.text[start:end]) for start, end in turn.matches]
-            for turn in turns[page.units[0].id]
+            for turn in turns[page.units[0].id].turns
         ]
 
     def test_marks_the_answer_it_matched(self, corpus):
@@ -645,7 +717,7 @@ class TestMatchSpans:
         page = browse(session, EmbeddingKind.MESSAGE)
         turns = EmbeddingRepository(session).turns_for(page.units)
 
-        assert all(turn.matches == [] for turn in turns[page.units[0].id])
+        assert all(turn.matches == [] for turn in turns[page.units[0].id].turns)
 
 
 class TestExcludedSpans:
@@ -664,7 +736,7 @@ class TestExcludedSpans:
                 [turn.text[a:b] for a, b in turn.matches],
                 [turn.text[a:b] for a, b in turn.excluded],
             )
-            for turn in turns[page.units[0].id]
+            for turn in turns[page.units[0].id].turns
         ]
 
     def test_marks_an_excluded_word_in_unsearched_text(self, session):
@@ -1040,7 +1112,9 @@ class TestTurnCoordinates:
         session.flush()
 
         page = browse(session, EmbeddingKind.QA_PAIR)
-        turns = EmbeddingRepository(session).turns_for(page.units)[page.units[0].id]
+        turns = (
+            EmbeddingRepository(session).turns_for(page.units)[page.units[0].id].turns
+        )
 
         assert [(turn.section, turn.main_question) for turn in turns] == [
             (2, 1),
@@ -1054,7 +1128,9 @@ class TestTurnCoordinates:
         session.flush()
 
         page = browse(session, EmbeddingKind.QA_PAIR)
-        turns = EmbeddingRepository(session).turns_for(page.units)[page.units[0].id]
+        turns = (
+            EmbeddingRepository(session).turns_for(page.units)[page.units[0].id].turns
+        )
 
         assert [turn.sub_question for turn in turns] == [1, 1, 2, 2]
 
@@ -1064,7 +1140,9 @@ class TestTurnCoordinates:
         session.flush()
 
         page = browse(session, EmbeddingKind.QA_PAIR)
-        turns = EmbeddingRepository(session).turns_for(page.units)[page.units[0].id]
+        turns = (
+            EmbeddingRepository(session).turns_for(page.units)[page.units[0].id].turns
+        )
 
         assert [turn.sub_question for turn in turns] == [None, None]
 
@@ -1237,7 +1315,9 @@ class TestSections:
         session.flush()
 
         page = self.section(session)
-        turns = EmbeddingRepository(session).turns_for(page.units)[page.units[0].id]
+        turns = (
+            EmbeddingRepository(session).turns_for(page.units)[page.units[0].id].turns
+        )
 
         assert [turn.text for turn in turns] == [
             "How often were you stressed?",
@@ -1269,7 +1349,7 @@ class TestSections:
         page = self.section(session)
         turns = EmbeddingRepository(session).turns_for(page.units)
 
-        assert [turn.text for turn in turns[page.units[0].id]] == [
+        assert [turn.text for turn in turns[page.units[0].id].turns] == [
             "How is it going?",
             "Slowly.",
         ]
