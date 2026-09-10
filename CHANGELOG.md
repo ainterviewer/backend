@@ -4,6 +4,48 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.5.0] - 2026-09-10
+
+### Features
+
+- Add report endpoint
+- Let comments be author specific and implement comment replies
+- Add comment authorship and permissions
+- (report) Add conditions to report payload
+- (monitoring) Change characters to log scale and duration from seconds -> minutes
+- Add embedding components
+- Implement new and better any-llm exception handling
+- Improved embedding chunk turn identification and grouping
+- Add umap embeddings and add language information to embedding chunks
+- Improve language filtering for embeddings
+- Implement pagination for embeddings endpoints
+- Add question filtering for data exploration
+- Add browsing with keywords
+- Improve keyword search match
+- Streamline transcript payloads
+- Add survey filtering for embeddings
+- Add order and filtering to browsing endpoints
+- Add sections as embedding kind
+
+### Bug Fixes
+
+- Cascade delete annotations when interviews are deleted
+- (build) Commit only release files in publish recipe
+- Update a users last_active status on token refresh
+- Better timeout handling for embedding client
+- Harden language type across api
+- Don't cast synthetic messages to ReceivedData before sumbission
+- Harden API authorization for annotations
+
+### Internal
+
+- Move histogram utility tools from monitor.py to shared histogram.py module
+- Bump ruff pre-commit
+- Update dev dependencies
+- Filter unnecessary umap warning
+- Refine db backup commands
+- Bump lib version
+
 ## [0.4.36] - 2026-08-27
 
 ### Features
