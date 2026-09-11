@@ -4,6 +4,12 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.5.3] - 2026-09-11
+
+### Internal
+
+- (scripts) Relabel survey answers stored as free text
+
 ## [0.5.2] - 2026-09-11
 
 ### Features
