@@ -69,7 +69,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-ainterviewer = { git = "https://github.com/ainterviewer/lib.git", tag = "v0.4.1" }
+ainterviewer = { git = "https://github.com/ainterviewer/lib.git", tag = "v0.4.2" }
 # ainterviewer = { path = "../lib", editable = true }
 
 [tool.locust]
