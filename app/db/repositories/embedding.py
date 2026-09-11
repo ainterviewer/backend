@@ -90,10 +90,10 @@ class EmbeddingFilters:
     #: knows what a section contains, and one shape of filter is easier to
     #: reason about than two that can disagree.
     #:
-    #: Note that INTERVIEW chunks carry no guide coordinates at all -- a whole
-    #: transcript spans the guide -- so any question filter excludes them
-    #: entirely. That is the honest answer rather than a bug: there is no
-    #: subset of an interview-level vector belonging to one question.
+    #: The two spanning units carry fewer coordinates than this names -- a
+    #: SECTION has a section and no question, an INTERVIEW has neither -- so
+    #: there the selection is read as containment rather than as equality. See
+    #: :meth:`EmbeddingRepository._question_condition`.
     questions: list[tuple[int, int]] | None = None
     #: Restrict to chunks whose underlying respondent messages contain this
     #: text. Always evaluated against ``message.content`` rather than against
@@ -236,6 +236,18 @@ class BrowseUnit:
 BrowseOrder = Literal["random", "interview_asc", "interview_desc"]
 
 DEFAULT_BROWSE_ORDER: BrowseOrder = "random"
+
+#: What a page of a browse is blocked into.
+#:
+#: "interview" keeps one conversation's chunks together and moves the
+#: interviews past each other, which is what `order` then decides. "guide"
+#: turns the list inside out: every respondent's answer to question 1.1, then
+#: every answer to 1.2, so a reader compares one question across people
+#: instead of reading people one at a time. `order` still decides whose answer
+#: comes first inside each of those blocks.
+BrowseGrouping = Literal["interview", "guide"]
+
+DEFAULT_BROWSE_GROUPING: BrowseGrouping = "interview"
 
 
 @dataclass(frozen=True)
@@ -763,6 +775,73 @@ class EmbeddingRepository(BaseRepository):
         conditions.extend(self._survey_conditions(project_id, filters))
         return select(InterviewTable.id).where(*conditions)
 
+    def _question_condition(
+        self, project_id: UUID, kind: EmbeddingKind, filters: EmbeddingFilters
+    ):
+        """The question filter as a condition on *this* unit's vector rows.
+
+        One selection, read three ways, because the units do not all carry a
+        question. A MESSAGE or a QA_PAIR *is* the thing selected and matches its
+        coordinates exactly. A SECTION carries a section and no question, so it
+        matches when the selection names any question inside it -- the section a
+        reader picked a question from is the smallest unit that exists at that
+        granularity, and the alternative is an empty view. An INTERVIEW carries
+        no coordinates at all and matches when the transcript *contains* an
+        answer to one of them, which is the only thing a question can mean about
+        a whole conversation: "the interviews where this came up".
+
+        Asking every unit for the exact pair -- which is what this used to do --
+        emptied both spanning units outright, so the client compensated by
+        throwing the selection away whenever the unit changed. Reading the
+        filter against the unit is the same thing said once, in the one place
+        that knows which unit is being scanned.
+
+        The browse path expresses this without deciding anything: it filters
+        *messages* and then groups them into units, so a section survives when
+        one of its messages does. This is that behaviour restated for the rows
+        that are already grouped.
+        """
+        if not filters.questions:
+            return None
+
+        if kind == EmbeddingKind.SECTION:
+            return EmbeddingTable.section.in_(
+                {section for section, _ in filters.questions}
+            )
+
+        if kind == EmbeddingKind.INTERVIEW:
+            # Scoped by project because message coordinates are only unique
+            # within one guide. The outer statement scopes to the project too,
+            # so this is belt and braces rather than the only guard.
+            return EmbeddingTable.interview_id.in_(
+                select(MessageTable.interview_id).where(
+                    MessageTable.project_id == project_id,
+                    or_(
+                        *(
+                            and_(
+                                MessageTable.section == section,
+                                MessageTable.main_question == main_question,
+                            )
+                            for section, main_question in filters.questions
+                        )
+                    ),
+                )
+            )
+
+        # An OR of pairs rather than a row-value `IN`: the list is a handful of
+        # questions picked by hand, so the planner sees the same thing either
+        # way, and this stays true on every backend rather than only the one
+        # that supports row constructors.
+        return or_(
+            *(
+                and_(
+                    EmbeddingTable.section == section,
+                    EmbeddingTable.main_question == main_question,
+                )
+                for section, main_question in filters.questions
+            )
+        )
+
     def _interview_order(self, column, order: BrowseOrder, seed: str):
         """How the interviews themselves are sequenced, as ORDER BY terms.
 
@@ -817,6 +896,7 @@ class EmbeddingRepository(BaseRepository):
         offset: int,
         order: BrowseOrder = DEFAULT_BROWSE_ORDER,
         seed: str = "",
+        group_by: BrowseGrouping = DEFAULT_BROWSE_GROUPING,
     ) -> BrowsePage:
         """A page of the corpus in guide order, with no query and no vectors.
 
@@ -831,6 +911,14 @@ class EmbeddingRepository(BaseRepository):
         a shuffle hold still across the pages of one list. A browse has no score
         to rank by, and the alternative to a declared order is a different page
         2 every time the planner changes its mind.
+
+        `group_by` chooses which of the two axes blocks the page. Grouping by
+        interview reads the corpus a conversation at a time; grouping by the
+        guide reads it a question at a time, which is the shape most
+        cross-interview comparison wants. It is an ordering and nothing else --
+        no row leaves, and `total` is the same number either way. Meaningless
+        under the INTERVIEW unit, which carries no guide coordinates to block
+        by, and there it falls back to interview order.
         """
         source = self._message_source(project_id)
 
@@ -871,6 +959,11 @@ class EmbeddingRepository(BaseRepository):
                 source.c.sub_question,
             ).where(*message_scope)
             within = [source.c.message_id]
+            guide_terms = [
+                source.c.section,
+                source.c.main_question,
+                source.c.sub_question,
+            ]
         elif kind == EmbeddingKind.SECTION:
             # One row per section that drew free text anywhere in it. The
             # free-text test is the same one a question group is held to, one
@@ -883,6 +976,7 @@ class EmbeddingRepository(BaseRepository):
                 .group_by(source.c.interview_id, source.c.section)
             )
             within = [source.c.section]
+            guide_terms = [source.c.section]
         elif kind == EmbeddingKind.QA_PAIR:
             grouped = (
                 select(
@@ -898,13 +992,17 @@ class EmbeddingRepository(BaseRepository):
                 )
             )
             within = [source.c.section, source.c.main_question]
+            guide_terms = [source.c.section, source.c.main_question]
         else:
             grouped = (
                 select(source.c.interview_id)
                 .where(*message_scope, *self._free_text_conditions(source))
                 .group_by(source.c.interview_id)
             )
+            # An interview spans the guide, so there is no coordinate to block
+            # a page of them by.
             within = []
+            guide_terms = []
 
         counted = grouped.subquery()
         total, interviews = self.session.execute(
@@ -913,12 +1011,18 @@ class EmbeddingRepository(BaseRepository):
             ).select_from(counted)
         ).one()
 
+        # Guide grouping puts the coordinates ahead of the interview terms, so
+        # the page runs question by question with the interviews shuffled or
+        # dated inside each. `within` still trails both, which is what keeps one
+        # unit's rows in one place under either grouping.
+        ordering = [
+            *(guide_terms if group_by == "guide" else ()),
+            *self._interview_order(source.c.interview_id, order, seed),
+            *within,
+        ]
+
         rows = self.session.execute(
-            grouped.order_by(
-                *self._interview_order(source.c.interview_id, order, seed), *within
-            )
-            .limit(limit)
-            .offset(offset)
+            grouped.order_by(*ordering).limit(limit).offset(offset)
         ).all()
 
         return BrowsePage(
@@ -1071,22 +1175,9 @@ class EmbeddingRepository(BaseRepository):
         if keyword is not None:
             statement = statement.where(keyword)
 
-        if filters.questions:
-            # An OR of pairs rather than a row-value `IN`: the list is a handful
-            # of questions picked by hand, so the planner sees the same thing
-            # either way, and this stays true on every backend rather than only
-            # the one that supports row constructors.
-            statement = statement.where(
-                or_(
-                    *(
-                        and_(
-                            EmbeddingTable.section == section,
-                            EmbeddingTable.main_question == main_question,
-                        )
-                        for section, main_question in filters.questions
-                    )
-                )
-            )
+        questions = self._question_condition(project_id, kind, filters)
+        if questions is not None:
+            statement = statement.where(questions)
 
         interview_conditions = []
         if not filters.include_synthetic:
@@ -1169,6 +1260,7 @@ class EmbeddingRepository(BaseRepository):
         self,
         embeddings: Sequence[ChunkLike],
         filters: EmbeddingFilters | None = None,
+        whole_interviews: bool = False,
     ) -> dict[UUID, ChunkTurns]:
         """The messages behind each chunk, as speaker turns.
 
@@ -1199,6 +1291,13 @@ class EmbeddingRepository(BaseRepository):
         showed the opening pleasantries would show the one part of an interview
         that is the same in all of them. `ChunkTurns.total` carries the full
         length either way, so the card can say what it is not showing.
+
+        `whole_interviews` turns that window off, for the one caller that wants
+        the transcripts themselves: a list browsing the INTERVIEW unit is a list
+        *of* interviews, and a six-turn window onto each is a list of openings.
+        It costs a transcript per hit on the wire, which is why it is asked for
+        rather than assumed -- a page of cluster representatives still wants the
+        window.
 
         One query for every hit on the page, grouped in Python: the alternative
         is a query per chunk, and a page of ten results with three
@@ -1349,7 +1448,7 @@ class EmbeddingRepository(BaseRepository):
 
             total = len(rendered)
 
-            if embedding.kind == EmbeddingKind.INTERVIEW:
+            if embedding.kind == EmbeddingKind.INTERVIEW and not whole_interviews:
                 # A window onto the conversation, opened where the reader's
                 # attention already is. The first marked turn where the search
                 # was a keyword one, backing up to the question that drew it so

@@ -34,7 +34,9 @@ from ....db.models import (
     SurveyFacetValue,
 )
 from ....db.repositories.embedding import (
+    DEFAULT_BROWSE_GROUPING,
     DEFAULT_BROWSE_ORDER,
+    BrowseGrouping,
     BrowseOrder,
     ChunkCoordinates,
     EmbeddingFilters,
@@ -93,6 +95,13 @@ class SearchFilterParams:
     zero-based `section,main_question`, the spelling the annotate view already
     uses so one filter means the same thing in both places. A whole section is
     asked for by listing its questions.
+
+    It is read against whatever unit is being asked for, because the units do
+    not all carry a question. A message or a QA pair matches its coordinates
+    exactly; a section matches when the selection names a question inside it; an
+    interview matches when the transcript contains an answer to one. Demanding
+    the exact pair of every unit would empty the two spanning ones outright,
+    which is a filter that cannot be used rather than a filter that says no.
 
     `keyword` is the literal half of searching, and it is a filter rather than a
     query: it narrows the candidate set, and whatever semantic query there is
@@ -383,6 +392,7 @@ async def search_embeddings(
     query: Annotated[str, Query(min_length=1, max_length=2000)],
     kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
     task: QueryTask = QueryTask.RETRIEVAL,
+    whole_interviews: bool = False,
 ) -> EmbeddingSearchResponse:
     """Semantic search over one project's embedded interview text.
 
@@ -397,6 +407,10 @@ async def search_embeddings(
     query and the corpus rather than of a cached ranking -- and `total` is the
     length of that ranking, not a count of things worth reading. Deep pages of
     a semantic search are the chunks that scored least.
+
+    `whole_interviews` sends interview-unit hits whole rather than as the
+    six-turn window a card normally gets -- see the browse endpoint, which is
+    where a list of interviews usually comes from.
     """
     if not embedding_client.enabled:
         raise HTTPException(503, detail="Embedding is not enabled on this deployment")
@@ -421,7 +435,9 @@ async def search_embeddings(
         raise HTTPException(409, detail=str(error))
 
     turns = db.embeddings.turns_for(
-        [hit.embedding for hit in result.hits], filter_params.filters
+        [hit.embedding for hit in result.hits],
+        filter_params.filters,
+        whole_interviews=whole_interviews,
     )
     numbers = db.embeddings.interview_numbers(project_id)
 
@@ -454,7 +470,9 @@ async def browse_embeddings(
     page: Annotated[SearchPageParams, Depends()],
     kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
     order: BrowseOrder = DEFAULT_BROWSE_ORDER,
+    group_by: BrowseGrouping = DEFAULT_BROWSE_GROUPING,
     seed: Annotated[str, Query(max_length=64, pattern=r"^[A-Za-z0-9_-]*$")] = "",
+    whole_interviews: bool = False,
 ) -> EmbeddingBrowseResponse:
     """The corpus in guide order, with no query and no vectors.
 
@@ -479,6 +497,19 @@ async def browse_embeddings(
     same seed is the same order, so page two continues page one -- and a client
     that draws a fresh seed per page load gets a fresh shuffle per visit.
     Ignored by the other orders, which need no seed to be stable.
+
+    `group_by` is the other half of that ordering and changes what the page is a
+    page *of*: `interview` runs one conversation at a time, `guide` runs one
+    question at a time with every respondent's answer to it together, which is
+    the shape a cross-interview reading wants. Nothing leaves either way, and
+    `order` still decides whose answer comes first inside a block. Ignored under
+    the interview unit, which has no coordinates to block by.
+
+    `whole_interviews` sends interview-unit hits as whole transcripts rather
+    than as the six-turn window a card normally gets. A list of interviews is a
+    list of transcripts, and a window onto each of ten of them is ten openings;
+    the cost is the whole corpus on the wire a page at a time, so it is asked
+    for rather than assumed.
     """
     result = db.embeddings.browse(
         project_id=project_id,
@@ -488,9 +519,12 @@ async def browse_embeddings(
         offset=page.offset,
         order=order,
         seed=seed,
+        group_by=group_by,
     )
 
-    turns = db.embeddings.turns_for(result.units, filter_params.filters)
+    turns = db.embeddings.turns_for(
+        result.units, filter_params.filters, whole_interviews=whole_interviews
+    )
     numbers = db.embeddings.interview_numbers(project_id)
 
     return EmbeddingBrowseResponse(
@@ -845,6 +879,7 @@ async def find_similar_embeddings(
     jwt: ProjectViewer,
     filter_params: Annotated[SearchFilterParams, Depends()],
     page: Annotated[SearchPageParams, Depends()],
+    whole_interviews: bool = False,
 ) -> EmbeddingSimilarResponse:
     """Chunks most like an existing one -- "more like this".
 
@@ -873,7 +908,9 @@ async def find_similar_embeddings(
         raise HTTPException(404, detail="Embedding not found")
 
     turns = db.embeddings.turns_for(
-        [source, *(hit.embedding for hit in result.hits)], filter_params.filters
+        [source, *(hit.embedding for hit in result.hits)],
+        filter_params.filters,
+        whole_interviews=whole_interviews,
     )
     numbers = db.embeddings.interview_numbers(project_id)
 

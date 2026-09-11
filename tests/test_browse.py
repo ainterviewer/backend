@@ -23,7 +23,7 @@ from app.db.keyword_query import KeywordQueryError
 from app.db.models import INTERVIEW_PREVIEW_TURNS, EmbeddingSearchHit
 from app.db.regexp import register_regexp
 from app.db.repositories.embedding import EmbeddingFilters, EmbeddingRepository
-from app.db.tables import Base, InterviewTable, MessageTable
+from app.db.tables import Base, EmbeddingTable, InterviewTable, MessageTable
 from app.db.types import InterviewType
 
 PROJECT = uuid.uuid4()
@@ -83,13 +83,15 @@ class Builder:
         return self.say(MessageRole.USER, answer, **kwargs)
 
 
-def browse(session, kind, **filters):
+def browse(session, kind, *, order=None, group_by=None, **filters):
     return EmbeddingRepository(session).browse(
         project_id=PROJECT,
         kind=kind,
         filters=EmbeddingFilters(**filters),
         limit=100,
         offset=0,
+        **({"order": order} if order else {}),
+        **({"group_by": group_by} if group_by else {}),
     )
 
 
@@ -399,6 +401,54 @@ class TestFilters:
         assert page.total == 1
         assert page.units[0].main_question == 1
 
+    def test_a_section_is_kept_when_a_question_inside_it_is_picked(self, session):
+        """The same selection, read against a unit that has no question of its
+        own: a section chunk carries a section, so the section a reader picked a
+        question from is the smallest unit that exists."""
+        builder = Builder(session)
+        builder.exchange("First?", "One.", section=0, question=0)
+        builder.exchange("Second?", "Two.", section=1, question=0)
+        session.flush()
+
+        page = browse(session, EmbeddingKind.SECTION, questions=[(1, 0)])
+
+        assert page.total == 1
+        assert page.units[0].section == 1
+
+    def test_an_interview_is_kept_when_it_answered_the_question(self, session):
+        """An interview carries no coordinates at all, so a question can only
+        mean "the interviews where this came up"."""
+        answered = Builder(session)
+        answered.exchange("First?", "One.", section=0, question=0)
+        answered.exchange("Second?", "Two.", section=1, question=0)
+        elsewhere = Builder(session)
+        elsewhere.exchange("First?", "One.", section=0, question=0)
+        session.flush()
+
+        page = browse(session, EmbeddingKind.INTERVIEW, questions=[(1, 0)])
+
+        assert page.total == 1
+        assert page.units[0].interview_id == answered.interview.id
+
+    def test_a_kept_section_is_still_rendered_whole(self, session):
+        """The filter chooses which units are on screen; it does not cut one
+        down. A section read without the answers around the picked question is
+        not the unit anybody asked for."""
+        builder = Builder(session)
+        builder.exchange("First?", "One.", section=0, question=0)
+        builder.exchange("Second?", "Two.", section=0, question=1)
+        session.flush()
+
+        page = browse(session, EmbeddingKind.SECTION, questions=[(0, 1)])
+        turns = EmbeddingRepository(session).turns_for(page.units)[page.units[0].id]
+
+        assert [turn.text for turn in turns.turns] == [
+            "First?",
+            "One.",
+            "Second?",
+            "Two.",
+        ]
+
     def test_test_runs_are_left_out_by_default(self, session):
         builder = Builder(session, type=InterviewType.SYNTHETIC_TEST)
         builder.exchange("How is it going?", "Slowly.")
@@ -520,6 +570,21 @@ class TestInterviewTurns:
         assert len(turns.turns) == INTERVIEW_PREVIEW_TURNS
         assert turns.total == 20
         assert turns.turns[0].text == "Q0?"
+
+    def test_whole_interviews_turns_the_window_off(self, session):
+        """A list browsing the interview unit is a list *of* interviews, and a
+        six-turn window onto each of ten of them is ten openings."""
+        builder = Builder(session)
+        for index in range(10):
+            builder.exchange(f"Q{index}?", f"A{index}", question=index)
+        session.flush()
+
+        page = browse(session, EmbeddingKind.INTERVIEW)
+        turns = EmbeddingRepository(session).turns_for(
+            page.units, whole_interviews=True
+        )[page.units[0].id]
+
+        assert len(turns.turns) == turns.total == 20
 
     def test_the_window_opens_on_the_keyword_match(self, session):
         """A reader who arrived from a keyword search is here to see the
@@ -1261,6 +1326,172 @@ class TestBrowseOrder:
         )
 
         assert [unit.main_question for unit in page.units] == [0, 1, 2]
+
+
+class TestQuestionFilterOnVectors:
+    """The same reading of the question filter, on the path that scans stored
+    vectors rather than messages.
+
+    The browse groups messages and so gets containment for free; search,
+    clustering and "more like this" scan rows that are already grouped, and have
+    to be told what a question means about a unit that carries fewer coordinates
+    than the filter names. These are what keep the two answers the same.
+    """
+
+    @pytest.fixture
+    def corpus(self, session):
+        """One interview answering two questions in two sections, with a stored
+        vector per unit."""
+        builder = Builder(session)
+        builder.exchange("First?", "One.", section=0, question=0)
+        builder.exchange("Second?", "Two.", section=1, question=0)
+        session.flush()
+
+        units = [
+            (EmbeddingKind.QA_PAIR, 0, 0),
+            (EmbeddingKind.QA_PAIR, 1, 0),
+            (EmbeddingKind.SECTION, 0, None),
+            (EmbeddingKind.SECTION, 1, None),
+            (EmbeddingKind.INTERVIEW, None, None),
+        ]
+        for index, (kind, section, question) in enumerate(units):
+            session.add(
+                EmbeddingTable(
+                    id=uuid.uuid4(),
+                    kind=kind,
+                    project_id=PROJECT,
+                    interview_id=builder.interview.id,
+                    section=section,
+                    main_question=question,
+                    model="test",
+                    dim=1,
+                    chunk_key=f"unit-{index}",
+                    content_hash=f"hash-{index}",
+                    vector=b"\x00\x00\x80?",
+                )
+            )
+        session.flush()
+        return builder.interview.id
+
+    def kept(self, session, kind, questions):
+        ids, _, _ = EmbeddingRepository(session).vectors_for(
+            project_id=PROJECT,
+            kind=kind,
+            filters=EmbeddingFilters(questions=questions),
+        )
+        return len(ids)
+
+    def test_a_question_group_matches_its_coordinates_exactly(self, session, corpus):
+        assert self.kept(session, EmbeddingKind.QA_PAIR, [(1, 0)]) == 1
+        assert self.kept(session, EmbeddingKind.QA_PAIR, [(1, 1)]) == 0
+
+    def test_a_section_matches_a_question_inside_it(self, session, corpus):
+        """A section chunk carries a section and no question, so the pair it is
+        asked about can only be read as one of its own."""
+        assert self.kept(session, EmbeddingKind.SECTION, [(1, 0)]) == 1
+        assert self.kept(session, EmbeddingKind.SECTION, [(2, 0)]) == 0
+
+    def test_an_interview_matches_when_it_answered_the_question(self, session, corpus):
+        """The unit that carries no coordinates at all. Containment is the only
+        thing a question can mean about a whole transcript -- and the filter
+        used to empty the view instead."""
+        assert self.kept(session, EmbeddingKind.INTERVIEW, [(1, 0)]) == 1
+        assert self.kept(session, EmbeddingKind.INTERVIEW, [(9, 9)]) == 0
+
+    def test_an_interview_elsewhere_is_not_kept(self, session, corpus):
+        """Containment is over the interview's own messages, not the project's:
+        somebody else answering the question does not put this transcript in
+        scope."""
+        other = Builder(session)
+        other.exchange("Third?", "Three.", section=2, question=0)
+        session.add(
+            EmbeddingTable(
+                id=uuid.uuid4(),
+                kind=EmbeddingKind.INTERVIEW,
+                project_id=PROJECT,
+                interview_id=other.interview.id,
+                model="test",
+                dim=1,
+                chunk_key="unit-other",
+                content_hash="hash-other",
+                vector=b"\x00\x00\x80?",
+            )
+        )
+        session.flush()
+
+        assert self.kept(session, EmbeddingKind.INTERVIEW, [(2, 0)]) == 1
+
+
+class TestBrowseGrouping:
+    """Whether a page runs a conversation at a time or a question at a time.
+
+    An ordering and nothing else: the same rows, blocked on a different axis.
+    Grouping by the guide is what a reader comparing one question across people
+    wants, and reading down an interview is what the default gives them.
+    """
+
+    @pytest.fixture
+    def corpus(self, session):
+        """Three interviews, a day apart, each answering the same two
+        questions."""
+        for day in range(1, 4):
+            builder = Builder(session, created_at=datetime(2026, 1, day, tzinfo=UTC))
+            builder.exchange("First?", f"One, {day}.", question=0)
+            builder.exchange("Second?", f"Two, {day}.", question=1)
+        session.flush()
+
+    def coordinates(self, session, group_by):
+        page = browse(
+            session,
+            EmbeddingKind.QA_PAIR,
+            order="interview_asc",
+            group_by=group_by,
+        )
+        return [unit.main_question for unit in page.units]
+
+    def test_by_interview_reads_one_conversation_at_a_time(self, session, corpus):
+        assert self.coordinates(session, "interview") == [0, 1, 0, 1, 0, 1]
+
+    def test_by_guide_reads_one_question_at_a_time(self, session, corpus):
+        assert self.coordinates(session, "guide") == [0, 0, 0, 1, 1, 1]
+
+    def test_the_order_still_decides_who_comes_first_inside_a_block(
+        self, session, corpus
+    ):
+        """Grouping blocks the page; `order` sequences the interviews within a
+        block. Both are read, and neither replaces the other."""
+        ascending = browse(
+            session, EmbeddingKind.QA_PAIR, order="interview_asc", group_by="guide"
+        )
+        descending = browse(
+            session, EmbeddingKind.QA_PAIR, order="interview_desc", group_by="guide"
+        )
+        first_question = [
+            unit.interview_id for unit in ascending.units if unit.main_question == 0
+        ]
+        reversed_question = [
+            unit.interview_id for unit in descending.units if unit.main_question == 0
+        ]
+
+        assert first_question == list(reversed(reversed_question))
+
+    def test_nothing_leaves(self, session, corpus):
+        by_interview = browse(session, EmbeddingKind.QA_PAIR, group_by="interview")
+        by_guide = browse(session, EmbeddingKind.QA_PAIR, group_by="guide")
+
+        assert by_interview.total == by_guide.total == 6
+
+    def test_an_interview_has_no_coordinate_to_block_by(self, session, corpus):
+        """The interview unit spans the guide, so grouping by it is the same
+        page -- not an empty one, and not an error."""
+        by_interview = browse(session, EmbeddingKind.INTERVIEW, order="interview_asc")
+        by_guide = browse(
+            session, EmbeddingKind.INTERVIEW, order="interview_asc", group_by="guide"
+        )
+
+        assert [unit.interview_id for unit in by_guide.units] == [
+            unit.interview_id for unit in by_interview.units
+        ]
 
 
 class TestSections:
