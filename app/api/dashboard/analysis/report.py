@@ -50,6 +50,7 @@ from ....db.tables import (
 )
 from ....db.types import InterviewType
 from ....dependencies import DBSession, DemoToken, ProjectViewer
+from .cohort import interview_cohort
 from .histogram import HistogramBucket, compute_histogram_buckets
 
 router = APIRouter(prefix="/report", tags=["report"])
@@ -784,6 +785,15 @@ def get_project_item_distributions(
     completed_only: Annotated[
         bool, Query(description="Count only interviews that reached the end")
     ] = False,
+    deduplicate_by_pid: Annotated[
+        bool,
+        Query(
+            description=(
+                "Count one interview per participant ID, keeping the one that "
+                "got furthest"
+            )
+        ),
+    ] = False,
 ) -> ItemDistributions:
     # NOTE: a plain `def` on purpose -- see the note in `monitoring.py`. The
     # session is synchronous, so an `async def` would block the event loop for
@@ -812,13 +822,18 @@ def get_project_item_distributions(
     if completed_only:
         interview_conditions.append(InterviewTable.status == InterviewStatus.COMPLETED)
 
-    interviews = (
-        select(
+    # Deduplication is applied here and nowhere else: every count below is
+    # derived from this CTE, so dropping a repeat visit drops it from the
+    # asked/answered totals, the per-option tallies and the condition firings
+    # in one move. Shared with the monitoring page so the two agree about who
+    # the cohort is.
+    interviews = interview_cohort(
+        (
             InterviewTable.id.label("id"),
             InterviewTable.language.label("language"),
-        )
-        .where(*interview_conditions)
-        .cte("filtered_interviews")
+        ),
+        interview_conditions,
+        deduplicate_by_pid=deduplicate_by_pid,
     )
 
     total_interviews = (
