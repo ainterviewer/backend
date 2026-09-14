@@ -5,19 +5,19 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 from pydantic import UUID4, BaseModel
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, func, select
 
 from ainterviewer.types import InterviewStatus, LanguageCode
 
 from ....db.tables import (
     InterviewTable,
     MessageTable,
-    ParticipantTable,
     ProjectLocalizationTable,
     ProjectParticipantTable,
 )
 from ....db.types import InterviewType
 from ....dependencies import DBSession, DemoToken, ProjectViewer
+from .cohort import interview_cohort
 from .histogram import (
     HistogramBucket,
     ValueCount,
@@ -250,71 +250,11 @@ def get_project_monitoring_stats(
         InterviewTable.participant_id.label("participant_id"),
     )
 
-    if deduplicate_by_pid:
-        # One row per participant `pid`, keeping the interview that got
-        # furthest: COMPLETED beats ACTIVE beats INACTIVE, and only within the
-        # same status does recency decide. `last_updated` is only written on
-        # update, so it falls back to `created_at`; `id` makes the pick stable
-        # when even those tie.
-        status_rank = case(
-            (InterviewTable.status == InterviewStatus.COMPLETED, 2),
-            (InterviewTable.status == InterviewStatus.ACTIVE, 1),
-            else_=0,
-        )
-        ranked = (
-            select(
-                *interview_columns,
-                ParticipantTable.pid.label("pid"),
-                func.row_number()
-                .over(
-                    partition_by=ParticipantTable.pid,
-                    order_by=(
-                        status_rank.desc(),
-                        func.coalesce(
-                            InterviewTable.last_updated, InterviewTable.created_at
-                        ).desc(),
-                        InterviewTable.id.desc(),
-                    ),
-                )
-                .label("rank"),
-            )
-            .select_from(InterviewTable)
-            # Outer joins: `pid` hangs two hops off the interview and every hop
-            # is optional (never distributed to a participant, participant
-            # since deleted, participant with no `pid` set). Those interviews
-            # have to survive the join to survive the filter below.
-            .outerjoin(
-                ProjectParticipantTable,
-                InterviewTable.participant_id == ProjectParticipantTable.id,
-            )
-            .outerjoin(
-                ParticipantTable,
-                ProjectParticipantTable.participant_id == ParticipantTable.id,
-            )
-            .where(*interview_conditions)
-            .subquery()
-        )
-        interviews = (
-            select(
-                ranked.c.id,
-                ranked.c.status,
-                ranked.c.created_at,
-                ranked.c.total_time_spent,
-                ranked.c.language,
-                ranked.c.participant_id,
-            )
-            # A NULL `pid` is not a duplicate key: SQL puts every such row in
-            # one partition, so ranking alone would collapse all pid-less
-            # interviews into a single one. They are let through unranked.
-            .where(or_(ranked.c.rank == 1, ranked.c.pid.is_(None)))
-            .cte("filtered_interviews")
-        )
-    else:
-        interviews = (
-            select(*interview_columns)
-            .where(*interview_conditions)
-            .cte("filtered_interviews")
-        )
+    interviews = interview_cohort(
+        interview_columns,
+        interview_conditions,
+        deduplicate_by_pid=deduplicate_by_pid,
+    )
 
     def interview_ids(status: InterviewStatus):
         return select(interviews.c.id).where(interviews.c.status == status).subquery()
