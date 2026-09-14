@@ -20,7 +20,7 @@ from typing import Annotated, NamedTuple
 
 from fastapi import APIRouter, Query
 from pydantic import UUID4, BaseModel, Field
-from sqlalchemy import distinct, func, or_, select
+from sqlalchemy import and_, distinct, func, or_, select
 
 from ainterviewer.interview_guides import SurveyItem
 from ainterviewer.interview_guides.conditions import Conditions
@@ -42,12 +42,24 @@ from ainterviewer.types import (
     MessageType,
 )
 
-from ....db.tables import InterviewTable, MessageTable, ProjectLocalizationTable
+from ....db.tables import (
+    InterviewTable,
+    MessageTable,
+    ProjectLocalizationTable,
+    TaskTable,
+)
 from ....db.types import InterviewType
 from ....dependencies import DBSession, DemoToken, ProjectViewer
 from .histogram import HistogramBucket, compute_histogram_buckets
 
 router = APIRouter(prefix="/report", tags=["report"])
+
+# The task row the interview writes for every condition it evaluates. Spelled
+# as the library spells it, typo and all -- it is the value in the column.
+CONDITION_TASK = "evaulate_condition"
+
+# What `response` holds when the conditions were met and the action fired.
+CONDITION_FIRED = "True"
 
 # A numeric item spanning at most this many whole numbers gets one bar per
 # number rather than being binned: a 1-7 slider binned into 20 buckets reads as
@@ -175,6 +187,16 @@ class ItemDistribution(BaseModel):
     # one everybody abandons.
     n_not_asked_by_condition: int = 0
 
+    # How often this question's own rule was evaluated, and how often it was
+    # met and the action fired. Both zero for a question with no conditions --
+    # and also where the firings cannot be attributed to a question with
+    # certainty, which is the case for interviews that ran before the
+    # evaluation recorded which question carried the rule. Absent rather than
+    # approximate: this sits next to the rule on the card, and a number that
+    # may belong to a neighbouring question is worse than none.
+    n_condition_evaluated: int = 0
+    n_condition_fired: int = 0
+
     counts: list[CategoryCount]
     buckets: list[DistributionBucket]
     stats: NumericStats | None
@@ -235,6 +257,13 @@ class _Answer(NamedTuple):
     content: str
     language: LanguageCode
     options: list[str] | None
+
+
+class _Firings(NamedTuple):
+    """How often one question's rule was evaluated, and how often it fired."""
+
+    evaluated: int
+    fired: int
 
 
 class _Collected:
@@ -520,6 +549,7 @@ def _build_distribution(
     item: SurveyItem | None,
     conditions: Conditions | None,
     collected: _Collected,
+    firings: _Firings,
 ) -> ItemDistribution:
     answers = collected.answers
     kind = DistributionKind.TEXT
@@ -597,6 +627,8 @@ def _build_distribution(
         n_answered=len(answers),
         n_skipped=collected.n_skipped,
         n_not_asked_by_condition=collected.n_not_asked_by_condition,
+        n_condition_evaluated=firings.evaluated,
+        n_condition_fired=firings.fired,
         counts=counts,
         buckets=buckets,
         stats=stats,
@@ -604,6 +636,132 @@ def _build_distribution(
         n_other_hidden=hidden_values,
         n_other_hidden_count=hidden_answers,
     )
+
+
+def _checked_after_answer(conditions: Conditions | None, key: QuestionKey) -> bool:
+    """Whether a rule reads the answer to the question carrying it.
+
+    Such a rule cannot be evaluated until that question has been answered, so
+    the interview checks it *after* asking rather than before -- see
+    `Interview.should_check_condition_after_question`. It therefore decides not
+    whether the question was put, but how much further the interview goes from
+    it, and it is the one kind of rule whose firings the card has no other way
+    to show.
+    """
+    if conditions is None:
+        return False
+    return any(
+        (condition.question_context.section, condition.question_context.question) == key
+        for condition in conditions.conditions
+    )
+
+
+def _carrier_key(context: str | None) -> QuestionKey | None:
+    """The question a recorded evaluation hangs off, or `None` if unrecorded."""
+    if not context:
+        return None
+    section, _, question = context.partition(":")
+    try:
+        return (int(section), int(question))
+    except ValueError:
+        return None
+
+
+def _unattributable(
+    order: list[QuestionKey], authored_conditions: dict[QuestionKey, Conditions | None]
+) -> set[QuestionKey]:
+    """Questions whose un-carried evaluations cannot be told from the next one's.
+
+    A rule checked *before* its question is asked is written against whatever
+    message came last, which is the previous question's. So an evaluation
+    landing on question K's messages belongs either to K's own after-the-answer
+    rule or to the pre-check of the question that follows K -- and when that
+    successor's rule happens to read K, the two are identical in every column.
+    Rather than guess, K is left without a count.
+
+    Only evaluations that predate the carrier being recorded need this; see
+    `_carrier_key`.
+    """
+    ambiguous: set[QuestionKey] = set()
+
+    for index, key in enumerate(order[:-1]):
+        following = order[index + 1]
+        rule = authored_conditions.get(following)
+        if rule is None or not rule.conditions:
+            continue
+        # A successor whose own rule is checked after its answer writes against
+        # its own messages, not against K's.
+        if _checked_after_answer(rule, following):
+            continue
+        ambiguous.add(key)
+
+    return ambiguous
+
+
+def _condition_firings(
+    session,
+    project_id: UUID4,
+    interviews,
+    order: list[QuestionKey],
+    authored_conditions: dict[QuestionKey, Conditions | None],
+) -> dict[QuestionKey, _Firings]:
+    """How often each question's rule was evaluated and met, across the cohort.
+
+    Read off the task the interview writes for every evaluation, which records
+    the verdict but -- before the carrier was added -- not which question the
+    rule belonged to. Those older rows are attributed through the message the
+    evaluation was written against, and only where that attribution is not
+    ambiguous.
+    """
+    rows = session.execute(
+        select(
+            TaskTable.context,
+            TaskTable.response,
+            MessageTable.section,
+            MessageTable.main_question,
+        )
+        .join(interviews, interviews.c.id == TaskTable.interview_id)
+        # Outer: an evaluation written against a timed message or the
+        # introduction has no question indices, and one carrying its own
+        # carrier does not need them.
+        .outerjoin(
+            MessageTable,
+            and_(
+                MessageTable.interview_id == TaskTable.interview_id,
+                MessageTable.message_id == TaskTable.message_id,
+            ),
+        )
+        .where(
+            TaskTable.project_id == project_id,
+            TaskTable.task == CONDITION_TASK,
+        )
+    ).all()
+
+    ambiguous = _unattributable(order, authored_conditions)
+    tally: dict[QuestionKey, list[int]] = defaultdict(lambda: [0, 0])
+
+    for row in rows:
+        key = _carrier_key(row.context)
+
+        if key is None:
+            if row.section is None or row.main_question is None:
+                continue
+            key = (row.section, row.main_question)
+            # Without a carrier, only a rule the interview checks after its own
+            # answer is known to have been written against its own question.
+            if key in ambiguous or not _checked_after_answer(
+                authored_conditions.get(key), key
+            ):
+                continue
+
+        counts = tally[key]
+        counts[0] += 1
+        if row.response == CONDITION_FIRED:
+            counts[1] += 1
+
+    return {
+        key: _Firings(evaluated=n, fired=fired) for key, (n, fired) in tally.items()
+    }
 
 
 @router.get(
@@ -800,6 +958,17 @@ def get_project_item_distributions(
                     question.conditions,
                 )
 
+    # Keyed apart from `authored` so the firing counts can be worked out before
+    # the items are built, and in the guide's own order -- which is what tells
+    # an un-carried evaluation on one question from the next question's
+    # pre-check.
+    authored_conditions: dict[QuestionKey, Conditions | None] = {
+        key: entry[3] for key, entry in authored.items()
+    }
+    firings_by_key = _condition_firings(
+        session, project_id, interviews, list(authored), authored_conditions
+    )
+
     # Union, not replacement: the guide above is the current editable draft,
     # while these interviews ran against per-interview snapshots taken when
     # they were created. Answers to a question the draft no longer has are
@@ -812,6 +981,7 @@ def get_project_item_distributions(
     items: list[ItemDistribution] = []
     for section_idx, question_idx in ordered_keys:
         bucket = collected.get((section_idx, question_idx), _Collected())
+        firings = firings_by_key.get((section_idx, question_idx), _Firings(0, 0))
         question, item, answerable, conditions = authored.get(
             (section_idx, question_idx),
             # A question the draft no longer has: its conditions went with it,
@@ -831,6 +1001,8 @@ def get_project_item_distributions(
                     n_answered=0,
                     n_skipped=0,
                     n_not_asked_by_condition=bucket.n_not_asked_by_condition,
+                    n_condition_evaluated=firings.evaluated,
+                    n_condition_fired=firings.fired,
                     counts=[],
                     buckets=[],
                     stats=None,
@@ -839,7 +1011,7 @@ def get_project_item_distributions(
             continue
         items.append(
             _build_distribution(
-                section_idx, question_idx, question, item, conditions, bucket
+                section_idx, question_idx, question, item, conditions, bucket, firings
             )
         )
 
