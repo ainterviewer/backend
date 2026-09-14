@@ -4,6 +4,16 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.5.8] - 2026-09-14
+
+### Features
+
+- Implement shared interview filtering for report, and add deduplicate_by_pid argument
+
+### Internal
+
+- Move interview filtering to standalone module
+
 ## [0.5.7] - 2026-09-14
 
 ### Internal
