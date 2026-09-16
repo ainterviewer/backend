@@ -4,6 +4,12 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.6.0] - 2026-09-16
+
+### Features
+
+- Switch from old annotations to new codebook analytical framework
+
 ## [0.5.8] - 2026-09-14
 
 ### Features
