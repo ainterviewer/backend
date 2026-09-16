@@ -6,9 +6,35 @@ from typing import final
 from sqlalchemy.types import VARCHAR, TypeDecorator
 
 
-class AnnotationType(StrEnum):
+class CodeKind(StrEnum):
+    """What a code *is*, which decides what applying it to a passage produces.
+
+    ``TAG`` is the ordinary case: the code either applies or it does not.
+    ``SCORE`` asks the coder for a number in the code's own range, for codes
+    that are degrees of something rather than presences of it. ``GROUP`` is
+    neither -- it organises the branch under it and is never applied, which is
+    what keeps a parent's count from pretending to include its children's.
+    """
+
+    GROUP = "group"
     TAG = "tag"
     SCORE = "score"
+
+
+#: The colours a codebook starts with: hues for top-level codes, checked
+#: pairwise for colour-vision deficiency. A starting point rather than the set
+#: -- the palette is part of the codebook document from there on, and an
+#: analyst can edit it, add to it and cut it down.
+DEFAULT_PALETTE: tuple[str, ...] = (
+    "#0f766e",
+    "#b45309",
+    "#4338ca",
+    "#be185d",
+    "#0369a1",
+    "#4d7c0f",
+    "#7c3aed",
+    "#a16207",
+)
 
 
 class AccessRequestStatus(StrEnum):

@@ -8,35 +8,38 @@ from ainterviewer.utils import now
 
 from ...types import Scope
 from ..models import (
-    AnalysisCategoryCreate,
-    AnalysisCategoryPublic,
-    MessageAnnotationCreate,
-    MessageAnnotationPublic,
+    CodeBase,
+    CodebookPublic,
+    CodebookPut,
+    CodePublic,
+    CodingCreate,
+    CodingPublic,
     MessageCommentCreate,
     MessageCommentPublic,
     MessagePublic,
 )
 from ..tables import (
-    AnalysisCategoryTable,
-    AnnotationValueTable,
-    MessageAnnotationTable,
+    CodeTable,
+    CodingTable,
     MessageCommentTable,
     MessageTable,
+    ProjectTable,
 )
+from ..types import DEFAULT_PALETTE, CodeKind
 from .base import BaseRepository
-from .errors import CommentThreadError
+from .errors import CodebookError, CodingError, CommentThreadError
 from .permissions import can_moderate_project
 
 
 class AnalysisRepository(BaseRepository):
-    """Repository for AnalysisCategory and MessageAnnotation operations.
+    """Repository for the codebook, the codings made with it, and comments.
 
     Everything here takes the project it acts in and filters on it. A message,
-    an annotation, a comment and a category all have ids of their own, and an
-    endpoint that took one on its word could be handed an id from a project the
-    caller has no business reading -- so the project is part of the query rather
-    than something checked beside it, and an id from elsewhere is simply not
-    found. See `app/api/dashboard/analysis` for the role check that runs first.
+    a code, a coding and a comment all have ids of their own, and an endpoint
+    that took one on its word could be handed an id from a project the caller
+    has no business reading -- so the project is part of the query rather than
+    something checked beside it, and an id from elsewhere is simply not found.
+    See `app/api/dashboard/analysis` for the role check that runs first.
     """
 
     # ==================== Scoping ====================
@@ -52,44 +55,18 @@ class AnalysisRepository(BaseRepository):
         if found is None:
             raise NoResultFound("Message not found")
 
-    def _require_categories(self, project_id: UUID4, category_ids: list[UUID4]) -> None:
-        """Raise unless every category is one of this project's.
-
-        An annotation's values name the categories it codes the message with,
-        and those arrive in the payload rather than the URL. Without this a
-        caller could hang another project's category off their own annotation,
-        which both corrupts the coding and confirms that the category exists.
-        """
-        if not category_ids:
-            return
-
-        known = set(
-            self.session.execute(
-                select(AnalysisCategoryTable.id).where(
-                    AnalysisCategoryTable.id.in_(set(category_ids)),
-                    AnalysisCategoryTable.project_id == project_id,
-                )
-            )
-            .scalars()
-            .all()
-        )
-        if set(category_ids) - known:
-            raise NoResultFound("Category not found")
-
-    def _scoped_annotation(
-        self, project_id: UUID4, annotation_id: UUID4
-    ) -> MessageAnnotationTable:
-        annotation = self.session.execute(
-            select(MessageAnnotationTable)
-            .join(MessageTable, MessageTable.id == MessageAnnotationTable.message_id)
+    def _scoped_coding(self, project_id: UUID4, coding_id: UUID4) -> CodingTable:
+        coding = self.session.execute(
+            select(CodingTable)
+            .join(MessageTable, MessageTable.id == CodingTable.message_id)
             .where(
-                MessageAnnotationTable.id == annotation_id,
+                CodingTable.id == coding_id,
                 MessageTable.project_id == project_id,
             )
         ).scalar_one_or_none()
-        if annotation is None:
-            raise NoResultFound("Annotation not found")
-        return annotation
+        if coding is None:
+            raise NoResultFound("Coding not found")
+        return coding
 
     def _scoped_comment(
         self, project_id: UUID4, comment_id: UUID4
@@ -106,66 +83,195 @@ class AnalysisRepository(BaseRepository):
             raise NoResultFound("Comment not found")
         return comment
 
-    def _scoped_category(
-        self, project_id: UUID4, category_id: UUID4
-    ) -> AnalysisCategoryTable:
-        category = self.session.execute(
-            select(AnalysisCategoryTable).where(
-                AnalysisCategoryTable.id == category_id,
-                AnalysisCategoryTable.project_id == project_id,
+    def _scoped_code(self, project_id: UUID4, code_id: UUID4) -> CodeTable:
+        code = self.session.execute(
+            select(CodeTable).where(
+                CodeTable.id == code_id,
+                CodeTable.project_id == project_id,
             )
         ).scalar_one_or_none()
-        if category is None:
-            raise NoResultFound("Category not found")
-        return category
+        if code is None:
+            raise NoResultFound("Code not found")
+        return code
 
-    # ==================== Analysis Category Methods ====================
+    # ==================== Codebook Methods ====================
 
-    def get_analysis_categories(
-        self, project_id: UUID4
-    ) -> list[AnalysisCategoryPublic]:
-        statement = select(AnalysisCategoryTable).where(
-            AnalysisCategoryTable.project_id == project_id
+    def _project_codes(self, project_id: UUID4) -> list[CodeTable]:
+        return list(
+            self.session.execute(
+                select(CodeTable).where(CodeTable.project_id == project_id)
+            )
+            .scalars()
+            .all()
         )
-        categories = self.session.execute(statement).scalars().all()
-        return [
-            AnalysisCategoryPublic.model_validate(category) for category in categories
-        ]
 
-    def create_analysis_category(
-        self, category: AnalysisCategoryCreate
-    ) -> AnalysisCategoryPublic:
-        new_category = AnalysisCategoryTable(**category.model_dump())
-        self.session.add(new_category)
-        self.session.commit()
-        self.session.refresh(new_category)
-        return AnalysisCategoryPublic.model_validate(new_category)
+    @staticmethod
+    def _outline(codes: list[CodeTable]) -> list[CodeTable]:
+        """The codes depth-first: every code followed by its own branch.
 
-    def update_analysis_category(
-        self, project_id: UUID4, category_id: UUID4, category: AnalysisCategoryCreate
-    ) -> AnalysisCategoryPublic:
-        existing = self._scoped_category(project_id, category_id)
+        The stored rows carry `parent_id` and `rank` and no order of their own,
+        so the reading order is rebuilt here rather than asked of SQL, which
+        cannot express "a parent, then its children, then the next parent"
+        without a recursive CTE for something a codebook-sized list does in
+        microseconds. Clients rely on it: the frontend's array order *is* its
+        sibling order.
+        """
+        children: dict[UUID4 | None, list[CodeTable]] = {}
+        for code in codes:
+            children.setdefault(code.parent_id, []).append(code)
+        for siblings in children.values():
+            siblings.sort(key=lambda code: (code.rank, code.created_at))
 
-        # `project_id` is part of the payload, so writing it back verbatim would
-        # let an update move a category into another project -- past the role
-        # check, which has already run against the project in the URL.
-        values = category.model_dump()
-        values["project_id"] = project_id
+        outline: list[CodeTable] = []
 
-        statement = (
-            update(AnalysisCategoryTable)
-            .where(AnalysisCategoryTable.id == existing.id)
-            .values(**values)
-            .returning(AnalysisCategoryTable)
+        def walk(parent_id: UUID4 | None) -> None:
+            for code in children.get(parent_id, []):
+                outline.append(code)
+                walk(code.id)
+
+        walk(None)
+        # A code orphaned by a parent that is gone would otherwise vanish from
+        # the codebook while still owning codings. Nothing should produce one
+        # -- `save_codebook` refuses a dangling parent -- so this is a floor,
+        # not a feature: surface it at the top level and let it be re-parented.
+        seen = {code.id for code in outline}
+        outline.extend(code for code in codes if code.id not in seen)
+        return outline
+
+    def get_codebook(self, project_id: UUID4) -> CodebookPublic:
+        codes = self._outline(self._project_codes(project_id))
+        palette = self.session.execute(
+            select(ProjectTable.codebook_palette).where(ProjectTable.id == project_id)
+        ).scalar_one_or_none()
+        return CodebookPublic(
+            codes=[CodePublic.model_validate(code) for code in codes],
+            palette=list(palette) if palette else list(DEFAULT_PALETTE),
         )
-        existing_category = self.session.execute(statement).scalar_one()
-        self.session.commit()
-        return AnalysisCategoryPublic.model_validate(existing_category)
 
-    def delete_analysis_category(self, project_id: UUID4, category_id: UUID4):
-        category = self._scoped_category(project_id, category_id)
-        self.session.delete(category)
+    def save_codebook(self, project_id: UUID4, codebook: CodebookPut) -> CodebookPublic:
+        """Replace the project's codebook with the one sent.
+
+        Wholesale rather than per-code because that is how it is edited: one
+        drag re-parents a branch and reseats two sets of siblings, and the
+        editor holds an undo stack over the whole document. Sending the parts
+        would make every intermediate state a thing the server could be left
+        in.
+
+        Codes carry client-supplied ids, so this is a diff and not a rewrite:
+        a code that survives keeps its row and therefore its codings. A code
+        left out is deleted along with its codings, which is what deleting a
+        code means -- but *turning* a coded code into a group is refused,
+        because dropping somebody's coding is a decision for them rather than
+        a side effect of a kind change.
+        """
+        sent = codebook.codes
+        ids = [code.id for code in sent]
+        if len(set(ids)) != len(ids):
+            raise CodebookError("The codebook contains the same code twice")
+
+        known = set(ids)
+        for code in sent:
+            if code.parent_id is not None and code.parent_id not in known:
+                raise CodebookError(
+                    f"'{code.name}' has a parent that is not in the codebook"
+                )
+            if code.id == code.parent_id:
+                raise CodebookError(f"'{code.name}' cannot be its own parent")
+
+        parents = {code.id: code.parent_id for code in sent}
+        for code in sent:
+            seen: set[UUID4] = {code.id}
+            cursor = code.parent_id
+            while cursor is not None:
+                if cursor in seen:
+                    raise CodebookError(f"'{code.name}' sits inside its own branch")
+                seen.add(cursor)
+                cursor = parents[cursor]
+
+        existing = {code.id: code for code in self._project_codes(project_id)}
+        gone = set(existing) - known
+        coded = self._coding_counts(project_id)
+
+        for code in sent:
+            was = existing.get(code.id)
+            if code.kind is CodeKind.GROUP and coded.get(code.id):
+                raise CodebookError(
+                    f"'{code.name}' is used to code {coded[code.id]} passage(s), "
+                    "so it cannot become a group. Remove the codings first."
+                )
+            if was is None:
+                self.session.add(
+                    CodeTable(
+                        id=code.id,
+                        project_id=project_id,
+                        **self._code_values(code, sent),
+                    )
+                )
+                continue
+            for field, value in self._code_values(code, sent).items():
+                setattr(was, field, value)
+
+        if gone:
+            # Explicitly, and children first: SQLite does not enforce the
+            # foreign keys these rows declare (see CLAUDE.md), so neither
+            # cascade fires on its own.
+            self.session.execute(
+                delete(CodingTable).where(CodingTable.code_id.in_(gone))
+            )
+            self.session.execute(delete(CodeTable).where(CodeTable.id.in_(gone)))
+
+        self.session.execute(
+            update(ProjectTable)
+            .where(ProjectTable.id == project_id)
+            .values(codebook_palette=list(codebook.palette))
+        )
         self.session.commit()
+        return self.get_codebook(project_id)
+
+    @staticmethod
+    def _code_values(code: CodeBase, sent: list[CodeBase]) -> dict:
+        """One code's columns, with its seat among its siblings worked out.
+
+        `rank` is not sent: the client's list order *is* the sibling order, so
+        deriving it here is what stops a stored rank from disagreeing with the
+        order the codes arrived in.
+        """
+        siblings = [other.id for other in sent if other.parent_id == code.parent_id]
+        scored = code.kind is CodeKind.SCORE
+        return {
+            "parent_id": code.parent_id,
+            "name": code.name,
+            "definition": code.definition,
+            "memo": code.memo,
+            "color": code.color,
+            "kind": code.kind,
+            # A range on anything but a score is a number nothing reads, and
+            # one that outlives a kind change reappears if the code is made a
+            # score again -- with the scale it had before somebody changed it.
+            "min_value": code.min_value if scored else None,
+            "max_value": code.max_value if scored else None,
+            "position_x": code.position_x,
+            "position_y": code.position_y,
+            "rank": siblings.index(code.id),
+        }
+
+    def _coding_counts(self, project_id: UUID4) -> dict[UUID4, int]:
+        rows = self.session.execute(
+            select(CodingTable.code_id, func.count(CodingTable.id))
+            .join(CodeTable, CodeTable.id == CodingTable.code_id)
+            .where(CodeTable.project_id == project_id)
+            .group_by(CodingTable.code_id)
+        ).all()
+        return {code_id: count for code_id, count in rows}
+
+    def count_codings_by_code(self, project_id: UUID4) -> dict[UUID4, int]:
+        """How many passages each code has been applied to.
+
+        Only the code's own codings: a parent does not inherit its children's,
+        because a passage coded `Cost` is not thereby coded `Barriers`. That is
+        also why `GROUP` exists -- see `CodeKind`.
+        """
+        return self._coding_counts(project_id)
 
     def _apply_search_filter(
         self,
@@ -286,7 +392,7 @@ class AnalysisRepository(BaseRepository):
     def count_filtered_messages(
         self,
         project_id: UUID4,
-        category_ids: list[UUID4] | None = None,
+        code_ids: list[UUID4] | None = None,
         search_text: str | None = None,
         exact_match: bool = False,
         case_sensitive: bool = False,
@@ -296,11 +402,9 @@ class AnalysisRepository(BaseRepository):
             MessageTable.project_id == project_id
         )
 
-        if category_ids is not None:
-            statement = (
-                statement.join(MessageTable.annotations)
-                .join(MessageAnnotationTable.values)
-                .where(AnnotationValueTable.category_id.in_(category_ids))
+        if code_ids is not None:
+            statement = statement.join(MessageTable.codings).where(
+                CodingTable.code_id.in_(code_ids)
             )
 
         statement = self._apply_search_filter(
@@ -317,7 +421,7 @@ class AnalysisRepository(BaseRepository):
         context_before: bool = False,
         context_after: bool = False,
         include_previous_on_user: bool = False,
-        category_ids: list[UUID4] | None = None,
+        code_ids: list[UUID4] | None = None,
         search_text: str | None = None,
         exact_match: bool = False,
         case_sensitive: bool = False,
@@ -325,11 +429,9 @@ class AnalysisRepository(BaseRepository):
     ) -> list[MessagePublic]:
         statement = select(MessageTable).where(MessageTable.project_id == project_id)
 
-        if category_ids:
-            statement = (
-                statement.join(MessageTable.annotations)
-                .join(MessageAnnotationTable.values)
-                .where(AnnotationValueTable.category_id.in_(category_ids))
+        if code_ids:
+            statement = statement.join(MessageTable.codings).where(
+                CodingTable.code_id.in_(code_ids)
             )
 
         statement = self._apply_search_filter(
@@ -345,12 +447,7 @@ class AnalysisRepository(BaseRepository):
             .offset(skip)
             .limit(limit)
             .options(
-                selectinload(MessageTable.annotations).selectinload(
-                    MessageAnnotationTable.values
-                ),
-                selectinload(MessageTable.annotations).joinedload(
-                    MessageAnnotationTable.user
-                ),
+                selectinload(MessageTable.codings).joinedload(CodingTable.user),
                 selectinload(MessageTable.comments).joinedload(
                     MessageCommentTable.user
                 ),
@@ -407,12 +504,7 @@ class AnalysisRepository(BaseRepository):
             .where(*conditions)
             .order_by(MessageTable.created_at)
             .options(
-                selectinload(MessageTable.annotations).selectinload(
-                    MessageAnnotationTable.values
-                ),
-                selectinload(MessageTable.annotations).joinedload(
-                    MessageAnnotationTable.user
-                ),
+                selectinload(MessageTable.codings).joinedload(CodingTable.user),
                 selectinload(MessageTable.comments).joinedload(
                     MessageCommentTable.user
                 ),
@@ -426,127 +518,198 @@ class AnalysisRepository(BaseRepository):
 
         return [MessagePublic.model_validate(message) for message in messages]
 
-    # ==================== Message Annotation Methods ====================
+    # ==================== Coding Methods ====================
 
-    def get_message_annotations(
+    def get_message_codings(
         self, project_id: UUID4, message_id: UUID4
-    ) -> list[MessageAnnotationPublic]:
+    ) -> list[CodingPublic]:
         self._require_message(project_id, message_id)
         statement = (
-            select(MessageAnnotationTable)
-            .where(MessageAnnotationTable.message_id == message_id)
-            .options(joinedload(MessageAnnotationTable.user))
+            select(CodingTable)
+            .where(CodingTable.message_id == message_id)
+            .order_by(CodingTable.created_at)
+            .options(joinedload(CodingTable.user))
         )
-        annotations = self.session.execute(statement).scalars().all()
-        # Ensure values are loaded
-        for annotation in annotations:
-            _ = annotation.values
+        codings = self.session.execute(statement).scalars().all()
+        return [CodingPublic.model_validate(coding) for coding in codings]
 
-        return [
-            MessageAnnotationPublic.model_validate(annotation)
-            for annotation in annotations
-        ]
+    def get_codings_for_messages(
+        self, project_id: UUID4, message_ids: list[UUID4]
+    ) -> dict[UUID4, list[CodingPublic]]:
+        """Every coding on each of these messages, keyed by message.
 
-    def add_message_annotation(
-        self, project_id: UUID4, annotation: MessageAnnotationCreate
-    ) -> MessageAnnotationPublic:
-        self._require_message(project_id, annotation.message_id)
-        self._require_categories(
-            project_id, [value.category_id for value in annotation.values]
-        )
+        Messages from another project are simply absent from the result rather
+        than an error: the caller is naming what is on its screen, and a screen
+        that has drifted from what it may read should lose the codings, not the
+        page.
 
-        # Create annotation (envelope)
-        new_annotation = MessageAnnotationTable(
-            message_id=annotation.message_id,
-            user_id=annotation.user_id,
-        )
-        self.session.add(new_annotation)
-        self.session.flush()
+        Messages with no codings are left out too, so the common case -- a page
+        of results nobody has coded yet -- is an empty object rather than a
+        hundred empty lists.
+        """
+        if not message_ids:
+            return {}
 
-        # Add values
-        for value in annotation.values:
-            new_value = AnnotationValueTable(
-                annotation_id=new_annotation.id,
-                category_id=value.category_id,
-                value_int=value.value_int,
+        statement = (
+            select(CodingTable)
+            .join(MessageTable, MessageTable.id == CodingTable.message_id)
+            .where(
+                CodingTable.message_id.in_(set(message_ids)),
+                MessageTable.project_id == project_id,
             )
-            self.session.add(new_value)
+            .order_by(CodingTable.created_at)
+            .options(joinedload(CodingTable.user))
+        )
 
-        self.session.commit()
-        self.session.refresh(new_annotation)
+        found: dict[UUID4, list[CodingPublic]] = {}
+        for coding in self.session.execute(statement).scalars().all():
+            found.setdefault(coding.message_id, []).append(
+                CodingPublic.model_validate(coding)
+            )
+        return found
 
-        # Ensure values are loaded for response
-        _ = new_annotation.values
-
-        return MessageAnnotationPublic.model_validate(new_annotation)
-
-    def update_message_annotation(
+    def _check_coding(
         self,
         project_id: UUID4,
-        annotation_id: UUID4,
-        annotation: MessageAnnotationCreate,
-    ) -> MessageAnnotationPublic:
-        self._scoped_annotation(project_id, annotation_id)
-        self._require_categories(
-            project_id, [value.category_id for value in annotation.values]
-        )
+        message_id: UUID4,
+        coding: CodingCreate,
+    ) -> None:
+        """Everything that makes a coding meaningful, checked in one place.
 
-        # Touch the envelope so its updated_at reflects the value change
-        statement = (
-            update(MessageAnnotationTable)
-            .where(MessageAnnotationTable.id == annotation_id)
-            .values(updated_at=now())
-        )
-        self.session.execute(statement)
+        A coding is a claim about a passage, and each of these failures makes
+        it a claim about nothing: a group code that is never applied, a score
+        with no number or one off its own scale, a span that does not point at
+        text in this message. They are 400s rather than silent repairs --
+        clamping a span or defaulting a score would store a claim the coder
+        did not make.
+        """
+        try:
+            code = self._scoped_code(project_id, coding.code_id)
+        except NoResultFound:
+            raise CodingError("That code is not in this project's codebook")
 
-        # Replace values (delete all existing, add new)
-        # This is simpler and safer than diffing for this use case
-        self.session.execute(
-            delete(AnnotationValueTable).where(
-                AnnotationValueTable.annotation_id == annotation_id
+        if code.kind is CodeKind.GROUP:
+            raise CodingError(
+                f"'{code.name}' is a group: it organises the codebook and is "
+                "not applied to passages"
             )
+
+        if code.kind is CodeKind.SCORE:
+            if coding.value_int is None:
+                raise CodingError(f"'{code.name}' is a score and needs a value")
+            low = code.min_value
+            high = code.max_value
+            if (
+                low is not None
+                and high is not None
+                and not low <= coding.value_int <= high
+            ):
+                raise CodingError(
+                    f"{coding.value_int} is outside '{code.name}'s scale ({low}-{high})"
+                )
+        elif coding.value_int is not None:
+            raise CodingError(f"'{code.name}' is a tag and takes no value")
+
+        start, stop = coding.start_offset, coding.end_offset
+        if (start is None) != (stop is None):
+            raise CodingError("A span needs both a start and an end")
+        if start is not None and stop is not None:
+            length = self.session.execute(
+                select(func.length(MessageTable.content)).where(
+                    MessageTable.id == message_id
+                )
+            ).scalar_one()
+            if not 0 <= start < stop <= length:
+                raise CodingError("That span does not fall inside the message")
+
+    def _require_no_duplicate(
+        self,
+        message_id: UUID4,
+        user_id: UUID4,
+        coding: CodingCreate,
+        exclude: UUID4 | None = None,
+    ) -> None:
+        """One coder cannot code one passage with one code twice.
+
+        Not a unique constraint, because the whole-message case is two NULL
+        offsets and SQL counts NULLs as distinct from each other -- the one
+        case this actually has to catch, since a second click on an already
+        applied tag is an ordinary thing for a UI to send.
+        """
+        statement = select(CodingTable.id).where(
+            CodingTable.message_id == message_id,
+            CodingTable.user_id == user_id,
+            CodingTable.code_id == coding.code_id,
+            CodingTable.start_offset.is_not_distinct_from(coding.start_offset),
+            CodingTable.end_offset.is_not_distinct_from(coding.end_offset),
         )
+        if exclude is not None:
+            statement = statement.where(CodingTable.id != exclude)
+        if self.session.execute(statement).scalar_one_or_none() is not None:
+            raise CodingError("That passage already carries this code")
 
-        for value in annotation.values:
-            new_value = AnnotationValueTable(
-                annotation_id=annotation_id,
-                category_id=value.category_id,
-                value_int=value.value_int,
-            )
-            self.session.add(new_value)
+    def add_message_coding(
+        self,
+        project_id: UUID4,
+        message_id: UUID4,
+        user_id: UUID4,
+        coding: CodingCreate,
+    ) -> CodingPublic:
+        self._require_message(project_id, message_id)
+        self._check_coding(project_id, message_id, coding)
+        self._require_no_duplicate(message_id, user_id, coding)
 
+        new_coding = CodingTable(
+            code_id=coding.code_id,
+            message_id=message_id,
+            user_id=user_id,
+            start_offset=coding.start_offset,
+            end_offset=coding.end_offset,
+            value_int=coding.value_int,
+        )
+        self.session.add(new_coding)
         self.session.commit()
+        self.session.refresh(new_coding)
+        return CodingPublic.model_validate(new_coding)
 
-        statement = select(MessageAnnotationTable).where(
-            MessageAnnotationTable.id == annotation_id
+    def update_message_coding(
+        self, project_id: UUID4, coding_id: UUID4, coding: CodingCreate
+    ) -> CodingPublic:
+        existing = self._scoped_coding(project_id, coding_id)
+        self._check_coding(project_id, existing.message_id, coding)
+        self._require_no_duplicate(
+            existing.message_id, existing.user_id, coding, exclude=coding_id
         )
-        existing_annotation = self.session.execute(statement).scalar_one()
 
-        # Ensure values are loaded for response
-        _ = existing_annotation.values
+        existing.code_id = coding.code_id
+        existing.start_offset = coding.start_offset
+        existing.end_offset = coding.end_offset
+        existing.value_int = coding.value_int
+        existing.updated_at = now()
+        self.session.commit()
+        self.session.refresh(existing)
+        return CodingPublic.model_validate(existing)
 
-        return MessageAnnotationPublic.model_validate(existing_annotation)
-
-    def can_modify_annotation(
-        self, project_id: UUID4, annotation_id: UUID4, user_id: UUID4, scope: Scope
+    def can_modify_coding(
+        self, project_id: UUID4, coding_id: UUID4, user_id: UUID4, scope: Scope
     ) -> bool:
-        """Whether `user_id` may edit or delete this annotation.
+        """Whether `user_id` may edit or delete this coding.
 
         Its author always may. Beyond that it takes moderation rights over the
         project -- the same rule comments follow, so that a project keeps a way
         to clean up after a collaborator who has left. Membership itself is the
         endpoint's role check; this decides who among the members may act on
-        somebody else's work.
+        somebody else's coding.
         """
-        annotation = self._scoped_annotation(project_id, annotation_id)
-        if annotation.user_id == user_id:
+        coding = self._scoped_coding(project_id, coding_id)
+        if coding.user_id == user_id:
             return True
 
         return can_moderate_project(self.session, user_id, project_id, scope)
 
-    def delete_message_annotation(self, project_id: UUID4, annotation_id: UUID4):
-        annotation = self._scoped_annotation(project_id, annotation_id)
-        self.session.delete(annotation)
+    def delete_message_coding(self, project_id: UUID4, coding_id: UUID4) -> None:
+        coding = self._scoped_coding(project_id, coding_id)
+        self.session.delete(coding)
         self.session.commit()
 
     # ==================== Message Comment Methods ====================

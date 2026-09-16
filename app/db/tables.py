@@ -48,7 +48,7 @@ from ..types import CollaboratorRole, ExternalParam, ProjectStatus, Scope, TestR
 from ._extra import PydanticJSONB
 from .types import (
     AccessRequestStatus,
-    AnnotationType,
+    CodeKind,
     EmbeddingTask,
     InterviewType,
     LanguageType,
@@ -263,7 +263,7 @@ class UserTable(Base):
         "folder",
         creator=lambda folder: CollaboratorTable(folder=folder),
     )
-    annotations: Mapped[list["MessageAnnotationTable"]] = relationship(
+    codings: Mapped[list["CodingTable"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
     comments: Mapped[list["MessageCommentTable"]] = relationship(
@@ -342,6 +342,14 @@ class ProjectTable(Base):
     external_params: Mapped[list[ExternalParam] | None] = mapped_column(
         PydanticJSONB(list[ExternalParam]), default=None
     )
+    #: The codebook's palette. It lives on the project rather than on a code
+    #: because it is the set a colour is *chosen from* -- an analyst edits it
+    #: with no code selected, and a colour dropped from it must survive on the
+    #: codes already painted with it. Read and written only by the codebook
+    #: endpoints; it is deliberately absent from ``ProjectPublic``.
+    #: Plain `JSON`, not `PydanticJSONB`: a list of colour strings has no
+    #: model to validate against, and that decoder expects one.
+    codebook_palette: Mapped[list[str] | None] = mapped_column(JSON, default=None)
     owner_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE")
     )
@@ -360,7 +368,7 @@ class ProjectTable(Base):
     tests: Mapped[list["TestSetupTable"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
-    analysis_categories: Mapped[list["AnalysisCategoryTable"]] = relationship(
+    codes: Mapped[list["CodeTable"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
     experiment_projects: Mapped[list["ExperimentProjectTable"]] = relationship(
@@ -840,7 +848,7 @@ class MessageTable(Base):
 
     # Relationships
     interview: Mapped["InterviewTable"] = relationship(back_populates="messages")
-    annotations: Mapped[list["MessageAnnotationTable"]] = relationship(
+    codings: Mapped[list["CodingTable"]] = relationship(
         back_populates="message", cascade="all, delete-orphan"
     )
     # Every comment on the message, roots and replies alike, so deleting the
@@ -981,71 +989,104 @@ class IntervieweeTable(Base):
 ############
 
 
-class AnalysisCategoryTable(Base):
-    __tablename__ = "analysis_category"
-    __table_args__ = (
-        UniqueConstraint("project_id", "name", name="unique_project_category_name"),
-    )
+class CodeTable(Base):
+    """One code in a project's codebook.
 
-    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
-    name: Mapped[str] = mapped_column()
-    description: Mapped[str | None] = mapped_column(Text)
-    type: Mapped[AnnotationType] = mapped_column(SQLEnum(AnnotationType))
-    color: Mapped[str] = mapped_column()
-    min_value: Mapped[int | None] = mapped_column()
-    max_value: Mapped[int | None] = mapped_column()
-    created_at: Mapped[datetime.datetime] = mapped_column(default=now)
+    Codes are held flat and point at their parent rather than nesting, because
+    a codebook is edited by moving branches around and every such move on a
+    nested structure is a splice at two depths. The tree is a *reading* of the
+    rows, recovered by ordering on ``parent_id`` and ``rank``.
 
-    # Relationships
-    project: Mapped["ProjectTable"] = relationship(back_populates="analysis_categories")
-    values: Mapped[list["AnnotationValueTable"]] = relationship(
-        back_populates="category", cascade="all, delete-orphan"
-    )
+    ``rank`` is the code's seat among its siblings. It is dense and rewritten
+    wholesale whenever the codebook is saved, so it cannot drift from the order
+    the client sent -- see ``AnalysisRepository.save_codebook``.
 
-
-class MessageAnnotationTable(Base):
-    """One user's coding of one message: a set of AnalysisCategory values.
-
-    Free-text discussion is *not* here -- it lives in MessageCommentTable,
-    which supports several users and threaded replies on the same message. The
-    ``comment`` column this table used to carry was migrated into that table
-    (revision 3c9a1e77b204) and dropped.
+    The primary key is supplied by the client. A code has to exist in the
+    editor, be dragged, renamed and coded with before anything is saved, and an
+    id handed out later would mean every unsaved reference was a placeholder to
+    be rewritten. UUIDs make that safe.
     """
 
-    __tablename__ = "message_annotation"
+    __tablename__ = "code"
+    __table_args__ = (Index("ix_code_project_id", "project_id"),)
 
-    message_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("message.id", ondelete="CASCADE")
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE")
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("user.id"))
+    #: NULL for a top-level code.
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("code.id", ondelete="CASCADE"), default=None, index=True
+    )
+    name: Mapped[str] = mapped_column(default="")
+    #: What counts as this code -- the rule a second coder would apply.
+    definition: Mapped[str] = mapped_column(Text, default="")
+    #: The analyst's own thinking: why it exists, what it borders on.
+    memo: Mapped[str] = mapped_column(Text, default="")
+    color: Mapped[str] = mapped_column(default="")
+    kind: Mapped[CodeKind] = mapped_column(SQLEnum(CodeKind), default=CodeKind.TAG)
+    #: The ends of a score's scale, inclusive. Both NULL on any other kind.
+    min_value: Mapped[int | None] = mapped_column(default=None)
+    max_value: Mapped[int | None] = mapped_column(default=None)
+    #: Where the analyst dragged the node on the coding canvas, if anywhere.
+    position_x: Mapped[float | None] = mapped_column(default=None)
+    position_y: Mapped[float | None] = mapped_column(default=None)
+    #: Seat among siblings; see the class docstring.
+    rank: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     updated_at: Mapped[datetime.datetime] = mapped_column(default=now, onupdate=now)
 
     # Relationships
-    message: Mapped["MessageTable"] = relationship(back_populates="annotations")
-    user: Mapped["UserTable"] = relationship(back_populates="annotations")
-    values: Mapped[list["AnnotationValueTable"]] = relationship(
-        back_populates="annotation", cascade="all, delete-orphan"
+    project: Mapped["ProjectTable"] = relationship(back_populates="codes")
+    children: Mapped[list["CodeTable"]] = relationship(
+        back_populates="parent", cascade="all, delete-orphan"
+    )
+    parent: Mapped[Optional["CodeTable"]] = relationship(
+        back_populates="children", remote_side="CodeTable.id"
+    )
+    codings: Mapped[list["CodingTable"]] = relationship(
+        back_populates="code", cascade="all, delete-orphan"
     )
 
 
-class AnnotationValueTable(Base):
-    __tablename__ = "annotation_value"
+class CodingTable(Base):
+    """One application of one code to one passage, by one coder.
+
+    ``start_offset``/``end_offset`` are character offsets into the message's
+    content and are both NULL when the whole message is coded. Nullable rather
+    than 0/len because "this turn is about cost" and "these nine words are
+    about cost" are different claims, and a span that happened to cover the
+    whole message would otherwise be indistinguishable from the first.
+
+    ``value_int`` carries the number a ``SCORE`` code was given and is NULL for
+    a ``TAG``. A ``GROUP`` code is never applied at all, which the repository
+    enforces rather than the schema.
+    """
+
+    __tablename__ = "coding"
     __table_args__ = (
-        UniqueConstraint(
-            "annotation_id", "category_id", name="unique_annotation_category"
-        ),
+        Index("ix_coding_message_id", "message_id"),
+        Index("ix_coding_code_id", "code_id"),
     )
 
-    annotation_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("message_annotation.id")
+    code_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("code.id", ondelete="CASCADE")
     )
-    category_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("analysis_category.id"))
-    value_int: Mapped[int] = mapped_column()
+    message_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("message.id", ondelete="CASCADE")
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE")
+    )
+    start_offset: Mapped[int | None] = mapped_column(default=None)
+    end_offset: Mapped[int | None] = mapped_column(default=None)
+    value_int: Mapped[int | None] = mapped_column(default=None)
+    created_at: Mapped[datetime.datetime] = mapped_column(default=now)
+    updated_at: Mapped[datetime.datetime] = mapped_column(default=now, onupdate=now)
 
     # Relationships
-    annotation: Mapped["MessageAnnotationTable"] = relationship(back_populates="values")
-    category: Mapped["AnalysisCategoryTable"] = relationship(back_populates="values")
+    code: Mapped["CodeTable"] = relationship(back_populates="codings")
+    message: Mapped["MessageTable"] = relationship(back_populates="codings")
+    user: Mapped["UserTable"] = relationship(back_populates="codings")
 
 
 ############
@@ -1063,8 +1104,7 @@ class MessageCommentTable(Base):
     instead of quietly reshaping the discussion.
 
     Several users can comment on the same message and answer each other; this
-    is the discussion surface, while MessageAnnotationTable stays the coding
-    one.
+    is the discussion surface, while CodingTable stays the coding one.
 
     ``ondelete="CASCADE"`` on both foreign keys is documentation on SQLite,
     where foreign keys are not enforced (see CLAUDE.md). Deleting a root

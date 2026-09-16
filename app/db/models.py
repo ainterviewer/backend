@@ -50,7 +50,7 @@ from ..types import (
     TurnRole,
 )
 from ._extra import CustomEmailStr
-from .types import AccessRequestStatus, AnnotationType, InterviewType
+from .types import AccessRequestStatus, CodeKind, InterviewType
 
 
 # TODO: Implement across more endpoints
@@ -449,7 +449,7 @@ class MessageCreate(_BaseModel):
 
 class MessagePublic(MessageBase):
     id: UUID4
-    annotations: list[MessageAnnotationPublic] = []
+    codings: list[CodingPublic] = []
     comments: list[MessageCommentPublic] = []
 
     @field_validator("comments", mode="after")
@@ -585,27 +585,54 @@ class IntervieweePublic(IntervieweeBase):
 ############
 
 
-class AnalysisCategoryBase(_BaseModel):
-    project_id: UUID4
-    name: str
-    description: str | None = None
-    type: AnnotationType
-    color: str
+class CodeBase(_BaseModel):
+    """One code as the client sends it, id and all.
+
+    The id is the client's because a code is dragged, renamed and coded with
+    long before the codebook is saved; see ``CodeTable``.
+    """
+
+    id: UUID4
+    parent_id: UUID4 | None = None
+    name: str = ""
+    definition: str = ""
+    memo: str = ""
+    color: str = ""
+    kind: CodeKind = CodeKind.TAG
     min_value: int | None = None
     max_value: int | None = None
+    position_x: float | None = None
+    position_y: float | None = None
 
 
-class AnalysisCategoryCreate(AnalysisCategoryBase):
-    pass
-
-
-class AnalysisCategoryPublic(AnalysisCategoryBase):
-    id: UUID4
+class CodePublic(CodeBase):
     created_at: datetime
+    updated_at: datetime
+
+
+class CodebookPut(_BaseModel):
+    """A whole codebook, replacing the stored one.
+
+    The codebook is edited as one document -- a drag re-parents a branch and
+    reorders two sets of siblings at once, and the editor holds an undo stack
+    over the whole thing -- so it is saved as one, and ``codes`` is authoritative:
+    a code the client leaves out is deleted, along with every coding made with
+    it. List order is sibling order.
+    """
+
+    codes: list[CodeBase]
+    palette: list[str]
+
+
+class CodebookPublic(_BaseModel):
+    """The stored codebook, in the order the tree reads."""
+
+    codes: list[CodePublic]
+    palette: list[str]
 
 
 class FilteredMessagesRequest(_BaseModel):
-    category_ids: list[UUID4] | None = None
+    code_ids: list[UUID4] | None = None
     search_text: str | None = None
     exact_match: bool = False
     case_sensitive: bool = False
@@ -613,23 +640,10 @@ class FilteredMessagesRequest(_BaseModel):
     include_previous_on_user: bool = True
 
 
-class AnnotationValueBase(_BaseModel):
-    category_id: UUID4
-    value_int: int
-
-
-class AnnotationValueCreate(AnnotationValueBase):
-    pass
-
-
-class AnnotationValuePublic(AnnotationValueBase):
-    id: UUID4
-
-
 class AuthorPublic(_BaseModel):
-    """Who wrote an annotation or a comment.
+    """Who wrote a coding or a comment.
 
-    Annotations and comments are author specific, so every one of them is shown
+    Codings and comments are author specific, so every one of them is shown
     with a name attached. Carrying the author inline saves the client from
     resolving user ids against a separate collaborator listing.
     """
@@ -640,20 +654,47 @@ class AuthorPublic(_BaseModel):
     email: EmailStr
 
 
-class MessageAnnotationBase(_BaseModel):
+#: How many messages one codings lookup may name. A page of explore results is
+#: tens of turns; this is room for several pages and a bound on the query.
+MAX_CODING_LOOKUP = 500
+
+
+class CodingBase(_BaseModel):
+    """One passage coded with one code.
+
+    ``start_offset``/``end_offset`` are character offsets into the message's
+    content, or both NULL for the whole message. ``value_int`` carries a
+    score's number and is NULL on a tag.
+    """
+
+    code_id: UUID4
+    start_offset: int | None = None
+    end_offset: int | None = None
+    value_int: int | None = None
+
+
+class CodingCreate(CodingBase):
+    pass
+
+
+class CodingsForMessages(_BaseModel):
+    """Which messages to read the codings of.
+
+    A POST for a read, like the filtered-message endpoints beside it: the
+    explore page draws a page of results as a mosaic of turns from many
+    interviews, so the ask is a few hundred message ids -- more than belongs in
+    a query string, and a request per turn would be a request per turn.
+    """
+
+    message_ids: list[UUID4] = Field(max_length=MAX_CODING_LOOKUP)
+
+
+class CodingPublic(CodingBase):
+    id: UUID4
     message_id: UUID4
     user_id: UUID4
-
-
-class MessageAnnotationCreate(MessageAnnotationBase):
-    values: list[AnnotationValueCreate]
-
-
-class MessageAnnotationPublic(MessageAnnotationBase):
-    id: UUID4
     created_at: datetime
     updated_at: datetime
-    values: list[AnnotationValuePublic]
     # The ORM relationship is called ``user``; the payload calls it ``author``.
     author: AuthorPublic = Field(validation_alias=AliasChoices("author", "user"))
 
@@ -699,6 +740,15 @@ class EmbeddingTurn(_BaseModel):
     and a result reads the way the conversation did.
     """
 
+    #: The message row this turn is, so a client can act on it.
+    #:
+    #: On the base model rather than only on `TranscriptTurn` because a turn is
+    #: the unit a reader codes, and explore draws turns everywhere -- inside a
+    #: QA-pair or section card as much as in a transcript. A hit's own
+    #: `message_id` is set for MESSAGE chunks alone, so without this there is
+    #: nothing to hang a coding on anywhere else, and coding from the results
+    #: list would be possible at one unit out of four.
+    id: UUID
     role: TurnRole
     text: str
     # The survey item type, when the answer was a chosen option rather than
@@ -740,10 +790,10 @@ class EmbeddingTurn(_BaseModel):
 class TranscriptTurn(EmbeddingTurn):
     """One turn of a whole interview, for reading a hit in its context.
 
-    An `EmbeddingTurn` with everything a chunk has no room for: the message
-    row's own id, the survey item in full, the image, and whether the guide
-    skipped past it. The coordinates it is scrolled to are the base model's
-    now, since a card numbers its messages from them too.
+    An `EmbeddingTurn` with everything a chunk has no room for: the survey item
+    in full, the image, and whether the guide skipped past it. The message id
+    and the coordinates it is scrolled to are the base model's, since a card
+    identifies and numbers its turns from them too.
 
     Inherits `matches`/`excluded` rather than restating them, so a transcript
     renders through the same component a chunk does -- the search is still
@@ -751,9 +801,6 @@ class TranscriptTurn(EmbeddingTurn):
     reading the transcript at all.
     """
 
-    #: The message row, so a client can single out one turn -- what a MESSAGE
-    #: chunk is about -- rather than the whole question group.
-    id: UUID
     #: The survey item in full, where the answer was a chosen option.
     #:
     #: `EmbeddingTurn.survey_label` carries only the item's *type*, which is all

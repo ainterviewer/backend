@@ -31,3 +31,24 @@ class CommentThreadError(Exception):
     400: it means the caller built the wrong parent, and silently re-pointing
     the reply at the root would hide that.
     """
+
+
+class CodebookError(Exception):
+    """A codebook could not be saved as sent.
+
+    Raised when the payload is not a tree over its own codes -- a parent that
+    is not in it, a cycle, a duplicated id -- or when saving it would throw
+    away coding already done, which is the one case where the user has to
+    decide rather than the server. The API maps this to a 400 and shows the
+    message, so keep messages user-facing.
+    """
+
+
+class CodingError(Exception):
+    """A passage could not be coded the way the caller asked.
+
+    Raised for a code that is a group (groups are never applied), a score
+    without a value or with one outside its range, a span that does not fall
+    inside the message, and a coding that already exists. The API maps this to
+    a 400 and shows the message.
+    """

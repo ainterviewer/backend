@@ -93,7 +93,8 @@ API Layer (app/api) → Services (app/services) → Repository Pattern (app/db) 
     access requests, credentials and email verification
   - `ProjectRepository`: Projects, folders, collaborators, multi-language support
   - `InterviewRepository`: Interview records, messages, feedback tracking
-  - `AnalysisRepository`: Annotations, categories, vector search
+  - `AnalysisRepository`: the codebook, the codings made with it, comments,
+    and the filtered-message queries
   - `TestRepository`: Experiment management
   - `ParticipantRepository`, `AssistanceRepository`, `NewsletterRepository`
 - `errors.py` holds the domain exceptions repositories raise (e.g.

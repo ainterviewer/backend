@@ -1399,6 +1399,7 @@ class EmbeddingRepository(BaseRepository):
                 marks = match_spans(text, node, side, scope)
                 rendered.append(
                     EmbeddingTurn(
+                        id=row.id,
                         role=(
                             TurnRole.RESPONDENT if respondent else TurnRole.INTERVIEWER
                         ),

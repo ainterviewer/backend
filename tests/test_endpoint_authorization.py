@@ -15,7 +15,7 @@ import pytest
 from fastapi.routing import APIRoute
 
 from app.api.dashboard.analysis import (
-    annotations,
+    codes,
     comments,
     embeddings,
     monitoring,
@@ -23,7 +23,7 @@ from app.api.dashboard.analysis import (
 )
 from app.dependencies import ResourceRoleChecker
 
-MODULES = [annotations, comments, embeddings, monitoring, report]
+MODULES = [codes, comments, embeddings, monitoring, report]
 
 
 def project_routes():
@@ -62,7 +62,7 @@ def test_a_project_route_checks_the_caller_s_role_on_that_project(route):
     ],
 )
 def test_every_analysis_route_names_the_project_it_acts_in(route):
-    """A route keyed only by a message, annotation, comment or category id has
+    """A route keyed only by a message, coding, comment or code id has
     nothing to check a role against, which is how those went ungated. Naming
     the project in the path is what makes the check above possible -- and the
     repository then scopes its queries by it, so the id cannot come from

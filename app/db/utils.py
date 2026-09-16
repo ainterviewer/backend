@@ -58,7 +58,7 @@ def messages_to_dataframe(
     """Normalize interview messages into a flat DataFrame for export.
 
     Nested/optional fields (feedback, attachment, image, survey_item,
-    annotations) are coerced to strings so the result can be written to
+    codings) are coerced to strings so the result can be written to
     csv/xlsx without struct columns.
 
     When ``external_params`` is given, one ``ext_<name>`` column per declared
@@ -98,10 +98,10 @@ def messages_to_dataframe(
         else:
             d["survey_item"] = ""
 
-        if (annotations := d.get("annotations")) is not None:
-            d["annotations"] = json.dumps(annotations)
+        if (codings := d.get("codings")) is not None:
+            d["codings"] = json.dumps(codings)
         else:
-            d["annotations"] = ""
+            d["codings"] = ""
 
         rows.append(d)
 

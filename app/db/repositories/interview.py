@@ -30,11 +30,11 @@ from ..models import (
     MessagePublic,
 )
 from ..tables import (
+    CodingTable,
     EmbeddingTable,
     IntervieweeTable,
     InterviewResumeTokenTable,
     InterviewTable,
-    MessageAnnotationTable,
     MessageCommentTable,
     MessageTable,
     ParticipantTable,
@@ -316,7 +316,7 @@ class InterviewRepository(BaseRepository):
         InterviewTable instances would make Pydantic read every field the
         model declares, and `messages` alone pulled the full transcript of
         every interview on the page (plus a query per message for its
-        annotations). `n_messages` and `test_name` are computed in SQL here
+        codings). `n_messages` and `test_name` are computed in SQL here
         instead of by walking relationships.
         """
         if sorting_column not in SORTABLE_INTERVIEW_COLUMNS:
@@ -590,8 +590,8 @@ class InterviewRepository(BaseRepository):
             # emitting two lazy loads per interview.
             joinedload(InterviewTable.test_run).joinedload(TestRunTable.test_setup),
             selectinload(InterviewTable.messages)
-            .selectinload(MessageTable.annotations)
-            .selectinload(MessageAnnotationTable.values)
+            .selectinload(MessageTable.codings)
+            .joinedload(CodingTable.user)
             if full
             else noload(InterviewTable.messages),
             selectinload(InterviewTable.messages)
@@ -603,11 +603,6 @@ class InterviewRepository(BaseRepository):
             selectinload(InterviewTable.messages)
             .selectinload(MessageTable.comments)
             .joinedload(MessageCommentTable.user)
-            if full
-            else noload(InterviewTable.messages),
-            selectinload(InterviewTable.messages)
-            .selectinload(MessageTable.annotations)
-            .joinedload(MessageAnnotationTable.user)
             if full
             else noload(InterviewTable.messages),
         ]
@@ -653,19 +648,14 @@ class InterviewRepository(BaseRepository):
     def _message_options():
         """Eager-load what MessagePublic serializes.
 
-        `MessagePublic` declares `annotations` and `comments`, and each of
-        those declares children of its own (`values`, `replies`), so
-        validating a message emits a query per relationship -- one per message,
-        whether or not any exist. selectinload collapses that into a fixed
-        number of queries for the whole result set.
+        `MessagePublic` declares `codings` and `comments`, and each of those
+        declares children of its own (the coding's author, the comment's
+        replies), so validating a message emits a query per relationship --
+        one per message, whether or not any exist. selectinload collapses that
+        into a fixed number of queries for the whole result set.
         """
         return (
-            selectinload(MessageTable.annotations).selectinload(
-                MessageAnnotationTable.values
-            ),
-            selectinload(MessageTable.annotations).joinedload(
-                MessageAnnotationTable.user
-            ),
+            selectinload(MessageTable.codings).joinedload(CodingTable.user),
             selectinload(MessageTable.comments).joinedload(MessageCommentTable.user),
             selectinload(MessageTable.comments)
             .selectinload(MessageCommentTable.replies)
