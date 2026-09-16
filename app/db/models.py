@@ -1125,6 +1125,34 @@ class SurveyFacets(_BaseModel):
     items: list[SurveyFacet] = []
 
 
+class CodeFacet(_BaseModel):
+    """One code, with how much of the current view carries it."""
+
+    code_id: UUID4
+    #: Chunks coded with this code exactly. What clicking *filter* on the row
+    #: would return, so a badge is never an invitation into an empty view.
+    count: int = 0
+    #: Chunks coded with it or with anything under it -- what `/*` returns.
+    #: Counted over the union of the branch and not summed down it: a chunk
+    #: carrying both a parent and its child is one chunk, and adding the rows
+    #: up would report it twice.
+    subtree: int = 0
+
+
+class CodeFacets(_BaseModel):
+    """What each code in the codebook is worth over the chunks now in view."""
+
+    #: The unit the counts are in. A code applied to one message is one
+    #: MESSAGE, one QA_PAIR and one INTERVIEW, so the number only means
+    #: something next to the unit it was counted in.
+    kind: EmbeddingKind
+    #: Chunks in view at all -- the denominator the counts are read against.
+    total: int = 0
+    #: Only the codes something in view carries; a code at zero is left out
+    #: and the client reads a missing code as zero.
+    items: list[CodeFacet] = []
+
+
 class EmbeddingBackfillResponse(_BaseModel):
     """What one backfill trigger put in flight."""
 

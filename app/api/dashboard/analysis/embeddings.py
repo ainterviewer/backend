@@ -16,8 +16,11 @@ from ainterviewer.interview_guides import SurveyItem
 from ainterviewer.interview_guides.survey_items import CheckboxItem
 from ainterviewer.types import EmbeddingKind, InterviewStatus
 
+from ....db.code_lookup import CodeIndex, resolve_all
 from ....db.keyword_query import MARKUP_PATTERN, KeywordQueryError, Scope, parse
 from ....db.models import (
+    CodeFacet,
+    CodeFacets,
     EmbeddingBackfillResponse,
     EmbeddingBrowseResponse,
     EmbeddingCluster,
@@ -39,6 +42,9 @@ from ....db.repositories.embedding import (
     BrowseGrouping,
     BrowseOrder,
     ChunkCoordinates,
+    CodeCoverage,
+    Coded,
+    CoderJoin,
     EmbeddingFilters,
 )
 from ....db.survey_answers import (
@@ -134,6 +140,30 @@ class SearchFilterParams:
     open end, and the bounds spelled the way the answers are: a number, or an
     ISO date, datetime or time.
 
+    `coded_mine` and `coded_others` are coverage rather than content: `any`
+    keeps the chunks that coder has marked, `none` the chunks they have not,
+    and `coder_id` says who "mine" is. Deliberately not `code:` with a NOT in
+    front -- a negated term is checked per message and then lifted, so a
+    section holding one coded turn and one uncoded one satisfies it, while this
+    asks about the chunk. `none` is the pass that closes a codebook.
+
+    `coder_join` joins the two, and is what makes them a complete 2x2. `and`
+    names the quadrants: the second-coder pass -- what have they coded that I
+    have not -- is `coded_mine=none&coded_others=any`, and there is no single
+    scope it is a filter on. `or` names their complements, of which two are
+    questions worth asking: `any` or `any` is "somebody has coded this", the
+    one reading that is a disjunction, and `none` or `none` is "not coded by
+    both" -- the work left in a double-coding pass.
+
+    An axis left out does not participate under either operator. If "unset"
+    meant *true* under `or`, leaving one out would widen the corpus to
+    everything rather than leave it alone.
+
+    None of them narrows a `code:` term, which counts anybody's codings. A
+    coder-scoped code term is a question about the term rather than about
+    coverage, and folding it in here would silently empty the review pass --
+    under `coded_mine=none` it could not match by construction.
+
     It is a boolean expression rather than a string to look for: `dog OR cat`,
     `kids -school`, `(dog OR cat) AND "my neighbour"`. `app.db.keyword_query`
     has the grammar. Matching is case-insensitive and by word, with `*` to open
@@ -144,6 +174,8 @@ class SearchFilterParams:
 
     def __init__(
         self,
+        project_id: UUID4,
+        db: DBSession,
         language: Annotated[list[LanguageFilter] | None, Query()] = None,
         status: InterviewStatus | None = None,
         participant_id: UUID4 | None = None,
@@ -156,6 +188,10 @@ class SearchFilterParams:
         keyword_scope: Scope = "answer",
         survey: Annotated[list[str] | None, Query()] = None,
         survey_range: Annotated[list[str] | None, Query()] = None,
+        coded_mine: Coded | None = None,
+        coded_others: Coded | None = None,
+        coder_join: CoderJoin = "and",
+        coder_id: UUID4 | None = None,
     ):
         self.filters = EmbeddingFilters(
             interview_ids=interview_id,
@@ -166,9 +202,13 @@ class SearchFilterParams:
             created_before=created_before,
             include_synthetic=include_synthetic,
             questions=_parse_questions(question),
-            keyword=_checked_keyword(keyword),
+            keyword=_checked_keyword(keyword, db, project_id),
             keyword_scope=keyword_scope,
             survey=_parse_survey(survey, survey_range),
+            coded_mine=coded_mine,
+            coded_others=coded_others,
+            coder_join=coder_join,
+            coder_id=coder_id,
         )
 
 
@@ -320,7 +360,7 @@ def _parse_survey(
     return parsed or None
 
 
-def _checked_keyword(raw: str | None) -> str | None:
+def _checked_keyword(raw: str | None, db: DBSession, project_id: UUID4) -> str | None:
     """The keyword query, parsed here so a bad one is a 422 and not a 500.
 
     Parsed and thrown away rather than passed on as a tree: the repository takes
@@ -329,6 +369,14 @@ def _checked_keyword(raw: str | None) -> str | None:
     nothing next to the scan, and it buys an error raised where FastAPI can turn
     it into a response.
 
+    Any `code:` reference is placed in the project's codebook here too, and for
+    the same reason. It is the half of reading a query that needs a project:
+    whether `code:stress` names anything, and whether it names only one thing,
+    cannot be known by a parser. Left to the repository it would surface as a
+    500 from inside a scan; left out altogether it would be a filter that
+    quietly matched nothing, which reads as "nobody was coded that way" rather
+    than as "there is no such code".
+
     The detail is an object rather than a sentence because the client points at
     the offending character with it.
     """
@@ -336,7 +384,11 @@ def _checked_keyword(raw: str | None) -> str | None:
         return raw
 
     try:
-        parse(raw)
+        node = parse(raw)
+        if node is not None:
+            # `db` is the repository facade; the lookup wants the session it
+            # wraps, which is the same one every repository on it shares.
+            resolve_all(db.session, project_id, node)
     except KeywordQueryError as error:
         raise HTTPException(
             422,
@@ -830,6 +882,84 @@ async def read_survey_facets(
     )
 
 
+def code_facets(
+    index: CodeIndex, coverage: CodeCoverage, kind: EmbeddingKind
+) -> CodeFacets:
+    """The coverage arranged as one number per code, plus one per branch.
+
+    A plain function rather than the endpoint itself, so the arithmetic that
+    turns chunk sets into badges can be read against a codebook in a test.
+
+    The branch total is the *union* of its codes' chunks and not the sum down
+    it: an answer coded both "Wellbeing/Strain" and its parent is one answer,
+    and adding the rows up would report it twice -- which is how a branch ends
+    up claiming more chunks than the corpus holds.
+    """
+    items = []
+    for code_id, subtree in index.subtrees().items():
+        branch: set[tuple] = set()
+        for descendant in subtree:
+            branch |= coverage.units.get(descendant, set())
+        if not branch:
+            # Nothing on it and nothing under it, so there is no number to
+            # send. A code the client does not hear about reads zero, which is
+            # what it is, and the alternative is the whole codebook coming back
+            # on every filter change to say nothing.
+            continue
+        items.append(
+            CodeFacet(
+                code_id=code_id,
+                count=len(coverage.units.get(code_id, set())),
+                subtree=len(branch),
+            )
+        )
+    return CodeFacets(kind=kind, total=coverage.total, items=items)
+
+
+@router.get("/projects/{project_id}/analysis/embeddings/code-facets")
+async def read_code_facets(
+    project_id: UUID4,
+    db: DBSession,
+    jwt: ProjectViewer,
+    filter_params: Annotated[SearchFilterParams, Depends()],
+    kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
+) -> CodeFacets:
+    """How much of what is on screen each code accounts for.
+
+    The badge beside a code row, and the number that decides whether clicking
+    *filter* on it is worth doing. Counted over the corpus the view is
+    currently showing, so it answers "how much of *this*" rather than "how much
+    of the project" -- the same choice the cohort filter's tallies make, and for
+    the same reason: two numbers counted over different corpora next to each
+    other read as a bug in one of them.
+
+    Every filter applies **except the code terms in the query itself**. A count
+    that applied them would take every other code to zero the moment one was
+    chosen, leaving the reader inside a selection with nothing on screen
+    offering a way out of it. `without_code_terms` is how, and why pruning
+    rather than substitution.
+
+    `kind` is the unit, and has to be the one the list is showing: one coding
+    is one message, one question group and one interview at once, so a number
+    without its unit is three different numbers.
+
+    The counts and the filter can still disagree in one corner: under a
+    coverage axis, a grouped chunk is counted here if it carries the code
+    anywhere in it, where filtering asks the coverage question of the coded
+    rows alone. It takes a coverage axis *and* a code filter together to see
+    it, and the alternative -- one query per code -- costs a codebook of round
+    trips to close a gap nobody is standing in.
+    """
+    coverage = await run_in_threadpool(
+        db.embeddings.code_coverage,
+        project_id=project_id,
+        kind=kind,
+        filters=filter_params.filters,
+    )
+    index = CodeIndex.for_project(db.session, project_id)
+    return code_facets(index, coverage, kind)
+
+
 @router.get(
     "/projects/{project_id}/analysis/embeddings/interviews/{interview_id}/transcript"
 )
@@ -862,7 +992,7 @@ async def read_interview_transcript(
         turns = db.embeddings.transcript(
             project_id=project_id,
             interview_id=interview_id,
-            keyword=_checked_keyword(keyword),
+            keyword=_checked_keyword(keyword, db, project_id),
             keyword_scope=keyword_scope,
         )
     except NoResultFound:

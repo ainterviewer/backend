@@ -23,8 +23,15 @@ from app.db.keyword_query import KeywordQueryError
 from app.db.models import INTERVIEW_PREVIEW_TURNS, EmbeddingSearchHit
 from app.db.regexp import register_regexp
 from app.db.repositories.embedding import EmbeddingFilters, EmbeddingRepository
-from app.db.tables import Base, EmbeddingTable, InterviewTable, MessageTable
-from app.db.types import InterviewType
+from app.db.tables import (
+    Base,
+    CodeTable,
+    CodingTable,
+    EmbeddingTable,
+    InterviewTable,
+    MessageTable,
+)
+from app.db.types import CodeKind, InterviewType
 
 PROJECT = uuid.uuid4()
 
@@ -1605,3 +1612,706 @@ class TestSections:
         page = self.section(session)
 
         assert (page.total, page.interviews) == (3, 2)
+
+
+class TestCodeFilter:
+    """`code:` reaching the database.
+
+    The grammar is `test_keyword_query.py`'s and placing a name is
+    `test_code_lookup.py`'s; these are what check that a coding actually selects
+    the chunk it sits in.
+    """
+
+    @pytest.fixture
+    def corpus(self, session):
+        """Three exchanges, one code applied in each of the three ways worth
+        distinguishing: on an answer, on a question, and on neither."""
+        builder = Builder(session)
+        stressed = builder.exchange(
+            "How is the work going?", "I am stressed.", section=0, question=0
+        )
+        leading_question = builder.say(
+            MessageRole.ASSISTANT,
+            "You must be exhausted, surely?",
+            section=0,
+            question=1,
+        )
+        builder.say(MessageRole.USER, "Not especially.", section=0, question=1)
+        builder.exchange(
+            "Anything else?", "The commute is fine.", section=1, question=0
+        )
+
+        parent = CodeTable(
+            id=uuid.uuid4(), project_id=PROJECT, name="Wellbeing", kind=CodeKind.GROUP
+        )
+        strain = CodeTable(
+            id=uuid.uuid4(),
+            project_id=PROJECT,
+            parent_id=parent.id,
+            name="Strain",
+            kind=CodeKind.TAG,
+        )
+        leading = CodeTable(
+            id=uuid.uuid4(), project_id=PROJECT, name="Leading", kind=CodeKind.TAG
+        )
+        session.add_all([parent, strain, leading])
+        session.add(
+            CodingTable(
+                id=uuid.uuid4(),
+                code_id=strain.id,
+                message_id=stressed.id,
+                user_id=uuid.uuid4(),
+            )
+        )
+        session.add(
+            CodingTable(
+                id=uuid.uuid4(),
+                code_id=leading.id,
+                message_id=leading_question.id,
+                user_id=uuid.uuid4(),
+            )
+        )
+        session.flush()
+        return session
+
+    def count(self, session, keyword, kind=EmbeddingKind.MESSAGE, **filters):
+        return browse(session, kind, keyword=keyword, **filters).total
+
+    # -- selecting --------------------------------------------------------
+
+    def test_a_code_selects_the_turn_it_is_on(self, corpus):
+        assert self.count(corpus, "code:Strain") == 1
+
+    def test_an_uncoded_corpus_position_is_not_selected(self, corpus):
+        assert self.count(corpus, "code:Strain AND commute") == 0
+
+    def test_a_subtree_reaches_a_child(self, corpus):
+        """`Wellbeing` is a GROUP and is never applied; the branch under it is
+        what holds the coding."""
+        assert self.count(corpus, "code:Wellbeing/*") == 1
+
+    def test_it_composes_with_words(self, corpus):
+        assert self.count(corpus, "code:Strain AND stressed") == 1
+        assert self.count(corpus, "code:Strain AND goldfish") == 0
+        assert self.count(corpus, "code:Strain OR commute") == 2
+
+    def test_it_composes_with_negation(self, corpus):
+        """Every embeddable answer except the one carrying the code."""
+        assert self.count(corpus, "-code:Strain") == 2
+
+    # -- lifting to a unit ------------------------------------------------
+
+    @pytest.mark.parametrize(
+        ("kind", "expected"),
+        [
+            (EmbeddingKind.MESSAGE, 1),
+            (EmbeddingKind.QA_PAIR, 1),
+            (EmbeddingKind.SECTION, 1),
+            (EmbeddingKind.INTERVIEW, 1),
+        ],
+    )
+    def test_one_coding_is_seen_from_every_unit(self, corpus, kind, expected):
+        """A chunk matches when a message inside it does -- the same lifting a
+        keyword gets, because a code term is the same shape of predicate."""
+        assert self.count(corpus, "code:Strain", kind=kind) == expected
+
+    def test_a_section_with_no_coding_in_it_is_not_selected(self, corpus):
+        """Section 1 holds only the commute exchange."""
+        assert self.count(corpus, "code:Strain", kind=EmbeddingKind.SECTION) == 1
+
+    # -- the interviewer turn ---------------------------------------------
+
+    def test_a_coding_on_the_question_is_found_by_default(self, corpus):
+        """The regression that would silently narrow the filter. `Leading` is on
+        an interviewer turn, and the default keyword scope is "answer" -- but a
+        code term never takes that default, so it is found anyway."""
+        assert self.count(corpus, "code:Leading") == 1
+
+    def test_the_default_scope_does_not_reach_it(self, corpus):
+        """The same query as a *word* is confined to the answer, which is the
+        behaviour the code term deliberately diverges from."""
+        assert self.count(corpus, "exhausted") == 0
+
+    def test_it_can_be_asked_for_explicitly(self, corpus):
+        assert self.count(corpus, "q:code:Leading") == 1
+        assert self.count(corpus, "a:code:Leading") == 0
+
+    def test_a_coding_on_an_answer_is_not_a_coding_on_its_question(self, corpus):
+        assert self.count(corpus, "a:code:Strain") == 1
+        assert self.count(corpus, "q:code:Strain") == 0
+
+    def test_the_segmented_control_does_not_move_a_code_term(self, corpus):
+        """Whatever the control is set to, `code:` means both sides."""
+        for scope in ("answer", "question", "both"):
+            assert self.count(corpus, "code:Leading", keyword_scope=scope) == 1
+            assert self.count(corpus, "code:Strain", keyword_scope=scope) == 1
+
+    # -- what a coding cannot reach ---------------------------------------
+
+    def test_a_coding_on_a_question_whose_answer_is_a_click_finds_nothing(
+        self, session
+    ):
+        """Found on a real codebook, and correct rather than broken.
+
+        A code term reaches an interviewer turn through the answer it drew, and
+        a survey answer is not embeddable -- `should_embed_message` takes only
+        TEXT and AUDIO. So there is no chunk for the coding to select, and the
+        honest answer is none: the explore view shows the corpus, and this
+        passage is not in it.
+
+        Worth pinning because it reads as a bug from the outside. The codebook
+        says the code has been applied; the filter returns nothing.
+        """
+        builder = Builder(session)
+        asked = builder.say(MessageRole.ASSISTANT, "How often were you stressed?")
+        # The answer is the click itself, which `should_embed_message` does not
+        # take: only TEXT and AUDIO are corpus.
+        builder.say(MessageRole.USER, "Never", message_type=MessageType.SURVEY_ITEM)
+
+        code = CodeTable(
+            id=uuid.uuid4(), project_id=PROJECT, name="Leading", kind=CodeKind.TAG
+        )
+        session.add(code)
+        session.add(
+            CodingTable(
+                id=uuid.uuid4(),
+                code_id=code.id,
+                message_id=asked.id,
+                user_id=uuid.uuid4(),
+            )
+        )
+        session.flush()
+
+        assert self.count(session, "code:Leading") == 0
+
+    def test_the_same_coding_is_found_where_the_answer_is_free_text(self, session):
+        """The other half of the pair, so the rule above reads as the chunk
+        policy's doing and not as the code filter failing."""
+        builder = Builder(session)
+        asked = builder.say(MessageRole.ASSISTANT, "How often were you stressed?")
+        builder.say(MessageRole.USER, "Most weeks, honestly.")
+
+        code = CodeTable(
+            id=uuid.uuid4(), project_id=PROJECT, name="Leading", kind=CodeKind.TAG
+        )
+        session.add(code)
+        session.add(
+            CodingTable(
+                id=uuid.uuid4(),
+                code_id=code.id,
+                message_id=asked.id,
+                user_id=uuid.uuid4(),
+            )
+        )
+        session.flush()
+
+        assert self.count(session, "code:Leading") == 1
+
+    # -- errors -----------------------------------------------------------
+
+    def test_a_name_nobody_can_place_is_refused(self, corpus):
+        with pytest.raises(KeywordQueryError):
+            self.count(corpus, "code:Nonsense")
+
+
+class TestCoverageFilter:
+    """`coded` -- whether a chunk carries any coding at all.
+
+    The pass that closes a codebook: what have I not read yet. Deliberately not
+    `code:` with a NOT in front, and the difference is the point -- see
+    `test_uncoded_is_not_the_same_as_a_negated_code_term`.
+    """
+
+    @pytest.fixture
+    def corpus(self, session):
+        """One section with a coding in it, one without."""
+        builder = Builder(session)
+        marked = builder.exchange(
+            "How is the work going?", "I am stressed.", section=0, question=0
+        )
+        # A second, uncoded turn in the *same* section, which is what makes the
+        # negated-term reading differ from this one.
+        builder.exchange("Anything else?", "The coffee is good.", section=0, question=1)
+        builder.exchange("And at home?", "Fine, thanks.", section=1, question=0)
+
+        code = CodeTable(
+            id=uuid.uuid4(), project_id=PROJECT, name="Strain", kind=CodeKind.TAG
+        )
+        session.add(code)
+        session.add(
+            CodingTable(
+                id=uuid.uuid4(),
+                code_id=code.id,
+                message_id=marked.id,
+                user_id=uuid.uuid4(),
+            )
+        )
+        session.flush()
+        return session
+
+    def count(self, session, kind=EmbeddingKind.SECTION, coded=None, **filters):
+        """`coded` as the two coder axes now spell it.
+
+        The axis that used to say this by itself is gone: "anybody has coded
+        it" is `any` *or* `any`, and "nobody has" is `none` and `none`. Those
+        are exactly the two readings the 2x2 was missing, which is what the
+        operator was added for -- so translating here rather than rewriting
+        every assertion keeps these as a check that the new model subsumes the
+        old one, partitioning and all.
+        """
+        if coded == "any":
+            filters |= {"coded_mine": "any", "coded_others": "any", "coder_join": "or"}
+        elif coded == "none":
+            filters |= {"coded_mine": "none", "coded_others": "none"}
+        return browse(session, kind, **filters).total
+
+    def test_absent_means_every_chunk(self, corpus):
+        assert self.count(corpus) == 2
+
+    def test_any_keeps_the_chunks_that_carry_one(self, corpus):
+        assert self.count(corpus, coded="any") == 1
+
+    def test_none_keeps_the_rest(self, corpus):
+        assert self.count(corpus, coded="none") == 1
+
+    def test_the_two_partition_the_corpus(self, corpus):
+        """Unlike a negated code term, which overlaps its positive."""
+        assert self.count(corpus, coded="any") + self.count(corpus, coded="none") == (
+            self.count(corpus)
+        )
+
+    def test_uncoded_is_not_the_same_as_a_negated_code_term(self, corpus):
+        """The coded section also holds an uncoded turn, so a negated term --
+        checked per message and then lifted -- keeps it. The coverage filter
+        asks about the chunk and does not."""
+        assert self.count(corpus, keyword="-code:Strain") == 2
+        assert self.count(corpus, coded="none") == 1
+
+    @pytest.mark.parametrize(
+        "kind",
+        [
+            EmbeddingKind.MESSAGE,
+            EmbeddingKind.QA_PAIR,
+            EmbeddingKind.SECTION,
+            EmbeddingKind.INTERVIEW,
+        ],
+    )
+    def test_every_unit_partitions(self, corpus, kind):
+        """A MESSAGE chunk is the row and the rest are groups, so the two take
+        different paths through the query. Neither may lose or double a chunk."""
+        total = self.count(corpus, kind=kind)
+        assert (
+            self.count(corpus, kind=kind, coded="any")
+            + self.count(corpus, kind=kind, coded="none")
+            == total
+        )
+
+    def test_the_whole_interview_counts_as_coded(self, corpus):
+        """One coding anywhere in it is enough: the unit spans the conversation."""
+        assert self.count(corpus, kind=EmbeddingKind.INTERVIEW, coded="any") == 1
+        assert self.count(corpus, kind=EmbeddingKind.INTERVIEW, coded="none") == 0
+
+    def test_a_coding_on_the_question_counts_as_coded(self, session):
+        """ "Uncoded" cannot disagree with `code:`, which reaches the question
+        that drew an answer. A section whose question somebody marked is a
+        section somebody has read."""
+        builder = Builder(session)
+        asked = builder.say(MessageRole.ASSISTANT, "You must be exhausted?")
+        builder.say(MessageRole.USER, "Not especially.")
+
+        code = CodeTable(
+            id=uuid.uuid4(), project_id=PROJECT, name="Leading", kind=CodeKind.TAG
+        )
+        session.add(code)
+        session.add(
+            CodingTable(
+                id=uuid.uuid4(),
+                code_id=code.id,
+                message_id=asked.id,
+                user_id=uuid.uuid4(),
+            )
+        )
+        session.flush()
+
+        assert self.count(session, coded="any") == 1
+        assert self.count(session, coded="none") == 0
+
+    def test_it_composes_with_a_keyword(self, corpus):
+        assert self.count(corpus, coded="none", keyword="coffee") == 1
+        assert self.count(corpus, coded="any", keyword="coffee") == 0
+
+
+class TestCoverageAxes:
+    """`coded_mine` and `coded_others`, joined by `coder_join`.
+
+    Two axes and an operator rather than one filter and a coder, because the
+    questions a coder asks are about two scopes at once. Under `and` the pair
+    names the four quadrants -- mine, theirs, both, neither -- and under `or`
+    it names their complements, which is where the two readings a conjunction
+    cannot give come from.
+    """
+
+    ADA = uuid.uuid4()
+    BEN = uuid.uuid4()
+
+    @pytest.fixture
+    def corpus(self, session):
+        """Four sections, one for each way two coders can have read one.
+
+        Ada's, Ben's, both, and neither -- which is every cell the axes can
+        pick out, so a test can name the one it means.
+        """
+        builder = Builder(session)
+        hers = builder.exchange("How is work?", "I am stressed.", section=0, question=0)
+        his = builder.exchange("And at home?", "Quite busy.", section=1, question=0)
+        both = builder.exchange("Sleeping?", "Badly.", section=2, question=0)
+        builder.exchange("Anything else?", "Not really.", section=3, question=0)
+
+        code = CodeTable(
+            id=uuid.uuid4(), project_id=PROJECT, name="Strain", kind=CodeKind.TAG
+        )
+        session.add(code)
+        for message, coder in (
+            (hers, self.ADA),
+            (his, self.BEN),
+            (both, self.ADA),
+            (both, self.BEN),
+        ):
+            session.add(
+                CodingTable(
+                    id=uuid.uuid4(),
+                    code_id=code.id,
+                    message_id=message.id,
+                    user_id=coder,
+                )
+            )
+        session.flush()
+        return session
+
+    def count(self, session, **filters):
+        return browse(session, EmbeddingKind.SECTION, **filters).total
+
+    def test_the_corpus_is_four_sections(self, corpus):
+        assert self.count(corpus) == 4
+
+    # -- what the operator is for -----------------------------------------
+
+    def test_coded_by_anyone(self, corpus):
+        """The reading that is a disjunction, and so cannot be a quadrant:
+        mine-or-theirs."""
+        assert (
+            self.count(
+                corpus,
+                coded_mine="any",
+                coded_others="any",
+                coder_join="or",
+                coder_id=self.ADA,
+            )
+            == 3
+        )
+
+    def test_not_coded_by_both(self, corpus):
+        """The other complement worth asking for: what still needs a reading,
+        first or second. Everything except the section the two of them agree
+        on."""
+        assert (
+            self.count(
+                corpus,
+                coded_mine="none",
+                coded_others="none",
+                coder_join="or",
+                coder_id=self.ADA,
+            )
+            == 3
+        )
+
+    def test_or_is_the_complement_of_and(self, corpus):
+        """The rule the whole 2x2 rests on. Each disjunction must be exactly
+        the corpus less its conjunction, or the operator is not what the panel
+        says it is."""
+        total = self.count(corpus)
+        for mine, others in (
+            ("any", "any"),
+            ("any", "none"),
+            ("none", "any"),
+            ("none", "none"),
+        ):
+            conjunction = self.count(
+                corpus, coded_mine=mine, coded_others=others, coder_id=self.ADA
+            )
+            # De Morgan: `not (A and B)` is `not A or not B`, so the
+            # complement of a quadrant is the *opposite* pair joined by `or`.
+            flip = {"any": "none", "none": "any"}
+            disjunction = self.count(
+                corpus,
+                coded_mine=flip[mine],
+                coded_others=flip[others],
+                coder_join="or",
+                coder_id=self.ADA,
+            )
+            assert conjunction + disjunction == total
+
+    def test_the_operator_is_inert_over_one_axis(self, corpus):
+        """`or` of one thing is that thing. What lets a row left at "either"
+        simply not participate, instead of widening the corpus to everything.
+        """
+        for setting in ("any", "none"):
+            assert self.count(
+                corpus, coded_mine=setting, coder_id=self.ADA
+            ) == self.count(
+                corpus, coded_mine=setting, coder_join="or", coder_id=self.ADA
+            )
+
+    def test_the_operator_alone_asks_nothing(self, corpus):
+        assert self.count(corpus, coder_join="or") == 4
+
+    # -- one coder's own --------------------------------------------------
+
+    def test_coded_by_me(self, corpus):
+        assert self.count(corpus, coded_mine="any", coder_id=self.ADA) == 2
+
+    def test_not_coded_by_me_includes_what_somebody_else_coded(self, corpus):
+        """Ben's section is coded, but not by Ada, so Ada has still not read
+        it."""
+        assert self.count(corpus, coded_mine="none", coder_id=self.ADA) == 2
+
+    def test_mine_is_not_the_same_question_as_nobody(self, corpus):
+        assert (
+            self.count(
+                corpus, coded_mine="none", coded_others="none", coder_id=self.ADA
+            )
+            == 1
+        )
+        assert self.count(corpus, coded_mine="none", coder_id=self.ADA) == 2
+
+    # -- everybody else's -------------------------------------------------
+
+    def test_coded_by_others(self, corpus):
+        assert self.count(corpus, coded_others="any", coder_id=self.ADA) == 2
+
+    def test_coded_by_nobody_else(self, corpus):
+        assert self.count(corpus, coded_others="none", coder_id=self.ADA) == 2
+
+    # -- the cells that need two axes -------------------------------------
+
+    def test_the_review_pass(self, corpus):
+        """What they have coded that I have not -- the cell a single coder
+        scope could not express, and the reason for the third axis."""
+        assert (
+            self.count(corpus, coded_mine="none", coded_others="any", coder_id=self.ADA)
+            == 1
+        )
+
+    def test_the_agreement_set(self, corpus):
+        """Both of us marked it, which is what an agreement check is made of."""
+        assert (
+            self.count(corpus, coded_mine="any", coded_others="any", coder_id=self.ADA)
+            == 1
+        )
+
+    def test_only_mine(self, corpus):
+        """My readings nobody has checked."""
+        assert (
+            self.count(corpus, coded_mine="any", coded_others="none", coder_id=self.ADA)
+            == 1
+        )
+
+    def test_nobody_has_read_it(self, corpus):
+        """Neither of us, which is the quadrant a codebook is closed against."""
+        assert (
+            self.count(
+                corpus, coded_mine="none", coded_others="none", coder_id=self.ADA
+            )
+            == 1
+        )
+
+    def test_the_four_two_axis_cells_partition_the_corpus(self, corpus):
+        """Every section is read by Ada, by somebody else, by both, or by
+        nobody -- so the four cells must add up and not overlap."""
+        cells = [
+            (mine, others) for mine in ("any", "none") for others in ("any", "none")
+        ]
+        total = sum(
+            self.count(corpus, coded_mine=mine, coded_others=others, coder_id=self.ADA)
+            for mine, others in cells
+        )
+        assert total == self.count(corpus)
+
+    # -- a reader with no id ----------------------------------------------
+
+    def test_without_a_reader_nothing_is_mine(self, corpus):
+        """Not "ignore the axis": a caller that asked for their own codings and
+        has no id has none, and saying so beats quietly widening the filter."""
+        assert self.count(corpus, coded_mine="any") == 0
+        assert self.count(corpus, coded_mine="none") == 4
+
+    def test_a_coder_who_has_coded_nothing(self, corpus):
+        stranger = uuid.uuid4()
+        assert self.count(corpus, coded_mine="any", coder_id=stranger) == 0
+        assert self.count(corpus, coded_others="any", coder_id=stranger) == 3
+
+    # -- what the axes deliberately do not touch --------------------------
+
+    def test_they_do_not_narrow_a_code_term(self, corpus):
+        """A `code:` term counts anybody's codings, whatever the axes say.
+
+        Narrowing it to the reader would empty the review pass by construction:
+        under `coded_mine=none` a coder-scoped term cannot match, so asking for
+        "their Strain codings I have not made" would always return nothing.
+        """
+        assert self.count(corpus, keyword="code:Strain") == 3
+        assert (
+            self.count(
+                corpus,
+                keyword="code:Strain",
+                coded_mine="none",
+                coded_others="any",
+                coder_id=self.ADA,
+            )
+            == 1
+        )
+
+
+class TestCodeFacets:
+    """`code_coverage` -- the number beside a code row.
+
+    Its contract is that the badge and the filter agree: a code reading 3 is a
+    code whose filter returns 3, so a number is never an invitation into an
+    empty view. Most of these are that same assertion asked under a different
+    filter.
+    """
+
+    @pytest.fixture
+    def corpus(self, session):
+        """Two sections. The first holds two coded answers -- one of them
+        coded twice, with a parent and its child -- and the second holds one
+        answer coded on the interviewer's turn."""
+        builder = Builder(session)
+        stressed = builder.exchange(
+            "How is the work going?", "I am stressed.", section=0, question=0
+        )
+        tired = builder.exchange(
+            "And otherwise?", "Tired, mostly.", section=0, question=1
+        )
+        leading_question = builder.say(
+            MessageRole.ASSISTANT,
+            "You must be exhausted, surely?",
+            section=1,
+            question=0,
+        )
+        builder.say(MessageRole.USER, "Not especially.", section=1, question=0)
+
+        self.group = CodeTable(
+            id=uuid.uuid4(), project_id=PROJECT, name="Wellbeing", kind=CodeKind.GROUP
+        )
+        self.strain = CodeTable(
+            id=uuid.uuid4(),
+            project_id=PROJECT,
+            parent_id=self.group.id,
+            name="Strain",
+            kind=CodeKind.TAG,
+        )
+        self.fatigue = CodeTable(
+            id=uuid.uuid4(),
+            project_id=PROJECT,
+            parent_id=self.group.id,
+            name="Fatigue",
+            kind=CodeKind.TAG,
+        )
+        self.leading = CodeTable(
+            id=uuid.uuid4(), project_id=PROJECT, name="Leading", kind=CodeKind.TAG
+        )
+        session.add_all([self.group, self.strain, self.fatigue, self.leading])
+        for code, message in (
+            (self.strain, stressed),
+            (self.fatigue, stressed),
+            (self.fatigue, tired),
+            (self.leading, leading_question),
+        ):
+            session.add(
+                CodingTable(
+                    id=uuid.uuid4(),
+                    code_id=code.id,
+                    message_id=message.id,
+                    user_id=uuid.uuid4(),
+                )
+            )
+        session.flush()
+        return session
+
+    def coverage(self, session, kind=EmbeddingKind.MESSAGE, **filters):
+        return EmbeddingRepository(session).code_coverage(
+            project_id=PROJECT, kind=kind, filters=EmbeddingFilters(**filters)
+        )
+
+    def counts(self, session, kind=EmbeddingKind.MESSAGE, **filters):
+        found = self.coverage(session, kind, **filters)
+        return {code_id: len(units) for code_id, units in found.units.items()}
+
+    # -- what a badge counts ----------------------------------------------
+
+    def test_a_code_counts_the_chunks_carrying_it(self, corpus):
+        assert self.counts(corpus)[self.strain.id] == 1
+        assert self.counts(corpus)[self.fatigue.id] == 2
+
+    def test_a_code_nothing_carries_is_absent(self, corpus):
+        """Read as zero by the client. Sending it would be sending the whole
+        codebook back on every filter change to say nothing."""
+        counts = self.counts(corpus)
+        assert self.group.id not in counts
+
+    def test_a_coding_on_the_interviewer_turn_counts_for_the_answer(self, corpus):
+        # What a bare `code:` reaches -- its default scope is both sides, so a
+        # badge counting only answers would offer a number the filter beat.
+        assert self.counts(corpus)[self.leading.id] == 1
+
+    def test_the_total_is_the_chunks_in_view(self, corpus):
+        assert self.coverage(corpus).total == 3
+
+    # -- agreeing with the filter -----------------------------------------
+
+    @pytest.mark.parametrize(
+        "kind", [EmbeddingKind.MESSAGE, EmbeddingKind.QA_PAIR, EmbeddingKind.SECTION]
+    )
+    def test_a_badge_is_what_its_filter_returns(self, corpus, kind):
+        for code, name in (
+            (self.strain, "Strain"),
+            (self.fatigue, "Fatigue"),
+            (self.leading, "Leading"),
+        ):
+            assert (
+                self.counts(corpus, kind).get(code.id, 0)
+                == browse(corpus, kind, keyword=f"code:{name}").total
+            )
+
+    def test_a_grouped_unit_counts_once_however_many_codings_it_holds(self, corpus):
+        # Both section-0 answers are Fatigue, and they are one section.
+        assert self.counts(corpus, EmbeddingKind.SECTION)[self.fatigue.id] == 1
+
+    # -- counted over the current view ------------------------------------
+
+    def test_a_keyword_narrows_what_is_counted(self, corpus):
+        counts = self.counts(corpus, keyword="stressed")
+        assert counts[self.strain.id] == 1
+        assert self.fatigue.id in counts and counts[self.fatigue.id] == 1
+        assert self.leading.id not in counts
+
+    def test_a_coverage_axis_narrows_what_is_counted(self, corpus):
+        # Chunks nobody has coded carry no codes, so every badge is empty.
+        assert self.counts(corpus, coded_mine="none", coded_others="none") == {}
+
+    def test_the_code_terms_in_the_query_are_not_applied(self, corpus):
+        """The rule the whole endpoint rests on: filtering by one code must not
+        take every other code's badge to zero, or the reader is inside a
+        selection with nothing on screen offering a way out."""
+        assert self.counts(corpus, keyword="code:Strain") == self.counts(corpus)
+
+    def test_a_negated_code_term_is_pruned_rather_than_falsified(self, corpus):
+        # Substituting a true condition for the leaf would make this `NOT True`
+        # and empty every badge.
+        assert self.counts(corpus, keyword="-code:Strain") == self.counts(corpus)
+
+    def test_the_words_beside_a_code_term_still_apply(self, corpus):
+        assert self.counts(corpus, keyword="code:Fatigue AND stressed") == self.counts(
+            corpus, keyword="stressed"
+        )

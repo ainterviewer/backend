@@ -17,6 +17,20 @@ override that for one term -- `q:stress a:træt` finds answers saying "træt" to
 questions about stress, which no single toggle can express -- and the caller's
 `default_scope` says what a bare term means.
 
+`code:` names a code from the project's codebook rather than a word, so the same
+expression can ask about what was said and what was marked:
+
+    code:stress                 coded with Stress, that code exactly
+    code:stress/*               Stress and everything under it
+    code:"Stress/New code"      by path, where a bare name is ambiguous
+    a:code:stress               coded on the answer rather than the question
+    code:stress -code:workload  composes with NOT like any other term
+
+A code term takes a written `q:`/`a:` but never the caller's default: the
+default governs words, and applying it here would silently drop codings made on
+an interviewer turn. See `resolve_scope`. Names are resolved by the caller, not
+here -- this module has no codebook -- so `compile_condition` takes a builder.
+
 A bare term matches a *word*, not a substring: `kat` finds "kat" and "Kat." but
 not "katalog". A trailing or leading `*` opens that edge -- `kat*` matches
 "katalog", `*kat` matches "delikat", `*kat*` matches anywhere -- and a quoted
@@ -43,11 +57,13 @@ from sqlalchemy import and_, not_, or_
 
 __all__ = [
     "And",
+    "CodeTerm",
     "KeywordQueryError",
     "Node",
     "Not",
     "Or",
     "Term",
+    "leaves_of",
     "parse",
     "terms_of",
 ]
@@ -117,6 +133,42 @@ class Term:
 
 
 @dataclass(frozen=True)
+class CodeTerm:
+    """One code from the project's codebook, as written.
+
+    A leaf beside `Term` rather than another `Scope` value, because the two are
+    not the same kind of thing: a scope picks *which column* a word is matched
+    against, and this matches no text at all. It selects on whether a passage
+    was *coded*, which is a different table.
+
+    `path` is the code as written, already split on `/`: `("Stress",)` for
+    `code:stress`, `("Stress", "Often")` for `code:"Stress/Often"`. Names rather
+    than ids because a parser has no codebook -- resolution happens in the
+    endpoint, which does, and which can then say *which* name it could not
+    place. A codebook may hold three codes called "New code", so an ambiguous
+    name has to be reportable rather than guessable.
+
+    `subtree` records the `/*` suffix. Without it the term means this code
+    exactly, which lines the filter up with `CodeKind.GROUP`: a branch that is
+    only a container says so by being a GROUP, and is not inferred from having
+    children.
+
+    `position` is carried, unlike on `Term`, because a code term can still fail
+    *after* parsing -- on a name that matches nothing or matches twice -- and
+    the 422 for that should point at the same character a syntax error would.
+    """
+
+    path: tuple[str, ...]
+    #: `/*` was written: this code and every code under it.
+    subtree: bool = False
+    #: `q:` or `a:` written on this term. None means *both sides* -- never the
+    #: caller's default. See `resolve_scope` for why that differs from `Term`.
+    scope: Scope | None = None
+    #: Where the `code:` prefix began, for naming an unresolvable code.
+    position: int = 0
+
+
+@dataclass(frozen=True)
 class Not:
     operand: Node
 
@@ -131,20 +183,77 @@ class Or:
     operands: tuple[Node, ...]
 
 
-Node = Term | Not | And | Or
+Node = Term | CodeTerm | Not | And | Or
 
 
 def terms_of(node: Node) -> list[Term]:
-    """Every term in the tree, in the order written.
+    """Every *text* term in the tree, in the order written.
 
-    Used to count terms against `MAX_TERMS`, and useful to a caller that wants
-    to know what was actually searched for.
+    Deliberately not the code terms: this feeds the highlighter, which marks
+    where a pattern matched, and a code term has no pattern to mark. What it
+    selects on is a coding row, whose own offsets are a separate matter.
+
+    `leaves_of` is the one to count with.
     """
     if isinstance(node, Term):
         return [node]
+    if isinstance(node, CodeTerm):
+        return []
     if isinstance(node, Not):
         return terms_of(node.operand)
     return [term for operand in node.operands for term in terms_of(operand)]
+
+
+def leaves_of(node: Node) -> list[Term | CodeTerm]:
+    """Every leaf in the tree, of either kind.
+
+    What `MAX_TERMS` is counted over: a query of two hundred code terms costs
+    what a query of two hundred words costs, and the cap exists to bound the
+    generated SQL rather than to bound how many *words* were asked for.
+    """
+    if isinstance(node, (Term, CodeTerm)):
+        return [node]
+    if isinstance(node, Not):
+        return leaves_of(node.operand)
+    return [leaf for operand in node.operands for leaf in leaves_of(operand)]
+
+
+def without_code_terms(node: Node) -> Node | None:
+    """`node` with every code leaf pruned, or None if nothing survives.
+
+    What the code facets are counted under: every other filter still applies,
+    but a code term must not, or activating `code:stress` would take every
+    other code's badge to zero and leave the reader inside a selection they
+    can no longer see out of -- the same rule `_facet_cohorts` keeps for
+    survey items.
+
+    The leaves are *pruned*, never replaced by a true condition. Substitution
+    breaks under negation: `-code:stress` would become `NOT True`, which is
+    false everywhere, and the badges would read zero across the codebook.
+
+    Under `OR` this narrows rather than widens -- `code:x OR kids` counts over
+    `kids` alone. There is no reading of "the same query without the code
+    part" that a disjunction agrees with, and pruning is at least the one that
+    never counts rows the reader cannot reach.
+    """
+    if isinstance(node, CodeTerm):
+        return None
+    if isinstance(node, Term):
+        return node
+    if isinstance(node, Not):
+        operand = without_code_terms(node.operand)
+        return Not(operand) if operand is not None else None
+
+    kept = tuple(
+        pruned
+        for pruned in (without_code_terms(operand) for operand in node.operands)
+        if pruned is not None
+    )
+    if not kept:
+        return None
+    if len(kept) == 1:
+        return kept[0]
+    return type(node)(kept)
 
 
 # --------------------------------------------------------------------------
@@ -154,10 +263,14 @@ def terms_of(node: Node) -> list[Term]:
 
 @dataclass(frozen=True)
 class _Token:
-    kind: str  # 'term' | 'phrase' | 'and' | 'or' | 'not' | 'scope' | '(' | ')'
+    kind: str  # 'term' | 'phrase' | 'code' | 'and' | 'or' | 'not' | 'scope' | '(' | ')'
     text: str
     position: int
     scope: Scope | None = None
+    #: On a 'code' token: the reference, split on `/` and already checked.
+    path: tuple[str, ...] | None = None
+    #: On a 'code' token: whether `/*` was written.
+    subtree: bool = False
 
 
 #: Operator spellings. The words are recognised case-insensitively: a reader who
@@ -175,6 +288,13 @@ _WORD_OPERATORS = {
 #: Characters that end a bare term. Everything else, punctuation included, is
 #: part of it: `e-mail` and `kl. 12` are words people write.
 _BREAKS = set(' \t\r\n\f\v()"')
+
+#: What introduces a code reference. Long enough to be unmistakable in a box
+#: that is mostly words, and read before the bare-term scan -- see `_tokenize`.
+_CODE_PREFIX = "code:"
+
+#: The suffix that widens a code reference to its descendants.
+_SUBTREE_SUFFIX = "/*"
 
 
 def _tokenize(query: str) -> list[_Token]:
@@ -213,6 +333,18 @@ def _tokenize(query: str) -> list[_Token]:
                 )
             )
             index += 2
+            continue
+
+        # `code:` names something in the codebook rather than a word to look
+        # for, so it is read here rather than falling through to the bare-term
+        # scan -- which would swallow the whole reference, colon and all.
+        #
+        # Before that scan for a second reason: the scan reads a word after a
+        # scope as a term and never as an operator, so leaving this later would
+        # make `a:code:stress` tokenize as the bare word "code:stress".
+        if query[index : index + len(_CODE_PREFIX)].lower() == _CODE_PREFIX:
+            token, index = _code_token(query, index)
+            tokens.append(token)
             continue
 
         if char == '"':
@@ -255,6 +387,77 @@ def _tokenize(query: str) -> list[_Token]:
     return tokens
 
 
+def _code_token(query: str, start: int) -> tuple[_Token, int]:
+    """The code reference beginning at `start`, and the index after it.
+
+    Two spellings, because a code's name is free text that may contain spaces
+    or collide with another code's:
+
+        code:stress              a name
+        code:Stress/Often        a path, where the name alone is ambiguous
+        code:"Stress/New code"   quoted, where a step contains spaces
+
+    A trailing `/*` widens the reference to the code's descendants and sits
+    *outside* any quotes: the quotes delimit the name, the marker is grammar.
+
+    Inside quotes `*` is the character, exactly as it is in a quoted phrase --
+    quoting is how a reader asks for the literal thing. Unquoted it is rejected
+    unless it is the `/*` suffix, because the alternative is `code:stre*`
+    looking like a wildcard, parsing cleanly, and then failing much later as a
+    name that matches nothing.
+    """
+    index = start + len(_CODE_PREFIX)
+    length = len(query)
+    quoted = index < length and query[index] == '"'
+
+    if quoted:
+        end = query.find('"', index + 1)
+        if end == -1:
+            raise KeywordQueryError('Unclosed quote — add a closing ".', index)
+        text = query[index + 1 : end]
+        index = end + 1
+        subtree = query[index : index + 2] == _SUBTREE_SUFFIX
+        if subtree:
+            index += 2
+    else:
+        text_start = index
+        while index < length and query[index] not in _BREAKS:
+            index += 1
+        text = query[text_start:index]
+        # The scan runs straight through `/*`, neither character being a break.
+        subtree = text.endswith(_SUBTREE_SUFFIX)
+        if subtree:
+            text = text[: -len(_SUBTREE_SUFFIX)]
+
+    if not text.strip():
+        raise KeywordQueryError(
+            "“code:” needs the name of a code after it — for example code:stress.",
+            start,
+        )
+    if not quoted and "*" in text:
+        raise KeywordQueryError(
+            "“*” after a code means “and everything under it”, and is written "
+            "as “/*” at the end — for example code:stress/*.",
+            start,
+        )
+
+    steps = tuple(step.strip() for step in text.split("/"))
+    if any(not step for step in steps):
+        raise KeywordQueryError(
+            "A code path cannot have an empty step — write it like "
+            'code:"Stress/Often".',
+            start,
+        )
+    for step in steps:
+        if len(step) > MAX_TERM_LENGTH:
+            raise KeywordQueryError(
+                f"“{step[:20]}…” is too long (at most {MAX_TERM_LENGTH} characters).",
+                start,
+            )
+
+    return _Token("code", text, start, path=steps, subtree=subtree), index
+
+
 # --------------------------------------------------------------------------
 # Parser
 # --------------------------------------------------------------------------
@@ -267,7 +470,7 @@ class _Parser:
         or      := and (OR and)*
         and     := unary (AND? unary)*
         unary   := (NOT | '-') unary | ('q:' | 'a:') unary | primary
-        primary := '(' or ')' | phrase | term
+        primary := '(' or ')' | phrase | term | code
 
     Precedence is the usual one: NOT binds tighter than AND, which binds tighter
     than OR, so `a OR b AND c` is `a OR (b AND c)`.
@@ -333,7 +536,7 @@ class _Parser:
                 continue
             # Adjacency is AND: `climate change` is both words, which is what
             # somebody typing two words into a search box means.
-            if self._at("term", "phrase", "not", "scope", "("):
+            if self._at("term", "phrase", "code", "not", "scope", "("):
                 operands.append(self._parse_unary())
                 continue
             break
@@ -395,6 +598,13 @@ class _Parser:
             self._advance()
             return _bare_term(token)
 
+        if token.kind == "code":
+            self._advance()
+            assert token.path is not None
+            return CodeTerm(
+                path=token.path, subtree=token.subtree, position=token.position
+            )
+
         # An operator where a term was expected: `AND dog`, `dog OR OR cat`.
         if after is not None:
             raise KeywordQueryError(
@@ -411,8 +621,12 @@ def _scoped(node: Node, scope: Scope) -> Node:
 
     Innermost wins, so a term carrying its own `q:`/`a:` keeps it and only the
     terms that said nothing take the outer one.
+
+    Code terms take a *written* prefix like any other leaf -- `a:code:stress` is
+    a coding on the answer -- but they never take the caller's default, which is
+    applied later and separately. `resolve_scope` says why.
     """
-    if isinstance(node, Term):
+    if isinstance(node, (Term, CodeTerm)):
         return node if node.scope is not None else replace(node, scope=scope)
     if isinstance(node, Not):
         return Not(_scoped(node.operand, scope))
@@ -470,7 +684,7 @@ def parse(query: str) -> Node | None:
 
     node = _Parser(_tokenize(query), query).parse()
 
-    count = len(terms_of(node))
+    count = len(leaves_of(node))
     if count > MAX_TERMS:
         raise KeywordQueryError(
             f"Too many search terms ({count}; at most {MAX_TERMS}).", None
@@ -508,28 +722,53 @@ def term_pattern(term: Term) -> str:
     return f"{start}{body}{end}"
 
 
-def resolve_scope(term: Term, default: Scope) -> Scope:
+def resolve_scope(term: Term | CodeTerm, default: Scope) -> Scope:
     """The side of the exchange this term is actually matched against.
 
     The term's own `q:`/`a:` wins; otherwise the caller's default, which is what
     the segmented control sets. Written once so the condition and the
     highlighting cannot disagree about which is which.
+
+    A code term falls back to "both" instead, and never to the default. The
+    control governs *words*: it exists because a chunk restates the question it
+    answers, so counting the interviewer's phrasing would let the guide read as
+    a finding. None of that is true of a coding, which is a deliberate mark
+    somebody put on a passage. Taking the default here would mean its ordinary
+    setting ("answer") silently dropped every coding made on an interviewer
+    turn -- a filter quietly answering a narrower question than it was asked.
     """
+    if isinstance(term, CodeTerm):
+        return term.scope or "both"
     return term.scope or default
 
 
-def compile_condition(node: Node, answer, question, default: Scope = "answer"):
+def compile_condition(
+    node: Node, answer, question, default: Scope = "answer", code=None
+):
     """The tree as a SQLAlchemy condition over an answer and its question.
 
     `answer` is the respondent's message; `question` is the interviewer turn
     that drew it, which in the message table is the row before. A term scoped to
     "both" is satisfied by either.
 
+    `code` builds the condition for a code term -- given the `CodeTerm`, it
+    returns SQL. Passed in rather than built here because placing a name in a
+    codebook needs the project, which this module has no business knowing. A
+    caller that hands over none refuses a query containing `code:` outright,
+    which is the honest failure: compiling it away would return every chunk and
+    call it a match.
+
     `regexp_match` with `flags="i"` renders as `~*` on Postgres. SQLite ignores
     the flag -- it has no regular expressions of its own -- so the `REGEXP`
     function registered in `app.db.regexp` is the one that has to be
     case-insensitive, and is.
     """
+    if isinstance(node, CodeTerm):
+        if code is None:
+            raise KeywordQueryError(
+                "Filtering by code is not available here.", node.position
+            )
+        return code(node)
     if isinstance(node, Term):
         pattern = term_pattern(node)
         scope = resolve_scope(node, default)
@@ -551,18 +790,18 @@ def compile_condition(node: Node, answer, question, default: Scope = "answer"):
         # absence of a message.
         return and_(
             answer.is_not(None),
-            not_(compile_condition(node.operand, answer, question, default)),
+            not_(compile_condition(node.operand, answer, question, default, code)),
         )
     if isinstance(node, And):
         return and_(
             *(
-                compile_condition(operand, answer, question, default)
+                compile_condition(operand, answer, question, default, code)
                 for operand in node.operands
             )
         )
     return or_(
         *(
-            compile_condition(operand, answer, question, default)
+            compile_condition(operand, answer, question, default, code)
             for operand in node.operands
         )
     )
@@ -607,6 +846,9 @@ def _terms_of_polarity(
     """
     if isinstance(node, Term):
         return [node] if positive == wanted else []
+    if isinstance(node, CodeTerm):
+        # Nothing to mark: a code term matches no text. See `terms_of`.
+        return []
     if isinstance(node, Not):
         return _terms_of_polarity(node.operand, wanted, not positive)
     return [

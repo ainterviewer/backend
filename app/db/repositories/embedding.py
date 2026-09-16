@@ -16,13 +16,16 @@ from sqlalchemy import (
     cast,
     delete,
     distinct,
+    false,
     func,
+    not_,
     or_,
     select,
+    true,
     update,
 )
 from sqlalchemy.exc import NoResultFound
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, aliased, joinedload
 
 from ainterviewer.interfaces import EmbeddingChunk
 from ainterviewer.interview_guides import Image
@@ -35,17 +38,22 @@ from ainterviewer.types import (
 )
 
 from ...types import TurnRole
+from ..code_lookup import CodeIndex
 from ..keyword_query import (
     MARKUP_PATTERN,
+    CodeTerm,
     Scope,
     compile_condition,
     excluded_spans,
     match_spans,
     parse,
+    resolve_scope,
+    without_code_terms,
 )
 from ..models import INTERVIEW_PREVIEW_TURNS, ChunkTurns, EmbeddingTurn, TranscriptTurn
 from ..survey_answers import SurveyFilter, matching_interviews
 from ..tables import (
+    CodingTable,
     EmbeddingTable,
     InterviewTable,
     MessageTable,
@@ -60,6 +68,31 @@ from .base import BaseRepository
 VECTOR_DTYPE = np.float32
 
 logger = logging.getLogger(__name__)
+
+
+#: Whether a chunk must carry a coding, carry none, or may be either.
+#:
+#: A coverage filter, not a code filter. "none" is the pass that closes a
+#: codebook -- what have I not read yet -- and it is why this is not simply a
+#: `code:` term with a NOT in front: a negated term is checked per message and
+#: then lifted, so a section holding one coded turn and one uncoded one
+#: satisfies it. This asks about the chunk.
+Coded = Literal["any", "none"]
+
+#: How the two coder axes are joined.
+#:
+#: They are a 2x2, and the operator is what makes it a complete one: `and`
+#: names the four quadrants -- coded by both, only me, to review, read by
+#: nobody -- and `or` names their four complements, of which two are questions
+#: worth asking. "Coded by anyone" is `any or any`, which is the one reading
+#: that is a disjunction and so has no place among the quadrants; "not coded by
+#: both" is `none or none`, the work left in a double-coding pass.
+#:
+#: An axis left unset does not participate, whichever the operator is. If
+#: "either" meant *true* under `or` then leaving a row alone would widen the
+#: corpus to everything, and the same control would mean opposite things
+#: depending on a setting next to it.
+CoderJoin = Literal["and", "or"]
 
 
 @dataclass(frozen=True)
@@ -121,6 +154,28 @@ class EmbeddingFilters:
     #: are asked for deliberately, and `q:`/`a:` in the query override this for
     #: a single term.
     keyword_scope: Scope = "answer"
+    #: Coverage over the codings `coder_id` made.
+    coded_mine: Coded | None = None
+    #: Coverage over the codings anybody *but* `coder_id` made.
+    coded_others: Coded | None = None
+    #: How the two above are joined. See :data:`CoderJoin`.
+    coder_join: CoderJoin = "and"
+    #: Who the reader is, for the two axes above. Not "whose codings count":
+    #: each axis says that for itself.
+    #:
+    #: Two axes and an operator rather than one coverage filter and a coder,
+    #: because the questions a coder asks are about two different scopes at
+    #: once and a single scope cannot express them. "What have they coded that
+    #: I have not?" -- the second-coder pass -- is `coded_mine="none"` with
+    #: `coded_others="any"`, and there is no one scope it is a filter on.
+    #:
+    #: None of them narrows a `code:` term, which counts anybody's codings.
+    #: Scoping one to a coder is a question about the term -- "passages *I*
+    #: coded Stress" -- and belongs in the grammar if it is wanted, not in a
+    #: filter that would also silently empty the review pass: under
+    #: `coded_mine="none"` a coder-scoped `code:` term matches nothing by
+    #: construction.
+    coder_id: UUID | None = None
 
 
 def _keyword_node(filters: EmbeddingFilters):
@@ -235,6 +290,7 @@ class BrowseUnit:
 #: score is the order and any other one would throw the answer away.
 BrowseOrder = Literal["random", "interview_asc", "interview_desc"]
 
+
 DEFAULT_BROWSE_ORDER: BrowseOrder = "random"
 
 #: What a page of a browse is blocked into.
@@ -248,6 +304,21 @@ DEFAULT_BROWSE_ORDER: BrowseOrder = "random"
 BrowseGrouping = Literal["interview", "guide"]
 
 DEFAULT_BROWSE_GROUPING: BrowseGrouping = "interview"
+
+
+@dataclass(frozen=True)
+class CodeCoverage:
+    """Which chunks in view carry each code, as the units themselves.
+
+    Sets rather than counts: only the caller knows which codes make up a
+    branch, and a union is the only way to add two of them up without counting
+    a chunk coded with both of them twice.
+    """
+
+    #: Chunks in view at all -- what the counts are read against.
+    total: int
+    #: Code id to the units carrying it, each a tuple of its key columns.
+    units: dict[UUID, set[tuple]]
 
 
 @dataclass(frozen=True)
@@ -322,6 +393,9 @@ class EmbeddingRepository(BaseRepository):
         # filter. A repository lives for one request, so this never has to be
         # invalidated -- see `_survey_interviews`.
         self._survey_cache: dict[tuple, set[UUID]] = {}
+        # The project's codebook, read once if a `code:` term needs it and not
+        # at all otherwise. Same lifetime and same reasoning as the cache above.
+        self._code_index: dict[UUID, CodeIndex] = {}
 
     # ------------------------------------------------------------------ #
     # Keys                                                               #
@@ -543,6 +617,10 @@ class EmbeddingRepository(BaseRepository):
             partition_by=MessageTable.interview_id,
             order_by=MessageTable.message_id,
         )
+        previous_id = func.lag(MessageTable.id).over(
+            partition_by=MessageTable.interview_id,
+            order_by=MessageTable.message_id,
+        )
         return (
             select(
                 MessageTable.id,
@@ -568,6 +646,14 @@ class EmbeddingRepository(BaseRepository):
                 case(
                     (previous_is_interviewer == 1, previous_content), else_=None
                 ).label("question_content"),
+                # The same row's *id*, on the same condition, so a `q:`-scoped
+                # code term can ask whether the question was coded. A UUID is
+                # lagged directly where `survey_item` could not be: `lag`
+                # returns the raw stored value and skips the column type's
+                # decoding, which a UUID does not need and a JSONB did.
+                case((previous_is_interviewer == 1, previous_id), else_=None).label(
+                    "question_id"
+                ),
             )
             .where(MessageTable.project_id == project_id)
             .subquery()
@@ -621,56 +707,69 @@ class EmbeddingRepository(BaseRepository):
             ),
         )
 
-    @staticmethod
-    def _keyword_condition(filters: EmbeddingFilters, source):
-        """The keyword query as a condition on a message row, or None.
+    def _codebook(self, project_id: UUID) -> CodeIndex:
+        """The project's codebook, read at most once per request.
 
-        Against the messages rather than the chunk: a chunk's text is a
-        rendering built for the model, the question restated included, so
-        matching it would let a word in the interviewer's question count as a
-        respondent having said it whether or not the reader asked for questions
-        to be searched. The two sides are kept apart here -- `content` is what
-        the respondent wrote, `question_content` the interviewer turn that drew
-        it -- so the scope means something.
-
-        The string is a boolean query, not a literal -- `parse` reads the
-        operators and `compile_condition` turns the tree into SQL. A query that
-        will not parse raises `KeywordQueryError`; the endpoint turns that into
-        a 422 naming the problem, because searching for something other than
-        what was typed is worse than refusing.
-
-        Only the question side is stripped of markup, because only guide text
-        can contain any: a respondent who types ``<b>`` is shown those
-        characters, so a term matching them matched something they can see.
+        Only ever reached from `_code_condition`, so a query with no `code:` in
+        it never asks for it at all.
         """
-        node = _keyword_node(filters)
-        if node is None:
-            return None
-        return compile_condition(
-            node,
-            source.c.content,
-            _prose(source.c.question_content),
-            filters.keyword_scope,
+        if project_id not in self._code_index:
+            self._code_index[project_id] = CodeIndex.for_project(
+                self.session, project_id
+            )
+        return self._code_index[project_id]
+
+    @staticmethod
+    def _coded_on(
+        column,
+        ids: tuple[UUID, ...] | None = None,
+        *,
+        by: UUID | None = None,
+        not_by: UUID | None = None,
+    ):
+        """Whether the message in `column` carries a coding, or one of `ids`.
+
+        Not scoped to the project: `source` is already one project's messages,
+        and a coding reaches a message by id.
+
+        `by` narrows to one coder's readings and `not_by` to everybody else's.
+        At most one is ever passed -- they are the two halves of one axis -- and
+        both left out means anybody's.
+        """
+        conditions = [CodingTable.message_id == column]
+        if ids is not None:
+            conditions.append(CodingTable.code_id.in_(ids))
+        if by is not None:
+            conditions.append(CodingTable.user_id == by)
+        if not_by is not None:
+            conditions.append(CodingTable.user_id != not_by)
+        return select(CodingTable.id).where(*conditions).exists()
+
+    def _coded_anywhere(
+        self, source, *, by: UUID | None = None, not_by: UUID | None = None
+    ):
+        """Whether anything a chunk can reach from this row has been coded.
+
+        The answer, or the question that drew it -- the same two places a code
+        term looks, so "uncoded" cannot disagree with `code:`. A section whose
+        question somebody marked is a section somebody has read.
+        """
+        return or_(
+            self._coded_on(source.c.id, by=by, not_by=not_by),
+            and_(
+                source.c.question_id.is_not(None),
+                self._coded_on(source.c.question_id, by=by, not_by=not_by),
+            ),
         )
 
-    def _keyword_scope(
-        self, project_id: UUID, filters: EmbeddingFilters, kind: EmbeddingKind
-    ):
-        """The keyword, lifted from messages to whichever unit is being scanned.
+    def _lift_to_unit(self, kind: EmbeddingKind, source, condition):
+        """A condition on a respondent row, as a condition on this unit's rows.
 
-        A chunk matches when a message inside it does, so the shape of the
-        condition follows what the chunk spans: one message, one question group,
-        or a whole interview.
-
-        Embeddable rather than free-text messages: whether a unit *exists* is
-        the chunk policy's question and is already settled by the time anything
-        is scanned. This one only asks whether the unit contains the word.
+        A chunk matches when a message inside it does, and the shape of that
+        follows what the chunk spans: one message, one question group, one
+        section, or a whole interview. Extracted so the keyword scan and the
+        coverage filter cannot drift on what "inside" means.
         """
-        source = self._message_source(project_id)
-        condition = self._keyword_condition(filters, source)
-        if condition is None:
-            return None
-
         matched = select(
             source.c.id,
             source.c.interview_id,
@@ -710,6 +809,174 @@ class EmbeddingRepository(BaseRepository):
             )
             .exists()
         )
+
+    @staticmethod
+    def _join(filters: EmbeddingFilters):
+        """`and_` or `or_`, per `coder_join`.
+
+        Both are identities over a single operand, so nothing has to special-
+        case the one-axis query: the operator is simply inert until there are
+        two things for it to join.
+        """
+        return or_ if filters.coder_join == "or" else and_
+
+    @staticmethod
+    def _coverage_axes(filters: EmbeddingFilters):
+        """The coverage axes that are asking something, as (setting, scope).
+
+        `scope` is what `_coded_anywhere` takes. A reader with no id has no
+        codings of their own, so "mine" becomes a condition nobody satisfies
+        and "others" becomes everybody -- which is what the words mean, and
+        beats quietly ignoring an axis the caller set.
+
+        An axis left at None is simply absent, which is what makes the operator
+        safe: `or` over one operand is that operand, and over none is no filter
+        at all, so leaving a row alone never widens the corpus.
+        """
+        axes = []
+        if filters.coded_mine is not None:
+            axes.append(
+                (filters.coded_mine, {"by": filters.coder_id}, filters.coder_id is None)
+            )
+        if filters.coded_others is not None:
+            axes.append((filters.coded_others, {"not_by": filters.coder_id}, False))
+        return axes
+
+    def _coded_scope(
+        self, project_id: UUID, filters: EmbeddingFilters, kind: EmbeddingKind
+    ):
+        """The coverage filter on this unit's rows, or None where it asks nothing.
+
+        The negation sits *outside* the lift, which is the whole point: lifted
+        first and negated after asks whether the chunk has any coding at all,
+        where negating the message predicate first would ask whether it has any
+        uncoded turn -- true of almost every chunk, coded or not.
+
+        `NOT IN` is safe on the two unit kinds that use it: the subquery selects
+        a message id and an interview id, neither of which is ever NULL.
+        """
+        axes = self._coverage_axes(filters)
+        if not axes:
+            return None
+
+        source = self._message_source(project_id)
+        conditions = []
+        for setting, scope, nobody in axes:
+            if nobody:
+                # "Mine" with no reader: nothing is mine, so "any" keeps
+                # nothing and "none" keeps everything.
+                conditions.append(false() if setting == "any" else true())
+                continue
+            lifted = self._lift_to_unit(
+                kind, source, self._coded_anywhere(source, **scope)
+            )
+            conditions.append(lifted if setting == "any" else not_(lifted))
+        return self._join(filters)(*conditions)
+
+    def _code_condition(
+        self, project_id: UUID, filters: EmbeddingFilters, source, term: CodeTerm
+    ):
+        """One `code:` term as a condition on a message row.
+
+        The same shape as a keyword term, and deliberately so: both end up as a
+        predicate over one respondent row, which is what lets `_keyword_scope`
+        lift either to whichever unit is being scanned without knowing the
+        difference. `code:stress AND kids` is one row that is both.
+
+        The scope reaches the interviewer turn the same way a `q:` term reaches
+        its words -- through the lag, not by widening the rows scanned. Widening
+        them would change what a *word* means too: a bare term would start
+        matching the guide's own phrasing, which is the thing the default scope
+        exists to prevent.
+
+        `resolve_scope` decides what an unscoped code term means, rather than
+        this deciding it: a bare `code:` is "both", never the caller's default,
+        and that rule lives in one place.
+        """
+        ids = self._codebook(project_id).resolve(term)
+        scope = resolve_scope(term, filters.keyword_scope)
+
+        def coded(column):
+            return self._coded_on(column, ids)
+
+        on_answer = coded(source.c.id)
+        # NULL where the row before was not an interviewer turn, exactly as
+        # `question_content` is, so a respondent writing twice running has no
+        # question of their own to have been coded.
+        on_question = and_(
+            source.c.question_id.is_not(None), coded(source.c.question_id)
+        )
+
+        if scope == "answer":
+            return on_answer
+        if scope == "question":
+            return on_question
+        return or_(on_answer, on_question)
+
+    def _keyword_condition(
+        self,
+        project_id: UUID,
+        filters: EmbeddingFilters,
+        source,
+        drop_codes: bool = False,
+    ):
+        """The keyword query as a condition on a message row, or None.
+
+        `drop_codes` prunes the `code:` leaves out of the tree first, which is
+        what the code facets are counted under -- see `without_code_terms`.
+        Expressed here rather than by handing in a different query string
+        because a tree has no spelling to go back to, and a second parse of a
+        second spelling is a second chance for the two to disagree.
+
+        Against the messages rather than the chunk: a chunk's text is a
+        rendering built for the model, the question restated included, so
+        matching it would let a word in the interviewer's question count as a
+        respondent having said it whether or not the reader asked for questions
+        to be searched. The two sides are kept apart here -- `content` is what
+        the respondent wrote, `question_content` the interviewer turn that drew
+        it -- so the scope means something.
+
+        The string is a boolean query, not a literal -- `parse` reads the
+        operators and `compile_condition` turns the tree into SQL. A query that
+        will not parse raises `KeywordQueryError`; the endpoint turns that into
+        a 422 naming the problem, because searching for something other than
+        what was typed is worse than refusing.
+
+        Only the question side is stripped of markup, because only guide text
+        can contain any: a respondent who types ``<b>`` is shown those
+        characters, so a term matching them matched something they can see.
+        """
+        node = _keyword_node(filters)
+        if node is not None and drop_codes:
+            node = without_code_terms(node)
+        if node is None:
+            return None
+        return compile_condition(
+            node,
+            source.c.content,
+            _prose(source.c.question_content),
+            filters.keyword_scope,
+            code=lambda term: self._code_condition(project_id, filters, source, term),
+        )
+
+    def _keyword_scope(
+        self, project_id: UUID, filters: EmbeddingFilters, kind: EmbeddingKind
+    ):
+        """The keyword, lifted from messages to whichever unit is being scanned.
+
+        A chunk matches when a message inside it does, so the shape of the
+        condition follows what the chunk spans: one message, one question group,
+        or a whole interview.
+
+        Embeddable rather than free-text messages: whether a unit *exists* is
+        the chunk policy's question and is already settled by the time anything
+        is scanned. This one only asks whether the unit contains the word.
+        """
+        source = self._message_source(project_id)
+        condition = self._keyword_condition(project_id, filters, source)
+        if condition is None:
+            return None
+        return self._lift_to_unit(kind, source, condition)
 
     #: Namespace for the synthetic ids of un-embedded browse units. A fixed
     #: UUID so the same chunk keeps the same id across processes and restarts.
@@ -886,6 +1153,78 @@ class EmbeddingRepository(BaseRepository):
             self.session.execute(self._interview_scope(project_id, filters)).scalars()
         )
 
+    def _browse_scope(
+        self,
+        project_id: UUID,
+        filters: EmbeddingFilters,
+        kind: EmbeddingKind,
+        drop_codes: bool = False,
+    ):
+        """What the filters leave, as conditions on message rows and on groups.
+
+        Returns the message source, the conditions every row must satisfy, and
+        the conditions every *group* must satisfy. Shared between browsing and
+        the code facets because a badge that counted over a different corpus
+        than the list it sits beside would be a number nobody could act on.
+        """
+        source = self._message_source(project_id)
+
+        message_scope = [
+            *self._embeddable_conditions(source),
+            source.c.interview_id.in_(self._interview_scope(project_id, filters)),
+        ]
+
+        keyword = self._keyword_condition(project_id, filters, source, drop_codes)
+        if keyword is not None:
+            message_scope.append(keyword)
+
+        if filters.questions:
+            message_scope.append(
+                or_(
+                    *(
+                        and_(
+                            source.c.section == section,
+                            source.c.main_question == main_question,
+                        )
+                        for section, main_question in filters.questions
+                    )
+                )
+            )
+
+        # The coverage filter, asked of the chunk rather than of a message.
+        #
+        # A MESSAGE chunk *is* the row, so each axis is an ordinary condition.
+        # The grouped kinds have to wait for the group: "this section has no
+        # coding" is a fact about every row in it at once, which is what HAVING
+        # is for. Filtering rows first would ask whether the section has an
+        # uncoded turn, which nearly every section does.
+        #
+        # Joined once at the end rather than appended one axis at a time: under
+        # `or` the two are a single condition, and two conditions in the same
+        # list are an `and` whatever the operator says.
+        coded_rows = []
+        coded_groups = []
+        for setting, scope, nobody in self._coverage_axes(filters):
+            if nobody:
+                # "Mine" with no reader -- see `_coverage_axes`.
+                coded_rows.append(false() if setting == "any" else true())
+                coded_groups.append(false() if setting == "any" else true())
+                continue
+            anywhere = self._coded_anywhere(source, **scope)
+            coded_rows.append(anywhere if setting == "any" else not_(anywhere))
+            marked = func.max(case((anywhere, 1), else_=0))
+            coded_groups.append(marked == 1 if setting == "any" else marked == 0)
+
+        coded_having = []
+        if coded_rows:
+            join = self._join(filters)
+            if kind == EmbeddingKind.MESSAGE:
+                message_scope.append(join(*coded_rows))
+            else:
+                coded_having.append(join(*coded_groups))
+
+        return source, message_scope, coded_having
+
     def browse(
         self,
         *,
@@ -920,29 +1259,9 @@ class EmbeddingRepository(BaseRepository):
         under the INTERVIEW unit, which carries no guide coordinates to block
         by, and there it falls back to interview order.
         """
-        source = self._message_source(project_id)
-
-        message_scope = [
-            *self._embeddable_conditions(source),
-            source.c.interview_id.in_(self._interview_scope(project_id, filters)),
-        ]
-
-        keyword = self._keyword_condition(filters, source)
-        if keyword is not None:
-            message_scope.append(keyword)
-
-        if filters.questions:
-            message_scope.append(
-                or_(
-                    *(
-                        and_(
-                            source.c.section == section,
-                            source.c.main_question == main_question,
-                        )
-                        for section, main_question in filters.questions
-                    )
-                )
-            )
+        source, message_scope, coded_having = self._browse_scope(
+            project_id, filters, kind
+        )
 
         # What one row of the listing is, per unit. A MESSAGE is a message; a QA
         # pair is a question group; an interview is an interview. The two
@@ -975,6 +1294,8 @@ class EmbeddingRepository(BaseRepository):
                 .where(*message_scope, *self._free_text_conditions(source))
                 .group_by(source.c.interview_id, source.c.section)
             )
+            if coded_having:
+                grouped = grouped.having(and_(*coded_having))
             within = [source.c.section]
             guide_terms = [source.c.section]
         elif kind == EmbeddingKind.QA_PAIR:
@@ -991,6 +1312,8 @@ class EmbeddingRepository(BaseRepository):
                     source.c.main_question,
                 )
             )
+            if coded_having:
+                grouped = grouped.having(and_(*coded_having))
             within = [source.c.section, source.c.main_question]
             guide_terms = [source.c.section, source.c.main_question]
         else:
@@ -999,6 +1322,8 @@ class EmbeddingRepository(BaseRepository):
                 .where(*message_scope, *self._free_text_conditions(source))
                 .group_by(source.c.interview_id)
             )
+            if coded_having:
+                grouped = grouped.having(and_(*coded_having))
             # An interview spans the guide, so there is no coordinate to block
             # a page of them by.
             within = []
@@ -1030,6 +1355,96 @@ class EmbeddingRepository(BaseRepository):
             total=total,
             interviews=interviews,
         )
+
+    @staticmethod
+    def _unit_key_columns(kind: EmbeddingKind, source) -> list:
+        """The columns that say which unit a message row belongs to.
+
+        The same keys `browse` groups by: a MESSAGE is its own row, a section
+        and a question group are coordinates inside an interview, and an
+        interview is itself.
+        """
+        if kind == EmbeddingKind.MESSAGE:
+            return [source.c.id]
+        if kind == EmbeddingKind.SECTION:
+            return [source.c.interview_id, source.c.section]
+        if kind == EmbeddingKind.QA_PAIR:
+            return [source.c.interview_id, source.c.section, source.c.main_question]
+        return [source.c.interview_id]
+
+    def code_coverage(
+        self, *, project_id: UUID, kind: EmbeddingKind, filters: EmbeddingFilters
+    ) -> CodeCoverage:
+        """Which chunks now in view carry each code.
+
+        The units themselves rather than their counts, because a branch's total
+        is the *union* of its codes' chunks: a chunk carrying both a parent and
+        its child is one chunk, and summing the rows down the branch would
+        report it twice. Small enough to hold -- a pair per coding, not per
+        chunk.
+
+        `filters` should already have its code terms pruned
+        (`without_code_terms`). Counted with them, choosing one code would take
+        every other badge to zero and leave the reader inside a selection they
+        can no longer see out of -- the rule `_facet_cohorts` keeps for the
+        survey items, for the same reason.
+
+        A coding on the interviewer's turn counts for the chunk that answers
+        it, which is what a bare `code:x` reaches: the term's default scope is
+        both sides, so a badge that counted only answers would offer a number
+        the filter then beat.
+        """
+        source, message_scope, coded_having = self._browse_scope(
+            project_id, filters, kind, drop_codes=True
+        )
+        key = self._unit_key_columns(kind, source)
+        grouped = kind != EmbeddingKind.MESSAGE
+        # What makes a *group* a chunk rather than survey scaffolding. Applied
+        # to the coded rows as well as to the units, because `browse` applies
+        # it alongside the keyword: a coding sitting on a closed answer is not
+        # reachable by `code:` under a grouped unit either, and a badge that
+        # counted it would send the reader somewhere empty.
+        free_text = list(self._free_text_conditions(source)) if grouped else []
+
+        units = select(*key).where(*message_scope, *free_text)
+        if grouped:
+            units = units.group_by(*key)
+            if coded_having:
+                units = units.having(and_(*coded_having))
+        in_view = units.subquery()
+
+        total = self.session.execute(
+            select(func.count()).select_from(in_view)
+        ).scalar_one()
+
+        # Aliased, and it has to be: the coverage axes in `message_scope` are
+        # EXISTS subqueries over the same table, and with `CodingTable` itself
+        # in the enclosing FROM they would auto-correlate to it and lose their
+        # own FROM clause entirely.
+        coding = aliased(CodingTable)
+        on_coding = or_(
+            coding.message_id == source.c.id,
+            and_(
+                source.c.question_id.is_not(None),
+                coding.message_id == source.c.question_id,
+            ),
+        )
+        pairs = (
+            select(coding.code_id, *key)
+            .select_from(
+                source.join(coding, on_coding).join(
+                    in_view,
+                    and_(*(column == in_view.c[column.name] for column in key)),
+                )
+            )
+            .where(*message_scope, *free_text)
+            .distinct()
+        )
+
+        units_by_code: dict[UUID, set[tuple]] = {}
+        for row in self.session.execute(pairs):
+            units_by_code.setdefault(row[0], set()).add(tuple(row[1:]))
+        return CodeCoverage(total=total, units=units_by_code)
 
     def _units_for(
         self, project_id: UUID, kind: EmbeddingKind, rows
@@ -1178,6 +1593,10 @@ class EmbeddingRepository(BaseRepository):
         questions = self._question_condition(project_id, kind, filters)
         if questions is not None:
             statement = statement.where(questions)
+
+        coded = self._coded_scope(project_id, filters, kind)
+        if coded is not None:
+            statement = statement.where(coded)
 
         interview_conditions = []
         if not filters.include_synthetic:
