@@ -1,11 +1,13 @@
 import datetime
 from collections.abc import Sequence
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Query
 from pydantic import UUID4, BaseModel
-from sqlalchemy import case, func, select
+from sqlalchemy import Integer, case, cast, func, select
+from sqlalchemy.orm import Session
+from sqlalchemy.sql import ColumnElement
 
 from ainterviewer.types import InterviewStatus, LanguageCode
 
@@ -23,10 +25,27 @@ from .histogram import (
     ValueCount,
     compute_histogram_buckets,
     compute_log_histogram_buckets,
-    trim_upper_outliers,
 )
 
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])
+
+# The longest a single pause between two messages may contribute to an
+# interview's duration. See the duration block in
+# `get_project_monitoring_stats` for why duration is capped per gap rather than
+# trimmed per interview.
+MAX_MESSAGE_GAP_SECONDS = 300
+
+
+def _gap_seconds(session: Session, later: Any, earlier: Any) -> ColumnElement:
+    """The difference between two timestamp columns, in seconds.
+
+    SQLite has no interval type -- subtracting two datetimes there yields a
+    string -- so the difference is taken in fractional days via `julianday` and
+    scaled. PostgreSQL subtracts to an interval and needs the epoch pulled out.
+    """
+    if session.get_bind().dialect.name == "sqlite":
+        return (func.julianday(later) - func.julianday(earlier)) * 86400.0
+    return func.extract("epoch", later - earlier)
 
 
 class InterviewStatusCount(BaseModel):
@@ -57,7 +76,11 @@ class InterviewTimeOfDayCount(BaseModel):
 
 
 class InterviewDurationStats(BaseModel):
-    """Statistics about interview duration (time spent)."""
+    """Statistics about interview duration (active time spent).
+
+    Over the same gap-capped durations the duration histogram is binned from,
+    so the summary and the chart describe the same quantity.
+    """
 
     min_seconds: int
     max_seconds: int
@@ -174,10 +197,11 @@ class MonitoringStats(BaseModel):
 
     # Histogram distributions
     duration_histogram: list[HistogramBucket]
-    # Completed interviews left out of `duration_histogram` as outliers, and the
-    # longest duration it still covers. Zero and null when nothing was trimmed.
-    duration_outliers_excluded: int
-    duration_outlier_threshold: int | None
+    # How many pauses between consecutive messages ran past the cap and were
+    # counted as the cap, and what that cap is. Reported so the chart can say
+    # that the durations it shows are active time rather than elapsed time.
+    duration_gaps_capped: int
+    duration_gap_cap_seconds: int
     message_count_histogram: list[HistogramBucket]
     message_length_histogram: list[HistogramBucket]
 
@@ -245,7 +269,6 @@ def get_project_monitoring_stats(
         InterviewTable.id.label("id"),
         InterviewTable.status.label("status"),
         InterviewTable.created_at.label("created_at"),
-        InterviewTable.total_time_spent.label("total_time_spent"),
         InterviewTable.language.label("language"),
         InterviewTable.participant_id.label("participant_id"),
     )
@@ -375,35 +398,81 @@ def get_project_monitoring_stats(
     # Stats for COMPLETED interviews #
     # ++++++++++++++++++++++++++++++ #
 
-    # Duration histogram (one entry per distinct total_time_spent value).
-    # min/max/avg/sum are derived from these rows.
+    # Duration (one row per distinct duration, in whole seconds). min/max/avg/
+    # sum are derived from these rows.
+    #
+    # Duration is re-derived from the message timestamps rather than read off
+    # `InterviewTable.total_time_spent`, which is session wall-clock: an
+    # interview left open in a browser tab records every one of those hours.
+    # Each gap between consecutive messages is capped at
+    # `MAX_MESSAGE_GAP_SECONDS`, so a pause contributes the cap and no more.
+    # That keeps such an interview -- whose actual answering time is perfectly
+    # ordinary -- in the data, where trimming the upper tail of
+    # `total_time_spent` discarded the whole interview to hide one pause.
+    #
+    # The first message of an interview has no predecessor and so no gap, which
+    # is correct: time spent reading the welcome screen is not answering time.
+    previous_created_at = func.lag(MessageTable.created_at).over(
+        partition_by=MessageTable.interview_id,
+        order_by=MessageTable.message_id,
+    )
+    message_gaps = (
+        select(
+            MessageTable.interview_id.label("interview_id"),
+            _gap_seconds(session, MessageTable.created_at, previous_created_at).label(
+                "gap_seconds"
+            ),
+        )
+        .select_from(MessageTable)
+        .join(
+            completed_interviews,
+            MessageTable.interview_id == completed_interviews.c.id,
+        )
+        .where(*message_conditions)
+        .subquery()
+    )
+
+    gap = message_gaps.c.gap_seconds
+    over_cap = gap > MAX_MESSAGE_GAP_SECONDS
+    # `case` rather than `least`/`min(a, b)`: the two-argument scalar minimum is
+    # spelled differently on SQLite and PostgreSQL, this is spelled once.
+    capped_gap = case((over_cap, MAX_MESSAGE_GAP_SECONDS), else_=gap)
+    interview_durations = (
+        select(
+            message_gaps.c.interview_id.label("interview_id"),
+            func.sum(capped_gap).label("duration_seconds"),
+            func.sum(case((over_cap, 1), else_=0)).label("capped_gaps"),
+        )
+        .where(gap.is_not(None))
+        .group_by(message_gaps.c.interview_id)
+        .subquery()
+    )
+
+    duration_value = cast(func.round(interview_durations.c.duration_seconds), Integer)
     duration_hist_stmt = (
         select(
-            interviews.c.total_time_spent.label("value"),
+            duration_value.label("value"),
             func.count().label("count"),
+            # Carried through the grouping so the total below costs no second
+            # query; `_summarize` reads only `value` and `count`.
+            func.sum(interview_durations.c.capped_gaps).label("capped_gaps"),
         )
-        .where(
-            interviews.c.status == InterviewStatus.COMPLETED,
-            interviews.c.total_time_spent > 0,
-        )
-        .group_by(interviews.c.total_time_spent)
-        .order_by(interviews.c.total_time_spent)
+        .where(interview_durations.c.duration_seconds > 0)
+        .group_by(duration_value)
+        .order_by(duration_value)
     )
     duration_rows = session.execute(duration_hist_stmt).all()
-
-    # An interview left open in a browser tab records hours of "duration" and
-    # stretches the axis over a range the rest of the data never reaches. Those
-    # are dropped from the histogram only -- the min/avg/max/total below stay
-    # over every completed interview, since a long one is still a real one --
-    # and the count of what was dropped is reported alongside it.
-    trimmed = trim_upper_outliers(duration_rows)
+    duration_gaps_capped = sum(int(row.capped_gaps or 0) for row in duration_rows)
 
     # Binned in minutes: at second resolution the axis ticks come out as 100,
     # 300, 500, ..., which no one reads as "eight and a bit minutes". The rows
     # keep their seconds precision through the division, so the bin edges are
     # whole minutes without the observations being rounded onto them first.
     duration_histogram = compute_histogram_buckets(
-        [ValueCount(value=row.value / 60, count=row.count) for row in trimmed.rows]
+        # Positional for the count: `Row.count` resolves to the labelled column
+        # at runtime, but it is also a sequence method, which the type checker
+        # sees first.
+        [ValueCount(value=row.value / 60, count=row[1]) for row in duration_rows]
     )
 
     duration_summary = _summarize(duration_rows)
@@ -661,8 +730,8 @@ def get_project_monitoring_stats(
         duration_stats=duration_stats,
         message_count_stats=message_count_stats,
         duration_histogram=duration_histogram,
-        duration_outliers_excluded=trimmed.excluded_count,
-        duration_outlier_threshold=trimmed.threshold,
+        duration_gaps_capped=duration_gaps_capped,
+        duration_gap_cap_seconds=MAX_MESSAGE_GAP_SECONDS,
         message_count_histogram=message_count_histogram,
         message_length_histogram=message_length_histogram,
         dropout_stats=dropout_stats,
