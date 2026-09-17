@@ -4,6 +4,13 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.6.2] - 2026-09-17
+
+### Features
+
+- Implement better code exploration integration
+- Add similarity search based on coded turns
+
 ## [0.6.1] - 2026-09-16
 
 ### Features
