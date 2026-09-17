@@ -14,18 +14,20 @@ from collections.abc import Sequence
 from typing import Literal
 
 from pydantic import UUID4
-from sqlalchemy import and_, insert, select, update
+from sqlalchemy import and_, func, insert, select, update
 from sqlalchemy.orm import aliased
 
 from ainterviewer.utils import now
 
 from ..models import MessageReportPublic, MessageReportRowPublic
 from ..tables import (
+    CollaboratorTable,
     InterviewTable,
     MessageReportReadTable,
     MessageReportTable,
     MessageTable,
     ParticipantTable,
+    ProjectFolderTable,
     ProjectParticipantTable,
     ProjectTable,
 )
@@ -251,3 +253,49 @@ class ReportRepository(BaseRepository):
         if project_id is not None:
             statement = statement.where(MessageReportTable.project_id == project_id)
         return list(self.session.execute(statement).scalars().all())
+
+    def unread_count(self, user_id: UUID4, track: ReviewTrack) -> int:
+        """How many still-open reports this reviewer has not read.
+
+        Both halves matter: a resolved report is off the queue whether or not
+        anyone ticked it as read, and a report that has been read is not
+        thereby resolved. The status is the named track's, so an owner
+        rewording a question does not empty the platform's badge.
+
+        On the `owner` track the count is confined to projects the user
+        collaborates on, reached through the folder exactly as
+        `ProjectRepository.get_user_role_on_project` does -- a project's owner
+        holds a collaborator row on its folder, so owners are included. The
+        `admin` track spans every project, which is what the platform queue
+        is.
+        """
+        unread = ~(
+            select(MessageReportReadTable.id)
+            .where(
+                MessageReportReadTable.report_id == MessageReportTable.id,
+                MessageReportReadTable.user_id == user_id,
+            )
+            .exists()
+        )
+
+        conditions = [self._status_column(track) == ReportStatus.OPEN, unread]
+
+        if track == "owner":
+            conditions.append(
+                MessageReportTable.project_id.in_(
+                    select(ProjectTable.id)
+                    .join(
+                        ProjectFolderTable,
+                        ProjectTable.folder_id == ProjectFolderTable.id,
+                    )
+                    .join(
+                        CollaboratorTable,
+                        CollaboratorTable.folder_id == ProjectFolderTable.id,
+                    )
+                    .where(CollaboratorTable.user_id == user_id)
+                )
+            )
+
+        return self.session.execute(
+            select(func.count(MessageReportTable.id)).where(*conditions)
+        ).scalar_one()

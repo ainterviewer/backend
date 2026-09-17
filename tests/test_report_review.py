@@ -25,6 +25,7 @@ from app.db.repositories.interview import InterviewRepository
 from app.db.repositories.reports import ReportRepository
 from app.db.tables import (
     Base,
+    CollaboratorTable,
     InterviewTable,
     MessageReportReadTable,
     MessageReportTable,
@@ -34,6 +35,7 @@ from app.db.tables import (
     UserTable,
 )
 from app.db.types import InterviewType, ReportReason, ReportStatus
+from app.types import CollaboratorRole
 
 FOLDER = uuid.uuid4()
 OURS = uuid.uuid4()
@@ -360,3 +362,104 @@ def test_interviews_can_be_sorted_by_report_count(interviews, session):
 
     assert [row.n_reports for row in rows] == [1, 0]
     assert rows[1].id == quiet
+
+
+# ------------------------------------------------ the account-menu badge count
+
+
+def collaborator(session, user_id: uuid.UUID, folder_id: uuid.UUID = FOLDER):
+    """Give a user a role on a folder, and so on its projects.
+
+    The same reach the role checker uses -- a project's owner holds one of
+    these on its folder, which is why the owner-track count joins through it.
+    """
+    session.add(
+        CollaboratorTable(
+            id=uuid.uuid4(),
+            folder_id=folder_id,
+            user_id=user_id,
+            role=CollaboratorRole.ADMIN,
+        )
+    )
+    session.flush()
+
+
+def test_the_owner_count_covers_the_user_s_own_projects(reports, interviews, session):
+    member = user(session)
+    collaborator(session, member)
+    report(interviews, project_id=OURS)
+    report(interviews, project_id=THEIRS)
+
+    # Both projects are in the one folder this member collaborates on.
+    assert reports.unread_count(member, track="owner") == 2
+
+
+def test_the_owner_count_excludes_projects_the_user_cannot_see(
+    reports, interviews, session
+):
+    """The badge must not count a report the user has no way to open."""
+    outsider = user(session, "Outsider")
+    report(interviews, project_id=OURS)
+
+    assert reports.unread_count(outsider, track="owner") == 0
+
+
+def test_the_admin_count_spans_every_project(reports, interviews, session):
+    """No collaborator row anywhere: the platform queue is not scoped."""
+    admin = user(session, "Admin")
+    report(interviews, project_id=OURS)
+    report(interviews, project_id=THEIRS)
+
+    assert reports.unread_count(admin, track="admin") == 2
+
+
+def test_reading_a_report_takes_it_off_the_count(reports, interviews, session):
+    member = user(session)
+    collaborator(session, member)
+    first = report(interviews, project_id=OURS)
+    report(interviews, project_id=OURS, reason=ReportReason.IRRELEVANT)
+
+    assert reports.unread_count(member, track="owner") == 2
+
+    reports.mark_read(member, [first.id], project_id=OURS)
+
+    assert reports.unread_count(member, track="owner") == 1
+
+
+def test_resolving_a_report_takes_it_off_the_count_unread_or_not(
+    reports, interviews, session
+):
+    """A resolved report is off the queue whether or not anyone ticked it as
+    read -- otherwise the badge would outlive the work."""
+    member = user(session)
+    collaborator(session, member)
+    saved = report(interviews, project_id=OURS)
+
+    reports.resolve(member, [saved.id], ReportStatus.RESOLVED, "owner")
+
+    assert reports.unread_count(member, track="owner") == 0
+
+
+def test_one_track_s_count_ignores_the_other_s_resolution(reports, interviews, session):
+    """The invariant again, seen from the badge: an owner rewording a question
+    must not empty the platform's."""
+    owner, admin = user(session, "Owner"), user(session, "Admin")
+    collaborator(session, owner)
+    saved = report(interviews, project_id=OURS)
+
+    reports.resolve(owner, [saved.id], ReportStatus.RESOLVED, "owner")
+
+    assert reports.unread_count(owner, track="owner") == 0
+    assert reports.unread_count(admin, track="admin") == 1
+
+
+def test_another_reviewer_s_read_does_not_clear_my_count(reports, interviews, session):
+    ada, grace = user(session, "Ada"), user(session, "Grace")
+    collaborator(session, ada)
+    collaborator(session, grace)
+    saved = report(interviews, project_id=OURS)
+
+    reports.mark_read(ada, [saved.id], project_id=OURS)
+
+    assert reports.unread_count(ada, track="owner") == 0
+    assert reports.unread_count(grace, track="owner") == 1
