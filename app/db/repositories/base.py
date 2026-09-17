@@ -1,10 +1,12 @@
-from sqlalchemy import Select, delete
+from sqlalchemy import Select, delete, select
 from sqlalchemy.orm import Session
 
 from ..tables import (
     CodingTable,
     EmbeddingTable,
     MessageCommentTable,
+    MessageReportReadTable,
+    MessageReportTable,
 )
 
 
@@ -17,13 +19,13 @@ class BaseRepository:
     def _delete_message_children(self, message_ids: Select) -> None:
         """Delete the analysis rows hanging off a set of messages.
 
-        Call this before deleting messages with a Core `delete()`. Codings and
-        comments both declare ON DELETE CASCADE, which fires while foreign keys
-        are enforced (the default) but not where enforcement is switched off
-        with `DATABASE__ENFORCE_FOREIGN_KEYS=false` -- and that is how the
-        orphans c3d18b40f2a7 cleaned up got there. Deleting them explicitly
-        holds either way. An ORM `session.delete()` on the message does not need
-        this: it cascades through the relationships in Python.
+        Call this before deleting messages with a Core `delete()`. Codings,
+        comments and reports all declare ON DELETE CASCADE, which fires while
+        foreign keys are enforced (the default) but not where enforcement is
+        switched off with `DATABASE__ENFORCE_FOREIGN_KEYS=false` -- and that is
+        how the orphans c3d18b40f2a7 cleaned up got there. Deleting them
+        explicitly holds either way. An ORM `session.delete()` on the message
+        does not need this: it cascades through the relationships in Python.
 
         `message_ids` is a SELECT of the message ids, not a materialized list,
         so it must still resolve when this runs -- i.e. before the messages
@@ -37,6 +39,22 @@ class BaseRepository:
         self.session.execute(
             delete(MessageCommentTable).where(
                 MessageCommentTable.message_id.in_(message_ids)
+            )
+        )
+        # Reports, and the rows recording that a reviewer read one. The reads
+        # go first: they hang off the report, not off the message, so the
+        # subquery cannot reach them once the reports are gone.
+        report_ids = select(MessageReportTable.id).where(
+            MessageReportTable.message_id.in_(message_ids)
+        )
+        self.session.execute(
+            delete(MessageReportReadTable).where(
+                MessageReportReadTable.report_id.in_(report_ids)
+            )
+        )
+        self.session.execute(
+            delete(MessageReportTable).where(
+                MessageReportTable.message_id.in_(message_ids)
             )
         )
         # Only the per-message vectors: a QA-pair or interview vector carries a

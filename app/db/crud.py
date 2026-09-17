@@ -19,6 +19,7 @@ from .repositories import (
     NewsletterRepository,
     ParticipantRepository,
     ProjectRepository,
+    ReportRepository,
     TestRepository,
     UserRepository,
     VerificationRepository,
@@ -67,6 +68,7 @@ class InterviewDataBase(PersistenceProtocol):
         self.embeddings: EmbeddingRepository = EmbeddingRepository(session)
         self.versions: VersionRepository = VersionRepository(session)
         self.content_docs: ContentDocRepository = ContentDocRepository(session)
+        self.reports: ReportRepository = ReportRepository(session)
 
     # ==================== Database Management ====================
 

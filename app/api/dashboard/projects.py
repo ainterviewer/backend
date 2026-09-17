@@ -875,6 +875,7 @@ def _filter_kwargs(filters: InterviewFilters) -> dict:
         "completed": filters.completed,
         "search": filters.search,
         "pid": filters.pid,
+        "reported": filters.reported,
     }
 
 
@@ -904,6 +905,7 @@ async def get_interviews(
     completed: Annotated[bool | None, Query()] = None,
     search: Annotated[str | None, Query(max_length=200)] = None,
     pid: Annotated[str | None, Query(max_length=200)] = None,
+    reported: Annotated[bool | None, Query()] = None,
 ) -> InterviewListResponse:
     """One page of interviews, with the filter options that fit the query.
 
@@ -915,6 +917,9 @@ async def get_interviews(
     `pid` narrows the list to a single participant and is matched exactly --
     it backs the "view interviews" link from the participants table, where the
     pid is already known.
+
+    `reported` narrows to interviews in which the respondent reported at least
+    one question, or to those in which they reported none.
     """
     if paginated_query.column not in SORTABLE_INTERVIEW_COLUMNS:
         # The repository raises ValueError, which would surface as a 500. A
@@ -938,6 +943,7 @@ async def get_interviews(
             completed=completed,
             search=search,
             pid=pid,
+            reported=reported,
         )
     )
 
