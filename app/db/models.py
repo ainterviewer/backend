@@ -50,7 +50,13 @@ from ..types import (
     TurnRole,
 )
 from ._extra import CustomEmailStr
-from .types import AccessRequestStatus, CodeKind, InterviewType
+from .types import (
+    AccessRequestStatus,
+    CodeKind,
+    InterviewType,
+    ReportReason,
+    ReportStatus,
+)
 
 
 # TODO: Implement across more endpoints
@@ -393,6 +399,8 @@ class InterviewSummaryPublic(_BaseModel):
     last_updated: datetime | None = None
     total_time_spent: int = 0
     n_messages: int
+    #: How many of this interview's questions the respondent reported.
+    n_reports: int = 0
     test_name: str | None = None
     # The participant this interview belongs to, joined in from the
     # participant record. NULL for interviews that were never distributed to
@@ -451,6 +459,9 @@ class MessagePublic(MessageBase):
     id: UUID4
     codings: list[CodingPublic] = []
     comments: list[MessageCommentPublic] = []
+    # Declared here, so every validation of a message reads the relationship:
+    # eager-load it with the rest in `InterviewRepository._message_options`.
+    reports: list[MessageReportPublic] = []
 
     @field_validator("comments", mode="after")
     @classmethod
@@ -723,6 +734,90 @@ class MessageCommentPublic(_BaseModel):
     author: AuthorPublic = Field(validation_alias=AliasChoices("author", "user"))
     # Only ever populated on a root comment: threads are two levels deep.
     replies: list[MessageCommentPublic] = []
+
+
+###########
+# Reports #
+###########
+
+
+class MessageReportCreate(_BaseModel):
+    """A respondent reporting one question of their own interview.
+
+    Carries no interview or project id: both come from the `interview_token`
+    cookie, so a respondent cannot report into somebody else's transcript by
+    naming it. Mirrors `MessageFeedbackRequest`.
+    """
+
+    #: Interview-scoped, so it only identifies a message together with the
+    #: interview the token names. The row uuid is resolved server-side.
+    message_id: int
+    reason: ReportReason
+    comment: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("comment", mode="after")
+    @classmethod
+    def _blank_is_none(cls, comment: str | None) -> str | None:
+        """An empty textarea is no comment, not a comment of "".
+
+        The dialog submits its comment field whether or not the respondent
+        typed in it, so without this a whitespace-only string would be stored
+        and the reviewer's queue would show a report that appears to carry a
+        note and does not.
+        """
+        if comment is None:
+            return None
+        return comment.strip() or None
+
+
+class MessageReportPublic(_BaseModel):
+    """A report as a reviewer sees it.
+
+    Both review tracks are exposed, as is the respondent's comment. The
+    reporter is not named because there is nothing to name: a respondent holds
+    no account, and the interview the report hangs off already says whose it
+    was.
+    """
+
+    id: UUID4
+    message_id: UUID4
+    interview_id: UUID4
+    project_id: UUID4
+    reason: ReportReason
+    comment: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    status: ReportStatus
+    resolved_by_id: UUID4 | None = None
+    resolved_at: datetime | None = None
+
+    admin_status: ReportStatus
+    admin_resolved_by_id: UUID4 | None = None
+    admin_resolved_at: datetime | None = None
+
+
+class MessageReportRowPublic(MessageReportPublic):
+    """A report with the context a reviewer needs to judge it.
+
+    The question's wording, the project it belongs to and the respondent's pid
+    are joined in rather than left to the client: a queue of report ids is not
+    something anyone can review, and a reviewer holding one page cannot resolve
+    a message id against a transcript they have not opened.
+
+    `read_by_me` is the calling reviewer's own read state, not a property of
+    the report -- a project member and a platform admin looking at the same
+    report each see their own.
+    """
+
+    #: The interview-scoped number of the reported message, as the transcript
+    #: shows it. `message_id` above is the row uuid.
+    question_number: int
+    question: str
+    project_title: str
+    language: LanguageCode = "EN"
+    pid: str | None = None
+    read_by_me: bool = False
 
 
 ##############

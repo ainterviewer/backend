@@ -43,6 +43,38 @@ class AccessRequestStatus(StrEnum):
     DENIED = "denied"
 
 
+class ReportReason(StrEnum):
+    """Why a respondent reported an interviewer's question.
+
+    A closed list rather than free text because the reason is what the review
+    queues are filtered and counted by, and because a respondent who is being
+    asked something offensive should be able to say so in one tap. ``OTHER``
+    is what makes the list honest: it exists so that the four options never
+    have to be stretched to cover something they do not, and a report carrying
+    it is expected to carry a comment as well.
+    """
+
+    INAPPROPRIATE = "inappropriate"
+    OFFENSIVE = "offensive"
+    IRRELEVANT = "irrelevant"
+    OTHER = "other"
+
+
+class ReportStatus(StrEnum):
+    """Where a report has got to in one review queue.
+
+    A report carries two of these, one per reviewer -- see
+    ``MessageReportTable``. ``DISMISSED`` is distinct from ``RESOLVED``
+    because "I have looked at this and there is nothing to do" and "I have
+    looked at this and fixed it" are different answers, and collapsing them
+    would make the resolved count meaningless.
+    """
+
+    OPEN = "open"
+    RESOLVED = "resolved"
+    DISMISSED = "dismissed"
+
+
 class InterviewType(StrEnum):
     MANUAL_TEST = "manual_test"
     SYNTHETIC_TEST = "synthetic_test"

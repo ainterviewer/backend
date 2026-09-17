@@ -28,6 +28,8 @@ from ..models import (
     InterviewPublic,
     InterviewSummaryPublic,
     MessagePublic,
+    MessageReportCreate,
+    MessageReportPublic,
 )
 from ..tables import (
     CodingTable,
@@ -36,6 +38,7 @@ from ..tables import (
     InterviewResumeTokenTable,
     InterviewTable,
     MessageCommentTable,
+    MessageReportTable,
     MessageTable,
     ParticipantTable,
     PlatformReleaseTable,
@@ -62,6 +65,7 @@ SORTABLE_INTERVIEW_COLUMNS = frozenset(
         "n_messages",
         "test_name",
         "pid",
+        "n_reports",
     }
 )
 """Columns `get_interviews` will sort by.
@@ -178,6 +182,21 @@ class InterviewRepository(BaseRepository):
         self.session.commit()
 
     @staticmethod
+    def _n_reports_column():
+        """How many questions a respondent reported in this interview.
+
+        A correlated count rather than a join: joining the reports would
+        multiply the interview row by them, and the list is a page of
+        interviews. Mirrors `InterviewTable.n_messages`.
+        """
+        return (
+            select(func.count(MessageReportTable.id))
+            .where(MessageReportTable.interview_id == InterviewTable.id)
+            .scalar_subquery()
+            .label("n_reports")
+        )
+
+    @staticmethod
     def _test_name_column():
         """Mirrors InterviewTable.test_name: only synthetic test runs carry one."""
         return case(
@@ -226,6 +245,7 @@ class InterviewRepository(BaseRepository):
         completed: bool | None = None,
         search: str | None = None,
         pid: str | None = None,
+        reported: bool | None = None,
     ) -> dict[str, ColumnElement[bool]]:
         """The active filters, keyed by the facet each one belongs to.
 
@@ -279,6 +299,17 @@ class InterviewRepository(BaseRepository):
             # participant's interviews" link from the participants table.
             filters["pid"] = ParticipantTable.pid == pid
 
+        if reported is not None:
+            # EXISTS rather than comparing a count: an interview either has a
+            # reported question or it does not, and the database can stop at
+            # the first one it finds.
+            has_report = (
+                select(MessageReportTable.id)
+                .where(MessageReportTable.interview_id == InterviewTable.id)
+                .exists()
+            )
+            filters["reported"] = has_report if reported else ~has_report
+
         if search and (term := search.strip()):
             pattern = f"%{term}%"
             filters["search"] = or_(
@@ -309,6 +340,7 @@ class InterviewRepository(BaseRepository):
         completed: bool | None = None,
         search: str | None = None,
         pid: str | None = None,
+        reported: bool | None = None,
     ) -> tuple[Sequence[InterviewSummaryPublic], int]:
         """One page of interview summaries, plus the total matching count.
 
@@ -324,6 +356,7 @@ class InterviewRepository(BaseRepository):
 
         test_name = self._test_name_column()
         pid_column = ParticipantTable.pid.label("pid")
+        n_reports = self._n_reports_column()
 
         if sorting_column == "last_updated":
             # Interviews written before last_updated was maintained still have
@@ -340,6 +373,9 @@ class InterviewRepository(BaseRepository):
             # is built from rather than by the output label, which only
             # Postgres would resolve.
             _sorting_col = test_name
+        elif sorting_column == "n_reports":
+            # Likewise a subquery rather than a column.
+            _sorting_col = n_reports
         else:
             _sorting_col = getattr(InterviewTable, sorting_column)
 
@@ -355,6 +391,7 @@ class InterviewRepository(BaseRepository):
                 completed=completed,
                 search=search,
                 pid=pid,
+                reported=reported,
             ).values()
         )
 
@@ -372,6 +409,7 @@ class InterviewRepository(BaseRepository):
                     InterviewTable.n_messages.label("n_messages"),
                     test_name,
                     pid_column,
+                    n_reports,
                 )
             )
             .where(*conditions)
@@ -526,6 +564,7 @@ class InterviewRepository(BaseRepository):
         completed: bool | None = None,
         search: str | None = None,
         pid: str | None = None,
+        reported: bool | None = None,
     ) -> dict[str, dict[str, int]]:
         """Distinct values and their counts for each filterable column.
 
@@ -544,12 +583,25 @@ class InterviewRepository(BaseRepository):
             completed=completed,
             search=search,
             pid=pid,
+            reported=reported,
         )
 
         columns = {
             "status": InterviewTable.status,
             "language": InterviewTable.language,
             "type": InterviewTable.type,
+            # Not a column but a yes/no reading of one: the filter is a
+            # boolean, so the facet has to offer the two values it accepts
+            # rather than every distinct count.
+            "reported": case(
+                (
+                    select(MessageReportTable.id)
+                    .where(MessageReportTable.interview_id == InterviewTable.id)
+                    .exists(),
+                    "true",
+                ),
+                else_="false",
+            ),
         }
 
         facets: dict[str, dict[str, int]] = {}
@@ -558,7 +610,13 @@ class InterviewRepository(BaseRepository):
                 condition for key, condition in filters.items() if key != facet
             ]
             statement = (
-                self._join_filter_sources(select(column, func.count()))
+                # `select_from` rather than letting the joins infer their left
+                # side: the `reported` facet's column is an expression, not an
+                # InterviewTable column, and with that leftmost SQLAlchemy
+                # cannot tell what the outer joins hang off.
+                self._join_filter_sources(
+                    select(column, func.count()).select_from(InterviewTable)
+                )
                 .where(*conditions)
                 .group_by(column)
             )
@@ -605,6 +663,12 @@ class InterviewRepository(BaseRepository):
             .joinedload(MessageCommentTable.user)
             if full
             else noload(InterviewTable.messages),
+            # `MessagePublic` declares `reports`, so the transcript reads the
+            # relationship whether or not this is here; without it that is a
+            # query per message. Same reasoning as `_message_options`.
+            selectinload(InterviewTable.messages).selectinload(MessageTable.reports)
+            if full
+            else noload(InterviewTable.messages),
         ]
 
         statement = (
@@ -648,11 +712,15 @@ class InterviewRepository(BaseRepository):
     def _message_options():
         """Eager-load what MessagePublic serializes.
 
-        `MessagePublic` declares `codings` and `comments`, and each of those
-        declares children of its own (the coding's author, the comment's
-        replies), so validating a message emits a query per relationship --
-        one per message, whether or not any exist. selectinload collapses that
-        into a fixed number of queries for the whole result set.
+        `MessagePublic` declares `codings`, `comments` and `reports`, and the
+        first two declare children of their own (the coding's author, the
+        comment's replies), so validating a message emits a query per
+        relationship -- one per message, whether or not any exist.
+        selectinload collapses that into a fixed number of queries for the
+        whole result set.
+
+        Anything added to `MessagePublic` belongs here too, or it costs a
+        query per message on every transcript read.
         """
         return (
             selectinload(MessageTable.codings).joinedload(CodingTable.user),
@@ -660,6 +728,7 @@ class InterviewRepository(BaseRepository):
             selectinload(MessageTable.comments)
             .selectinload(MessageCommentTable.replies)
             .joinedload(MessageCommentTable.user),
+            selectinload(MessageTable.reports),
         )
 
     def insert_message(
@@ -748,6 +817,46 @@ class InterviewRepository(BaseRepository):
         )
         self.session.execute(statement)
         self.session.commit()
+
+    def create_message_report(
+        self,
+        interview_id: UUID4,
+        project_id: UUID4,
+        report: MessageReportCreate,
+    ) -> MessageReportPublic:
+        """Record a respondent's report of one interviewer question.
+
+        `report.message_id` is the interview-scoped integer the respondent's
+        client knows; the report stores the message's row uuid, so the lookup
+        happens here. Raises NoResultFound when that message is not in this
+        interview, which is what scopes the write -- the caller passes the
+        interview and project from the token, never from the request body.
+
+        Reports are appended, never updated: reporting the same question twice
+        is two reports. A respondent who reports, reconsiders and reports
+        again has said something a reviewer should see, and collapsing it onto
+        one row would hide the second reason behind the first.
+        """
+        message_uuid = self.session.execute(
+            select(MessageTable.id).where(
+                MessageTable.message_id == report.message_id,
+                MessageTable.interview_id == interview_id,
+                MessageTable.project_id == project_id,
+            )
+        ).scalar_one()
+
+        row = MessageReportTable(
+            message_id=message_uuid,
+            interview_id=interview_id,
+            project_id=project_id,
+            reason=report.reason,
+            comment=report.comment,
+        )
+        self.session.add(row)
+        self.session.commit()
+        self.session.refresh(row)
+
+        return MessageReportPublic.model_validate(row)
 
     def get_last_message(
         self,

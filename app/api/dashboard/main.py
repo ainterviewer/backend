@@ -7,6 +7,7 @@ from . import (
     folders,
     participants,
     projects,
+    reports,
     synthesize,
 )
 
@@ -18,4 +19,5 @@ router.include_router(experiments.router)
 router.include_router(folders.router)
 router.include_router(participants.router)
 router.include_router(projects.router)
+router.include_router(reports.router)
 router.include_router(synthesize.router)

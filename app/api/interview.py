@@ -22,6 +22,7 @@ from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode, MessageRole, TestType
 
 from ..auth import AuthToken, InterviewToken, create_interview_token, hash_token
+from ..db.models import MessageReportCreate, MessageReportPublic
 from ..db.repositories.errors import ResumeTokenError
 from ..db.types import InterviewType
 from ..dependencies import (
@@ -327,6 +328,35 @@ async def put_feedback(
         message_id=feedback_request.message_id,
         feedback=feedback_request.feedback,
     )
+
+
+# Not `/report`: that prefix is the analysis router's generated reports (see
+# `app.api.dashboard.analysis.report`), and this is a respondent reporting one
+# question. Sibling of `/feedback` above.
+@router.post("/report-question", response_model=MessageReportPublic, status_code=201)
+async def report_message(
+    interview_token: InterviewCredential,
+    report: MessageReportCreate,
+    db: DBSession,
+) -> MessageReportPublic:
+    """Record a respondent's report of one interviewer message.
+
+    Scoped exactly as `put_feedback`: the interview and project come from the
+    interview token, never from the body, so a report can only ever land on a
+    message of the caller's own transcript. The respondent holds no account,
+    which is why this is the interview credential and not an account token.
+
+    A POST rather than a PATCH because reports accumulate -- see
+    `InterviewRepository.create_message_report`.
+    """
+    try:
+        return db.interviews.create_message_report(
+            interview_id=interview_token.interview_id,
+            project_id=interview_token.project_id,
+            report=report,
+        )
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail="Message not found")
 
 
 def _checked_interview(db: DBSession, project_id: UUID4, interview_id: UUID4) -> None:

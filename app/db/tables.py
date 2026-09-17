@@ -52,6 +52,8 @@ from .types import (
     EmbeddingTask,
     InterviewType,
     LanguageType,
+    ReportReason,
+    ReportStatus,
     VerificationPurpose,
 )
 
@@ -862,6 +864,11 @@ class MessageTable(Base):
     embeddings: Mapped[list["EmbeddingTable"]] = relationship(
         back_populates="message", cascade="all, delete-orphan"
     )
+    reports: Mapped[list["MessageReportTable"]] = relationship(
+        back_populates="message",
+        cascade="all, delete-orphan",
+        order_by="MessageReportTable.created_at",
+    )
 
     @hybrid_property
     def interview_type(self) -> InterviewType | None:
@@ -1139,6 +1146,131 @@ class MessageCommentTable(Base):
     parent: Mapped[Optional["MessageCommentTable"]] = relationship(
         back_populates="replies", remote_side="MessageCommentTable.id"
     )
+
+
+###########
+# Reports #
+###########
+
+
+class MessageReportTable(Base):
+    """A respondent's report of one interviewer question.
+
+    This is the respondent's own channel, and the only one they have: they
+    hold no account, so the report is written under the ``interview_token``
+    cookie and can only ever land on a message of their own interview (see
+    ``app.api.interview.report_message``). It is deliberately not
+    ``MessageTable.feedback``, which is a thumbs rating -- "I disliked this"
+    and "this question is offensive" are different claims, and a report
+    carries a reason and a note besides.
+
+    ``interview_id`` and ``project_id`` are denormalized from the message, as
+    on ``TaskTable`` and ``EmbeddingTable``. Both review queues are scoped to
+    a project and read alongside the interview list, and without them every
+    such query is a three-table join back through ``message``.
+
+    **Two review tracks.** ``status``/``resolved_by_id``/``resolved_at`` is
+    the project owner's, ``admin_status``/``admin_resolved_by_id``/
+    ``admin_resolved_at`` the platform admin's. They are separate columns
+    rather than one status because an owner resolving "badly worded, I will
+    fix the guide" and an admin resolving "safety issue, reviewed" are
+    different acts on different queues: neither must be able to clear the
+    other's. Both start ``OPEN``.
+
+    ``ondelete="SET NULL"`` on the resolver foreign keys, as on
+    ``AccessRequestTable.processed_by_id``: deleting the member who reviewed a
+    report must not delete the record that it was reviewed.
+    """
+
+    __tablename__ = "message_report"
+    __table_args__ = (
+        Index("ix_message_report_message_id", "message_id"),
+        Index("ix_message_report_interview_id", "interview_id"),
+        # Both queues list a project's open reports newest-first.
+        Index(
+            "ix_message_report_project_id_status_created_at",
+            "project_id",
+            "status",
+            "created_at",
+        ),
+    )
+
+    message_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("message.id", ondelete="CASCADE")
+    )
+    interview_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("interview.id", ondelete="CASCADE")
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE")
+    )
+    reason: Mapped[ReportReason] = mapped_column(SQLEnum(ReportReason))
+    #: The respondent's own words. Optional on every reason but expected on
+    #: ``OTHER``, which says nothing on its own.
+    comment: Mapped[str | None] = mapped_column(Text, default=None)
+    created_at: Mapped[datetime.datetime] = mapped_column(default=now)
+    updated_at: Mapped[datetime.datetime] = mapped_column(default=now, onupdate=now)
+
+    # Project-owner review track
+    status: Mapped[ReportStatus] = mapped_column(
+        SQLEnum(ReportStatus), default=ReportStatus.OPEN
+    )
+    resolved_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), default=None
+    )
+    resolved_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
+
+    # Platform-admin review track
+    admin_status: Mapped[ReportStatus] = mapped_column(
+        SQLEnum(ReportStatus), default=ReportStatus.OPEN
+    )
+    admin_resolved_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), default=None
+    )
+    admin_resolved_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
+
+    # Relationships
+    message: Mapped["MessageTable"] = relationship(back_populates="reports")
+    resolved_by: Mapped[Optional["UserTable"]] = relationship(
+        foreign_keys=[resolved_by_id]
+    )
+    admin_resolved_by: Mapped[Optional["UserTable"]] = relationship(
+        foreign_keys=[admin_resolved_by_id]
+    )
+    reads: Mapped[list["MessageReportReadTable"]] = relationship(
+        back_populates="report", cascade="all, delete-orphan"
+    )
+
+
+class MessageReportReadTable(Base):
+    """One reviewer has seen one report.
+
+    A join row rather than a list of ids on the report, so that "unread by me"
+    is a condition the database can answer: a JSON array can be neither joined
+    nor counted, which is exactly what the queue needs it for. The same shape
+    as ``CollaboratorTable`` -- a unique pair plus the timestamp.
+
+    Not scoped to a reviewer *role*: a project member and a platform admin
+    both read the same row, and which queue they were looking at is not what
+    "I have seen this" means.
+    """
+
+    __tablename__ = "message_report_read"
+    __table_args__ = (
+        UniqueConstraint("report_id", "user_id", name="uq_message_report_read"),
+    )
+
+    report_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("message_report.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), index=True
+    )
+    read_at: Mapped[datetime.datetime] = mapped_column(default=now)
+
+    # Relationships
+    report: Mapped["MessageReportTable"] = relationship(back_populates="reads")
+    user: Mapped["UserTable"] = relationship()
 
 
 ##############

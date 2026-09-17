@@ -1,10 +1,12 @@
-from sqlalchemy import Select, delete
+from sqlalchemy import Select, delete, select
 from sqlalchemy.orm import Session
 
 from ..tables import (
     CodingTable,
     EmbeddingTable,
     MessageCommentTable,
+    MessageReportReadTable,
+    MessageReportTable,
 )
 
 
@@ -17,10 +19,10 @@ class BaseRepository:
     def _delete_message_children(self, message_ids: Select) -> None:
         """Delete the analysis rows hanging off a set of messages.
 
-        Call this before deleting messages with a Core `delete()`. Codings and
-        comments both declare ON DELETE CASCADE, but SQLite only enforces
-        foreign keys on connections that ran
-        `PRAGMA foreign_keys=ON` and the app does not currently do that, so the
+        Call this before deleting messages with a Core `delete()`. Codings,
+        comments and reports all declare ON DELETE CASCADE, but SQLite only
+        enforces foreign keys on connections that ran `PRAGMA
+        foreign_keys=ON` and the app does not currently do that, so the
         cascade never fires and the rows are orphaned instead -- which is how
         the orphaned task and interviewee rows already in the database got
         there. An ORM `session.delete()` on the message does not need this: it
@@ -38,6 +40,22 @@ class BaseRepository:
         self.session.execute(
             delete(MessageCommentTable).where(
                 MessageCommentTable.message_id.in_(message_ids)
+            )
+        )
+        # Reports, and the rows recording that a reviewer read one. The reads
+        # go first: they hang off the report, not off the message, so the
+        # subquery cannot reach them once the reports are gone.
+        report_ids = select(MessageReportTable.id).where(
+            MessageReportTable.message_id.in_(message_ids)
+        )
+        self.session.execute(
+            delete(MessageReportReadTable).where(
+                MessageReportReadTable.report_id.in_(report_ids)
+            )
+        )
+        self.session.execute(
+            delete(MessageReportTable).where(
+                MessageReportTable.message_id.in_(message_ids)
             )
         )
         # Only the per-message vectors: a QA-pair or interview vector carries a

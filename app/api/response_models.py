@@ -30,6 +30,9 @@ class InterviewFacets(BaseModel):
     status: list[FacetCount] = []
     language: list[FacetCount] = []
     type: list[FacetCount] = []
+    #: "true"/"false" rather than a set of values: the filter behind it asks
+    #: whether an interview has any reported questions at all.
+    reported: list[FacetCount] = []
 
 
 class InterviewListResponse(PaginatedResponse[InterviewSummaryPublic]):

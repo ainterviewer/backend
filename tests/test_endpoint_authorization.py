@@ -1,4 +1,4 @@
-"""Every project-scoped analysis endpoint checks the caller's role on it.
+"""Every project-scoped analysis and review endpoint checks the caller's role.
 
 A scope check says the caller is a signed-in user; it says nothing about *which*
 projects are theirs. Since `project_id` comes off the URL, an endpoint carrying
@@ -14,6 +14,7 @@ analysis API is visible at once. See the note in `app/api/main.py`.
 import pytest
 from fastapi.routing import APIRoute
 
+from app.api.dashboard import reports
 from app.api.dashboard.analysis import (
     codes,
     comments,
@@ -23,7 +24,10 @@ from app.api.dashboard.analysis import (
 )
 from app.dependencies import ResourceRoleChecker
 
-MODULES = [codes, comments, embeddings, monitoring, report]
+# `reports` is not an analysis module, but its routes are project-scoped and
+# act on ids that arrive in a request body, which is exactly the shape these
+# two tests exist to guard.
+MODULES = [codes, comments, embeddings, monitoring, report, reports]
 
 
 def project_routes():

@@ -58,8 +58,10 @@ def messages_to_dataframe(
     """Normalize interview messages into a flat DataFrame for export.
 
     Nested/optional fields (feedback, attachment, image, survey_item,
-    codings) are coerced to strings so the result can be written to
-    csv/xlsx without struct columns.
+    codings, reports) are coerced to strings so the result can be written to
+    csv/xlsx without struct columns. Reports also get flat ``n_reports`` and
+    ``report_reasons`` columns, which are what an analyst can actually count
+    and filter on.
 
     When ``external_params`` is given, one ``ext_<name>`` column per declared
     param is added to every row, filled from that message's interview in
@@ -102,6 +104,24 @@ def messages_to_dataframe(
             d["codings"] = json.dumps(codings)
         else:
             d["codings"] = ""
+
+        # Reports get three columns rather than one. The JSON keeps the whole
+        # record, but nothing can be counted or filtered in a spreadsheet from
+        # a JSON string -- and "how often was this question reported, and what
+        # for" is the question an analyst brings to it. The reasons are joined
+        # rather than one column each: a question may be reported twice for
+        # different reasons, so a column per reason would be mostly empty and
+        # still not say how many.
+        #
+        # Serialized here rather than left to `fix_nested_columns`, which the
+        # csv path applies to whatever nested columns are left: that keeps csv
+        # working but renders an unreported message as "[]", and the xlsx path
+        # does not run it at all. An empty cell is what the other optional
+        # fields above give an analyst. `comments` is still left to it.
+        reports = d.get("reports") or []
+        d["n_reports"] = len(reports)
+        d["report_reasons"] = "; ".join(report["reason"] for report in reports)
+        d["reports"] = json.dumps(reports) if reports else ""
 
         rows.append(d)
 
