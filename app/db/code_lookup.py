@@ -113,6 +113,15 @@ class CodeIndex:
             index += 1
         return found
 
+    def ids_under(self, code_id: UUID) -> tuple[UUID, ...]:
+        """`code_id` and everything beneath it, or empty if there is no such
+        code in this project. What `/*` selects, for a caller that already has
+        an id and so has nothing to place."""
+        code = self._by_id.get(code_id)
+        if code is None:
+            return ()
+        return tuple(descendant.id for descendant in self._descendants(code))
+
     def subtrees(self) -> dict[UUID, tuple[UUID, ...]]:
         """Every code in the project, with the ids `/*` on it would select.
 

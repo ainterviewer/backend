@@ -1026,6 +1026,35 @@ class EmbeddingSimilarResponse(_BaseModel):
     items: list[EmbeddingSearchHit] = []
 
 
+class EmbeddingCodeSimilarResponse(_BaseModel):
+    """One page of the corpus ranked against what a code has been applied to.
+
+    "More like this" with a code for the this. Where the single-chunk version
+    ranks against one stored vector, this ranks against the average of every
+    chunk the code sits on -- so what it is near is the code as it has been
+    *used*, which is a different claim from the code as it was *defined*, and
+    the two actions in the panel are deliberately both there.
+    """
+
+    code_id: UUID4
+    #: Chunks the centroid was averaged from. The number that says how much to
+    #: trust the ranking: one seed is "more like this chunk" wearing a code's
+    #: name, and a code nothing has been applied to cannot be asked at all.
+    #:
+    #: Those chunks are in the results too, and near the top by construction.
+    #: Left in deliberately -- whether the seeds sit together is what the
+    #: ranking says about the code itself -- and `-code:x` in the keyword query
+    #: is how a reader asks for only where it has not reached.
+    seeds: int = 0
+    candidates: int = 0
+    total: int = 0
+    #: How many distinct interviews the counted chunks come from -- see
+    #: `EmbeddingSimilarResponse.interviews`.
+    interviews: int = 0
+    offset: int = 0
+    items: list[EmbeddingSearchHit] = []
+
+
 class EmbeddingBrowseResponse(_BaseModel):
     """One page of the corpus with no query behind it.
 

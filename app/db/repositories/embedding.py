@@ -2,7 +2,7 @@
 
 import hashlib
 import logging
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal, Protocol
@@ -893,18 +893,26 @@ class EmbeddingRepository(BaseRepository):
         this deciding it: a bare `code:` is "both", never the caller's default,
         and that rule lives in one place.
         """
-        ids = self._codebook(project_id).resolve(term)
-        scope = resolve_scope(term, filters.keyword_scope)
+        return self._carries_code(
+            source,
+            self._codebook(project_id).resolve(term),
+            resolve_scope(term, filters.keyword_scope),
+        )
 
-        def coded(column):
-            return self._coded_on(column, ids)
+    def _carries_code(self, source, ids: tuple[UUID, ...], scope: Scope = "both"):
+        """Whether a message row carries one of `ids`, on the side `scope` asks.
 
-        on_answer = coded(source.c.id)
+        The predicate behind both readings of a code: the grammar's `code:`
+        term, and the centroid that "find more like these" is built from. One
+        expression, so what a code *selects* and what it is *averaged over*
+        cannot come apart.
+        """
+        on_answer = self._coded_on(source.c.id, ids)
         # NULL where the row before was not an interviewer turn, exactly as
         # `question_content` is, so a respondent writing twice running has no
         # question of their own to have been coded.
         on_question = and_(
-            source.c.question_id.is_not(None), coded(source.c.question_id)
+            source.c.question_id.is_not(None), self._coded_on(source.c.question_id, ids)
         )
 
         if scope == "answer":
@@ -2003,7 +2011,7 @@ class EmbeddingRepository(BaseRepository):
         query_vector: list[float] | np.ndarray,
         limit: int,
         offset: int = 0,
-        exclude: UUID | None = None,
+        exclude: Collection[UUID] = (),
     ) -> EmbeddingSearchPage:
         """Score every candidate, return one page of the ranking.
 
@@ -2014,8 +2022,8 @@ class EmbeddingRepository(BaseRepository):
         pin to a session.
         """
         scored = len(rows)
-        if exclude is not None:
-            rows = [row for row in rows if row[0] != exclude]
+        if exclude:
+            rows = [row for row in rows if row[0] not in exclude]
         # The candidate rows carry their interview, so the spread of the
         # ranking is a set over rows already read rather than a second query.
         interviews = len({row[2] for row in rows})
@@ -2113,8 +2121,108 @@ class EmbeddingRepository(BaseRepository):
         ).all()
 
         return source, self._rank(
-            rows, decode_vector(source.vector), limit, offset, exclude=source.id
+            rows, decode_vector(source.vector), limit, offset, exclude={source.id}
         )
+
+    def like_code(
+        self,
+        *,
+        project_id: UUID,
+        code_ids: tuple[UUID, ...],
+        kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
+        task: EmbeddingTask = EmbeddingTask.DOCUMENT,
+        limit: int = 10,
+        offset: int = 0,
+        filters: EmbeddingFilters | None = None,
+    ) -> tuple[int, EmbeddingSearchPage]:
+        """The corpus ranked against the average of what a code sits on.
+
+        "More like this" with a code for the this. The seed set is exactly what
+        a bare `code:` term selects -- both sides of the exchange, through the
+        same `_carries_code` predicate -- so the passages this is built from
+        are the passages the filter would have shown.
+
+        Costs no inference, like `similar_to`: every vector it needs is already
+        stored, so this works with the embedding server down.
+
+        The seeds stay in the ranking. Dropping them would be this method
+        deciding what the reader meant -- and taking away the one thing the
+        ranking says about the code itself, which is whether the passages it
+        was built from actually sit together. A seed ranking low is a seed
+        somebody coded loosely, and that is worth seeing.
+
+        Narrowing to where the code has *not* reached is a filter, and the
+        grammar already has it: `-code:x` in the keyword box, which composes
+        with everything else and says exactly which code it means. A flag here
+        would be a second way to say the same thing.
+
+        Deliberately not filtered to the seeds' coders or to a subtree
+        decision: `code_ids` is whatever the caller resolved, which is one code
+        or a branch, and the caller is the one that knows which was asked for.
+        """
+        source = self._message_source(project_id)
+        seeds = self.session.execute(
+            select(EmbeddingTable.id, EmbeddingTable.vector).where(
+                EmbeddingTable.project_id == project_id,
+                EmbeddingTable.kind == kind,
+                EmbeddingTable.task == task,
+                self._lift_to_unit(kind, source, self._carries_code(source, code_ids)),
+            )
+        ).all()
+
+        if not seeds:
+            # Refused rather than answered with the corpus in arbitrary order:
+            # a centroid of nothing is not a query, and ranking against a zero
+            # vector would return everything at a score of 0 and look like an
+            # answer.
+            #
+            # Which of the two reasons it is matters to the reader, and the
+            # count they are looking at cannot tell them. A badge counts what
+            # the *filter* reaches, and browsing works on a project nobody has
+            # embedded -- so a code can read 1 beside an action that has no
+            # vector to average. Saying "nothing has been coded with this"
+            # there would be a plain lie.
+            carried = self.session.execute(
+                select(func.count())
+                .select_from(source)
+                .where(
+                    *self._embeddable_conditions(source),
+                    self._carries_code(source, code_ids),
+                )
+            ).scalar_one()
+            if carried:
+                raise ValueError(
+                    "The passages coded with this have not been embedded yet, "
+                    "so there is nothing to average — they are still findable "
+                    "by filtering to the code."
+                )
+            raise ValueError(
+                "Nothing has been coded with this yet, so there is nothing to "
+                "be like — search by the code's definition instead."
+            )
+
+        stacked = np.frombuffer(
+            b"".join(row[1] for row in seeds), dtype=VECTOR_DTYPE
+        ).reshape(len(seeds), -1)
+        centroid = stacked.mean(axis=0)
+        # Back to unit length, because the stored vectors are and the scores are
+        # read as cosines. The mean of unit vectors is shorter than one -- the
+        # more the seeds disagree, the shorter -- so leaving it would scale
+        # every score by how incoherent the code is and show that as relevance.
+        norm = float(np.linalg.norm(centroid))
+        if norm > 0:
+            centroid = centroid / norm
+
+        rows = self.session.execute(
+            self._candidate_statement(
+                project_id=project_id,
+                kind=kind,
+                task=task,
+                filters=filters or EmbeddingFilters(),
+            ).add_columns(EmbeddingTable.interview_id)
+        ).all()
+
+        return len(seeds), self._rank(rows, centroid, limit, offset)
 
     def vectors_for(
         self,

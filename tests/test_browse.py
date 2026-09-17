@@ -7,11 +7,12 @@ it a second time, in SQL, and these are what keep the two expressions saying the
 same thing.
 """
 
+import math
 import uuid
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 
@@ -22,7 +23,11 @@ from ainterviewer.types import EmbeddingKind, MessageRole, MessageType
 from app.db.keyword_query import KeywordQueryError
 from app.db.models import INTERVIEW_PREVIEW_TURNS, EmbeddingSearchHit
 from app.db.regexp import register_regexp
-from app.db.repositories.embedding import EmbeddingFilters, EmbeddingRepository
+from app.db.repositories.embedding import (
+    EmbeddingFilters,
+    EmbeddingRepository,
+    encode_vector,
+)
 from app.db.tables import (
     Base,
     CodeTable,
@@ -2315,3 +2320,211 @@ class TestCodeFacets:
         assert self.counts(corpus, keyword="code:Fatigue AND stressed") == self.counts(
             corpus, keyword="stressed"
         )
+
+
+def embed_messages(session):
+    """A stored MESSAGE vector for every respondent turn in the project.
+
+    Two dimensions and a spread of directions, so a centroid of two seeds is
+    not simply one of them again and the ranking has something to order by.
+    The real numbers come from a model; what a test needs is only that they
+    differ.
+    """
+    rows = (
+        session.execute(
+            select(MessageTable)
+            .where(
+                MessageTable.project_id == PROJECT,
+                MessageTable.role == MessageRole.USER,
+            )
+            .order_by(MessageTable.message_id)
+        )
+        .scalars()
+        .all()
+    )
+    for index, message in enumerate(rows):
+        angle = index * math.pi / (2 * max(len(rows), 1))
+        session.add(
+            EmbeddingTable(
+                id=uuid.uuid4(),
+                kind=EmbeddingKind.MESSAGE,
+                project_id=PROJECT,
+                interview_id=message.interview_id,
+                message_id=message.id,
+                section=message.section,
+                main_question=message.main_question,
+                model="test",
+                dim=2,
+                chunk_key=f"message-{message.id}",
+                content_hash=f"hash-{message.id}",
+                vector=encode_vector([math.cos(angle), math.sin(angle)]),
+            )
+        )
+    session.flush()
+
+
+class TestLikeCode:
+    """`like_code` -- the corpus ranked against what a code has been used on.
+
+    The ranking itself is `_rank`'s and is tested with the search; what these
+    pin is which chunks the centroid is built from, and which are left out of
+    the answer.
+    """
+
+    @pytest.fixture
+    def corpus(self, session):
+        """Four embedded answers, two of them coded."""
+        builder = Builder(session)
+        first = builder.exchange(
+            "How is work?", "I am stressed.", section=0, question=0
+        )
+        second = builder.exchange("And then?", "Very tired.", section=1, question=0)
+        builder.exchange("At home?", "Fine, thanks.", section=2, question=0)
+        builder.exchange("Anything else?", "Not really.", section=3, question=0)
+
+        self.parent = CodeTable(
+            id=uuid.uuid4(), project_id=PROJECT, name="Wellbeing", kind=CodeKind.GROUP
+        )
+        self.strain = CodeTable(
+            id=uuid.uuid4(),
+            project_id=PROJECT,
+            parent_id=self.parent.id,
+            name="Strain",
+            kind=CodeKind.TAG,
+        )
+        self.fatigue = CodeTable(
+            id=uuid.uuid4(),
+            project_id=PROJECT,
+            parent_id=self.parent.id,
+            name="Fatigue",
+            kind=CodeKind.TAG,
+        )
+        self.unused = CodeTable(
+            id=uuid.uuid4(), project_id=PROJECT, name="Unused", kind=CodeKind.TAG
+        )
+        session.add_all([self.parent, self.strain, self.fatigue, self.unused])
+        for code, message in ((self.strain, first), (self.fatigue, second)):
+            session.add(
+                CodingTable(
+                    id=uuid.uuid4(),
+                    code_id=code.id,
+                    message_id=message.id,
+                    user_id=uuid.uuid4(),
+                )
+            )
+        session.flush()
+        embed_messages(session)
+        return session
+
+    def like(self, session, ids, **kwargs):
+        return EmbeddingRepository(session).like_code(
+            project_id=PROJECT,
+            code_ids=ids,
+            kind=EmbeddingKind.MESSAGE,
+            limit=10,
+            **kwargs,
+        )
+
+    def test_it_averages_the_chunks_the_code_sits_on(self, corpus):
+        seeds, _ = self.like(corpus, (self.strain.id,))
+
+        assert seeds == 1
+
+    def test_a_branch_averages_every_code_under_it(self, corpus):
+        seeds, _ = self.like(corpus, (self.parent.id, self.strain.id, self.fatigue.id))
+
+        assert seeds == 2
+
+    def test_the_seeds_are_in_the_answer(self, corpus):
+        """Kept rather than hidden. Whether the passages a code was built from
+        sit together is the one thing this ranking says about the code itself,
+        and a reader who wants only where it has *not* reached has `-code:x`,
+        which is precise about which code it means."""
+        _, page = self.like(corpus, (self.strain.id,))
+
+        assert page.total == 4
+        assert page.scored == 4
+        assert len(page.hits) == 4
+
+    def test_a_negated_term_is_how_a_reader_looks_away_from_them(self, corpus):
+        """The filter the reader already has, rather than a flag here saying
+        the same thing.
+
+        Exact under MESSAGE, where a chunk *is* the coded row. Under a grouped
+        unit it is the looser reading `-code:` has everywhere -- checked per
+        message and then lifted, so a question group holding one coded turn and
+        one uncoded one survives it. That difference is the grammar's and is
+        pinned in `TestCodeFilter`; it is restated here because this is where a
+        reader is pointed at the term.
+        """
+        _, page = self.like(
+            corpus, (self.strain.id,), filters=EmbeddingFilters(keyword="-code:Strain")
+        )
+
+        assert page.total == 3
+
+    def test_a_coded_but_unembedded_code_says_so_instead(self, session):
+        """A badge counts what the *filter* reaches, and browsing works on a
+        project nobody has embedded -- so a code can read 1 beside an action
+        with no vector to average. The two refusals must not be the same
+        sentence, because only one of them is true."""
+        builder = Builder(session)
+        answer = builder.exchange("How is work?", "I am stressed.")
+        code = CodeTable(
+            id=uuid.uuid4(), project_id=PROJECT, name="Strain", kind=CodeKind.TAG
+        )
+        session.add(code)
+        session.add(
+            CodingTable(
+                id=uuid.uuid4(),
+                code_id=code.id,
+                message_id=answer.id,
+                user_id=uuid.uuid4(),
+            )
+        )
+        session.flush()
+        # Deliberately not embedded.
+
+        with pytest.raises(ValueError, match="not been embedded"):
+            self.like(session, (code.id,))
+
+    def test_a_code_nothing_carries_is_refused(self, corpus):
+        """Not answered with the corpus in arbitrary order: a centroid of
+        nothing is not a query, and a zero vector would score everything the
+        same and look like an answer."""
+        with pytest.raises(ValueError, match="nothing to be like"):
+            self.like(corpus, (self.unused.id,))
+
+    def test_it_ranks_within_the_filters(self, corpus):
+        seeds, page = self.like(
+            corpus, (self.strain.id,), filters=EmbeddingFilters(keyword="tired")
+        )
+
+        assert seeds == 1
+        assert page.total == 1
+
+    def test_a_coding_on_the_question_seeds_it_too(self, session):
+        """The seed set is what a bare `code:` term selects, both sides of the
+        exchange -- so what it is built from is what the filter would show."""
+        builder = Builder(session)
+        asked = builder.say(
+            MessageRole.ASSISTANT, "You must be exhausted?", section=0, question=0
+        )
+        builder.say(MessageRole.USER, "Not especially.", section=0, question=0)
+        code = CodeTable(
+            id=uuid.uuid4(), project_id=PROJECT, name="Leading", kind=CodeKind.TAG
+        )
+        session.add(code)
+        session.add(
+            CodingTable(
+                id=uuid.uuid4(),
+                code_id=code.id,
+                message_id=asked.id,
+                user_id=uuid.uuid4(),
+            )
+        )
+        session.flush()
+        embed_messages(session)
+
+        seeds, _ = self.like(session, (code.id,))
+        assert seeds == 1

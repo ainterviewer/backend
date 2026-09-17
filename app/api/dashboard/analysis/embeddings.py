@@ -26,6 +26,7 @@ from ....db.models import (
     EmbeddingCluster,
     EmbeddingClusterPoint,
     EmbeddingClusterResponse,
+    EmbeddingCodeSimilarResponse,
     EmbeddingGroup,
     EmbeddingSearchHit,
     EmbeddingSearchResponse,
@@ -999,6 +1000,89 @@ async def read_interview_transcript(
         raise HTTPException(404, detail="Interview not found")
 
     return InterviewTranscript(interview_id=interview_id, turns=turns)
+
+
+@router.get("/projects/{project_id}/analysis/embeddings/codes/{code_id}/similar")
+async def find_embeddings_like_code(
+    project_id: UUID4,
+    code_id: UUID4,
+    db: DBSession,
+    jwt: ProjectViewer,
+    filter_params: Annotated[SearchFilterParams, Depends()],
+    page: Annotated[SearchPageParams, Depends()],
+    kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
+    subtree: bool = False,
+    whole_interviews: bool = False,
+) -> EmbeddingCodeSimilarResponse:
+    """Chunks most like the ones a code has been applied to -- "find more like
+    these".
+
+    The other half of searching from a code, and the half that only exists once
+    there is coded data. *Searching by definition* asks what the code says it
+    is and needs nothing but the words; this asks what it has *become* in the
+    hands of whoever applied it, which on a code used fifty times is a
+    different and usually better query. Neither replaces the other, and a code
+    nobody has used yet can only be asked the first.
+
+    Costs no inference: every vector is already stored, so it works with the
+    embedding server down.
+
+    The already-coded chunks are in the results, near the top by construction.
+    Left there rather than hidden: whether they sit together is the one thing
+    this ranking says about the code *itself*, and a seed ranking low is a
+    passage somebody coded loosely. A reader who wants only where the code has
+    not reached writes `-code:x` in the keyword query, which is precise about
+    which code it means and composes with every other filter.
+
+    `subtree` averages the branch instead of the one code, which is what
+    `code:x/*` selects. A GROUP is never applied on its own, so asking one
+    without it is a query with no seeds -- a 409 saying so.
+    """
+    # Resolved either way, so that a code from another project is a 404 rather
+    # than a centroid with no seeds wearing a 409.
+    index = CodeIndex.for_project(db.session, project_id)
+    branch = index.ids_under(code_id)
+    if not branch:
+        raise HTTPException(404, detail="Code not found")
+    ids = branch if subtree else (code_id,)
+
+    try:
+        seeds, result = await run_in_threadpool(
+            db.embeddings.like_code,
+            project_id=project_id,
+            code_ids=ids,
+            kind=kind,
+            limit=page.limit,
+            offset=page.offset,
+            filters=filter_params.filters,
+        )
+    except ValueError as error:
+        raise HTTPException(409, detail=str(error))
+
+    turns = db.embeddings.turns_for(
+        [hit.embedding for hit in result.hits],
+        filter_params.filters,
+        whole_interviews=whole_interviews,
+    )
+    numbers = db.embeddings.interview_numbers(project_id)
+
+    return EmbeddingCodeSimilarResponse(
+        code_id=code_id,
+        seeds=seeds,
+        candidates=result.scored,
+        total=result.total,
+        interviews=result.interviews,
+        offset=page.offset,
+        items=[
+            EmbeddingSearchHit.from_hit(
+                hit.embedding,
+                hit.score,
+                turns.get(hit.embedding.id),
+                numbers.get(hit.embedding.interview_id),
+            )
+            for hit in result.hits
+        ],
+    )
 
 
 @router.get("/projects/{project_id}/analysis/embeddings/{embedding_id}/similar")
