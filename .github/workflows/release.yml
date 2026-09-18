@@ -65,6 +65,9 @@ jobs:
             type=ref,event=tag
             # Tag 'latest' ONLY if it is NOT a pre-release (no 'rc' in tag)
             type=raw,value=latest,enable=${{ !contains(github.ref, 'rc') }}
+            # Staging follows every release, release candidates included, so a
+            # candidate can be exercised there without moving the tag prod follows.
+            type=raw,value=staging
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
