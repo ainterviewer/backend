@@ -7,7 +7,7 @@ from sqlalchemy.exc import NoResultFound
 from ..dependencies import DBSession
 from ..openapi import build_openapi_schema
 from ..platform_release import PlatformManifest, PlatformRelease
-from . import auth, interview, misc, notifications
+from . import auth, interview, me, misc
 from .admin import main as admin
 from .dashboard import main as dashboard
 
@@ -36,7 +36,7 @@ router.include_router(interview.router)
 router.include_router(auth.router)
 router.include_router(admin.router)
 router.include_router(misc.router)
-router.include_router(notifications.router)
+router.include_router(me.router)
 
 
 @router.get("/openapi.json", include_in_schema=False)

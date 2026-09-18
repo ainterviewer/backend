@@ -771,12 +771,19 @@ class MessageReportCreate(_BaseModel):
 
 
 class MessageReportPublic(_BaseModel):
-    """A report as a reviewer sees it.
+    """A report as the project sees it.
 
-    Both review tracks are exposed, as is the respondent's comment. The
-    reporter is not named because there is nothing to name: a respondent holds
-    no account, and the interview the report hangs off already says whose it
-    was.
+    Carries the project's own review track and **not** the platform's. The
+    admin track is the platform's internal moderation record: whether a
+    reviewer there judged a question offensive or waved it through is not a
+    project member's business, and it is left off this model rather than
+    merely hidden in the UI -- a column can be hidden while the value still
+    sits in the JSON.
+
+    `MessageReportAdminPublic` is the wider view, served only to the platform
+    queue. The respondent is not named because there is nothing to name: they
+    hold no account, and the interview the report hangs off already says whose
+    it was.
     """
 
     id: UUID4
@@ -791,6 +798,14 @@ class MessageReportPublic(_BaseModel):
     status: ReportStatus
     resolved_by_id: UUID4 | None = None
     resolved_at: datetime | None = None
+
+
+class MessageReportAdminPublic(MessageReportPublic):
+    """A report including the platform's own review track.
+
+    Served only where the caller is a platform admin. Everything project-side
+    uses the narrower `MessageReportPublic`.
+    """
 
     admin_status: ReportStatus
     admin_resolved_by_id: UUID4 | None = None
@@ -818,6 +833,18 @@ class MessageReportRowPublic(MessageReportPublic):
     language: LanguageCode = "EN"
     pid: str | None = None
     read_by_me: bool = False
+
+
+class MessageReportAdminRowPublic(MessageReportRowPublic):
+    """A queue row for the platform's own review.
+
+    The admin track is added back here, and only here: the project queue is
+    served `MessageReportRowPublic`, which has no field for it.
+    """
+
+    admin_status: ReportStatus
+    admin_resolved_by_id: UUID4 | None = None
+    admin_resolved_at: datetime | None = None
 
 
 ##############

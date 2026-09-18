@@ -14,7 +14,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from pydantic import UUID4, BaseModel
 
-from ...db.models import MessageReportRowPublic
+from ...db.models import MessageReportAdminRowPublic
 from ...db.types import ReportStatus
 from ...dependencies import AdminToken, DBSession
 
@@ -40,17 +40,20 @@ async def get_reports(
     jwt: AdminToken,
     statuses: Annotated[list[ReportStatus] | None, Query()] = None,
     unread_only: Annotated[bool, Query()] = False,
-) -> list[MessageReportRowPublic]:
+) -> list[MessageReportAdminRowPublic]:
     """Every report there is, newest first, with the question it is about.
+
+    The only place the platform's own review track is served: everywhere
+    project-side gets `MessageReportRowPublic`, which has no field for it --
+    see `MessageReportPublic`.
 
     `statuses` filters on the admin track, not the project's: this queue is
     about what the platform has reviewed. Unfiltered by default so that the
     page can count and facet the whole set client-side, as the other admin
     tables do.
     """
-    return db.reports.list_reports(
+    return db.reports.list_admin_reports(
         user_id=jwt.user_id,
-        track="admin",
         statuses=statuses,
         unread_only=unread_only,
     )

@@ -145,15 +145,26 @@ def test_a_report_lands_on_the_message_of_the_named_interview(interviews, sessio
     assert saved.comment == "This is none of your business."
 
 
-def test_both_review_tracks_start_open(interviews):
+def test_both_review_tracks_start_open(interviews, session):
+    """Asserted on the row, not on what the respondent is handed back.
+
+    `MessageReportPublic` deliberately carries only the project track -- the
+    platform's review is internal, and a model that could serialize it to a
+    respondent or a project member is the thing that must not exist. The
+    defaults still belong to the row, so that is where they are checked.
+    """
     saved = report(interviews)
 
     assert saved.status is ReportStatus.OPEN
-    assert saved.admin_status is ReportStatus.OPEN
     assert saved.resolved_by_id is None
-    assert saved.admin_resolved_by_id is None
     assert saved.resolved_at is None
-    assert saved.admin_resolved_at is None
+    assert not [field for field in saved.model_dump() if field.startswith("admin_")]
+
+    row = session.get(MessageReportTable, saved.id)
+    assert row is not None
+    assert row.admin_status is ReportStatus.OPEN
+    assert row.admin_resolved_by_id is None
+    assert row.admin_resolved_at is None
 
 
 def test_a_message_id_from_another_interview_is_not_found(interviews, session):
@@ -318,7 +329,6 @@ def test_a_reported_question_exports_as_text():
         created_at=when,
         updated_at=when,
         status=ReportStatus.OPEN,
-        admin_status=ReportStatus.OPEN,
     )
 
     frame = messages_to_dataframe([message([reported]), message([])])
@@ -359,7 +369,6 @@ def test_several_reports_on_one_question_export_as_one_row():
             created_at=when,
             updated_at=when,
             status=ReportStatus.OPEN,
-            admin_status=ReportStatus.OPEN,
         )
 
     frame = messages_to_dataframe(
