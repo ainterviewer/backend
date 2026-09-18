@@ -196,7 +196,7 @@ def test_the_admin_listing_spans_every_project(reports, interviews, session):
     theirs = report(interviews, project_id=THEIRS)
     admin = user(session, "Admin")
 
-    listed = reports.list_reports(admin, track="admin")
+    listed = reports.list_admin_reports(admin)
 
     assert {row.id for row in listed} == {ours.id, theirs.id}
 
@@ -264,13 +264,11 @@ def test_a_status_filter_reads_the_named_track(reports, interviews, session):
 
     reports.resolve(owner, [saved.id], ReportStatus.RESOLVED, "owner")
 
-    still_open = reports.list_reports(
-        admin, track="admin", statuses=[ReportStatus.OPEN]
-    )
+    still_open = reports.list_admin_reports(admin, statuses=[ReportStatus.OPEN])
     assert [row.id for row in still_open] == [saved.id]
 
     owner_open = reports.list_reports(
-        owner, project_id=OURS, track="owner", statuses=[ReportStatus.OPEN]
+        owner, project_id=OURS, statuses=[ReportStatus.OPEN]
     )
     assert owner_open == []
 
@@ -463,3 +461,78 @@ def test_another_reviewer_s_read_does_not_clear_my_count(reports, interviews, se
 
     assert reports.unread_count(ada, track="owner") == 0
     assert reports.unread_count(grace, track="owner") == 1
+
+
+# ------------------------------------------------- the cross-project inbox
+
+
+def test_the_inbox_spans_every_project_the_user_collaborates_on(
+    reports, interviews, session
+):
+    member = user(session)
+    collaborator(session, member)
+    ours = report(interviews, project_id=OURS)
+    theirs = report(interviews, project_id=THEIRS)
+
+    listed = reports.list_reports(member, collaborated_only=True)
+
+    assert {row.id for row in listed} == {ours.id, theirs.id}
+
+
+def test_the_inbox_is_empty_for_someone_with_no_projects(reports, interviews, session):
+    """The scoping is the whole of the access control here: there is no
+    project in the path for the endpoint to role-check."""
+    outsider = user(session, "Outsider")
+    report(interviews, project_id=OURS)
+
+    assert reports.list_reports(outsider, collaborated_only=True) == []
+
+
+def test_collaboration_scoping_is_not_implied_by_the_owner_track(
+    reports, interviews, session
+):
+    """A platform admin may read one project's owner-track queue without
+    collaborating on it -- the role checker lets them through, so scoping by
+    collaboration would hand them an empty page. The project endpoint
+    therefore passes `project_id` and not `collaborated_only`."""
+    admin = user(session, "Admin")
+    saved = report(interviews, project_id=OURS)
+
+    visible = reports.list_reports(admin, project_id=OURS)
+    assert [row.id for row in visible] == [saved.id]
+
+    # The same call with the inbox's scoping would see nothing.
+    assert reports.list_reports(admin, project_id=OURS, collaborated_only=True) == []
+
+
+# ------------------------------------------- the platform track stays internal
+
+
+def test_the_project_queue_does_not_carry_the_platform_s_review(
+    reports, interviews, session
+):
+    """A project member has no business knowing what the platform decided.
+
+    Asserted on the model rather than on a hidden column: a column can be
+    hidden while the value still sits in the JSON, which is what this exists
+    to prevent.
+    """
+    member = user(session)
+    collaborator(session, member)
+    report(interviews, project_id=OURS)
+
+    (row,) = reports.list_reports(member, project_id=OURS)
+
+    serialized = row.model_dump()
+    assert "status" in serialized
+    assert not [field for field in serialized if field.startswith("admin_")]
+
+
+def test_the_platform_queue_does_carry_it(reports, interviews, session):
+    admin = user(session, "Admin")
+    report(interviews, project_id=OURS)
+
+    (row,) = reports.list_admin_reports(admin)
+
+    assert row.admin_status is ReportStatus.OPEN
+    assert "admin_status" in row.model_dump()

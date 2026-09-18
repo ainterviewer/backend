@@ -61,7 +61,6 @@ async def get_project_reports(
     return db.reports.list_reports(
         user_id=jwt.user_id,
         project_id=project_id,
-        track="owner",
         statuses=statuses,
         unread_only=unread_only,
     )

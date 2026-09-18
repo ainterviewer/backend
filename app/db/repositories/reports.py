@@ -11,7 +11,7 @@ they pass a `project_id` and which track they name.
 
 import logging
 from collections.abc import Sequence
-from typing import Literal
+from typing import Literal, TypeVar
 
 from pydantic import UUID4
 from sqlalchemy import and_, func, insert, select, update
@@ -19,7 +19,11 @@ from sqlalchemy.orm import aliased
 
 from ainterviewer.utils import now
 
-from ..models import MessageReportPublic, MessageReportRowPublic
+from ..models import (
+    MessageReportAdminPublic,
+    MessageReportAdminRowPublic,
+    MessageReportRowPublic,
+)
 from ..tables import (
     CollaboratorTable,
     InterviewTable,
@@ -39,9 +43,35 @@ logger = logging.getLogger(__name__)
 #: Which of the two review tracks a listing filters on, or a resolve writes to.
 ReviewTrack = Literal["owner", "admin"]
 
+#: The row model a listing builds. Parameterising on it is what keeps the
+#: platform's review track out of the project queue: the narrow model has no
+#: field for it, so a caller cannot serialize it by accident.
+RowT = TypeVar("RowT", bound=MessageReportRowPublic)
+
 
 class ReportRepository(BaseRepository):
     """Repository for reviewing message reports."""
+
+    @staticmethod
+    def _collaborated_projects(user_id: UUID4):
+        """The projects this user has any role on, as a subquery.
+
+        Reached through the folder, exactly as
+        `ProjectRepository.get_user_role_on_project` does -- a project's owner
+        holds a collaborator row on its folder, so owners are included.
+        """
+        return (
+            select(ProjectTable.id)
+            .join(
+                ProjectFolderTable,
+                ProjectTable.folder_id == ProjectFolderTable.id,
+            )
+            .join(
+                CollaboratorTable,
+                CollaboratorTable.folder_id == ProjectFolderTable.id,
+            )
+            .where(CollaboratorTable.user_id == user_id)
+        )
 
     @staticmethod
     def _status_column(track: ReviewTrack):
@@ -51,22 +81,38 @@ class ReportRepository(BaseRepository):
             else MessageReportTable.admin_status
         )
 
-    def list_reports(
+    def _list_reports(
         self,
+        row_class: type[RowT],
         user_id: UUID4,
         project_id: UUID4 | None = None,
         track: ReviewTrack = "owner",
         statuses: list[ReportStatus] | None = None,
         unread_only: bool = False,
-    ) -> list[MessageReportRowPublic]:
+        collaborated_only: bool = False,
+    ) -> list[RowT]:
         """Every report a reviewer may see, newest first.
 
-        `project_id` is what separates the two callers: the project endpoint
-        passes it and sees one project, the admin endpoint omits it and sees
-        all of them. It is not optional in the sense of "convenient" -- an
-        endpoint that forgets it shows one project's members another's
-        reports, so the project router passes it from the path it already
-        role-checks.
+        Called through `list_reports` or `list_admin_reports`, which fix
+        `row_class` and the track together -- the two cannot be mixed up, so
+        the project queue has no way to come back carrying the platform's
+        review.
+
+        Scope comes from one of two places, and a caller outside the admin
+        queue must pass one of them:
+
+        * `project_id` -- one project, for the project endpoint, which has
+          already role-checked the id in its own path.
+        * `collaborated_only` -- every project the user has a role on, for
+          the cross-project inbox, which has no path to check.
+
+        Neither is optional in the sense of "convenient": with both left off
+        this returns every report on the platform, which is right for the
+        admin queue and a leak anywhere else. `collaborated_only` is
+        deliberately not implied by `track="owner"`, because a platform admin
+        may read one project's owner-track queue without collaborating on it
+        -- the role checker lets them through, and scoping by collaboration
+        would hand them an empty page instead.
 
         The question itself is joined in rather than left to the client. A
         report names a message by id, and a queue of ids is not something
@@ -117,6 +163,11 @@ class ReportRepository(BaseRepository):
         if project_id is not None:
             statement = statement.where(MessageReportTable.project_id == project_id)
 
+        if collaborated_only:
+            statement = statement.where(
+                MessageReportTable.project_id.in_(self._collaborated_projects(user_id))
+            )
+
         if statuses:
             statement = statement.where(self._status_column(track).in_(statuses))
 
@@ -124,8 +175,10 @@ class ReportRepository(BaseRepository):
             statement = statement.where(read.id.is_(None))
 
         return [
-            MessageReportRowPublic(
-                **MessageReportPublic.model_validate(report).model_dump(),
+            row_class(
+                **MessageReportAdminPublic.model_validate(report).model_dump(
+                    include=set(row_class.model_fields)
+                ),
                 question_number=question_number,
                 question=question,
                 project_title=project_title,
@@ -143,6 +196,48 @@ class ReportRepository(BaseRepository):
                 read_by_me,
             ) in self.session.execute(statement).all()
         ]
+
+    def list_reports(
+        self,
+        user_id: UUID4,
+        project_id: UUID4 | None = None,
+        statuses: list[ReportStatus] | None = None,
+        unread_only: bool = False,
+        collaborated_only: bool = False,
+    ) -> list[MessageReportRowPublic]:
+        """The project-side queue: one project's reports, or the caller's own.
+
+        Always the project track, and always the narrow row model -- see
+        `MessageReportPublic` for why the platform's review is not in it.
+        """
+        return self._list_reports(
+            MessageReportRowPublic,
+            user_id=user_id,
+            project_id=project_id,
+            track="owner",
+            statuses=statuses,
+            unread_only=unread_only,
+            collaborated_only=collaborated_only,
+        )
+
+    def list_admin_reports(
+        self,
+        user_id: UUID4,
+        statuses: list[ReportStatus] | None = None,
+        unread_only: bool = False,
+    ) -> list[MessageReportAdminRowPublic]:
+        """The platform queue: every report there is, with the admin track.
+
+        Takes no project and no collaboration scope: this is the whole
+        platform, which is the point of it.
+        """
+        return self._list_reports(
+            MessageReportAdminRowPublic,
+            user_id=user_id,
+            track="admin",
+            statuses=statuses,
+            unread_only=unread_only,
+        )
 
     def mark_read(
         self,
@@ -282,18 +377,7 @@ class ReportRepository(BaseRepository):
 
         if track == "owner":
             conditions.append(
-                MessageReportTable.project_id.in_(
-                    select(ProjectTable.id)
-                    .join(
-                        ProjectFolderTable,
-                        ProjectTable.folder_id == ProjectFolderTable.id,
-                    )
-                    .join(
-                        CollaboratorTable,
-                        CollaboratorTable.folder_id == ProjectFolderTable.id,
-                    )
-                    .where(CollaboratorTable.user_id == user_id)
-                )
+                MessageReportTable.project_id.in_(self._collaborated_projects(user_id))
             )
 
         return self.session.execute(
