@@ -4,6 +4,9 @@ on:
     tags:
       - "v*.*.*"
   workflow_dispatch:
+  # Pull requests run the test job only: the docker and github-release jobs
+  # below require a version tag ref, which a PR event never has.
+  pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -36,7 +39,8 @@ jobs:
       - name: Run pre-commit hooks
         run: uv run prek run --all-files
 
-      # - run: uv run pytest -q
+      - name: Run tests
+        run: uv run pytest -q
 
       - name: Minimize uv cache
         run: uv cache prune --ci
