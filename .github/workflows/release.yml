@@ -62,6 +62,19 @@ jobs:
       - uses: actions/checkout@v6
 
       # 1. NEW: Generate Docker tags and metadata automatically
+      # "Not a pre-release" is a stricter question than "does the tag say rc":
+      # uv also offers alpha and beta bumps, which produce v0.6.3a1 and v0.6.3b1.
+      # Neither contains "rc", so a substring test let them move the tag prod
+      # follows. Match the shape of a final release instead.
+      - name: Classify the ref
+        id: release
+        run: |
+          if [[ "$GITHUB_REF" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "final=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "final=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v6
@@ -70,11 +83,10 @@ jobs:
           tags: |
             # Tag with the git tag 
             type=ref,event=tag
-            # 'latest' is the tag prod follows, so it moves only for a real,
-            # non-pre-release version tag. The ref check carries the weight: a
-            # branch name contains no 'rc', so the pre-release guard on its own
-            # would happily publish a feature branch straight to prod.
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, 'rc') }}
+            # 'latest' is the tag prod follows. It moves only for a tag shaped
+            # exactly like a final release -- see the Classify step above, which
+            # covers branch refs and every pre-release spelling in one rule.
+            type=raw,value=latest,enable=${{ steps.release.outputs.final == 'true' }}
             # Staging follows every release, release candidates included, so a
             # candidate can be exercised there without moving the tag prod
             # follows. A manual run from a feature branch moves it too: that is
