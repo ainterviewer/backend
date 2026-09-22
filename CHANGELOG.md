@@ -4,6 +4,13 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.6.4] - 2026-09-22
+
+### Internal
+
+- Update db justfile recipes to match new ENV structure
+- Fix service settings default values
+
 ## [0.6.3] - 2026-09-22
 
 ### Internal
