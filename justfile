@@ -24,35 +24,45 @@ update-users:
     python -m app.db --create-users
 
 [doc("Fetches the latest daily backup db from the remote AWS server.
-Pass \"migrate\" to run `alembic upgrade head` on the fetched database.")]
+Pass \"migrate\" to run `alembic upgrade head` on the fetched database.
+ENV picks which environment's backups to pull from.")]
 [group("Database")]
-fetch-db MIGRATE="":
+fetch-db MIGRATE="" ENV="production":
     #!/usr/bin/env bash
     set -euo pipefail
     case "{{ MIGRATE }}" in
       ""|migrate) ;;
       *) echo "expected 'migrate' or nothing, got '{{ MIGRATE }}'" >&2; exit 1 ;;
     esac
+    case "{{ ENV }}" in
+      production|staging) ;;
+      *) echo "ENV must be 'production' or 'staging', got '{{ ENV }}'" >&2; exit 1 ;;
+    esac
     rm -f storage/db.sqlite*
-    scp aws-1:/var/backups/sqlite/app-daily-latest.db storage/db.sqlite
+    scp aws-1:/var/backups/sqlite/{{ ENV }}/app-daily-latest.db storage/db.sqlite
     if [ -n "{{ MIGRATE }}" ]; then
       uv run alembic upgrade head
     fi
 
 [doc("Run a backup on the remote out of band, exactly as cron does.
-WAL-safe (sqlite3 \".backup\"), so the backend keeps running.")]
+WAL-safe (sqlite3 \".backup\"), so the backend keeps running.
+ENV picks which environment's database to back up.")]
 [group("Database")]
-backup-db KIND="daily" HOST="aws-1":
+backup-db KIND="daily" ENV="production" HOST="aws-1":
     #!/usr/bin/env bash
     set -euo pipefail
     case "{{ KIND }}" in
       daily|weekly) ;;
       *) echo "KIND must be 'daily' or 'weekly', got '{{ KIND }}'" >&2; exit 1 ;;
     esac
+    case "{{ ENV }}" in
+      production|staging) ;;
+      *) echo "ENV must be 'production' or 'staging', got '{{ ENV }}'" >&2; exit 1 ;;
+    esac
     # sudo: the scripts live in root's crontab and write to root-owned
     # /var/backups/sqlite; they export the ubuntu AWS creds themselves.
-    ssh {{ HOST }} "/home/ubuntu/deploy/scripts/backups/sqlite_{{ KIND }}_backup.sh"
-    aws s3 ls s3://ainterviewer-sodas/data/backups/{{ KIND }}/ | tail -3
+    ssh {{ HOST }} "/home/ubuntu/deploy/scripts/backups/sqlite_{{ KIND }}_backup.sh {{ ENV }}"
+    aws s3 ls s3://ainterviewer-sodas/data/backups/{{ ENV }}/{{ KIND }}/ | tail -3
 
 [doc(" ENV/VERSION pick which archived manifest to copy in (VERSION defaults to newest).
 Copy a release — versions, notes and highlights — into the local dev database.")]
