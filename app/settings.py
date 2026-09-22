@@ -239,7 +239,13 @@ class Settings(BaseSettings):
 
     app: AppSettings = AppSettings()
     database: DatabaseSettings = DatabaseSettings()
-    services: ServiceSettings
+    # `default_factory`, not `ServiceSettings()`: the eager form is built at
+    # class-definition time and reads `APP_SERVICE__*` on its own, so a partial
+    # environment -- a .env carrying only the email passwords, with the rest of
+    # the section in config.toml -- fails validation before the toml source is
+    # ever consulted. Deferred, it runs only when config.toml supplies no
+    # `services` at all, which is the case in CI and in a fresh clone.
+    services: ServiceSettings = Field(default_factory=ServiceSettings)
 
     # TODO:
     # - Should the secrets be a standalone class so they cant be read
