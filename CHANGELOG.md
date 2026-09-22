@@ -4,6 +4,17 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.6.3] - 2026-09-22
+
+### Internal
+
+- Remove old dead translations module
+- Publish a staging tag on every release
+- Preview a feature branch on staging
+- Reenable pytest in release wf and run on pull requests
+- Better release version detection in wf
+- Bump lib version
+
 ## [0.6.2] - 2026-09-17
 
 ### Features
