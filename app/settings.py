@@ -166,6 +166,15 @@ class EmbeddingSettings(BaseModel):
     # rejected rather than split.
     batch_size: int = 32
 
+    # Budget for one request, applied on top of `batch_size` and measured as
+    # `count x longest input` in characters: the server pads every input in a
+    # batch out to the longest one, so that product is what a request costs,
+    # not the sum. 16000 is the measured throughput optimum on the reference
+    # box (see ../embedding/bench.py): it lands exactly on the best batch size
+    # for message- and QA-length chunks, and puts interview-length chunks in a
+    # request of their own, where they belong.
+    max_batch_chars: int = 16000
+
     # Truncation guard, in characters. The server was launched with
     # `--max-batch-tokens 8192 --auto-truncate`, so anything longer is silently
     # cut off at the far end; truncating here instead means it is logged and the
@@ -175,8 +184,11 @@ class EmbeddingSettings(BaseModel):
 
     # Generous on purpose: an interview-level chunk runs to the full 8k-token
     # input, and the reference deployment runs this model on CPU, where a batch
-    # of those takes far longer than any interactive request would.
-    timeout: float = 120.0
+    # of those takes far longer than any interactive request would. Kept above
+    # the proxy's own `request_timeout` so the server that knows why a request
+    # is slow is the one that gets to answer: timing out first here just turns
+    # its 502 into an empty ReadTimeout and abandons work still in flight.
+    timeout: float = 360.0
 
     # How long to wait on a server that is not answering at all. Split out from
     # `timeout` because the two measure different things: a dropped SYN -- a box

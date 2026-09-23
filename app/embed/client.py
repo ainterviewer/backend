@@ -216,6 +216,49 @@ class EmbeddingClient:
         except ValueError:
             return 5.0
 
+    def _batches(self, inputs: list[str]) -> list[list[int]]:
+        """Group `inputs` into requests, returning indices into `inputs`.
+
+        `batch_size` alone is the server's rejection threshold, not a statement
+        about how long a request takes: the chunks vary from a single message to
+        a whole transcript, so the same 32 inputs can be a few thousand
+        characters or the better part of a million. Batched by count only, the
+        long ones queue up behind each other inside one request and run past
+        `timeout`, which surfaces as an unreachable server and drops the whole
+        batch to the backfill.
+
+        The size budget is on `count x longest`, not on the sum: the server pads
+        every input in a batch out to the longest one, so one interview-level
+        chunk sets the price for everything sharing its request -- measured, one
+        long chunk plus seven short ones costs the same as eight long ones. That
+        is also why these are grouped by length: the queue interleaves message-,
+        section- and interview-level chunks, and taking them in arrival order
+        puts the expensive ones next to cheap ones that then pay their price.
+
+        Characters rather than tokens, to stay free of a tokenizer; at ~3.4
+        chars/token that errs towards smaller requests. An input over the budget
+        on its own still goes -- `truncate` has already capped it.
+        """
+        batches: list[list[int]] = []
+        current: list[int] = []
+
+        # Ascending, so the input being considered is always the longest in the
+        # batch it would join and its length alone sets the padded cost.
+        for index in sorted(range(len(inputs)), key=lambda i: len(inputs[i])):
+            padded = (len(current) + 1) * len(inputs[index])
+            if current and (
+                len(current) == self.settings.batch_size
+                or padded > self.settings.max_batch_chars
+            ):
+                batches.append(current)
+                current = []
+            current.append(index)
+
+        if current:
+            batches.append(current)
+
+        return batches
+
     async def embed_documents(self, texts: list[str]) -> list[list[float]]:
         """Embed passages, document-side: no instruction prefix, by design.
 
@@ -225,19 +268,26 @@ class EmbeddingClient:
             return []
 
         inputs = [self.truncate(text) for text in texts]
-        vectors: list[list[float]] = []
+        # Placed by index: `_batches` groups by length, so requests come back
+        # in no relation to the order the caller asked in.
+        vectors: list[list[float] | None] = [None] * len(inputs)
 
-        for start in range(0, len(inputs), self.settings.batch_size):
-            batch = inputs[start : start + self.settings.batch_size]
-            vectors.extend(await self._post_embed(batch))
+        for batch in self._batches(inputs):
+            returned = await self._post_embed([inputs[i] for i in batch])
+            if len(returned) != len(batch):
+                raise EmbeddingUnavailable(
+                    f"Embedding server returned {len(returned)} vectors for "
+                    f"{len(batch)} inputs"
+                )
+            for index, vector in zip(batch, returned):
+                vectors[index] = vector
 
-        if len(vectors) != len(texts):
+        if any(vector is None for vector in vectors):
             raise EmbeddingUnavailable(
-                f"Embedding server returned {len(vectors)} vectors for "
-                f"{len(texts)} inputs"
+                "Embedding server did not return a vector for every input"
             )
 
-        return vectors
+        return [vector for vector in vectors if vector is not None]
 
     async def embed_query(
         self, query: str, task: QueryTask = QueryTask.RETRIEVAL
