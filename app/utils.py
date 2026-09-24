@@ -32,6 +32,7 @@ from ainterviewer.interfaces import (
 )
 from ainterviewer.lpm.types import CustomToken
 from ainterviewer.settings import settings as lib_settings
+from ainterviewer.types import MessageType
 
 from .db.models import MessagePublic
 from .paths import APP_DIR
@@ -118,7 +119,12 @@ def replay_history(
         # if message.content in CustomTokens:
         #     continue
 
-        if message.skipped_by_condition:
+        # An override answer was given in the intervention's modal, never in
+        # the chat.
+        if (
+            message.skipped_by_condition
+            or message.message_type == MessageType.SECURITY_OVERRIDE
+        ):
             continue
 
         if message.image:
@@ -130,11 +136,16 @@ def replay_history(
             message_id=message.message_id,
             feedback=message.feedback,
             image=message.image,
+            security_intervention=message.security_intervention,
         )
 
         messages.append(data)
 
-    if (last_message := interview_history[-1]).role == "user":
+    if (last_message := interview_history[-1]).message_type == (
+        MessageType.SECURITY_OVERRIDE
+    ):
+        pass
+    elif last_message.role == "user":
         data = OutgoingHistoryMessage(
             content=last_message.content,
             role=last_message.role,
@@ -158,9 +169,11 @@ def replay_history(
                 content=last_message.content,
                 role=last_message.role,
                 message_id=last_message.message_id,
+                can_answer=last_message.can_answer,
                 feedback=last_message.feedback,
                 image=last_message.image,
                 survey_item=last_message.survey_item,
+                security_intervention=last_message.security_intervention,
             )
             messages.append(data)
 

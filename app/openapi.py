@@ -16,6 +16,7 @@ from ainterviewer.interfaces import (
     OutgoingHistoryMessage,
     OutgoingMessage,
     ReceivedData,
+    SecurityOverride,
 )
 from ainterviewer.lpm.types import CustomToken
 
@@ -38,6 +39,7 @@ EXTRA_MODELS = [
     OutgoingHistoryMessage,
     OutgoingMessage,
     ReceivedData,
+    SecurityOverride,
     TemplatePlaceholder,
 ]
 

@@ -11,6 +11,7 @@ from sqlalchemy.orm import joinedload, noload, selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.sql.elements import ColumnElement
 
+from ainterviewer.interfaces import SecurityIntervention
 from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
 from ainterviewer.types import (
     Feedback,
@@ -683,6 +684,7 @@ class InterviewRepository(BaseRepository):
         outro: bool = False,
         timed: bool = False,
         skipped_by_condition: bool = False,
+        security_intervention: SecurityIntervention | None = None,
     ) -> int:
         message = MessageTable(
             content=content,
@@ -704,6 +706,7 @@ class InterviewRepository(BaseRepository):
             outro=outro,
             timed=timed,
             skipped_by_condition=skipped_by_condition,
+            security_intervention=security_intervention,
         )
         self.session.add(message)
         try:

@@ -23,6 +23,7 @@ from sqlalchemy.sql import func
 
 from ainterviewer.agents.config import AgentConfigs
 from ainterviewer.config import InterviewConfig
+from ainterviewer.interfaces import SecurityIntervention
 from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
 from ainterviewer.interview_guides.extra import Consent, Welcome
 from ainterviewer.synthesize.interviewees import (
@@ -845,6 +846,11 @@ class MessageTable(Base):
     image: Mapped[Image | None] = mapped_column(PydanticJSONB(Image))
     survey_item: Mapped[SurveyItem | None] = mapped_column(PydanticJSONB(SurveyItem))
     skipped_by_condition: Mapped[bool] = mapped_column(default=False)
+    # Set on a message sent by the interview's security check, which the
+    # respondent is shown in a modal rather than in the chat.
+    security_intervention: Mapped[SecurityIntervention | None] = mapped_column(
+        PydanticJSONB(SecurityIntervention), default=None
+    )
 
     # Relationships
     interview: Mapped["InterviewTable"] = relationship(back_populates="messages")
