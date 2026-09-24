@@ -20,6 +20,7 @@ from pydantic import (
 
 from ainterviewer.agents.config import AgentConfigs
 from ainterviewer.config import InterviewConfig
+from ainterviewer.interfaces import SecurityIntervention
 from ainterviewer.interview_guides import (
     Image,
     InterviewGuide,
@@ -491,6 +492,7 @@ class MessageBase(_BaseModel):
     image: Image | list[Image] | None = None
     survey_item: SurveyItem | None = None
     skipped_by_condition: bool = False
+    security_intervention: SecurityIntervention | None = None
 
 
 class MessageCreate(_BaseModel):
@@ -514,6 +516,7 @@ class MessageCreate(_BaseModel):
     image: Image | list[Image] | None = None
     survey_item: SurveyItem | None = None
     skipped_by_condition: bool = False
+    security_intervention: SecurityIntervention | None = None
 
 
 class MessagePublic(MessageBase):

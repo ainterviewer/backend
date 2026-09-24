@@ -30,6 +30,7 @@ from ainterviewer.agents.config import (
     ProbingPromptSlots,
 )
 from ainterviewer.agents.prompts.agent_prompts import ProbingAgentPrompts
+from ainterviewer.agents.security_policy import SecurityPolicy, default_security_policy
 from ainterviewer.config import InterviewConfig
 from ainterviewer.interview_guides import (
     InterviewGuide,
@@ -740,6 +741,17 @@ async def get_prompt_defaults(jwt: DemoToken) -> ProbingPromptSlots:
     text for any slot a project has not overridden.
     """
     return DEFAULT_PROBING_SLOTS
+
+
+@router.get("/security-policy-defaults")
+async def get_security_policy_defaults(jwt: DemoToken) -> SecurityPolicy:
+    """The security policy a project gets unless it configures its own.
+
+    A project's policy lives on ``AgentConfigs.security.policy`` and is read and
+    written through the ``/agents`` endpoints. The frontend uses this to reset
+    an edited policy.
+    """
+    return default_security_policy()
 
 
 # NOTE: Doesn't require auth since it's not sensitive and has to be read

@@ -73,7 +73,8 @@ dev = [
 ]
 
 [tool.uv.sources]
-ainterviewer = { git = "https://github.com/ainterviewer/lib.git", tag = "v0.6.1" }
+# ainterviewer = { git = "https://github.com/ainterviewer/lib.git", tag = "v0.6.1" }
+ainterviewer = { git = "https://github.com/ainterviewer/lib.git", rev = "d5b85948bf2331b556409370da200281303ed636" }
 # ainterviewer = { path = "../lib", editable = true }
 
 [tool.locust]
@@ -115,7 +116,6 @@ extend-immutable-calls = [
 [tool.ruff.lint.isort]
 known-first-party = ["ainterviewer"]
 known-third-party = ["alembic"]
-
 
 [build-system]
 requires = ["hatchling"]
