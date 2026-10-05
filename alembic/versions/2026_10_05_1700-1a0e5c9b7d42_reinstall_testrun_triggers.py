@@ -1,14 +1,16 @@
 """reinstall the testrun triggers
 
-The first version of c7bde657f2c4 batch-altered `testrun` without uninstalling
-and reinstalling the touch-last_updated triggers around it. On SQLite that
-recreates the table and drops every trigger on it, so databases that ran it
-(prod, with v0.4.37) lost the six that bump testsetup.last_updated and
-project.last_updated when a test run changes.
+e5f2a91c4d80 (shipped in v0.4.31) batch-altered `testrun` to change its
+foreign keys without reinstalling the touch-last_updated triggers. On SQLite
+that recreates the table and drops every trigger on it, so prod and staging
+lost the six that bump testsetup.last_updated and project.last_updated when a
+test run changes, and ran without them for six weeks. (This was first blamed
+on c7bde657f2c4, whose first version had the same flaw, but the backups show
+the triggers were already gone before it ran.)
 
-c7bde657f2c4 now handles the triggers itself; this puts them back on the
-databases that ran it before. `install_triggers` drops and recreates every
-trigger, so it is a no-op wherever they are already in place.
+This puts them back. `install_triggers` drops and recreates every trigger, so it
+is a no-op wherever they are already in place. On main, alembic/env.py now
+reinstalls the triggers after every run, so this cannot recur.
 
 Revision ID: 1a0e5c9b7d42
 Revises: e2a7c1f09b3d

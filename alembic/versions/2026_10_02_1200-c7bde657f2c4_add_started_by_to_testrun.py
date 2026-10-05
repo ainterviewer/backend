@@ -11,8 +11,10 @@ upgraded to main.
 
 SQLite batch-altering `testrun` recreates the table, which drops the
 touch-last_updated triggers on it, so they are uninstalled first and
-reinstalled after. The first version of this migration did not, and left the
-databases it ran on without them; 1a0e5c9b7d42 reinstalls them there.
+reinstalled after. (The first version did not. It cost nothing in practice:
+prod and staging had already lost these triggers to e5f2a91c4d80. alembic/env.py
+now manages the triggers around every run, which makes the wrapping here
+redundant but harmless.)
 
 Revision ID: c7bde657f2c4
 Revises: d4f83a01c96b
