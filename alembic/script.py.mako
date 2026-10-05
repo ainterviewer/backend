@@ -5,13 +5,10 @@ Revises: ${down_revision | comma,n}
 Create Date: ${create_date}
 
 """
-# NOTE: If this migration uses `op.batch_alter_table` against any of `project`,
-# `projectlocalization`, `testsetup`, or `testrun` (the tables referenced by
-# the touch-last_updated triggers), wrap the upgrade/downgrade bodies with
-# `uninstall_triggers(op.get_bind())` before and
-# `install_triggers(op.get_bind())` after. SQLite batch-alter renames the
-# table, which breaks any trigger that references it by name. See
-# `app/db/triggers.py` and revision 3d64d3a385a1 for an example.
+# NOTE: Don't manage the touch-last_updated triggers here. alembic/env.py
+# uninstalls them before every run and reinstalls the full set from
+# app/db/triggers.py after, so batch_alter_table on `project`, `testrun` etc.
+# cannot lose or break them.
 from typing import Sequence, Union
 
 from alembic import op

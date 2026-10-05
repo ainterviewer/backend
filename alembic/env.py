@@ -17,6 +17,7 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 from app.db._extra import PydanticJSONB
 from app.db.tables import Base
+from app.db.triggers import install_triggers, uninstall_triggers
 
 target_metadata = Base.metadata
 
@@ -58,6 +59,20 @@ def _target_url() -> str | None:
     return context.get_x_argument(as_dictionary=True).get("db_url") or (
         config.get_main_option("sqlalchemy.url")
     )
+
+
+def _manages_triggers() -> bool:
+    """Whether this run should take the triggers down and put them back.
+
+    Only for commands that change the schema. env.py also runs for read-only
+    commands (current, history, check, ...), which must not write -- they may
+    be pointed at a read-only backup. Programmatic calls carry no command line
+    and are treated as changing, which is harmless: reinstalling is idempotent.
+    """
+    if config.cmd_opts is None:
+        return True
+    fn = config.cmd_opts.cmd[0]
+    return fn.__name__ in {"upgrade", "downgrade"}
 
 
 def run_migrations_offline() -> None:
@@ -105,8 +120,23 @@ def run_migrations_online() -> None:
             include_object=include_object,
         )
 
+        # The touch-last_updated triggers (app/db/triggers.py) are owned here,
+        # not by individual migrations. On SQLite, batch_alter_table rebuilds
+        # a table by copy-and-rename, which silently drops the triggers on it
+        # and breaks triggers elsewhere that name it; e5f2a91c4d80 lost the
+        # testrun triggers that way for six weeks. So every run takes them all
+        # down first and installs the full set from triggers.py last, in the
+        # same transaction: whatever a migration rebuilds, the database ends
+        # with every trigger, and a failed run rolls back with them intact.
+        # An upgrade with nothing to apply still reinstalls, so each deploy
+        # also repairs triggers lost any other way.
+        manage_triggers = _manages_triggers()
         with context.begin_transaction():
+            if manage_triggers:
+                uninstall_triggers(connection)
             context.run_migrations()
+            if manage_triggers:
+                install_triggers(connection)
 
 
 if context.is_offline_mode():

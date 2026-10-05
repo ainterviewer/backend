@@ -1,3 +1,5 @@
+import logging
+
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
 from sqlalchemy import Engine, select, text
@@ -21,7 +23,9 @@ from .repositories import (
     VerificationRepository,
 )
 from .tables import Base, PlatformReleaseTable
-from .triggers import install_triggers
+from .triggers import install_triggers, missing_triggers
+
+logger = logging.getLogger(__name__)
 
 
 class InterviewDataBase(PersistenceProtocol):
@@ -78,6 +82,23 @@ class InterviewDataBase(PersistenceProtocol):
 
     def on_startup(self):
         self.interviews.change_active_to_inactive()
+        self.check_triggers()
+
+    def check_triggers(self) -> list[str]:
+        """Log an error naming any maintained trigger the database lacks.
+
+        Alembic reinstalls them on every upgrade, so this should stay quiet; it
+        is here because losing them is otherwise silent -- the testrun triggers
+        were once missing for six weeks before anyone noticed.
+        """
+        missing = missing_triggers(self.session.connection())
+        if missing:
+            logger.error(
+                "Database is missing triggers %s; last_updated will not "
+                "propagate for them. Run `alembic upgrade head` to reinstall.",
+                ", ".join(missing),
+            )
+        return missing
 
     def on_shutdown(self) -> None:
         if (

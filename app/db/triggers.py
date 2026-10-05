@@ -1,13 +1,13 @@
 """Database triggers maintained as live behavior, not frozen migration history.
 
-Migrations import from this module so the latest definitions get applied. To
-change a trigger, edit the SQL here and write a new migration that calls
-`install_triggers` (the install functions drop existing triggers first, so they
-are safe to re-run).
+alembic/env.py owns them: every `alembic upgrade` or `downgrade` uninstalls them
+before running migrations and installs the full set defined here afterwards, in
+the same transaction. Migrations therefore need not (and should not) manage
+them, and a batch_alter_table that rebuilds a table cannot lose them. To change
+a trigger, edit the SQL here; the next deploy's `alembic upgrade head` applies
+it, even with no new migration.
 
-See alembic migration #9c7f4f2f91ab for how to apply the triggers to the database.
-A new similar migration should be made whenever the triggers change, so they will
-be applied to the databases automatically on deployment.
+`missing_triggers` reports any that a database lacks; the app logs it on startup.
 """
 
 from sqlalchemy import text
@@ -296,6 +296,21 @@ _SQLITE_CREATE_STATEMENTS_TESTRUN_TO_PROJECT = (
     """,
 )
 
+# Every trigger this module maintains, per dialect -- what `install_triggers`
+# creates and what `missing_triggers` expects to find.
+_SQLITE_ALL_TRIGGER_NAMES = (
+    _SQLITE_TRIGGER_NAMES
+    + _SQLITE_TRIGGER_NAMES_TESTRUN_TO_TESTSETUP
+    + _SQLITE_TRIGGER_NAMES_TESTSETUP_TO_PROJECT
+    + _SQLITE_TRIGGER_NAMES_TESTRUN_TO_PROJECT
+)
+_PG_ALL_TRIGGER_NAMES = (
+    "trg_projectlocalization_touch_project",
+    "trg_testrun_touch_testsetup",
+    "trg_testsetup_touch_project",
+    "trg_testrun_touch_project",
+)
+
 
 def install_triggers(connection: Connection) -> None:
     """(Re)install all DB triggers. Safe to call on existing or fresh DBs."""
@@ -320,19 +335,13 @@ def install_triggers(connection: Connection) -> None:
         return
 
     if dialect == "sqlite":
-        all_names = (
-            _SQLITE_TRIGGER_NAMES
-            + _SQLITE_TRIGGER_NAMES_TESTRUN_TO_TESTSETUP
-            + _SQLITE_TRIGGER_NAMES_TESTSETUP_TO_PROJECT
-            + _SQLITE_TRIGGER_NAMES_TESTRUN_TO_PROJECT
-        )
         all_statements = (
             _SQLITE_CREATE_STATEMENTS
             + _SQLITE_CREATE_STATEMENTS_TESTRUN_TO_TESTSETUP
             + _SQLITE_CREATE_STATEMENTS_TESTSETUP_TO_PROJECT
             + _SQLITE_CREATE_STATEMENTS_TESTRUN_TO_PROJECT
         )
-        for name in all_names:
+        for name in _SQLITE_ALL_TRIGGER_NAMES:
             connection.execute(text(f"DROP TRIGGER IF EXISTS {name};"))
         for stmt in all_statements:
             connection.execute(text(stmt))
@@ -360,14 +369,31 @@ def uninstall_triggers(connection: Connection) -> None:
         return
 
     if dialect == "sqlite":
-        all_names = (
-            _SQLITE_TRIGGER_NAMES
-            + _SQLITE_TRIGGER_NAMES_TESTRUN_TO_TESTSETUP
-            + _SQLITE_TRIGGER_NAMES_TESTSETUP_TO_PROJECT
-            + _SQLITE_TRIGGER_NAMES_TESTRUN_TO_PROJECT
-        )
-        for name in all_names:
+        for name in _SQLITE_ALL_TRIGGER_NAMES:
             connection.execute(text(f"DROP TRIGGER IF EXISTS {name};"))
         return
 
     raise NotImplementedError(f"Unsupported dialect for triggers: {dialect}")
+
+
+def missing_triggers(connection: Connection) -> list[str]:
+    """The triggers this module maintains that the database does not have.
+
+    Empty when they are all in place. Migrations reinstall the full set on every
+    upgrade (see alembic/env.py), so a non-empty result means the database was
+    changed outside Alembic -- a restored backup, a manual fix -- and running
+    `alembic upgrade head` puts them back.
+    """
+    dialect = connection.dialect.name
+
+    if dialect == "postgresql":
+        expected = _PG_ALL_TRIGGER_NAMES
+        query = "SELECT tgname FROM pg_trigger WHERE NOT tgisinternal"
+    elif dialect == "sqlite":
+        expected = _SQLITE_ALL_TRIGGER_NAMES
+        query = "SELECT name FROM sqlite_master WHERE type = 'trigger'"
+    else:
+        raise NotImplementedError(f"Unsupported dialect for triggers: {dialect}")
+
+    present = set(connection.execute(text(query)).scalars())
+    return [name for name in expected if name not in present]
