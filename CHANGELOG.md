@@ -4,6 +4,23 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.4.37] - 2026-10-05
+
+### Features
+
+- (synthesize) Limit demo users' synthetic interviews per user
+- (auth) Add password reset via emailed magic link
+
+### Bug Fixes
+
+- (websockets) Stop enqueueing messages on the unconsumed embedding queue
+- (export) Infer the messages dataframe schema from every row
+
+### Internal
+
+- Fix fetch-db backup path
+- (release) Don't move latest from release/0.4.x
+
 ## [0.4.36] - 2026-08-27
 
 ### Features
