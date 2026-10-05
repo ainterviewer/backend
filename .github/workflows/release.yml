@@ -61,10 +61,11 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            # Tag with the git tag 
+            # Tag with the git tag
             type=ref,event=tag
-            # Tag 'latest' ONLY if it is NOT a pre-release (no 'rc' in tag)
-            type=raw,value=latest,enable=${{ !contains(github.ref, 'rc') }}
+            # No 'latest' on release/0.4.x: this is a maintenance line behind
+            # main, and moving 'latest' here would point it back to old code.
+            type=raw,value=latest,enable=false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -116,3 +117,5 @@ jobs:
         with:
           body_path: ${{ steps.cliff.outputs.changelog }}
           prerelease: ${{ contains(github.ref, 'rc') }}
+          # Keep main's newest release as GitHub's "Latest" (see 'latest' above).
+          make_latest: false
