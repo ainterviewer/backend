@@ -105,7 +105,10 @@ def messages_to_dataframe(
 
         rows.append(d)
 
-    return pl.from_dicts(rows)
+    # Infer from every row: optional columns (pid, ext_* params) can be null
+    # for the first 100 rows and then hold strings, which the default sample
+    # types as Null and then fails to append to.
+    return pl.from_dicts(rows, infer_schema_length=None)
 
 
 def write_messages_xlsx(df: pl.DataFrame, target: "str | IO[bytes]") -> None:
