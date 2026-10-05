@@ -61,7 +61,7 @@ backup-db KIND="daily" ENV="production" HOST="aws-1":
     esac
     # sudo: the scripts live in root's crontab and write to root-owned
     # /var/backups/sqlite; they export the ubuntu AWS creds themselves.
-    ssh {{ HOST }} "/home/ubuntu/deploy/scripts/backups/sqlite_{{ KIND }}_backup.sh {{ ENV }}"
+    ssh {{ HOST }} "sudo /home/ubuntu/deploy/scripts/backups/sqlite_{{ KIND }}_backup.sh {{ ENV }}"
     aws s3 ls s3://ainterviewer-sodas/data/backups/{{ ENV }}/{{ KIND }}/ | tail -3
 
 [doc(" ENV/VERSION pick which archived manifest to copy in (VERSION defaults to newest).
