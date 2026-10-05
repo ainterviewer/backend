@@ -26,7 +26,7 @@ update-users:
 [group("Database")]
 fetch-db:
     rm -f storage/db.sqlite*
-    scp aws-1:/var/backups/sqlite/app-daily-latest.db storage/db.sqlite
+    scp aws-1:/var/backups/sqlite/production/app-daily-latest.db storage/db.sqlite
 
 # ENV/VERSION pick which archived manifest to copy in (VERSION defaults to newest).
 # Copy a release — versions, notes and highlights — into the local dev database.
