@@ -60,12 +60,16 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
+          # No 'latest' on release/0.4.x: this is a maintenance line behind
+          # main, and moving 'latest' here would point it back to old code.
+          # It has to be turned off in the flavor: the default latest=auto adds
+          # 'latest' to every type=ref,event=tag build by itself, whatever the
+          # tag list says (which is how v0.4.37 moved it).
+          flavor: |
+            latest=false
           tags: |
             # Tag with the git tag
             type=ref,event=tag
-            # No 'latest' on release/0.4.x: this is a maintenance line behind
-            # main, and moving 'latest' here would point it back to old code.
-            type=raw,value=latest,enable=false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
