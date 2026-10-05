@@ -9,6 +9,11 @@ Shipped as a hotfix on release/0.4.x, so it hangs off that line's head
 a merge revision joins the two, so a database at this revision can still be
 upgraded to main.
 
+SQLite batch-altering `testrun` recreates the table, which drops the
+touch-last_updated triggers on it, so they are uninstalled first and
+reinstalled after. The first version of this migration did not, and left the
+databases it ran on without them; 1a0e5c9b7d42 reinstalls them there.
+
 Revision ID: c7bde657f2c4
 Revises: d4f83a01c96b
 Create Date: 2026-10-02 12:00:00.000000
@@ -19,6 +24,8 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+
+from app.db.triggers import install_triggers, uninstall_triggers
 
 # revision identifiers, used by Alembic.
 revision: str = "c7bde657f2c4"
@@ -39,6 +46,8 @@ _INDEX = "ix_testrun_started_by_id"
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    uninstall_triggers(bind)
     with op.batch_alter_table(
         "testrun", naming_convention=NAMING_CONVENTION
     ) as batch_op:
@@ -47,12 +56,16 @@ def upgrade() -> None:
             _CONSTRAINT, "user", ["started_by_id"], ["id"], ondelete="SET NULL"
         )
         batch_op.create_index(_INDEX, ["started_by_id"], unique=False)
+    install_triggers(bind)
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    uninstall_triggers(bind)
     with op.batch_alter_table(
         "testrun", naming_convention=NAMING_CONVENTION
     ) as batch_op:
         batch_op.drop_index(_INDEX)
         batch_op.drop_constraint(_CONSTRAINT, type_="foreignkey")
         batch_op.drop_column("started_by_id")
+    install_triggers(bind)
