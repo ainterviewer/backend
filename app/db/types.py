@@ -52,6 +52,7 @@ class InterviewType(StrEnum):
 class VerificationPurpose(StrEnum):
     EMAIL_VERIFICATION = "email_verification"
     LOGIN = "login"
+    PASSWORD_RESET = "password_reset"
 
 
 class EmbeddingTask(StrEnum):

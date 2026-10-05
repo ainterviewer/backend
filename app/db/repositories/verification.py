@@ -19,7 +19,8 @@ def _as_aware(value: datetime.datetime) -> datetime.datetime:
 
 
 class VerificationRepository(BaseRepository):
-    """Repository for one-time verification codes (email verification + login OTP)."""
+    """Repository for one-time verification codes (email verification, password
+    reset, login OTP)."""
 
     def create(
         self,

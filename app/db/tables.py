@@ -193,8 +193,9 @@ class RefreshTokenTable(Base):
 
 
 class VerificationCodeTable(Base):
-    """One-time secrets for email verification (magic-link token) and login
-    two-factor (OTP code). Both store only a sha256 hash of the raw value."""
+    """One-time secrets for email verification and password reset (magic-link
+    tokens) and login two-factor (OTP code). All store only a sha256 hash of
+    the raw value."""
 
     __tablename__ = "verification_code"
 
