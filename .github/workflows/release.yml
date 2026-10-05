@@ -80,8 +80,13 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
+          # The raw 'latest' line below is the only thing that may set 'latest'.
+          # Without this, the default latest=auto adds it to every
+          # type=ref,event=tag build by itself -- release candidates included.
+          flavor: |
+            latest=false
           tags: |
-            # Tag with the git tag 
+            # Tag with the git tag
             type=ref,event=tag
             # 'latest' is the tag prod follows. It moves only for a tag shaped
             # exactly like a final release -- see the Classify step above, which
