@@ -1,9 +1,12 @@
+from datetime import timedelta
+
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from pydantic import UUID4
 from uvicorn.config import logger
 
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
 from ainterviewer.types import TestType
+from ainterviewer.utils import now
 
 from ...db.models import (
     IntervieweeCreate,
@@ -12,12 +15,13 @@ from ...db.models import (
     TestSetupPublic,
 )
 from ...dependencies import DBSession, ProjectEditor, ProjectViewer, UserToken
+from ...settings import app_settings
 from ...synthesize.core import (
     run_synthesis_job_fixed_ai,
     run_synthesis_job_fixed_answers,
     run_synthesis_job_shuffled_ai,
 )
-from ...types import TestRunStatus
+from ...types import Scope, TestRunStatus
 from ..request_models import (
     SynthesizeRequest,
     UpdateBackgroundInfoRequest,
@@ -27,6 +31,51 @@ from ..request_models import (
 from ..response_models import SynthesizeResponse
 
 router = APIRouter(tags=["synthesize"])
+
+DEMO_DAILY_WINDOW = timedelta(days=1)
+
+
+def check_demo_synthetic_limits(db: DBSession, user_id: UUID4, n_interviews: int):
+    """Refuse a demo user's run with a 429 if it would exceed any of their budgets."""
+    limits = app_settings.app.demo_limits
+
+    lifetime = db.tests.count_started_synthetic_interviews(user_id)
+    if lifetime + n_interviews > limits.lifetime_synthetic_interviews:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Demo accounts can run at most "
+                f"{limits.lifetime_synthetic_interviews} synthetic interviews in total, "
+                f"and {lifetime} have already been started."
+            ),
+        )
+
+    daily = db.tests.count_started_synthetic_interviews(
+        user_id, since=now() - DEMO_DAILY_WINDOW
+    )
+    if daily + n_interviews > limits.daily_synthetic_interviews:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Demo accounts can run at most "
+                f"{limits.daily_synthetic_interviews} synthetic interviews per 24 "
+                f"hours, and {daily} have been started in the last 24 hours."
+            ),
+        )
+
+    active = db.tests.count_active_synthetic_interviews(
+        user_id, max_age=limits.active_run_max_age.to_timedelta()
+    )
+    if active + n_interviews > limits.max_concurrent_synthetic_interviews:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Demo accounts can run at most "
+                f"{limits.max_concurrent_synthetic_interviews} synthetic interviews "
+                f"at a time, and {active} are already running. Wait for them "
+                "to finish or run fewer interviews."
+            ),
+        )
 
 
 @router.get("/projects/{project_id}/tests/{test_id}/background_info")
@@ -194,10 +243,17 @@ async def run_synthetic_test(
 
         return wrapper
 
+    if jwt.scope == Scope.DEMO:
+        check_demo_synthetic_limits(db, jwt.user_id, request_data.n_interviews)
+
     test_setup = db.tests.update_test_setup_settings(test_id, request_data)
 
     test_run_id = db.tests.create_test_run(
-        TestRunCreate(test_setup_id=test_id, **request_data.model_dump())
+        TestRunCreate(
+            test_setup_id=test_id,
+            started_by_id=jwt.user_id,
+            **request_data.model_dump(),
+        )
     )
 
     exception = None

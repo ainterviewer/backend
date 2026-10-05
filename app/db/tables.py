@@ -931,6 +931,11 @@ class TestRunTable(Base):
     status: Mapped[TestRunStatus] = mapped_column(
         SQLEnum(TestRunStatus), default=TestRunStatus.PENDING
     )
+    # Who pressed Run; null for runs from before this was recorded. Used to cap
+    # how many synthetic interviews a demo user can have in flight at once.
+    started_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), index=True
+    )
 
     # Relationships
     test_setup: Mapped["TestSetupTable"] = relationship(back_populates="test_runs")

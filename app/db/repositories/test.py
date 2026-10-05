@@ -1,9 +1,11 @@
 from collections.abc import Sequence
+from datetime import datetime, timedelta
 
 from pydantic import UUID4
-from sqlalchemy import Column, delete, select, update
+from sqlalchemy import Column, delete, func, select, update
 
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
+from ainterviewer.utils import now
 
 from ...api.request_models import SynthesizeRequest
 from ...types import TestRunStatus
@@ -192,6 +194,36 @@ class TestRepository(BaseRepository):
         )
         self.session.execute(statement)
         self.session.commit()
+
+    def count_active_synthetic_interviews(
+        self, user_id: UUID4, max_age: timedelta
+    ) -> int:
+        """Sum the interviews of the test runs a user started that are in flight.
+
+        Runs older than `max_age` are left out: a backend restart mid-run
+        leaves its status at RUNNING for good, and without the cutoff that run
+        would count against the user forever.
+        """
+        statement = select(func.coalesce(func.sum(TestRunTable.n_interviews), 0)).where(
+            TestRunTable.started_by_id == user_id,
+            TestRunTable.status.in_([TestRunStatus.PENDING, TestRunStatus.RUNNING]),
+            TestRunTable.created_at > now() - max_age,
+        )
+        return self.session.execute(statement).scalar_one()
+
+    def count_started_synthetic_interviews(
+        self, user_id: UUID4, since: datetime | None = None
+    ) -> int:
+        """Sum the interviews of every test run a user started, whatever its status.
+
+        With `since`, only runs created after it count; without, all of them do.
+        """
+        statement = select(func.coalesce(func.sum(TestRunTable.n_interviews), 0)).where(
+            TestRunTable.started_by_id == user_id
+        )
+        if since is not None:
+            statement = statement.where(TestRunTable.created_at > since)
+        return self.session.execute(statement).scalar_one()
 
     # ==================== Experiment Methods ====================
 
