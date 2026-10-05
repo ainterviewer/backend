@@ -25,6 +25,26 @@ class SpecialRegistrationTokens(BaseModel):
     scope: Scope
 
 
+class DemoLimits(BaseModel):
+    """Synthetic-interview budgets for `Scope.DEMO` accounts, counted per user.
+
+    Every synthetic interview is a full interview against the shared inference
+    server, so a demo account gets a small budget of them.
+    """
+
+    # Interviews in flight at once, across all of the user's runs.
+    max_concurrent_synthetic_interviews: int = 10
+    # Runs older than this no longer count as in flight, so a run orphaned in
+    # RUNNING by a backend restart cannot lock a demo user out for good.
+    active_run_max_age: TimeDelta = Field(default_factory=lambda: TimeDelta(hours=2))
+
+    # Interviews started, whatever the runs' outcome: a failed run still spent
+    # inference before it failed. "Daily" is a rolling 24 hours rather than a
+    # calendar day, so it has no timezone to get wrong.
+    daily_synthetic_interviews: int = 50
+    lifetime_synthetic_interviews: int = 100
+
+
 class AppSettings(BaseModel):
     api_host: str = "127.0.0.1"
     api_port: int = 8666
@@ -71,6 +91,8 @@ class AppSettings(BaseModel):
     )
     login_code_max_attempts: int = 5
     code_resend_cooldown_seconds: int = 30
+
+    demo_limits: DemoLimits = Field(default_factory=DemoLimits)
 
     # Debounce for the last_active touch on /refresh. A client with the app
     # open refreshes every jwt_auth_token_expiration, so without this the

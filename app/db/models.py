@@ -527,7 +527,7 @@ class TestRunBase(_BaseModel):
 
 
 class TestRunCreate(TestRunBase):
-    pass
+    started_by_id: UUID4 | None = None
 
 
 class TestRunPublic(TestRunBase):
