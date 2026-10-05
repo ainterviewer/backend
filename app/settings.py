@@ -86,6 +86,9 @@ class AppSettings(BaseModel):
         default_factory=lambda: TimeDelta(minutes=10)
     )
     login_code_max_attempts: int = 5
+    password_reset_token_expiration: TimeDelta = Field(
+        default_factory=lambda: TimeDelta(hours=1)
+    )
     code_resend_cooldown_seconds: int = 30
 
     demo_limits: DemoLimits = Field(default_factory=DemoLimits)

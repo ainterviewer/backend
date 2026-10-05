@@ -85,8 +85,7 @@ class UpdateEmailRequest(BaseModel):
     new_email: EmailStr
 
 
-class UpdatePasswordRequest(BaseModel):
-    current_password: str
+class _NewPasswordRequest(BaseModel):
     new_password: str = Field(min_length=8)
 
     @field_validator("new_password")
@@ -97,6 +96,18 @@ class UpdatePasswordRequest(BaseModel):
         if len(value.encode("utf-8")) > 72:
             raise ValueError("Password must be at most 72 bytes")
         return value
+
+
+class UpdatePasswordRequest(_NewPasswordRequest):
+    current_password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(_NewPasswordRequest):
+    token: str
 
 
 class DeleteAccountRequest(BaseModel):

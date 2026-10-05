@@ -35,8 +35,10 @@ from ..settings import app_settings
 from ..types import Scope
 from .request_models import (
     DeleteAccountRequest,
+    ForgotPasswordRequest,
     LoginData,
     ResendVerificationRequest,
+    ResetPasswordRequest,
     UpdateEmailRequest,
     UpdatePasswordRequest,
     VerifyEmailRequest,
@@ -463,6 +465,84 @@ async def resend_verification(body: ResendVerificationRequest, db: DBSession):
         await _send_verification_email(db, user)
 
     return JSONResponse({"detail": detail})
+
+
+async def _send_password_reset_email(db, user: UserPrivate) -> None:
+    """Issue a fresh password-reset magic link and email it to the user.
+
+    On send failure the code row is deleted and a 502 is raised so the user can
+    immediately retry without tripping the resend cooldown."""
+    raw_token = generate_verification_token()
+    db.verification.invalidate_active(user.id, VerificationPurpose.PASSWORD_RESET)
+    expiration = app_settings.app.password_reset_token_expiration.to_timedelta()
+    code = db.verification.create(
+        user_id=user.id,
+        code_hash=hash_token(raw_token),
+        purpose=VerificationPurpose.PASSWORD_RESET,
+        expires_at=now() + expiration,
+    )
+    link = f"{app_settings.sveltekit_platform_public_addr}/reset-password?token={raw_token}"
+    minutes = int(expiration.total_seconds() // 60)
+    try:
+        await send_email(
+            user.email,
+            "Reset your password",
+            html_content=email_templates.get_template("reset_password.jinja").render(
+                recipient_name=user.first_name,
+                reset_link=link,
+                expires_in=f"{minutes} minute{'s' if minutes != 1 else ''}",
+            ),
+        )
+    except Exception:
+        logger.exception("Failed to send password reset email to %s", user.email)
+        db.verification.delete(code.id)
+        raise _EMAIL_SEND_FAILED
+
+
+@router.post("/forgot-password")
+async def forgot_password(body: ForgotPasswordRequest, db: DBSession):
+    """Email a password-reset link. Always returns 200 to avoid leaking which
+    addresses are registered."""
+    detail = (
+        "If an account exists with this email, a password reset link has been sent."
+    )
+    try:
+        user = db.users.get_user_private(body.email)
+    except sqlalchemy.exc.NoResultFound:
+        return JSONResponse({"detail": detail})
+
+    # Skip silently within the cooldown so a 200 can't distinguish it from a
+    # missing account. As with resend-verification, a genuine SMTP failure
+    # still surfaces as a 502 for a real account -- a rare-condition leak.
+    if not db.verification.in_cooldown(
+        user.id,
+        VerificationPurpose.PASSWORD_RESET,
+        app_settings.app.code_resend_cooldown_seconds,
+    ):
+        await _send_password_reset_email(db, user)
+
+    return JSONResponse({"detail": detail})
+
+
+@router.post("/reset-password")
+async def reset_password(body: ResetPasswordRequest, db: DBSession):
+    """Set a new password from a password-reset magic link."""
+    code = db.verification.get_active_by_hash(
+        hash_token(body.token), VerificationPurpose.PASSWORD_RESET
+    )
+    if code is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+
+    db.verification.consume(code.id)
+    db.users.update_user_password(code.user_id, body.new_password)
+    # Receiving the link proves control of the address, so an account still
+    # waiting on its verification email isn't left locked out after a reset.
+    db.users.set_email_verified(code.user_id)
+    # Whoever knew the old password may hold a session; end all of them. No
+    # new session is issued: login still goes through two-factor if enabled.
+    db.auth.revoke_all_for_user(code.user_id)
+
+    return JSONResponse({"detail": "Password has been reset"})
 
 
 @router.post("/request-access")
