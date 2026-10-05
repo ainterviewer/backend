@@ -4,6 +4,16 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.4.38] - 2026-10-05
+
+### Bug Fixes
+
+- (migrations) Keep the testrun triggers through the started_by migration
+
+### Internal
+
+- (release) Turn latest off in the flavor on release/0.4.x
+
 ## [0.4.37] - 2026-10-05
 
 ### Features
