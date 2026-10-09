@@ -223,8 +223,8 @@ class UserRepository(BaseRepository):
         An invitation outlives the request it came from -- pruning the request
         list must not revoke a pending invite -- so the link is cleared and the
         invitation kept. The foreign key declares SET NULL for the same reason;
-        this does it explicitly so the behaviour also holds where foreign keys
-        are not enforced.
+        this does it explicitly so the behaviour also holds where foreign-key
+        enforcement is switched off.
         """
         self.session.execute(
             update(InvitationTable)

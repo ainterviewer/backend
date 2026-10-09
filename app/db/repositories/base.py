@@ -18,13 +18,12 @@ class BaseRepository:
         """Delete the analysis rows hanging off a set of messages.
 
         Call this before deleting messages with a Core `delete()`. Codings and
-        comments both declare ON DELETE CASCADE, but SQLite only enforces
-        foreign keys on connections that ran
-        `PRAGMA foreign_keys=ON` and the app does not currently do that, so the
-        cascade never fires and the rows are orphaned instead -- which is how
-        the orphaned task and interviewee rows already in the database got
-        there. An ORM `session.delete()` on the message does not need this: it
-        cascades through the relationships in Python.
+        comments both declare ON DELETE CASCADE, which fires while foreign keys
+        are enforced (the default) but not where enforcement is switched off
+        with `DATABASE__ENFORCE_FOREIGN_KEYS=false` -- and that is how the
+        orphans c3d18b40f2a7 cleaned up got there. Deleting them explicitly
+        holds either way. An ORM `session.delete()` on the message does not need
+        this: it cascades through the relationships in Python.
 
         `message_ids` is a SELECT of the message ids, not a materialized list,
         so it must still resolve when this runs -- i.e. before the messages

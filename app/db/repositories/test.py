@@ -82,9 +82,9 @@ class TestRepository(BaseRepository):
         produced.
 
         The children are deleted explicitly rather than left to ON DELETE
-        CASCADE: SQLite only enforces foreign keys on connections that ran
-        `PRAGMA foreign_keys=ON`, which the app does not currently do, so the
-        cascade would not fire and the rows would be orphaned instead.
+        CASCADE, which only fires while foreign keys are enforced. Enforcement
+        is the default but can be switched off (see app/db/pragmas.py), and the
+        rows would be orphaned instead.
         """
         run_ids = select(TestRunTable.id).where(TestRunTable.test_setup_id == test_id)
         interview_ids = select(InterviewTable.id).where(
@@ -299,8 +299,8 @@ class TestRepository(BaseRepository):
 
         Interviews are kept and their reference cleared, matching the SET NULL
         that `interview.experiment_id` declares; the project links are deleted.
-        Both are done explicitly because the cascade does not fire while
-        foreign keys are unenforced -- see `delete_test_setup`.
+        Both are done explicitly so they hold with foreign-key enforcement
+        switched off too -- see `delete_test_setup`.
         """
         owned = select(ExperimentTable.id).where(
             ExperimentTable.id == experiment_id,

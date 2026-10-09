@@ -151,7 +151,7 @@
           "type": "string"
         },
         "enforce_foreign_keys": {
-          "default": false,
+          "default": true,
           "title": "Enforce Foreign Keys",
           "type": "boolean"
         },
@@ -790,7 +790,7 @@
       "default": {
         "db": "sqlite",
         "db_path": "storage",
-        "enforce_foreign_keys": false,
+        "enforce_foreign_keys": true,
         "db_url": "localhost",
         "db_port": "5432",
         "db_name": "ainterviewer",

@@ -152,14 +152,36 @@ The backend is tightly coupled with the `ainterviewer` library (sibling package 
   `create_db_and_tables` used to) leaves the pooled connections that actually
   serve requests on SQLite's defaults. Add new pragmas to `_SQLITE_PRAGMAS`,
   never to a one-off `session.execute`.
-- **Foreign keys are not enforced.** `foreign_keys` is deliberately left out of
-  `_SQLITE_PRAGMAS`: the database holds orphaned rows from the period when the
-  pragma never reached a live connection, and the Core `delete()` statements in
-  `TestRepository.delete_test_setup` / `delete_experiment` raise IntegrityError
-  once it is on (their child FKs have no `ondelete`). Until that is fixed,
-  `ON DELETE CASCADE` does nothing at runtime -- delete child rows explicitly,
-  as `InterviewRepository.delete_interviews` does. Note PostgreSQL enforces
-  foreign keys unconditionally, so this must be resolved before migrating.
+- **Foreign keys are enforced** (`enforce_foreign_keys`, default `true`):
+  `register_pragmas` adds `foreign_keys=ON` to every connection, so the
+  declared `ON DELETE CASCADE` / `SET NULL` fire and a write pointing at a
+  missing row raises `IntegrityError`. `DATABASE__ENFORCE_FOREIGN_KEYS=false`
+  and a restart switch it off without a deploy if it ever surfaces a violation
+  in production.
+  - Keep deleting child rows explicitly in Core `delete()` paths
+    (`InterviewRepository.delete_interviews`, `TestRepository.delete_test_setup`,
+    `BaseRepository._delete_message_children`): they must stay correct with
+    enforcement switched off, which is how orphans accumulated before.
+  - Every endpoint that deletes interviews calls `session_manager.end(...)`
+    first, so live interview sessions stop before their rows go. A session
+    left running writes messages and tasks for a deleted interview -- that is
+    what orphaned 1,097 rows in production on 2026-10-06. Any new endpoint that
+    deletes interviews must do the same. If a write still lands on a deleted
+    interview, `insert_message` / `insert_task` raise `InterviewGoneError` and
+    the websocket sends the restart frame.
+  - Validate ids a client supplies (test run, participant, interview) against
+    the project and answer 404; don't leave it to the foreign key, which turns
+    a stale id into a 500. `is_foreign_key_violation` (`app/db/utils.py`) tells
+    a foreign-key failure from a unique one where code expects the latter.
+  - Every foreign-key column is indexed (revision `0fa4a271248f`); index new
+    ones too, or deleting a parent scans the child table once per row.
+  - Alembic runs with foreign keys **off**: `alembic/env.py` builds its own
+    engine without the pragmas. Keep it that way -- `batch_alter_table`
+    rebuilds a table by dropping it, and with enforcement on that drop deletes
+    every row that cascades from it. Point Alembic at another database with
+    `-x db_url=sqlite:///path`; it does not read the app settings.
+  - `PRAGMA foreign_key_check` should return nothing. Revision `4f8273d9e6f2`
+    derives its orphan sweep from the schema and can be re-run safely.
 - Storage location: `storage/db.sqlite`
 
 **PostgreSQL: not implemented.** `DatabaseType.POSTGRESQL` exists and the
@@ -583,10 +605,10 @@ await self.message_queue.put(
 
 ## Known Issues & TODOs
 
-- No general test suite: `tests/test_clustering.py` covers the embedding
-  clustering logic (pure, synthetic data, no database or network) and is the
-  only one so far. The `ainterviewer` library has its own suite under
-  `../lib/tests`.
+- The test suite (`uv run pytest`) covers specific behaviour rather than every
+  endpoint: each module builds its own in-memory SQLite database or none, with
+  no shared fixtures beyond the throwaway secrets in `tests/conftest.py`. The
+  `ainterviewer` library has its own suite under `../lib/tests`.
 - OpenAPI SDK generation pattern needs full implementation (see the TODO at the top of `app/main.py`)
 - `create_interview` falls back to the project's default language when a
   respondent requests one the project has no localization for, instead of

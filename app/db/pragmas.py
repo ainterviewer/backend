@@ -6,10 +6,16 @@ app actually serves requests on. It has to be reapplied on every new connection,
 which is what `register_pragmas` does via SQLAlchemy's `connect` event.
 
 `foreign_keys` is handled separately from the rest because it changes behaviour
-rather than tuning it: with enforcement on, a delete that would orphan rows
-raises IntegrityError instead of succeeding quietly. It is driven by
-`app_settings.database.enforce_foreign_keys` so it can be switched back off with
-an environment variable and a restart rather than a deploy.
+rather than tuning it: with enforcement on, a write that would orphan rows
+raises IntegrityError instead of succeeding quietly, and the declared ON DELETE
+CASCADE / SET NULL actually fire. It is driven by
+`app_settings.database.enforce_foreign_keys` -- on by default -- so it can be
+switched off with an environment variable and a restart rather than a deploy.
+
+Alembic does not go through here: alembic/env.py builds its own engine, so
+migrations run with foreign keys off. That is load-bearing. A
+`batch_alter_table` on SQLite rebuilds the table by dropping it, and with
+enforcement on, dropping a parent table deletes every row that cascades from it.
 """
 
 import logging
@@ -37,7 +43,7 @@ _SQLITE_PRAGMAS: tuple[tuple[str, str], ...] = (
 )
 
 
-def register_pragmas(engine: Engine, *, enforce_foreign_keys: bool = False) -> None:
+def register_pragmas(engine: Engine, *, enforce_foreign_keys: bool = True) -> None:
     """Apply the SQLite pragmas to every new connection of `engine`.
 
     A no-op on other dialects.

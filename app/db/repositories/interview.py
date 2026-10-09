@@ -147,12 +147,11 @@ class InterviewRepository(BaseRepository):
         self.session.execute(statement).scalar_one()
 
         # Children first, then the interviews, in a single transaction. Every
-        # child table here declares ON DELETE CASCADE, but SQLite only
-        # enforces foreign keys on connections that ran `PRAGMA
-        # foreign_keys=ON` and the app does not currently enable it, so the
-        # cascade cannot be relied on -- leaving these out is what orphaned the
-        # task and interviewee rows already in the database. This order is
-        # correct whether or not the cascade fires.
+        # child table here declares ON DELETE CASCADE, but the cascade only
+        # fires while foreign keys are enforced, which can be switched off
+        # (see app/db/pragmas.py) -- and leaving these out while it was off is
+        # what orphaned task and interviewee rows before c3d18b40f2a7. This
+        # order is correct whether or not the cascade fires.
         # Annotations and comments hang off the messages rather than the
         # interview, so they go before the messages do. Embeddings lead the
         # loop for the same reason: a per-message vector points at a message

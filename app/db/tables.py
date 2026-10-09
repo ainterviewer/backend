@@ -1132,9 +1132,9 @@ class MessageCommentTable(Base):
     Several users can comment on the same message and answer each other; this
     is the discussion surface, while CodingTable stays the coding one.
 
-    ``ondelete="CASCADE"`` on both foreign keys is documentation on SQLite,
-    where foreign keys are not enforced (see CLAUDE.md). Deleting a root
-    comment therefore deletes its replies explicitly, in
+    ``ondelete="CASCADE"`` on both foreign keys fires while foreign keys are
+    enforced, which can be switched off (see app/db/pragmas.py). Deleting a
+    root comment therefore deletes its replies explicitly too, in
     ``AnalysisRepository.delete_message_comment``.
     """
 
