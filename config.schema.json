@@ -121,10 +121,16 @@
           "title": "Login Code Max Attempts",
           "type": "integer"
         },
+        "password_reset_token_expiration": {
+          "$ref": "#/$defs/TimeDelta"
+        },
         "code_resend_cooldown_seconds": {
           "default": 30,
           "title": "Code Resend Cooldown Seconds",
           "type": "integer"
+        },
+        "demo_limits": {
+          "$ref": "#/$defs/DemoLimits"
         },
         "last_active_debounce": {
           "$ref": "#/$defs/TimeDelta"
@@ -175,6 +181,31 @@
       ],
       "title": "DatabaseType",
       "type": "string"
+    },
+    "DemoLimits": {
+      "description": "Synthetic-interview budgets for `Scope.DEMO` accounts, counted per user.\n\nEvery synthetic interview is a full interview against the shared inference\nserver, so a demo account gets a small budget of them.",
+      "properties": {
+        "max_concurrent_synthetic_interviews": {
+          "default": 10,
+          "title": "Max Concurrent Synthetic Interviews",
+          "type": "integer"
+        },
+        "active_run_max_age": {
+          "$ref": "#/$defs/TimeDelta"
+        },
+        "daily_synthetic_interviews": {
+          "default": 50,
+          "title": "Daily Synthetic Interviews",
+          "type": "integer"
+        },
+        "lifetime_synthetic_interviews": {
+          "default": 100,
+          "title": "Lifetime Synthetic Interviews",
+          "type": "integer"
+        }
+      },
+      "title": "DemoLimits",
+      "type": "object"
     },
     "EmailAccount": {
       "properties": {
@@ -262,13 +293,18 @@
           "title": "Batch Size",
           "type": "integer"
         },
+        "max_batch_chars": {
+          "default": 16000,
+          "title": "Max Batch Chars",
+          "type": "integer"
+        },
         "max_input_chars": {
           "default": 24000,
           "title": "Max Input Chars",
           "type": "integer"
         },
         "timeout": {
-          "default": 120.0,
+          "default": 360.0,
           "title": "Timeout",
           "type": "number"
         },
@@ -281,6 +317,11 @@
           "default": 3,
           "title": "Max Retries",
           "type": "integer"
+        },
+        "max_retry_after": {
+          "default": 30.0,
+          "title": "Max Retry After",
+          "type": "number"
         },
         "circuit_breaker_threshold": {
           "default": 5,
@@ -338,10 +379,12 @@
             "model": "microsoft/harrier-oss-v1-0.6b",
             "dimension": 1024,
             "batch_size": 32,
+            "max_batch_chars": 16000,
             "max_input_chars": 24000,
-            "timeout": 120.0,
+            "timeout": 360.0,
             "connect_timeout": 5.0,
             "max_retries": 3,
+            "max_retry_after": 30.0,
             "circuit_breaker_threshold": 5,
             "circuit_breaker_reset_seconds": 60.0
           }
@@ -704,7 +747,30 @@
           "weeks": 0
         },
         "login_code_max_attempts": 5,
+        "password_reset_token_expiration": {
+          "days": 0,
+          "hours": 1,
+          "microseconds": 0,
+          "milliseconds": 0,
+          "minutes": 0,
+          "seconds": 0,
+          "weeks": 0
+        },
         "code_resend_cooldown_seconds": 30,
+        "demo_limits": {
+          "active_run_max_age": {
+            "days": 0,
+            "hours": 2,
+            "microseconds": 0,
+            "milliseconds": 0,
+            "minutes": 0,
+            "seconds": 0,
+            "weeks": 0
+          },
+          "daily_synthetic_interviews": 50,
+          "lifetime_synthetic_interviews": 100,
+          "max_concurrent_synthetic_interviews": 10
+        },
         "last_active_debounce": {
           "days": 0,
           "hours": 0,
@@ -775,9 +841,6 @@
       }
     }
   },
-  "required": [
-    "services"
-  ],
   "title": "Settings",
   "type": "object",
   "$schema": "http://json-schema.org/draft-07/schema#"
