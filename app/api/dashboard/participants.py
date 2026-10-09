@@ -8,7 +8,7 @@ from typing import Annotated
 from urllib.parse import quote
 
 import polars as pl
-from fastapi import APIRouter, Body, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Body, Depends, HTTPException, Response, UploadFile
 from jinja2 import TemplateError
 from pydantic import UUID4
 
@@ -28,6 +28,7 @@ from ...dependencies import (
     ProjectEditor,
     ProjectViewer,
     UserToken,
+    require_preview_features,
 )
 from ...services.email.mail import send_email
 from ...services.email.participant_template import (
@@ -66,7 +67,13 @@ ALLOWED_ATTACHMENT_EXTENSIONS = frozenset(
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["participants"])
+# Participant management and emailing are preview features. The opt-out link is
+# not: it is followed by participants, who hold no account, from emails already
+# sent, so it lives on a router of its own without the gate.
+router = APIRouter(
+    tags=["participants"], dependencies=[Depends(require_preview_features)]
+)
+public_router = APIRouter(tags=["participants"])
 
 
 @router.get("/projects/{project_id}/participants")
@@ -233,7 +240,7 @@ async def export_email_bundle(
     )
 
 
-@router.post("/participants/opt-out/{opt_out_token}")
+@public_router.post("/participants/opt-out/{opt_out_token}")
 async def opt_out(
     opt_out_token: str,
     db: DBSession,

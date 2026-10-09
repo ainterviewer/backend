@@ -18,7 +18,7 @@ from collections import Counter, defaultdict
 from enum import StrEnum
 from typing import Annotated, NamedTuple
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import UUID4, BaseModel, Field
 from sqlalchemy import and_, distinct, func, or_, select
 
@@ -49,11 +49,21 @@ from ....db.tables import (
     TaskTable,
 )
 from ....db.types import InterviewType
-from ....dependencies import DBSession, DemoToken, ProjectViewer
+from ....dependencies import (
+    DBSession,
+    DemoToken,
+    ProjectViewer,
+    require_preview_features,
+)
 from .cohort import interview_cohort
 from .histogram import HistogramBucket, compute_histogram_buckets
 
-router = APIRouter(prefix="/report", tags=["report"])
+# The report page is a preview feature; see `require_preview_features`.
+router = APIRouter(
+    prefix="/report",
+    tags=["report"],
+    dependencies=[Depends(require_preview_features)],
+)
 
 # The task row the interview writes for every condition it evaluates. Spelled
 # as the library spells it, typo and all -- it is the value in the column.

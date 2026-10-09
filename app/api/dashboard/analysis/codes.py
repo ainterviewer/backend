@@ -11,7 +11,7 @@ and deleting one is the author's, plus whoever moderates the project.
 
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import UUID4
 from sqlalchemy.exc import NoResultFound
 
@@ -31,9 +31,15 @@ from ....dependencies import (
     ProjectEditor,
     ProjectViewer,
     UserToken,
+    require_preview_features,
 )
 
 router = APIRouter()
+
+# Gates the routes only the Analysis pages use. Reading the codebook and
+# reading, adding and editing codings stay open: the interview transcript page,
+# which is not a preview feature, codes messages through them.
+_preview = [Depends(require_preview_features)]
 
 
 def _require_modify_rights(
@@ -67,7 +73,7 @@ async def get_codebook(
     return db.analysis.get_codebook(project_id)
 
 
-@router.put("/projects/{project_id}/analysis/codebook")
+@router.put("/projects/{project_id}/analysis/codebook", dependencies=_preview)
 async def save_codebook(
     project_id: UUID4,
     codebook: CodebookPut,
@@ -81,7 +87,7 @@ async def save_codebook(
         raise HTTPException(400, detail=str(error))
 
 
-@router.get("/projects/{project_id}/analysis/codebook/counts")
+@router.get("/projects/{project_id}/analysis/codebook/counts", dependencies=_preview)
 async def get_code_counts(
     project_id: UUID4,
     db: DBSession,
@@ -174,7 +180,7 @@ async def delete_message_coding(
     db.analysis.delete_message_coding(project_id, coding_id)
 
 
-@router.post("/analysis/{project_id}/messages/count")
+@router.post("/analysis/{project_id}/messages/count", dependencies=_preview)
 async def get_filtered_messages_count(
     project_id: UUID4,
     filters: FilteredMessagesRequest,
@@ -192,7 +198,7 @@ async def get_filtered_messages_count(
     )
 
 
-@router.post("/analysis/{project_id}/messages")
+@router.post("/analysis/{project_id}/messages", dependencies=_preview)
 async def get_filtered_messages(
     project_id: UUID4,
     filters: FilteredMessagesRequest,
@@ -216,7 +222,8 @@ async def get_filtered_messages(
 
 
 @router.post(
-    "/analysis/{project_id}/interviews/{interview_id}/messages/{message_id}/context_before"
+    "/analysis/{project_id}/interviews/{interview_id}/messages/{message_id}/context_before",
+    dependencies=_preview,
 )
 async def get_message_context_before(
     project_id: UUID4,
@@ -235,7 +242,8 @@ async def get_message_context_before(
 
 
 @router.post(
-    "/analysis/{project_id}/interviews/{interview_id}/messages/{message_id}/context_after"
+    "/analysis/{project_id}/interviews/{interview_id}/messages/{message_id}/context_after",
+    dependencies=_preview,
 )
 async def get_message_context_after(
     project_id: UUID4,

@@ -61,6 +61,11 @@ class InterviewToken(_Token):
 class AuthToken(_Token):
     user_id: UUID4
     scope: Scope
+    # Mirrors UserTable.with_demo_features, read fresh from the database on
+    # every login and refresh, so an admin's change reaches the token within one
+    # access-token lifetime. Defaults to False so tokens issued before the claim
+    # existed decode as "off" until their next refresh.
+    preview_features: bool = False
 
     _timedelta: TimeDelta = app_settings.app.jwt_auth_token_expiration
 
@@ -125,10 +130,12 @@ def create_interview_token(
 def create_auth_token(
     user_id: UUID4,
     scope: Scope,
+    preview_features: bool,
 ) -> str:
     token = AuthToken(
         user_id=user_id,
         scope=scope,
+        preview_features=preview_features,
     )
 
     return token.encode()

@@ -507,6 +507,10 @@ _RESPONDENT_FACING_AGENTS = frozenset(
 )
 
 
+#: `InterviewConfig` fields only a caller with preview features may change.
+_PREVIEW_CONFIG_FIELDS = ("with_audio", "probing_strategy")
+
+
 @router.get("/projects/{project_id}/config")
 async def get_interview_config(
     project_id: UUID4,
@@ -548,6 +552,15 @@ async def create_interview_config(
     jwt: DemoToken,
     _: ProjectEditor,
 ):
+    if not jwt.preview_features:
+        # Keep what is stored rather than refusing: the setup page posts the
+        # whole config, so an editor without the flag saving consent or
+        # welcome on a project whose owner turned audio on must neither fail
+        # nor silently switch audio back off.
+        stored = db.projects.get_project(project_id).config
+        config = config.model_copy(
+            update={field: getattr(stored, field) for field in _PREVIEW_CONFIG_FIELDS}
+        )
     db.projects.update_interview_config(project_id, config)
 
 

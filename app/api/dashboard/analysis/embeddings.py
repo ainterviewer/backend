@@ -65,7 +65,12 @@ from ....db.survey_answers import (
     values_of,
 )
 from ....db.tables import ProjectLocalizationTable
-from ....dependencies import DBSession, ProjectEditor, ProjectViewer
+from ....dependencies import (
+    DBSession,
+    ProjectEditor,
+    ProjectViewer,
+    require_preview_features,
+)
 from ....embed.backfill import pending_chunks
 from ....embed.client import EmbeddingUnavailable, embedding_client
 from ....embed.clustering import (
@@ -81,7 +86,8 @@ from ....settings import app_settings
 from ....types import GroupKind, Projection
 from ...request_models import LanguageFilter
 
-router = APIRouter()
+# The whole explore surface is a preview feature; see `require_preview_features`.
+router = APIRouter(dependencies=[Depends(require_preview_features)])
 
 
 class SearchFilterParams:

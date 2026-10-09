@@ -144,6 +144,27 @@ class ResourceRoleChecker:
         return token
 
 
+#: The 403 detail for a caller without preview features. Distinct so the frontend
+#: can tell a token minted before an admin enabled the flag -- which a refresh
+#: fixes -- from any other refusal, and refresh and retry once on it.
+PREVIEW_FEATURES_REQUIRED = "preview_features_required"
+
+
+def require_preview_features(
+    token: AuthToken = Depends(_decode_token),
+) -> AuthToken:
+    """Refuse callers whose token does not carry `preview_features`.
+
+    Read from the token rather than the user row so the check costs no query;
+    the claim is re-read from the database on every refresh. No admin bypass,
+    matching the dashboard, which hides these features from admins too until
+    the flag is set on their own account.
+    """
+    if not token.preview_features:
+        raise AuthError(status_code=403, detail=PREVIEW_FEATURES_REQUIRED)
+    return token
+
+
 DBSession = Annotated[InterviewDataBase, Depends(get_db)]
 LocalizationCookie = Annotated[LanguageCode, Cookie(alias="localization")]
 LanguageCookie = Annotated[LanguageCode, Cookie(alias="language")]
@@ -191,6 +212,11 @@ InterviewCredential = Annotated[InterviewToken, Depends(_require_interview_token
 AdminToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.ADMIN))]
 UserToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.USER))]
 DemoToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.DEMO))]
+
+# Feature flags. Not to be confused with DemoToken: `Scope.DEMO` is a
+# restricted account tier, `with_demo_features` is early access to unfinished
+# features.
+PreviewFeatures = Annotated[AuthToken, Depends(require_preview_features)]
 
 
 # Resource checks
