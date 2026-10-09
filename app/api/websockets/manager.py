@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections.abc import Collection
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -10,6 +11,10 @@ logger = logging.getLogger(__name__)
 class _Session:
     task: asyncio.Task
     done: asyncio.Event
+    # Set by `end` before it cancels the task, so the session can tell the
+    # client its interview is gone rather than treating the cancellation as a
+    # takeover by a newer connection.
+    deleted: bool = False
 
 
 class InterviewSessionManager:
@@ -20,6 +25,17 @@ class InterviewSessionManager:
     it to finish teardown before the new session proceeds. This prevents
     two AInterviewer instances from racing on writes to the same interview
     (e.g. duplicate `message_id` inserts on a probe-in-flight reconnect).
+
+    It is also how a delete reaches the sessions it would otherwise orphan:
+    every endpoint that deletes interviews calls `end` first. Without that the
+    interview loop keeps running on its in-memory history and writes messages
+    and tasks for an interview that no longer exists -- which is how a test
+    setup deleted mid-run left 1,097 orphaned rows in production.
+
+    The registry is in-process, so this relies on the backend running a single
+    worker (`fastapi run` in entrypoint.sh). With several, a delete handled by
+    one would not reach sessions held by another, and the foreign-key check
+    would be the only thing catching the writes.
     """
 
     _CANCEL_TIMEOUT_S = 10.0
@@ -67,6 +83,60 @@ class InterviewSessionManager:
         async with self._lock:
             self._sessions[key] = _Session(task=current, done=done)
         return done
+
+    async def end(
+        self,
+        project_ids: Collection[UUID],
+        interview_ids: Collection[UUID] | None = None,
+    ) -> int:
+        """End the live sessions of interviews about to be deleted.
+
+        Matches the sessions in `project_ids`, narrowed to `interview_ids` when
+        given; marks each as deleted, cancels it and waits for its teardown, so
+        that by the time this returns nothing is left to write to the rows the
+        caller is about to delete. Returns how many were ended.
+
+        Always scoped by project, never by interview id alone: interview ids
+        reach the delete endpoints in request bodies, and the deletes themselves
+        are project-scoped, so an unscoped match would let a caller end live
+        sessions in a project they cannot touch.
+        """
+        projects = set(project_ids)
+        interviews = None if interview_ids is None else set(interview_ids)
+
+        async with self._lock:
+            ending = [
+                session
+                for (project_id, interview_id), session in self._sessions.items()
+                if project_id in projects
+                and (interviews is None or interview_id in interviews)
+            ]
+
+        for session in ending:
+            session.deleted = True
+            session.task.cancel()
+
+        for session in ending:
+            try:
+                await asyncio.wait_for(
+                    session.done.wait(), timeout=self._CANCEL_TIMEOUT_S
+                )
+            except TimeoutError:
+                logger.error(
+                    "A session ended for deletion did not exit within %.1fs",
+                    self._CANCEL_TIMEOUT_S,
+                )
+
+        if ending:
+            logger.info("Ended %d live interview session(s) for deletion", len(ending))
+        return len(ending)
+
+    def ended_by_delete(
+        self, project_id: UUID, interview_id: UUID, done: asyncio.Event
+    ) -> bool:
+        """Whether this session was cancelled by `end` rather than replaced."""
+        session = self._sessions.get((project_id, interview_id))
+        return session is not None and session.done is done and session.deleted
 
     def release(
         self, project_id: UUID, interview_id: UUID, done: asyncio.Event

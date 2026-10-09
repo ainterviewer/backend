@@ -3,6 +3,7 @@ from pydantic import UUID4, BaseModel
 
 from ...db.models import UNSET, UserAdmin, UserAdminUpdate
 from ...dependencies import AdminToken, DBSession
+from ..websockets.manager import session_manager
 
 router = APIRouter()
 
@@ -18,6 +19,7 @@ async def get_users(db: DBSession, jwt: AdminToken) -> list[UserAdmin]:
 
 @router.delete("/users")
 async def delete_user(user_id: UUID4, db: DBSession, jwt: AdminToken):
+    await session_manager.end(db.projects.get_owned_project_ids(user_id))
     return db.users.delete_user(id=user_id)
 
 

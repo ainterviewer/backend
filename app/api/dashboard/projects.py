@@ -83,6 +83,7 @@ from ..response_models import (
     InterviewResumeLinkPublic,
     ProbingPromptPreview,
 )
+from ..websockets.manager import session_manager
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,7 @@ async def delete_project(
     jwt: DemoToken,
     _: ProjectAdmin,
 ):
+    await session_manager.end([project_id])
     db.projects.delete_project(project_id)
     delete_project_storage(project_id)
 
@@ -762,6 +764,7 @@ async def delete_interviews(
     jwt: DemoToken,
     _: ProjectAdmin,
 ):
+    await session_manager.end([project_id], delete_request.interview_ids)
     db.interviews.delete_interviews(project_id, delete_request.interview_ids)
 
 

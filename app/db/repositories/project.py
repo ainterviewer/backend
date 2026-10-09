@@ -157,6 +157,16 @@ class ProjectRepository(BaseRepository):
 
         return ProjectFolderPublic.model_validate(folder)
 
+    def get_folder_project_ids(self, folder_id: UUID4) -> list[uuid.UUID]:
+        """The projects a folder delete takes with it."""
+        statement = select(ProjectTable.id).where(ProjectTable.folder_id == folder_id)
+        return list(self.session.execute(statement).scalars())
+
+    def get_owned_project_ids(self, user_id: UUID4) -> list[uuid.UUID]:
+        """The projects a user delete takes with it."""
+        statement = select(ProjectTable.id).where(ProjectTable.owner_id == user_id)
+        return list(self.session.execute(statement).scalars())
+
     def delete_folder(self, folder_id: UUID4):
         statement = select(ProjectFolderTable).where(ProjectFolderTable.id == folder_id)
         folder = self.session.execute(statement).scalar_one()

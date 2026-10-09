@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 
@@ -54,6 +55,15 @@ class TestRepository(BaseRepository):
         self.session.refresh(test)
 
         return TestSetupPublic.model_validate(test)
+
+    def get_setup_interview_ids(self, test_id: UUID4) -> list[uuid.UUID]:
+        """The interviews a test setup delete takes with it."""
+        statement = (
+            select(InterviewTable.id)
+            .join(TestRunTable, InterviewTable.test_run_id == TestRunTable.id)
+            .where(TestRunTable.test_setup_id == test_id)
+        )
+        return list(self.session.execute(statement).scalars())
 
     def delete_test_setup(self, test_id: UUID4):
         """Delete a test setup along with its runs and the interviews they

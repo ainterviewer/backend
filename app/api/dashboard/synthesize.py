@@ -29,6 +29,7 @@ from ..request_models import (
     UpdateFixedPersonasRequest,
 )
 from ..response_models import SynthesizeResponse
+from ..websockets.manager import session_manager
 
 router = APIRouter(tags=["synthesize"])
 
@@ -169,6 +170,7 @@ async def delete_test_setup(
     db: DBSession,
     jwt: ProjectEditor,
 ):
+    await session_manager.end([project_id], db.tests.get_setup_interview_ids(test_id))
     db.tests.delete_test_setup(test_id)
 
 

@@ -44,6 +44,7 @@ from .request_models import (
     VerifyEmailRequest,
     VerifyLoginCodeRequest,
 )
+from .websockets.manager import session_manager
 
 logger = logging.getLogger(__name__)
 
@@ -332,6 +333,7 @@ async def update_my_password(
 async def delete_me(body: DeleteAccountRequest, db: DBSession, jwt: DemoToken):
     _verify_current_password(db, jwt.user_id, body.password)
 
+    await session_manager.end(db.projects.get_owned_project_ids(jwt.user_id))
     db.users.delete_user(jwt.user_id)
 
     response = JSONResponse({"detail": "Account deleted"})

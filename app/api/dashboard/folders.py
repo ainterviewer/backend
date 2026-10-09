@@ -15,6 +15,7 @@ from ...dependencies import DBSession, DemoToken, FolderAdmin, FolderEditor
 from ...types import CollaboratorRole
 from ...utils import generate_qr_img
 from ..request_models import CreateProjectRequest
+from ..websockets.manager import session_manager
 
 router = APIRouter(tags=["folders"])
 
@@ -49,6 +50,7 @@ async def delete_folder(
     jwt: DemoToken,
     _: FolderAdmin,
 ):
+    await session_manager.end(db.projects.get_folder_project_ids(folder_id))
     db.projects.delete_folder(folder_id)
 
 

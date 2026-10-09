@@ -162,10 +162,18 @@ async def ai_interview_websocket_endpoint(
             initialized=initialized,
         )
     except asyncio.CancelledError:
-        # Deliberately cancelled by session_manager because a newer connection
-        # took over this interview. Close the socket and exit cleanly so
-        # uvicorn doesn't log it as an unhandled ASGI exception.
+        # Deliberately cancelled by session_manager: either a newer connection
+        # took over this interview, or the interview is being deleted. Close
+        # the socket and exit cleanly so uvicorn doesn't log it as an unhandled
+        # ASGI exception.
         try:
+            if session_manager.ended_by_delete(project_id, interview_id, session_done):
+                # The frame a reconnect to a deleted interview gets anyway (see
+                # `_run_interview`), so the client starts over instead of
+                # reconnecting into an interview that is no longer there.
+                await websocket.send_json(
+                    OutgoingData(content=CustomToken.restart_interview).model_dump()
+                )
             await websocket.close()
         except Exception:
             logger.debug("Websocket already closed while cancelling interview")
