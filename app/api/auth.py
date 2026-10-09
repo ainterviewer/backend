@@ -131,7 +131,7 @@ def _issue_session(
     db.users.update_user_status(user.id, last_login=True)
 
     access_token = create_auth_token(
-        user_id=user.id, scope=user.scope, preview_features=user.with_demo_features
+        user_id=user.id, scope=user.scope, preview_features=user.with_preview_features
     )
     raw_refresh = _create_and_store_refresh_token(
         db, user_id=user.id, extended=extended
@@ -319,7 +319,7 @@ async def update_my_password(
     # fresh one so the current client stays logged in.
     db.auth.revoke_all_for_user(jwt.user_id)
     access_token = create_auth_token(
-        user_id=user.id, scope=user.scope, preview_features=user.with_demo_features
+        user_id=user.id, scope=user.scope, preview_features=user.with_preview_features
     )
     raw_refresh = _create_and_store_refresh_token(db, user_id=user.id)
 
@@ -655,7 +655,7 @@ async def refresh(
 
     # Issue new token pair, same family
     new_access = create_auth_token(
-        user_id=user.id, scope=user.scope, preview_features=user.with_demo_features
+        user_id=user.id, scope=user.scope, preview_features=user.with_preview_features
     )
     new_raw_refresh = _create_and_store_refresh_token(
         db,

@@ -61,7 +61,7 @@ class InterviewToken(_Token):
 class AuthToken(_Token):
     user_id: UUID4
     scope: Scope
-    # Mirrors UserTable.with_demo_features, read fresh from the database on
+    # Mirrors UserTable.with_preview_features, read fresh from the database on
     # every login and refresh, so an admin's change reaches the token within one
     # access-token lifetime. Defaults to False so tokens issued before the claim
     # existed decode as "off" until their next refresh.

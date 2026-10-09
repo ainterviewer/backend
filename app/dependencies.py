@@ -214,7 +214,7 @@ UserToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.USER))]
 DemoToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.DEMO))]
 
 # Feature flags. Not to be confused with DemoToken: `Scope.DEMO` is a
-# restricted account tier, `with_demo_features` is early access to unfinished
+# restricted account tier, `with_preview_features` is early access to unfinished
 # features.
 PreviewFeatures = Annotated[AuthToken, Depends(require_preview_features)]
 

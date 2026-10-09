@@ -157,7 +157,7 @@ class UserCreate(UserCreateRequest):
 class UserPrivate(UserBase):
     id: UUID4
     password: str
-    with_demo_features: bool
+    with_preview_features: bool
     organization: str | None = None
     email_verified: bool = False
     two_factor_enabled: bool = True
@@ -167,7 +167,7 @@ class UserPublic(UserBase):
     id: UUID4
     invitation_title: str | None = None
     expires_at: datetime | None = None
-    with_demo_features: bool
+    with_preview_features: bool
     organization: str | None = None
 
 
@@ -180,7 +180,7 @@ class UserAdmin(UserPublic):
 
 class UserAdminUpdate(BaseModel):
     scope: Scope | _Unset = UNSET
-    with_demo_features: bool | _Unset = UNSET
+    with_preview_features: bool | _Unset = UNSET
     organization: str | None | _Unset = UNSET
     expires_at: datetime | None | _Unset = UNSET
     two_factor_enabled: bool | _Unset = UNSET

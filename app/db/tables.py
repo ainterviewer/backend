@@ -246,7 +246,7 @@ class UserTable(Base):
     admin_note_updated_at: Mapped[datetime.datetime | None] = mapped_column(
         default=None
     )
-    with_demo_features: Mapped[bool] = mapped_column(
+    with_preview_features: Mapped[bool] = mapped_column(
         default=False, server_default=sa.false()
     )
 
