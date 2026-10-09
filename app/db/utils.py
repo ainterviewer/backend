@@ -150,4 +150,4 @@ def urlid_to_uuid(url: str) -> uuid.UUID:
     >>> print(id_)
     5d98d578-2731-4a4d-b666-70ca16f10aa2
     """
-    return uuid.UUID(bytes=base64.urlsafe_b64decode(url + "=" * (len(url) % 4)))
+    return uuid.UUID(bytes=base64.urlsafe_b64decode(url + "=" * (-len(url) % 4)))

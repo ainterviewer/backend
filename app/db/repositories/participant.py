@@ -4,6 +4,7 @@ import uuid
 
 from pydantic import UUID4
 from sqlalchemy import delete, select, update
+from sqlalchemy.exc import NoResultFound
 
 from ..models import UNSET, ParticipantCreate, ParticipantPublic, ParticipantUpdate
 from ..tables import (
@@ -14,6 +15,7 @@ from ..tables import (
 )
 from ..utils import urlid_to_uuid, uuid_to_urlid
 from .base import BaseRepository
+from .errors import OptOutTokenError
 
 
 def _to_public(link: ProjectParticipantTable) -> ParticipantPublic:
@@ -258,21 +260,35 @@ class ParticipantRepository(BaseRepository):
         Participant row and flip its participating flag. Returns the public
         view from any one of the participant's project links (callers using
         the public opt-out endpoint don't have project context)."""
-        token = urlid_to_uuid(opt_out_urlid)
+        try:
+            token = urlid_to_uuid(opt_out_urlid)
+        except ValueError as exc:  # binascii.Error is a ValueError
+            raise OptOutTokenError(f"undecodable token: {exc}") from exc
+
         participant = self.session.execute(
             select(ParticipantTable).where(ParticipantTable.opt_out_token == token)
-        ).scalar_one()
+        ).scalar_one_or_none()
+        if participant is None:
+            raise OptOutTokenError("token matches no participant")
+
         participant.participating = False
         participant.opt_out_reason = reason
         self.session.commit()
         self.session.refresh(participant)
 
-        link = self.session.execute(
-            select(ProjectParticipantTable)
-            .where(ProjectParticipantTable.participant_id == participant.id)
-            .order_by(ProjectParticipantTable.created_at.desc())
-            .limit(1)
-        ).scalar_one()
+        # The opt-out above is already committed; this only shapes the
+        # response, which needs a project link to render.
+        try:
+            link = self.session.execute(
+                select(ProjectParticipantTable)
+                .where(ProjectParticipantTable.participant_id == participant.id)
+                .order_by(ProjectParticipantTable.created_at.desc())
+                .limit(1)
+            ).scalar_one()
+        except NoResultFound as exc:
+            raise OptOutTokenError(
+                f"participant {participant.id} opted out but has no project link"
+            ) from exc
         return _to_public(link)
 
     def get_opt_out_urlid(self, project_participant_id: UUID4) -> str:

@@ -22,6 +22,7 @@ from ...db.models import (
     ParticipantPublic,
     ParticipantUpdate,
 )
+from ...db.repositories.errors import OptOutTokenError
 from ...dependencies import (
     DBSession,
     ProjectAdmin,
@@ -246,7 +247,18 @@ async def opt_out(
     db: DBSession,
     reason: Annotated[str | None, Body()] = None,
 ) -> ParticipantPublic:
-    return db.participants.opt_out(opt_out_token, reason)
+    try:
+        return db.participants.opt_out(opt_out_token, reason)
+    except OptOutTokenError as exc:
+        logger.info("Rejecting opt-out link: %s", exc.reason)
+        # Shown verbatim on the opt-out page, so written for the participant.
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "This opt-out link is invalid or no longer active. "
+                "Please contact the study team."
+            ),
+        )
 
 
 @router.post("/projects/{project_id}/participants")

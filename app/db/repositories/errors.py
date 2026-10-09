@@ -52,3 +52,19 @@ class CodingError(Exception):
     inside the message, and a coding that already exists. The API maps this to
     a 400 and shows the message.
     """
+
+
+class OptOutTokenError(Exception):
+    """An opt-out link did not resolve to a participant.
+
+    Raised for a token that does not decode and for one that names nobody --
+    typically a participant deleted after their email went out, or a link an
+    email client wrapped or truncated. The API turns both into the same 404,
+    since to the participant following it they are the same broken link.
+
+    ``reason`` is for the server log, never for the response body.
+    """
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
