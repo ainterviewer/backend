@@ -162,11 +162,10 @@ The backend is tightly coupled with the `ainterviewer` library (sibling package 
   foreign keys unconditionally, so this must be resolved before migrating.
 - Storage location: `storage/db.sqlite`
 
-**Alternative: PostgreSQL**
-
-- Connection pooling: 20 pool size, 40 max overflow
-- Configured via `DATABASE_URL` environment variable
-- Use `db = "postgres"` in config.toml
+**PostgreSQL: not implemented.** `DatabaseType.POSTGRESQL` exists and the
+engine is created with a 20/40 pool, but `DatabaseSettings.connection_string`
+builds no URL for it (the branch is a `pass`), so `db = "postgresql"` fails at
+startup. Nothing reads a `DATABASE_URL` variable.
 
 ### Embeddings
 
@@ -395,7 +394,10 @@ recomputed and no text can land beside a vector made from something else.
 
 - Sources (priority order): Environment variables → `.env` → `pyproject.toml` → `config.toml`
 - Pydantic BaseSettings with validation
-- Prefixes: `APP_SECRET__`, `APP_SERVICE__`, `APP_DATABASE__`
+- Prefixes: `APP_SECRET__` and `APP_SERVICE__` for those two sections; every
+  other section is read with no prefix and `__` as the nesting delimiter, so
+  `[database] enforce_foreign_keys` is `DATABASE__ENFORCE_FOREIGN_KEYS`, not
+  `APP_DATABASE__…` (which is silently ignored)
 - Example: `APP_SECRET__JWT_SECRET_KEY` overrides default JWT secret
 
 ## Development Workflow
@@ -471,12 +473,13 @@ User-facing prompt customisation is exposed through
 ### Running with Different Configurations
 
 ```bash
-# Override config values via environment
-APP_DATABASE__DB=postgres DATABASE_URL=postgresql://... just dev
-
-# Use custom config file
-CONFIG_FILE=config.production.toml just dev
+# Override config values via environment (no APP_ prefix outside the
+# secret and service sections)
+DATABASE__DB_PATH=/tmp/scratch-db just dev
 ```
+
+The config file is always `config.toml` in the working directory; there is no
+variable to point at another one.
 
 ## Important Patterns
 
@@ -634,9 +637,6 @@ APP_SECRET__SESSION_SECRET_KEY=your-session-key
 
 # Email Service (optional)
 APP_SERVICE__EMAIL__SMTP_PASSWORD=your-smtp-password
-
-# Database (if using PostgreSQL)
-DATABASE_URL=postgresql://user:pass@host:port/dbname
 ```
 
 ## Package Manager: uv

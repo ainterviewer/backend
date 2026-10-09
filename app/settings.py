@@ -123,7 +123,7 @@ class DatabaseSettings(BaseModel):
 
     # SQLite only, and per-connection: see app/db/pragmas.py. Exposed as a
     # setting so enforcement can be switched off with
-    # `APP_DATABASE__ENFORCE_FOREIGN_KEYS=false` and a restart, without a
+    # `DATABASE__ENFORCE_FOREIGN_KEYS=false` and a restart, without a
     # deploy, if it surfaces a violation in production.
     enforce_foreign_keys: bool = False
 
