@@ -68,3 +68,19 @@ class OptOutTokenError(Exception):
     def __init__(self, reason: str):
         super().__init__(reason)
         self.reason = reason
+
+
+class InterviewGoneError(Exception):
+    """A write for an interview failed because the interview no longer exists.
+
+    Raised from the interview loop's own writes (messages and tasks) when the
+    foreign-key check rejects them: the interview was deleted while its session
+    was still running. Deleting endpoints end the session first (see
+    `InterviewSessionManager.end`), so this is the backstop for whatever slips
+    past that. The websocket maps it to the restart frame a reconnect to a
+    deleted interview gets.
+    """
+
+    def __init__(self, interview_id):
+        super().__init__(f"interview {interview_id} no longer exists")
+        self.interview_id = interview_id

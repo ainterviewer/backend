@@ -6,6 +6,7 @@ from typing import IO, Any
 
 import polars as pl
 from pydantic import UUID4
+from sqlalchemy.exc import IntegrityError
 from xlsxwriter import Workbook
 
 from ..types import ExternalParam
@@ -151,3 +152,19 @@ def urlid_to_uuid(url: str) -> uuid.UUID:
     5d98d578-2731-4a4d-b666-70ca16f10aa2
     """
     return uuid.UUID(bytes=base64.urlsafe_b64decode(url + "=" * (-len(url) % 4)))
+
+
+def is_foreign_key_violation(error: IntegrityError) -> bool:
+    """Whether `error` is a foreign-key failure, as opposed to a unique or NOT
+    NULL one.
+
+    Callers that expect one kind of IntegrityError -- a duplicate insert, say --
+    must not swallow the other: a foreign-key failure means the parent row is
+    gone, which is never the benign case.
+    """
+    orig = error.orig
+    # sqlite3 (Python 3.11+) names the extended result code.
+    if getattr(orig, "sqlite_errorname", None) == "SQLITE_CONSTRAINT_FOREIGNKEY":
+        return True
+    # PostgreSQL's SQLSTATE for foreign_key_violation, under psycopg 3 and 2.
+    return "23503" in (getattr(orig, "sqlstate", None), getattr(orig, "pgcode", None))

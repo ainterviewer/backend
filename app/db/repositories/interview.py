@@ -46,8 +46,9 @@ from ..tables import (
     TestSetupTable,
 )
 from ..types import InterviewType
+from ..utils import is_foreign_key_violation
 from .base import BaseRepository
-from .errors import ResumeTokenError
+from .errors import InterviewGoneError, ResumeTokenError
 
 logger = logging.getLogger(__name__)
 
@@ -714,8 +715,10 @@ class InterviewRepository(BaseRepository):
                 .values(last_updated=now())
             )
             self.session.commit()
-        except IntegrityError:
+        except IntegrityError as error:
             self.session.rollback()
+            if is_foreign_key_violation(error):
+                raise InterviewGoneError(interview_id) from error
             logger.warning(
                 "Skipping duplicate message insert "
                 "(project_id=%s interview_id=%s message_id=%s role=%s); "
@@ -829,7 +832,15 @@ class InterviewRepository(BaseRepository):
             time_spend=time_spend,
         )
         self.session.add(new_task)
-        self.session.commit()
+        try:
+            self.session.commit()
+        except IntegrityError as error:
+            # Rolled back either way so the session stays usable for the
+            # status update AInterviewer makes on its way out.
+            self.session.rollback()
+            if is_foreign_key_violation(error):
+                raise InterviewGoneError(interview_id) from error
+            raise
 
     # ==================== Interviewee Methods ====================
 

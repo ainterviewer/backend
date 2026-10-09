@@ -40,6 +40,7 @@ from ainterviewer.interview import AInterviewer
 from ainterviewer.lpm.types import CustomToken
 
 from ....db import InterviewDataBase
+from ....db.repositories.errors import InterviewGoneError
 from ....dependencies import DBSession
 from ....embed.client import embedding_client
 from ....embed.queue import QueueEmbedder, chunk_queue
@@ -276,6 +277,20 @@ async def _run_interview(
             await interviewer.interview(interview_history=interview_history)
     except WebSocketDisconnect:
         pass
+    except InterviewGoneError:
+        # Deleted while this session was running, and the delete did not end
+        # the session first (see InterviewSessionManager.end) -- the foreign
+        # key caught the write instead. Same frame as a reconnect to a deleted
+        # interview, rather than a service failure the respondent cannot act on.
+        logger.info(
+            "Interview %s was deleted mid-session; restarting client", interview_id
+        )
+        try:
+            await websocket.send_json(
+                OutgoingData(content=CustomToken.restart_interview).model_dump()
+            )
+        except Exception:
+            logger.debug("Restart could not be sent: websocket closed")
     except Exception as e:
         # Every failure has to reach the client as a frame. An exception that
         # escapes here closes the socket with nothing on it, which the frontend
