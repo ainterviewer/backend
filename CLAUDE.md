@@ -589,6 +589,24 @@ await self.message_queue.put(
   respondent requests one the project has no localization for, instead of
   surfacing the choice (see the `FIXME` in `app/api/interview.py`)
 
+## Branching & Merging
+
+History on `main` is linear: no merge commits.
+
+- Work on a branch (`feat/…`, `fix/…`, `refactor/…`), never directly on `main`.
+  The exception is the release commit `just publish` makes, which lands on
+  `main` directly.
+- To land it, rebase onto `main` and fast-forward:
+  `git rebase main <branch> && git switch main && git merge --ff-only <branch>`.
+  Several branches land one after another, each rebased onto the result of
+  the last.
+- Run the checks again after a rebase that touched the same files as `main`;
+  a clean rebase is not proof the two changes compose.
+- On GitHub, PRs merge by rebase or squash; merge commits are disabled.
+- Clones should set `git config pull.rebase true` and
+  `git config merge.ff only`, so a stray `git pull` or `git merge` cannot
+  create a merge commit.
+
 ## Release Process
 
 ```bash
