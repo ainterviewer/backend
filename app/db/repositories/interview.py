@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import UUID4
-from sqlalchemy import String, case, cast, delete, func, or_, select, update
+from sqlalchemy import String, case, cast, delete, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload, noload, selectinload
 from sqlalchemy.orm.attributes import set_committed_value
@@ -832,6 +832,18 @@ class InterviewRepository(BaseRepository):
         self.session.commit()
 
     # ==================== Interviewee Methods ====================
+
+    def interview_in_project(self, interview_id: UUID4, project_id: UUID4) -> bool:
+        return bool(
+            self.session.scalar(
+                select(
+                    exists().where(
+                        InterviewTable.id == interview_id,
+                        InterviewTable.project_id == project_id,
+                    )
+                )
+            )
+        )
 
     def add_interviewee(self, project_id: UUID4, interviewee: IntervieweeCreate):
         self.session.add(

@@ -3,7 +3,7 @@ import io
 import uuid
 
 from pydantic import UUID4
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, exists, select, update
 from sqlalchemy.exc import NoResultFound
 
 from ..models import UNSET, ParticipantCreate, ParticipantPublic, ParticipantUpdate
@@ -205,6 +205,18 @@ class ParticipantRepository(BaseRepository):
             )
         ).scalar_one()
         return link_id
+
+    def link_in_project(self, project_participant_id: UUID4, project_id: UUID4) -> bool:
+        return bool(
+            self.session.scalar(
+                select(
+                    exists().where(
+                        ProjectParticipantTable.id == project_participant_id,
+                        ProjectParticipantTable.project_id == project_id,
+                    )
+                )
+            )
+        )
 
     def _get_link(self, project_participant_id: UUID4) -> ProjectParticipantTable:
         return self.session.execute(

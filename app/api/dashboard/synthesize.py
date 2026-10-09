@@ -181,6 +181,10 @@ async def add_interviewee(
     db: DBSession,
     jwt: ProjectEditor,
 ):
+    # A synthetic agent posts this after creating its interview; if the test
+    # setup was deleted in between, the interview is already gone.
+    if not db.interviews.interview_in_project(interviewee.interview_id, project_id):
+        raise HTTPException(status_code=404, detail="Interview not found")
     db.interviews.add_interviewee(project_id, interviewee)
 
 

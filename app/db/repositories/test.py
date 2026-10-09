@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta
 
 from pydantic import UUID4
-from sqlalchemy import Column, delete, func, select, update
+from sqlalchemy import Column, delete, exists, func, select, update
 
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
 from ainterviewer.utils import now
@@ -55,6 +55,18 @@ class TestRepository(BaseRepository):
         self.session.refresh(test)
 
         return TestSetupPublic.model_validate(test)
+
+    def run_in_project(self, test_run_id: UUID4, project_id: UUID4) -> bool:
+        return bool(
+            self.session.scalar(
+                select(
+                    exists()
+                    .where(TestRunTable.id == test_run_id)
+                    .where(TestRunTable.test_setup_id == TestSetupTable.id)
+                    .where(TestSetupTable.project_id == project_id)
+                )
+            )
+        )
 
     def get_setup_interview_ids(self, test_id: UUID4) -> list[uuid.UUID]:
         """The interviews a test setup delete takes with it."""

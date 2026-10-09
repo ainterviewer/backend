@@ -218,6 +218,21 @@ async def create_interview(
                 detail=f"No participant with pid '{new_interview.pid}' in this project",
             )
 
+    # Checked here rather than left to the foreign keys, which would turn a
+    # stale or foreign id into an IntegrityError and a 500. A test run goes
+    # stale when its setup is deleted while the run is still starting agents.
+    if new_interview.test_run_id is not None and not db.tests.run_in_project(
+        new_interview.test_run_id, project_id
+    ):
+        raise HTTPException(status_code=404, detail="Test run not found")
+
+    if participant_id is not None and not db.participants.link_in_project(
+        participant_id, project_id
+    ):
+        raise HTTPException(
+            status_code=404, detail="No such participant in this project"
+        )
+
     interview = db.interviews.create_interview(
         project_id,
         interview_guide=interview_guide,
