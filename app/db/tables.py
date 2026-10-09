@@ -106,7 +106,9 @@ class AccessRequestTable(Base):
     status: Mapped[AccessRequestStatus] = mapped_column(
         default=AccessRequestStatus.WAITING
     )
-    processed_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("user.id"))
+    processed_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id"), index=True
+    )
 
     # Relationships
     processed_by: Mapped[Optional["UserTable"]] = relationship(
@@ -139,7 +141,8 @@ class InvitationTable(Base):
     # SET NULL, not CASCADE: an invitation outlives the access request it came
     # from. Pruning the request list must never revoke a pending invite.
     access_request_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("access_requests.id", ondelete="SET NULL")
+        ForeignKey("access_requests.id", ondelete="SET NULL"),
+        index=True,
     )
 
     # Relationships
@@ -324,7 +327,8 @@ class ProjectTable(Base):
     __table_args__ = (UniqueConstraint("title", "folder_id", name="title"),)
 
     folder_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("projectfolder.id", ondelete="CASCADE")
+        ForeignKey("projectfolder.id", ondelete="CASCADE"),
+        index=True,
     )
     title: Mapped[str] = mapped_column()
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
@@ -352,7 +356,8 @@ class ProjectTable(Base):
     #: model to validate against, and that decoder expects one.
     codebook_palette: Mapped[list[str] | None] = mapped_column(JSON, default=None)
     owner_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("user.id", ondelete="CASCADE")
+        ForeignKey("user.id", ondelete="CASCADE"),
+        index=True,
     )
 
     # Relationships
@@ -573,10 +578,12 @@ class CollaboratorTable(Base):
 
     folder_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projectfolder.id"))
     user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("user.id", ondelete="CASCADE")
+        ForeignKey("user.id", ondelete="CASCADE"),
+        index=True,
     )
     added_by_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("user.id", ondelete="SET NULL")
+        ForeignKey("user.id", ondelete="SET NULL"),
+        index=True,
     )
     added_at: Mapped[datetime.datetime] = mapped_column(default=now)
     role: Mapped[CollaboratorRole] = mapped_column(SQLEnum(CollaboratorRole))
@@ -609,7 +616,8 @@ class ExperimentProjectTable(Base):
         ForeignKey("experiment.id", ondelete="CASCADE")
     )
     project_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("project.id", ondelete="CASCADE")
+        ForeignKey("project.id", ondelete="CASCADE"),
+        index=True,
     )
     weight: Mapped[float | None] = mapped_column(default=None)
     added_at: Mapped[datetime.datetime] = mapped_column(default=now)
@@ -629,7 +637,7 @@ class ExperimentTable(Base):
     status: Mapped[ProjectStatus] = mapped_column(
         SQLEnum(ProjectStatus), default=ProjectStatus.ACTIVE
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("user.id"))
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("user.id"), index=True)
 
     # Relationships
     user: Mapped["UserTable"] = relationship(back_populates="experiments")
@@ -691,13 +699,17 @@ class InterviewTable(Base):
     external_params: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
     experiment_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("experiment.id", ondelete="SET NULL")
+        ForeignKey("experiment.id", ondelete="SET NULL"),
+        index=True,
     )
     test_run_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("testrun.id", ondelete="CASCADE")
+        ForeignKey("testrun.id", ondelete="CASCADE"),
+        index=True,
     )
     participant_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("project_participant.id", ondelete="SET NULL"), default=None
+        ForeignKey("project_participant.id", ondelete="SET NULL"),
+        default=None,
+        index=True,
     )
 
     # Relationships
@@ -789,7 +801,9 @@ class InterviewResumeTokenTable(Base):
     # SET NULL rather than CASCADE: deleting the member who issued a link must
     # not silently delete the audit trail of the link itself.
     created_by: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("user.id", ondelete="SET NULL"), default=None
+        ForeignKey("user.id", ondelete="SET NULL"),
+        default=None,
+        index=True,
     )
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     expires_at: Mapped[datetime.datetime] = mapped_column()
@@ -888,10 +902,12 @@ class TaskTable(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     message_id: Mapped[int] = mapped_column()
     interview_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("interview.id", ondelete="CASCADE")
+        ForeignKey("interview.id", ondelete="CASCADE"),
+        index=True,
     )
     project_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("project.id", ondelete="CASCADE")
+        ForeignKey("project.id", ondelete="CASCADE"),
+        index=True,
     )
     task: Mapped[str] = mapped_column(Text)
     reason: Mapped[str | None] = mapped_column(Text)
@@ -915,7 +931,7 @@ class TestSetupTable(Base):
 
     name: Mapped[str | None] = mapped_column()
     type: Mapped[TestType] = mapped_column(SQLEnum(TestType))
-    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"), index=True)
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     # Also bumped by a DB trigger when any TestRun row for this setup changes,
     # and changes here bump ProjectTable.last_updated; see app/db/triggers.py.
@@ -947,7 +963,8 @@ class TestRunTable(Base):
     __tablename__ = "testrun"
 
     test_setup_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("testsetup.id", ondelete="CASCADE")
+        ForeignKey("testsetup.id", ondelete="CASCADE"),
+        index=True,
     )
     language: Mapped[LanguageCode] = mapped_column(LanguageType, default="EN")
     n_interviews: Mapped[int] = mapped_column()
@@ -977,10 +994,12 @@ class IntervieweeTable(Base):
     __tablename__ = "interviewee"
 
     interview_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("interview.id", ondelete="CASCADE")
+        ForeignKey("interview.id", ondelete="CASCADE"),
+        index=True,
     )
     project_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("project.id", ondelete="CASCADE")
+        ForeignKey("project.id", ondelete="CASCADE"),
+        index=True,
     )
     interview_subject: Mapped[InterviewSubject | str] = mapped_column(
         PydanticJSONB(InterviewSubject | str)
@@ -1081,7 +1100,8 @@ class CodingTable(Base):
         ForeignKey("message.id", ondelete="CASCADE")
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("user.id", ondelete="CASCADE")
+        ForeignKey("user.id", ondelete="CASCADE"),
+        index=True,
     )
     start_offset: Mapped[int | None] = mapped_column(default=None)
     end_offset: Mapped[int | None] = mapped_column(default=None)
@@ -1124,7 +1144,8 @@ class MessageCommentTable(Base):
         ForeignKey("message.id", ondelete="CASCADE"), index=True
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("user.id", ondelete="CASCADE")
+        ForeignKey("user.id", ondelete="CASCADE"),
+        index=True,
     )
     # NULL on a root comment; a root's id on a reply.
     parent_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -1156,10 +1177,12 @@ class AssistanceSessionTable(Base):
     __tablename__ = "assistance_session"
 
     project_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("project.id", ondelete="CASCADE")
+        ForeignKey("project.id", ondelete="CASCADE"),
+        index=True,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("user.id", ondelete="CASCADE")
+        ForeignKey("user.id", ondelete="CASCADE"),
+        index=True,
     )
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
 
@@ -1175,7 +1198,8 @@ class AssistanceMessageChunkTable(Base):
     __tablename__ = "assistance_message_chunk"
 
     session_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("assistance_session.id", ondelete="CASCADE")
+        ForeignKey("assistance_session.id", ondelete="CASCADE"),
+        index=True,
     )
     messages_json: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
@@ -1238,7 +1262,9 @@ class EmbeddingTable(Base):
     # Set for MESSAGE chunks only; a QA pair spans several messages and an
     # interview chunk spans all of them.
     message_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("message.id", ondelete="CASCADE"), default=None
+        ForeignKey("message.id", ondelete="CASCADE"),
+        default=None,
+        index=True,
     )
 
     # The interview-guide coordinates the chunk covers. NULL on an interview
