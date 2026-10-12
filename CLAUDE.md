@@ -194,7 +194,9 @@ The backend is tightly coupled with the `ainterviewer` library (sibling package 
   `6b1d0e7a9c35`). The cost is that a connection without the function -- the
   `sqlite3` shell, a new engine -- fails writes to `projectlocalization`,
   `testsetup` and `testrun` with "no such function: app_now"; register it on
-  any engine you build.
+  any engine you build. That includes Alembic's (`alembic/env.py`): older
+  migrations call `install_triggers()` mid-run, so the triggers can fire
+  during later ones even though env.py takes them down first.
 
 **PostgreSQL: not implemented.** `DatabaseType.POSTGRESQL` exists and the
 engine is created with a 20/40 pool, but `DatabaseSettings.connection_string`

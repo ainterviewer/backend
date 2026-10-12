@@ -17,7 +17,11 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 from app.db._extra import PydanticJSONB
 from app.db.tables import Base
-from app.db.triggers import install_triggers, uninstall_triggers
+from app.db.triggers import (
+    install_triggers,
+    register_trigger_functions,
+    uninstall_triggers,
+)
 
 target_metadata = Base.metadata
 
@@ -106,6 +110,12 @@ def run_migrations_online() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
+    # The triggers call app_now(), which only exists on a connection that
+    # registered it. env.py uninstalls them before a run, but older
+    # migrations call install_triggers() mid-run, so they can fire during
+    # later ones: 4f8273d9e6f2's orphan sweep failed on staging that way.
+    # Only the function, not the app's pragmas -- foreign keys stay off.
+    register_trigger_functions(connectable)
 
     logger.info("running migrations against %s", connectable.url)
 
@@ -127,7 +137,8 @@ def run_migrations_online() -> None:
         # testrun triggers that way for six weeks. So every run takes them all
         # down first and installs the full set from triggers.py last, in the
         # same transaction: whatever a migration rebuilds, the database ends
-        # with every trigger, and a failed run rolls back with them intact.
+        # with every trigger. On SQLite the DDL is not transactional, so a
+        # failed run keeps the migrations before it; re-running resumes there.
         # An upgrade with nothing to apply still reinstalls, so each deploy
         # also repairs triggers lost any other way.
         manage_triggers = _manages_triggers()

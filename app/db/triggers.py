@@ -21,8 +21,9 @@ clock has to come from Python.
 The cost: a connection without the function -- the `sqlite3` shell, a DB
 browser, an engine that skipped `register_trigger_functions` -- fails any write
 to `projectlocalization`, `testsetup` or `testrun` with "no such function:
-app_now" rather than stamping the wrong clock. Alembic is unaffected: env.py
-uninstalls the triggers for the duration of every migration. (The PostgreSQL
+app_now" rather than stamping the wrong clock. Alembic's engine registers it
+too: env.py uninstalls the triggers before a run, but older migrations call
+`install_triggers` mid-run, so they can fire during later ones. (The PostgreSQL
 functions use `NOW()`, which follows the session time zone.)
 """
 
