@@ -43,6 +43,14 @@ fetch-db MIGRATE="" ENV="production":
     if [ -n "{{ MIGRATE }}" ]; then
       uv run alembic upgrade head
     fi
+    # Local copies skip the emailed login code. Backups older than the
+    # column don't have it until migrated.
+    if [ "$(sqlite3 storage/db.sqlite "SELECT count(*) FROM pragma_table_info('user') WHERE name = 'two_factor_enabled'")" = 1 ]; then
+      sqlite3 storage/db.sqlite 'UPDATE "user" SET two_factor_enabled = 0'
+      echo "Disabled two-factor for all users"
+    else
+      echo "No two_factor_enabled column; run with 'migrate' to add it" >&2
+    fi
 
 [doc("Run a backup on the remote out of band, exactly as cron does.
 WAL-safe (sqlite3 \".backup\"), so the backend keeps running.
