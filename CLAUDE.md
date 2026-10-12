@@ -185,6 +185,16 @@ The backend is tightly coupled with the `ainterviewer` library (sibling package 
   - `PRAGMA foreign_key_check` should return nothing. Revision `4f8273d9e6f2`
     derives its orphan sweep from the schema and can be re-run safely.
 - Storage location: `storage/db.sqlite`
+- The triggers in `app/db/triggers.py` that bump a parent's `last_updated`
+  stamp `app_now()`, a Python function registered on every connection
+  (`register_trigger_functions`, `app/dependencies.py`) so they write the same
+  clock and format as the app's `now()`. Never use `CURRENT_TIMESTAMP` there:
+  it is UTC with whole seconds, which is how projects came to show a
+  `last_updated` hours before their `created_at` (fixed by revision
+  `6b1d0e7a9c35`). The cost is that a connection without the function -- the
+  `sqlite3` shell, a new engine -- fails writes to `projectlocalization`,
+  `testsetup` and `testrun` with "no such function: app_now"; register it on
+  any engine you build.
 
 **PostgreSQL: not implemented.** `DatabaseType.POSTGRESQL` exists and the
 engine is created with a 20/40 pool, but `DatabaseSettings.connection_string`
@@ -607,12 +617,6 @@ await self.message_queue.put(
 
 ## Known Issues & TODOs
 
-- `last_updated` mixes two clocks. The app writes Copenhagen wall-clock time
-  (`now()`, naive in the column, with microseconds), but the SQLite triggers in
-  `app/db/triggers.py` that bump a parent's `last_updated` write
-  `CURRENT_TIMESTAMP` -- UTC, whole seconds. A parent touched by a trigger can
-  therefore show a `last_updated` hours *before* its `created_at`. Compare
-  `last_updated` values only within one source until this is resolved.
 - The interview session registry is per-process, so ending sessions on delete
   and `claim`'s takeover only work within one worker; see
   `InterviewSessionManager` for what degrades with several.

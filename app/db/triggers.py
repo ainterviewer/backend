@@ -9,19 +9,61 @@ it, even with no new migration.
 
 `missing_triggers` reports any that a database lacks; the app logs it on startup.
 
-Known mismatch, left as is for now: the SQLite triggers write
-`CURRENT_TIMESTAMP`, which is UTC with whole seconds, while the app writes
-`last_updated` with `now()` -- Copenhagen wall-clock time with microseconds. A
-parent bumped by a trigger can show a `last_updated` hours before its own
-`created_at`, and comparing a trigger-written value with an app-written one is
-off by the UTC offset. SQLite has no time-zone database, so a trigger cannot
-produce Copenhagen time itself; resolving it means the app writing UTC, or the
-app doing these bumps. (The PostgreSQL functions use `NOW()`, which follows the
-session time zone.)
+The SQLite triggers stamp `last_updated` with `app_now()`, a function the app
+registers on every connection (`register_trigger_functions`) that returns
+`ainterviewer.utils.now()` rendered exactly as SQLAlchemy stores it. They used
+to write `CURRENT_TIMESTAMP` -- UTC, whole seconds -- beside app-written
+Copenhagen wall-clock time, so a parent bumped by a trigger could show a
+`last_updated` hours before its own `created_at`; revision 6b1d0e7a9c35
+converted the values written that way. SQLite has no time-zone database, so the
+clock has to come from Python.
+
+The cost: a connection without the function -- the `sqlite3` shell, a DB
+browser, an engine that skipped `register_trigger_functions` -- fails any write
+to `projectlocalization`, `testsetup` or `testrun` with "no such function:
+app_now" rather than stamping the wrong clock. Alembic is unaffected: env.py
+uninstalls the triggers for the duration of every migration. (The PostgreSQL
+functions use `NOW()`, which follows the session time zone.)
 """
 
-from sqlalchemy import text
-from sqlalchemy.engine import Connection
+import logging
+
+from sqlalchemy import event, text
+from sqlalchemy.engine import Connection, Engine
+
+from ainterviewer.utils import now
+
+logger = logging.getLogger(__name__)
+
+# ----- the clock the SQLite triggers stamp with --------------------------------
+
+APP_NOW = "app_now"
+
+
+def _app_now() -> str:
+    # The format SQLAlchemy stores a DateTime in on SQLite -- always six
+    # fractional digits. SQLite compares these columns as strings, so a
+    # trigger-written value must be shaped exactly like an app-written one.
+    return now().strftime("%Y-%m-%d %H:%M:%S.%f")
+
+
+def register_trigger_functions(engine: Engine) -> None:
+    """Make `app_now()`, which the SQLite triggers call, exist on every new
+    connection of `engine`.
+
+    A no-op on other dialects.
+    """
+    if engine.dialect.name != "sqlite":
+        return
+
+    @event.listens_for(engine, "connect")
+    def _register(dbapi_connection, _connection_record):
+        try:
+            # Not deterministic: it is a clock.
+            dbapi_connection.create_function(APP_NOW, 0, _app_now)
+        except Exception:
+            logger.exception("Failed to register %s on a new connection", APP_NOW)
+
 
 # ----- touch project.last_updated when a localization changes -----------------
 
@@ -68,7 +110,7 @@ _SQLITE_CREATE_STATEMENTS = (
     FOR EACH ROW
     BEGIN
         UPDATE project
-        SET last_updated = CURRENT_TIMESTAMP
+        SET last_updated = app_now()
         WHERE id = NEW.project_id;
     END;
     """,
@@ -78,7 +120,7 @@ _SQLITE_CREATE_STATEMENTS = (
     FOR EACH ROW
     BEGIN
         UPDATE project
-        SET last_updated = CURRENT_TIMESTAMP
+        SET last_updated = app_now()
         WHERE id = NEW.project_id;
     END;
     """,
@@ -88,7 +130,7 @@ _SQLITE_CREATE_STATEMENTS = (
     FOR EACH ROW
     BEGIN
         UPDATE project
-        SET last_updated = CURRENT_TIMESTAMP
+        SET last_updated = app_now()
         WHERE id = OLD.project_id;
     END;
     """,
@@ -138,7 +180,7 @@ _SQLITE_CREATE_STATEMENTS_TESTRUN_TO_TESTSETUP = (
     FOR EACH ROW
     BEGIN
         UPDATE testsetup
-        SET last_updated = CURRENT_TIMESTAMP
+        SET last_updated = app_now()
         WHERE id = NEW.test_setup_id;
     END;
     """,
@@ -148,7 +190,7 @@ _SQLITE_CREATE_STATEMENTS_TESTRUN_TO_TESTSETUP = (
     FOR EACH ROW
     BEGIN
         UPDATE testsetup
-        SET last_updated = CURRENT_TIMESTAMP
+        SET last_updated = app_now()
         WHERE id = NEW.test_setup_id;
     END;
     """,
@@ -158,7 +200,7 @@ _SQLITE_CREATE_STATEMENTS_TESTRUN_TO_TESTSETUP = (
     FOR EACH ROW
     BEGIN
         UPDATE testsetup
-        SET last_updated = CURRENT_TIMESTAMP
+        SET last_updated = app_now()
         WHERE id = OLD.test_setup_id;
     END;
     """,
@@ -208,7 +250,7 @@ _SQLITE_CREATE_STATEMENTS_TESTSETUP_TO_PROJECT = (
     FOR EACH ROW
     BEGIN
         UPDATE project
-        SET last_updated = CURRENT_TIMESTAMP
+        SET last_updated = app_now()
         WHERE id = NEW.project_id;
     END;
     """,
@@ -218,7 +260,7 @@ _SQLITE_CREATE_STATEMENTS_TESTSETUP_TO_PROJECT = (
     FOR EACH ROW
     BEGIN
         UPDATE project
-        SET last_updated = CURRENT_TIMESTAMP
+        SET last_updated = app_now()
         WHERE id = NEW.project_id;
     END;
     """,
@@ -228,7 +270,7 @@ _SQLITE_CREATE_STATEMENTS_TESTSETUP_TO_PROJECT = (
     FOR EACH ROW
     BEGIN
         UPDATE project
-        SET last_updated = CURRENT_TIMESTAMP
+        SET last_updated = app_now()
         WHERE id = OLD.project_id;
     END;
     """,
@@ -280,7 +322,7 @@ _SQLITE_CREATE_STATEMENTS_TESTRUN_TO_PROJECT = (
     FOR EACH ROW
     BEGIN
         UPDATE project
-        SET last_updated = CURRENT_TIMESTAMP
+        SET last_updated = app_now()
         WHERE id = (SELECT project_id FROM testsetup WHERE id = NEW.test_setup_id);
     END;
     """,
@@ -290,7 +332,7 @@ _SQLITE_CREATE_STATEMENTS_TESTRUN_TO_PROJECT = (
     FOR EACH ROW
     BEGIN
         UPDATE project
-        SET last_updated = CURRENT_TIMESTAMP
+        SET last_updated = app_now()
         WHERE id = (SELECT project_id FROM testsetup WHERE id = NEW.test_setup_id);
     END;
     """,
@@ -300,7 +342,7 @@ _SQLITE_CREATE_STATEMENTS_TESTRUN_TO_PROJECT = (
     FOR EACH ROW
     BEGIN
         UPDATE project
-        SET last_updated = CURRENT_TIMESTAMP
+        SET last_updated = app_now()
         WHERE id = (SELECT project_id FROM testsetup WHERE id = OLD.test_setup_id);
     END;
     """,
