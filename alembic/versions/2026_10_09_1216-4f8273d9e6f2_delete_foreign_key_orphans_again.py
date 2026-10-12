@@ -94,10 +94,16 @@ def upgrade() -> None:
         changed = 0
         for table, column, parent, parent_column, null_it in keys:
             # NOT EXISTS rather than NOT IN: it does not go wrong if the
-            # subquery ever yields a NULL.
+            # subquery ever yields a NULL. The parent is aliased because a key
+            # can point at its own table (`code.parent_id`,
+            # `message_comment.parent_id`): unaliased, both sides resolve to
+            # the subquery's row, so every child whose parent was not itself
+            # looked orphaned and was deleted -- 68 of 72 codes, and with them
+            # nearly every coding, on staging.
             orphaned = (
                 f'"{column}" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM "{parent}" '
-                f'WHERE "{parent}"."{parent_column}" = "{table}"."{column}")'
+                f'AS parent_row WHERE parent_row."{parent_column}" = '
+                f'"{table}"."{column}")'
             )
             if null_it:
                 sql = f'UPDATE "{table}" SET "{column}" = NULL WHERE {orphaned}'
