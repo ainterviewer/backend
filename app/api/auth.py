@@ -599,7 +599,7 @@ async def logout_everywhere(db: DBSession, jwt: DemoToken):
 async def exit():
     """Route to exit the interview and deletes the cookies."""
     response = JSONResponse({"detail": "Successfully exited"})
-    cookies_to_delete = {"language", "interview_token", "config"}
+    cookies_to_delete = {"interview_token", "config"}
     for key in cookies_to_delete:
         response.delete_cookie(
             key=key,

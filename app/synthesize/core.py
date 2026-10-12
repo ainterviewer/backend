@@ -44,8 +44,6 @@ async def fetch_token(
     url = f"http://{app_settings.app.api_endpoint}/api/projects/{project_id}/{language}/interviews"
 
     cookies = {"access_token": auth_token}
-    if language:
-        cookies["language"] = language
 
     headers = {
         "User-Agent": f"ainterviewer/{ainterviewer.__version__} ({platform.system()} {platform.release()}; Python/{platform.python_version()})"
@@ -70,11 +68,10 @@ async def fetch_token(
 
 async def _connect_and_yield_messages(
     token: str,
-    language: LanguageCode | None = None,
 ) -> AsyncGenerator[tuple[dict, ClientConnection], None]:
     """Connect to the websocket and yield parsed messages."""
 
-    cookies = f"interview_token={token}; language={language}"
+    cookies = f"interview_token={token}"
 
     async with connect(
         f"ws://{app_settings.app.api_endpoint}/ws/ai",
@@ -118,7 +115,7 @@ async def run_synthetic_answering_agent(
     )
 
     async for json_data, websocket in _connect_and_yield_messages(
-        interview_token.encode(), language
+        interview_token.encode()
     ):
         match json_data["type"]:
             case "data":
@@ -158,7 +155,7 @@ async def run_synthetic_fixed_answers(
     )
 
     async for json_data, websocket in _connect_and_yield_messages(
-        interview_token.encode(), language
+        interview_token.encode()
     ):
         match json_data["type"]:
             case "message":

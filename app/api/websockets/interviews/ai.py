@@ -216,10 +216,22 @@ async def _run_interview(
 
     interview_config = project.config
 
-    if (language := websocket.cookies.get("language")) is None:
-        language = db.projects.get_default_language(project_id)
+    # The interview's own language, fixed when it was created. Not a cookie:
+    # nothing has set one since the server-rendered routes went, and falling
+    # back to the project default ran Danish interviews with English agents.
+    language = interview.language
 
-    project_localization = db.projects.get_project_localization(project_id, language)
+    try:
+        project_localization = db.projects.get_project_localization(
+            project_id, language
+        )
+    except NoResultFound:
+        # The language was removed from the project mid-interview. Its guide
+        # lives on the interview row, so keep speaking it and borrow only the
+        # agent configs from the default localization.
+        project_localization = db.projects.get_project_localization(
+            project_id, db.projects.get_default_language(project_id)
+        )
 
     if interview_history:
         if initialized:
