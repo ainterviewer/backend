@@ -8,6 +8,16 @@ a trigger, edit the SQL here; the next deploy's `alembic upgrade head` applies
 it, even with no new migration.
 
 `missing_triggers` reports any that a database lacks; the app logs it on startup.
+
+Known mismatch, left as is for now: the SQLite triggers write
+`CURRENT_TIMESTAMP`, which is UTC with whole seconds, while the app writes
+`last_updated` with `now()` -- Copenhagen wall-clock time with microseconds. A
+parent bumped by a trigger can show a `last_updated` hours before its own
+`created_at`, and comparing a trigger-written value with an app-written one is
+off by the UTC offset. SQLite has no time-zone database, so a trigger cannot
+produce Copenhagen time itself; resolving it means the app writing UTC, or the
+app doing these bumps. (The PostgreSQL functions use `NOW()`, which follows the
+session time zone.)
 """
 
 from sqlalchemy import text

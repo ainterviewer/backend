@@ -168,7 +168,9 @@ The backend is tightly coupled with the `ainterviewer` library (sibling package 
     what orphaned 1,097 rows in production on 2026-10-06. Any new endpoint that
     deletes interviews must do the same. If a write still lands on a deleted
     interview, `insert_message` / `insert_task` raise `InterviewGoneError` and
-    the websocket sends the restart frame.
+    the websocket sends the restart frame. The session registry is
+    per-process: with more than one worker, that backstop is all that ends
+    sessions on other workers (see `InterviewSessionManager`).
   - Validate ids a client supplies (test run, participant, interview) against
     the project and answer 404; don't leave it to the foreign key, which turns
     a stale id into a 500. `is_foreign_key_violation` (`app/db/utils.py`) tells
@@ -605,6 +607,15 @@ await self.message_queue.put(
 
 ## Known Issues & TODOs
 
+- `last_updated` mixes two clocks. The app writes Copenhagen wall-clock time
+  (`now()`, naive in the column, with microseconds), but the SQLite triggers in
+  `app/db/triggers.py` that bump a parent's `last_updated` write
+  `CURRENT_TIMESTAMP` -- UTC, whole seconds. A parent touched by a trigger can
+  therefore show a `last_updated` hours *before* its `created_at`. Compare
+  `last_updated` values only within one source until this is resolved.
+- The interview session registry is per-process, so ending sessions on delete
+  and `claim`'s takeover only work within one worker; see
+  `InterviewSessionManager` for what degrades with several.
 - The test suite (`uv run pytest`) covers specific behaviour rather than every
   endpoint: each module builds its own in-memory SQLite database or none, with
   no shared fixtures beyond the throwaway secrets in `tests/conftest.py`. The

@@ -32,10 +32,23 @@ class InterviewSessionManager:
     and tasks for an interview that no longer exists -- which is how a test
     setup deleted mid-run left 1,097 orphaned rows in production.
 
-    The registry is in-process, so this relies on the backend running a single
-    worker (`fastapi run` in entrypoint.sh). With several, a delete handled by
-    one would not reach sessions held by another, and the foreign-key check
-    would be the only thing catching the writes.
+    The registry is in-process. Production runs a single worker (`fastapi run`
+    in entrypoint.sh), so it sees every session. With several workers -- not
+    yet decided -- two things degrade, deliberately accepted for now:
+
+    * A delete handled by one worker does not reach sessions on another. Those
+      end at their next write instead: the foreign key rejects it,
+      `insert_message`/`insert_task` raise `InterviewGoneError`, and the
+      websocket sends the restart frame. What is lost is the one reply the
+      session had already generated. That backstop needs foreign keys
+      enforced (the default); with them switched off, those writes orphan.
+    * `claim`'s takeover only cancels a prior session on the same worker, so a
+      reconnect landing on another one runs alongside the old session and
+      both write to the interview.
+
+    Fixing either properly needs state shared between workers (a broker such
+    as Redis, or polling the database), which belongs with deciding how
+    workers are run.
     """
 
     _CANCEL_TIMEOUT_S = 10.0
