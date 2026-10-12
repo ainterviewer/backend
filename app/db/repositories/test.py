@@ -56,6 +56,18 @@ class TestRepository(BaseRepository):
 
         return TestSetupPublic.model_validate(test)
 
+    def test_in_project(self, test_id: UUID4, project_id: UUID4) -> bool:
+        return bool(
+            self.session.scalar(
+                select(
+                    exists().where(
+                        TestSetupTable.id == test_id,
+                        TestSetupTable.project_id == project_id,
+                    )
+                )
+            )
+        )
+
     def run_in_project(self, test_run_id: UUID4, project_id: UUID4) -> bool:
         return bool(
             self.session.scalar(

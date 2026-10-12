@@ -1,7 +1,15 @@
 from datetime import timedelta
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+)
 from pydantic import UUID4
+from sqlalchemy.exc import NoResultFound
 from uvicorn.config import logger
 
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
@@ -10,11 +18,12 @@ from ainterviewer.utils import now
 
 from ...db.models import (
     IntervieweeCreate,
+    IntervieweePublic,
     TestRunCreate,
     TestSetupCreate,
     TestSetupPublic,
 )
-from ...dependencies import DBSession, ProjectEditor, ProjectViewer, UserToken
+from ...dependencies import DBSession, ProjectEditor, ProjectViewer
 from ...settings import app_settings
 from ...synthesize.core import (
     run_synthesis_job_fixed_ai,
@@ -32,6 +41,23 @@ from ..response_models import SynthesizeResponse
 from ..websockets.manager import session_manager
 
 router = APIRouter(tags=["synthesize"])
+
+
+def _require_test_in_project(project_id: UUID4, test_id: UUID4, db: DBSession) -> None:
+    """404 unless `test_id` is a test setup of `project_id`.
+
+    The role check on these routes is against the project in the path, and the
+    repository methods act on `test_id` alone -- so without this an editor of
+    one project could read, change, run or delete another project's test setup
+    by naming its id. A 404 rather than a 403 so the answer does not confirm
+    the id exists elsewhere.
+    """
+    if not db.tests.test_in_project(test_id, project_id):
+        raise HTTPException(status_code=404, detail="Test setup not found")
+
+
+#: For every route with `{test_id}` in its path.
+_test_in_project = [Depends(_require_test_in_project)]
 
 DEMO_DAILY_WINDOW = timedelta(days=1)
 
@@ -79,7 +105,10 @@ def check_demo_synthetic_limits(db: DBSession, user_id: UUID4, n_interviews: int
         )
 
 
-@router.get("/projects/{project_id}/tests/{test_id}/background_info")
+@router.get(
+    "/projects/{project_id}/tests/{test_id}/background_info",
+    dependencies=_test_in_project,
+)
 async def get_background_info(
     response: Response,
     project_id: UUID4,
@@ -90,7 +119,10 @@ async def get_background_info(
     return db.tests.get_background_info(project_id, test_id)
 
 
-@router.post("/projects/{project_id}/tests/{test_id}/background_info")
+@router.post(
+    "/projects/{project_id}/tests/{test_id}/background_info",
+    dependencies=_test_in_project,
+)
 async def update_background_info(
     project_id: UUID4,
     test_id: UUID4,
@@ -101,7 +133,10 @@ async def update_background_info(
     return db.tests.update_background_info(test_id, request.background_info)
 
 
-@router.get("/projects/{project_id}/tests/{test_id}/fixed_personas")
+@router.get(
+    "/projects/{project_id}/tests/{test_id}/fixed_personas",
+    dependencies=_test_in_project,
+)
 async def get_fixed_personas(
     response: Response,
     project_id: UUID4,
@@ -112,7 +147,10 @@ async def get_fixed_personas(
     return db.tests.get_fixed_personas(project_id, test_id)
 
 
-@router.post("/projects/{project_id}/tests/{test_id}/fixed_personas")
+@router.post(
+    "/projects/{project_id}/tests/{test_id}/fixed_personas",
+    dependencies=_test_in_project,
+)
 async def update_fixed_personas(
     project_id: UUID4,
     test_id: UUID4,
@@ -123,7 +161,10 @@ async def update_fixed_personas(
     return db.tests.update_fixed_personas(test_id, request.fixed_personas)
 
 
-@router.get("/projects/{project_id}/tests/{test_id}/fixed_answers")
+@router.get(
+    "/projects/{project_id}/tests/{test_id}/fixed_answers",
+    dependencies=_test_in_project,
+)
 async def get_fixed_answers(
     project_id: UUID4,
     test_id: UUID4,
@@ -133,7 +174,10 @@ async def get_fixed_answers(
     return db.tests.get_fixed_answers(test_id)
 
 
-@router.post("/projects/{project_id}/tests/{test_id}/fixed_answers")
+@router.post(
+    "/projects/{project_id}/tests/{test_id}/fixed_answers",
+    dependencies=_test_in_project,
+)
 async def update_fixed_answers(
     project_id: UUID4,
     test_id: UUID4,
@@ -155,15 +199,19 @@ async def get_test_setups(
 
 @router.post("/projects/{project_id}/tests")
 async def create_test_setup(
+    project_id: UUID4,
     test_setup: TestSetupCreate,
     db: DBSession,
     jwt: ProjectEditor,
 ) -> TestSetupPublic:
+    # The role check is against the project in the path, so that is the
+    # project the setup goes in -- never one named in the body.
+    test_setup = test_setup.model_copy(update={"project_id": project_id})
     test_setup_public = db.tests.create_test_setup(test_setup)
     return test_setup_public
 
 
-@router.delete("/projects/{project_id}/tests/{test_id}")
+@router.delete("/projects/{project_id}/tests/{test_id}", dependencies=_test_in_project)
 async def delete_test_setup(
     project_id: UUID4,
     test_id: UUID4,
@@ -188,17 +236,22 @@ async def add_interviewee(
     db.interviews.add_interviewee(project_id, interviewee)
 
 
-@router.post("/projects/{project_id}/interviewee")
+@router.get("/projects/{project_id}/interviewee")
 async def get_interviewee(
     project_id: UUID4,
     interview_id: UUID4,
     db: DBSession,
-    jwt: UserToken,
-):
-    return db.interviews.get_interviewee(project_id, interview_id)
+    jwt: ProjectViewer,
+) -> IntervieweePublic:
+    try:
+        return db.interviews.get_interviewee(project_id, interview_id)
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail="Interviewee not found")
 
 
-@router.get("/projects/{project_id}/tests/{test_id}/status")
+@router.get(
+    "/projects/{project_id}/tests/{test_id}/status", dependencies=_test_in_project
+)
 async def get_test_status(
     project_id: UUID4,
     test_id: UUID4,
@@ -208,7 +261,9 @@ async def get_test_status(
     return db.tests.get_test_status(test_id)
 
 
-@router.post("/projects/{project_id}/tests/{test_id}/run")
+@router.post(
+    "/projects/{project_id}/tests/{test_id}/run", dependencies=_test_in_project
+)
 async def run_synthetic_test(
     request: Request,
     project_id: UUID4,
