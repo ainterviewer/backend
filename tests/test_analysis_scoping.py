@@ -410,6 +410,163 @@ class TestSavingACodebook:
         assert [c.name for c in analysis.get_codebook(THEIRS).codes] == ["Theirs"]
 
 
+def kept_codes(analysis, project_id, without=frozenset()) -> list[CodeBase]:
+    """The stored codebook as a client would send it back, less `without`."""
+    return [
+        CodeBase(**existing.model_dump(exclude={"created_at", "updated_at"}))
+        for existing in analysis.get_codebook(project_id).codes
+        if existing.id not in without
+    ]
+
+
+def merge(analysis, project_id, source, target):
+    return analysis.save_codebook(
+        project_id,
+        CodebookPut(
+            codes=kept_codes(analysis, project_id, without={source}),
+            palette=[],
+            merges={source: target},
+        ),
+    )
+
+
+class TestMergingCodes:
+    def test_the_merged_code_s_codings_move_to_the_target(self, session, analysis):
+        source = code(analysis, OURS, "Worry")
+        target = code(analysis, OURS, "Stress")
+        ours = message(session, OURS)
+        apply(analysis, OURS, ours, user(session), source)
+
+        saved = merge(analysis, OURS, source, target)
+
+        assert [c.id for c in saved.codes] == [target]
+        assert [c.code_id for c in analysis.get_message_codings(OURS, ours)] == [target]
+
+    def test_one_coder_s_identical_codings_collapse_into_one(self, session, analysis):
+        """Otherwise the passage carries the merged code twice -- the
+        duplicate a coder is not allowed to make by hand."""
+        source = code(analysis, OURS, "Worry")
+        target = code(analysis, OURS, "Stress")
+        ours = message(session, OURS)
+        ada, bob = user(session, "Ada"), user(session, "Bob")
+        apply(analysis, OURS, ours, ada, source)
+        apply(analysis, OURS, ours, ada, target)
+        apply(analysis, OURS, ours, ada, source, start_offset=0, end_offset=4)
+        apply(analysis, OURS, ours, bob, source)
+
+        merge(analysis, OURS, source, target)
+
+        codings = analysis.get_message_codings(OURS, ours)
+        assert {c.code_id for c in codings} == {target}
+        assert sorted(
+            (c.user_id == ada, c.start_offset is not None) for c in codings
+        ) == [(False, False), (True, False), (True, True)]
+
+    def test_the_target_s_score_is_the_one_kept(self, session, analysis):
+        scale = {"kind": CodeKind.SCORE, "min_value": 1, "max_value": 5}
+        source = code(analysis, OURS, "Worry", **scale)
+        target = code(analysis, OURS, "Stress", **scale)
+        ours = message(session, OURS)
+        ada = user(session)
+        apply(analysis, OURS, ours, ada, source, value_int=2)
+        apply(analysis, OURS, ours, ada, target, value_int=4)
+
+        merge(analysis, OURS, source, target)
+
+        assert [c.value_int for c in analysis.get_message_codings(OURS, ours)] == [4]
+
+    def test_the_target_may_be_new_in_the_same_save(self, session, analysis):
+        source = code(analysis, OURS, "Worry")
+        ours = message(session, OURS)
+        apply(analysis, OURS, ours, user(session), source)
+        target = uuid.uuid4()
+
+        analysis.save_codebook(
+            OURS,
+            CodebookPut(
+                codes=[CodeBase(id=target, name="Stress")],
+                palette=[],
+                merges={source: target},
+            ),
+        )
+
+        assert [c.code_id for c in analysis.get_message_codings(OURS, ours)] == [target]
+
+    def test_a_merge_already_carried_out_is_ignored(self, session, analysis):
+        """The editor keeps its merges until it reloads, so every later save
+        repeats them."""
+        source = code(analysis, OURS, "Worry")
+        target = code(analysis, OURS, "Stress")
+        merge(analysis, OURS, source, target)
+
+        saved = merge(analysis, OURS, source, target)
+
+        assert [c.id for c in saved.codes] == [target]
+
+    def test_a_kept_code_cannot_also_be_merged_away(self, session, analysis):
+        source = code(analysis, OURS, "Worry")
+        target = code(analysis, OURS, "Stress")
+
+        with pytest.raises(CodebookError, match="merged away and kept"):
+            analysis.save_codebook(
+                OURS,
+                CodebookPut(
+                    codes=kept_codes(analysis, OURS),
+                    palette=[],
+                    merges={source: target},
+                ),
+            )
+
+    def test_the_target_has_to_be_in_the_codebook(self, session, analysis):
+        source = code(analysis, OURS, "Worry")
+
+        with pytest.raises(CodebookError, match="not in the codebook"):
+            merge(analysis, OURS, source, uuid.uuid4())
+
+    @pytest.mark.parametrize(
+        ("target_kind", "match"),
+        [
+            ({"kind": CodeKind.GROUP}, "a group is never applied"),
+            ({"kind": CodeKind.SCORE, "min_value": 1, "max_value": 5}, "cannot move"),
+        ],
+    )
+    def test_codings_that_would_not_fit_the_target_are_refused(
+        self, session, analysis, target_kind, match
+    ):
+        source = code(analysis, OURS, "Worry")
+        target = code(analysis, OURS, "Stress", **target_kind)
+        ours = message(session, OURS)
+        apply(analysis, OURS, ours, user(session), source)
+
+        with pytest.raises(CodebookError, match=match):
+            merge(analysis, OURS, source, target)
+
+        session.rollback()
+        assert [c.code_id for c in analysis.get_message_codings(OURS, ours)] == [source]
+
+    def test_a_score_off_the_target_s_scale_is_refused(self, session, analysis):
+        source = code(
+            analysis, OURS, "Worry", kind=CodeKind.SCORE, min_value=1, max_value=10
+        )
+        target = code(
+            analysis, OURS, "Stress", kind=CodeKind.SCORE, min_value=1, max_value=5
+        )
+        ours = message(session, OURS)
+        apply(analysis, OURS, ours, user(session), source, value_int=8)
+
+        with pytest.raises(CodebookError, match="outside 'Stress's scale"):
+            merge(analysis, OURS, source, target)
+
+    def test_an_uncoded_code_merges_into_anything(self, session, analysis):
+        """Nothing depends on its kind, so there is nothing to refuse."""
+        source = code(analysis, OURS, "Worry")
+        target = code(analysis, OURS, "Feelings", kind=CodeKind.GROUP)
+
+        saved = merge(analysis, OURS, source, target)
+
+        assert [c.id for c in saved.codes] == [target]
+
+
 class TestCountingCodings:
     def test_a_parent_does_not_inherit_its_children_s(self, session, analysis):
         """A passage coded `Cost` is not thereby coded `Barriers`; that is what

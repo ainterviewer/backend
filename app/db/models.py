@@ -618,10 +618,20 @@ class CodebookPut(_BaseModel):
     over the whole thing -- so it is saved as one, and ``codes`` is authoritative:
     a code the client leaves out is deleted, along with every coding made with
     it. List order is sibling order.
+
+    ``merges`` is the one exception to "left out means deleted with its
+    codings": it maps a code the client has merged away to the code that
+    absorbed it, and the merged code's codings are moved there rather than
+    dropped. It rides along with the document instead of being an endpoint of
+    its own so that a merge is an edit like any other -- undoable until saved,
+    and never racing the unsaved edits around it. An entry whose code is
+    already gone from the store is a merge an earlier save carried out, and is
+    ignored.
     """
 
     codes: list[CodeBase]
     palette: list[str]
+    merges: dict[UUID4, UUID4] = {}
 
 
 class CodebookPublic(_BaseModel):

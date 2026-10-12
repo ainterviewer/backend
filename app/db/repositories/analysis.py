@@ -1,7 +1,7 @@
 from pydantic import UUID4
 from sqlalchemy import delete, distinct, exists, func, or_, select, update
 from sqlalchemy.exc import NoResultFound
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import aliased, joinedload, selectinload
 
 from ainterviewer.types import MessageRole
 from ainterviewer.utils import now
@@ -163,6 +163,9 @@ class AnalysisRepository(BaseRepository):
         code means -- but *turning* a coded code into a group is refused,
         because dropping somebody's coding is a decision for them rather than
         a side effect of a kind change.
+
+        A code left out *and* named in `merges` is merged: its codings move to
+        the code it was merged into before it is deleted. See `CodebookPut`.
         """
         sent = codebook.codes
         ids = [code.id for code in sent]
@@ -192,6 +195,23 @@ class AnalysisRepository(BaseRepository):
         gone = set(existing) - known
         coded = self._coding_counts(project_id)
 
+        by_id = {code.id: code for code in sent}
+        for source in codebook.merges:
+            if source in known:
+                raise CodebookError(
+                    f"'{by_id[source].name}' cannot be merged away and kept"
+                )
+        # Only the merges this save carries out. The rest are history: the
+        # editor keeps a merge in its document until it reloads, so later saves
+        # repeat merges whose code an earlier one already removed.
+        merges = {
+            source: target
+            for source, target in codebook.merges.items()
+            if source in gone
+        }
+        for source, target in merges.items():
+            self._check_merge(existing[source], by_id.get(target))
+
         for code in sent:
             was = existing.get(code.id)
             if code.kind is CodeKind.GROUP and coded.get(code.id):
@@ -211,6 +231,13 @@ class AnalysisRepository(BaseRepository):
             for field, value in self._code_values(code, sent).items():
                 setattr(was, field, value)
 
+        if merges:
+            # The target may be a code this same save creates, and its row has
+            # to exist before codings are pointed at it.
+            self.session.flush()
+            for source, target in merges.items():
+                self._move_codings(source, target)
+
         if gone:
             # Explicitly, and children first: SQLite does not enforce the
             # foreign keys these rows declare (see CLAUDE.md), so neither
@@ -227,6 +254,78 @@ class AnalysisRepository(BaseRepository):
         )
         self.session.commit()
         return self.get_codebook(project_id)
+
+    def _check_merge(self, source: CodeTable, target: CodeBase | None) -> None:
+        """Whether every coding made with `source` still means something when
+        made with `target`.
+
+        Checked against the codings rather than the two codes: merging a code
+        nobody has applied moves nothing, and refusing it over a kind no coding
+        depends on would be a rule for its own sake. The editor is stricter --
+        same kind, same scale -- because it cannot see the codings; this is
+        the invariant that actually has to hold.
+        """
+        if target is None:
+            raise CodebookError(
+                f"'{source.name}' is merged into a code that is not in the codebook"
+            )
+
+        codings = select(CodingTable.id).where(CodingTable.code_id == source.id)
+        if self.session.execute(codings.limit(1)).first() is None:
+            return
+
+        if target.kind is CodeKind.GROUP:
+            raise CodebookError(
+                f"'{source.name}' cannot be merged into '{target.name}': "
+                "a group is never applied to passages"
+            )
+        if target.kind is not source.kind:
+            raise CodebookError(
+                f"'{source.name}' is a {source.kind} and '{target.name}' is a "
+                f"{target.kind}, so its codings cannot move there"
+            )
+        if target.kind is CodeKind.SCORE:
+            low, high = target.min_value, target.max_value
+            bounds = []
+            if low is not None:
+                bounds.append(CodingTable.value_int < low)
+            if high is not None:
+                bounds.append(CodingTable.value_int > high)
+            if bounds:
+                outside = codings.where(or_(*bounds)).limit(1)
+                if self.session.execute(outside).first() is not None:
+                    raise CodebookError(
+                        f"'{source.name}' has scores outside '{target.name}'s "
+                        f"scale ({low}-{high})"
+                    )
+
+    def _move_codings(self, source: UUID4, target: UUID4) -> None:
+        """Repoints `source`'s codings at `target`, without doubling any up.
+
+        A passage one coder had coded with both codes would otherwise carry
+        the merged code twice -- the duplicate `_require_no_duplicate` refuses
+        to create. The target's coding is the one kept: it is the code the
+        analyst chose to keep, and for a score its value is on the scale that
+        survives.
+        """
+        theirs = aliased(CodingTable)
+        self.session.execute(
+            delete(CodingTable).where(
+                CodingTable.code_id == source,
+                exists().where(
+                    theirs.code_id == target,
+                    theirs.message_id == CodingTable.message_id,
+                    theirs.user_id == CodingTable.user_id,
+                    theirs.start_offset.is_not_distinct_from(CodingTable.start_offset),
+                    theirs.end_offset.is_not_distinct_from(CodingTable.end_offset),
+                ),
+            )
+        )
+        self.session.execute(
+            update(CodingTable)
+            .where(CodingTable.code_id == source)
+            .values(code_id=target)
+        )
 
     @staticmethod
     def _code_values(code: CodeBase, sent: list[CodeBase]) -> dict:
