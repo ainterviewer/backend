@@ -393,6 +393,21 @@ class InterviewRepository(BaseRepository):
             InterviewSummaryPublic.model_validate(row._mapping) for row in rows
         ], total
 
+    def get_interview_ids(self, project_id: UUID4, **filters) -> list[UUID4]:
+        """Every interview id `get_interviews` would page through.
+
+        Takes the same filter keywords, through the same `_interview_filters`,
+        so a bulk action on "all matching" covers exactly the rows the list
+        counted. Oldest first, which is the order an export reads naturally in.
+        """
+        conditions = self._interview_filters(project_id, **filters).values()
+        statement = (
+            self._join_filter_sources(select(InterviewTable.id))
+            .where(*conditions)
+            .order_by(InterviewTable.created_at)
+        )
+        return list(self.session.execute(statement).scalars())
+
     # ================= Interview resume links =================
 
     def get_resume_target(

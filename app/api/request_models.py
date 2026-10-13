@@ -1,3 +1,4 @@
+import datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import Query
@@ -8,12 +9,19 @@ from pydantic import (
     EmailStr,
     Field,
     field_validator,
+    model_validator,
 )
 
 from ainterviewer.constants import LANGUAGES
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
-from ainterviewer.types import Feedback, Interviewer, LanguageCode, TestType
+from ainterviewer.types import (
+    Feedback,
+    Interviewer,
+    InterviewStatus,
+    LanguageCode,
+    TestType,
+)
 
 from ..db.types import InterviewType
 from ..types import ExternalParam, ProjectStatus
@@ -47,12 +55,43 @@ class PaginatedQueryParams(BaseModel):
     order: Literal["asc", "desc"] = Query("desc", description="Sorting order")
 
 
-class DeleteInterviewRequest(BaseModel):
-    interview_ids: list[UUID4]
+class InterviewFilters(BaseModel):
+    """The interview list's filters, as the list endpoint takes them.
+
+    Lets a bulk action target "everything matching" rather than ids the client
+    has seen: with server-side paging it only ever holds one page of them.
+    Same names and same defaults as the query parameters of `get_interviews`,
+    so "all 123 selected" means exactly the 123 the list counted.
+    """
+
+    interview_types: list[InterviewType] | None = None
+    types: list[InterviewType] | None = None
+    statuses: list[InterviewStatus] | None = None
+    languages: list[str] | None = None
+    created_from: datetime.datetime | None = None
+    created_to: datetime.datetime | None = None
+    completed: bool | None = None
+    search: str | None = Field(default=None, max_length=200)
+    pid: str | None = Field(default=None, max_length=200)
 
 
-class ExportMessagesRequest(BaseModel):
-    interview_ids: list[UUID4]
+class InterviewSelectionRequest(BaseModel):
+    """Interviews picked either by id or by the list's filters, never both."""
+
+    interview_ids: list[UUID4] | None = None
+    filters: InterviewFilters | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_selection(self):
+        if (self.interview_ids is None) == (self.filters is None):
+            raise ValueError("Give exactly one of interview_ids or filters.")
+        return self
+
+
+class DeleteInterviewRequest(InterviewSelectionRequest): ...
+
+
+class ExportMessagesRequest(InterviewSelectionRequest):
     format: Literal["csv", "xlsx"] = "csv"
 
 

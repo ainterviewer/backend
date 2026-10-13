@@ -67,7 +67,9 @@ from ..request_models import (
     DeleteInterviewRequest,
     ExportMessagesRequest,
     ExternalParamsRequest,
+    InterviewFilters,
     InterviewGuideGenerationRequest,
+    InterviewSelectionRequest,
     MoveProjectRequest,
     PaginatedQueryParams,
     ProjectStatusChangeRequest,
@@ -678,6 +680,38 @@ async def create_welcome(
     db.projects.update_welcome(project_id, welcome, language)
 
 
+def _filter_kwargs(filters: InterviewFilters) -> dict:
+    """The list's filters as the interview repository takes them.
+
+    Shared by the list and the bulk actions, so "all matching" in a bulk
+    request cannot drift from what the list showed -- the scope default in
+    particular.
+    """
+    return {
+        "interview_types": filters.interview_types
+        if filters.interview_types is not None
+        else [InterviewType.DISTRIBUTED],
+        "selected_types": filters.types,
+        "statuses": filters.statuses,
+        "languages": filters.languages,
+        "created_from": filters.created_from,
+        "created_to": filters.created_to,
+        "completed": filters.completed,
+        "search": filters.search,
+        "pid": filters.pid,
+    }
+
+
+def _selected_interview_ids(
+    db: DBSession, project_id: UUID4, selection: InterviewSelectionRequest
+) -> list[UUID4]:
+    if selection.filters is None:
+        return selection.interview_ids or []
+    return db.interviews.get_interview_ids(
+        project_id, **_filter_kwargs(selection.filters)
+    )
+
+
 @router.get("/projects/{project_id}/interviews")
 async def get_interviews(
     project_id: UUID4,
@@ -717,19 +751,19 @@ async def get_interviews(
 
     # The page and the facet counts must be built from exactly the same
     # filters, or the dropdown would offer options the list contradicts.
-    filters = {
-        "interview_types": interview_types
-        if interview_types is not None
-        else [InterviewType.DISTRIBUTED],
-        "selected_types": types,
-        "statuses": statuses,
-        "languages": languages,
-        "created_from": created_from,
-        "created_to": created_to,
-        "completed": completed,
-        "search": search,
-        "pid": pid,
-    }
+    filters = _filter_kwargs(
+        InterviewFilters(
+            interview_types=interview_types,
+            types=types,
+            statuses=statuses,
+            languages=languages,
+            created_from=created_from,
+            created_to=created_to,
+            completed=completed,
+            search=search,
+            pid=pid,
+        )
+    )
 
     interviews, total = db.interviews.get_interviews(
         project_id,
@@ -764,8 +798,9 @@ async def delete_interviews(
     jwt: DemoToken,
     _: ProjectAdmin,
 ):
-    await session_manager.end([project_id], delete_request.interview_ids)
-    db.interviews.delete_interviews(project_id, delete_request.interview_ids)
+    interview_ids = _selected_interview_ids(db, project_id, delete_request)
+    await session_manager.end([project_id], interview_ids)
+    db.interviews.delete_interviews(project_id, interview_ids)
 
 
 # ============ Interview resume links ============
@@ -982,11 +1017,12 @@ async def export_messages(
     jwt: DemoToken,
     _: ProjectViewer,
 ):
+    interview_ids = _selected_interview_ids(db, project_id, export_request)
     messages: list[MessagePublic] = [
         message
         for interview in (
             db.interviews.get_messages(interview_id, project_id)
-            for interview_id in export_request.interview_ids
+            for interview_id in interview_ids
         )
         for message in interview
     ]
@@ -995,7 +1031,7 @@ async def export_messages(
         messages,
         external_params=db.projects.get_external_params(project_id),
         external_param_values=db.projects.get_external_param_values_for_interviews(
-            project_id, export_request.interview_ids
+            project_id, interview_ids
         ),
     )
 
