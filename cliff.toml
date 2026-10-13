@@ -1,8 +1,8 @@
 # git-cliff configuration — https://git-cliff.org/docs/configuration
 #
 # Keep this file byte-identical across the ainterviewer repos. Section headings
-# are a contract: deploy/scripts/generate_manifest.py parses them out of the
-# published GitHub Release bodies.
+# and the `[area]` entry prefix are a contract: deploy/scripts/generate_manifest.py
+# parses them out of the published GitHub Release bodies.
 
 [changelog]
 header = """
@@ -18,7 +18,14 @@ body = """
 {% else -%}
 ## [Unreleased]
 {% endif %}
-{%- set breaking = commits | filter(attribute="breaking", value=true) -%}
+{#- A breaking change to a preview feature only breaks it for preview users, so
+    it stays in Preview rather than being announced to everyone here. -#}
+{%- set_global breaking = [] -%}
+{%- for commit in commits | filter(attribute="breaking", value=true) -%}
+{%- if commit.group is not containing("Preview") -%}
+{%- set_global breaking = breaking | concat(with=commit) -%}
+{%- endif -%}
+{%- endfor -%}
 {% if breaking | length > 0 %}
 ### Breaking Changes
 {% for commit in breaking %}
@@ -29,7 +36,14 @@ body = """
 {%- for group, group_commits in commits | group_by(attribute="group") %}
 ### {{ group | striptags | trim | upper_first }}
 {% for commit in group_commits %}
-- {% if commit.scope %}({{ commit.scope }}) {% endif %}\
+{%- set_global area = "" -%}
+{%- for footer in commit.footers -%}
+{%- if footer.token == "Preview" or footer.token == "Graduates" -%}
+{%- set_global area = footer.value | trim -%}
+{%- endif -%}
+{%- endfor %}
+- {% if area %}[{{ area }}] {% endif %}\
+{% if commit.scope and commit.scope != area %}({{ commit.scope }}) {% endif %}\
 {{ commit.message | upper_first }}\
 {% if commit.breaking %} [**breaking**]{% endif %}
 {%- endfor %}
@@ -56,19 +70,32 @@ commit_parsers = [
   { message = "^chore\\(release\\)", skip = true },
   { message = "^Release v", skip = true },
 
-  # User-visible. deploy/scripts/generate_manifest.py lifts these three sections
+  # Trailers come first: a parser matches the first rule that fits, and these
+  # must win over the plain type rules below. `message` is matched against the
+  # raw commit, footers included, which is how a rule can require both a type
+  # and a trailer — a parser's `footer` field is ORed with `message`, not ANDed.
+  #
+  #   Preview: <area>    — a change only users with preview features can see.
+  #   Graduates: <area>  — the commit that opens <area> to everyone.
+  #
+  # The <area> is rendered as a `[area]` prefix on the entry, so the curation
+  # step can collect a feature's whole preview history when it graduates.
+  { message = "(?s)^feat(\\(.*?\\))?!?:.*\\nGraduates:", group = "<!-- 2 -->Graduated" },
+  { message = "(?s)^(feat|fix|perf)(\\(.*?\\))?!?:.*\\nPreview:", group = "<!-- 5 -->Preview" },
+
+  # User-visible. deploy/scripts/generate_manifest.py lifts these sections
   # (plus Breaking Changes) into the platform manifest.
   { message = "^feat", group = "<!-- 1 -->Features" },
-  { message = "^fix", group = "<!-- 2 -->Bug Fixes" },
-  { message = "^perf", group = "<!-- 3 -->Performance" },
+  { message = "^fix", group = "<!-- 3 -->Bug Fixes" },
+  { message = "^perf", group = "<!-- 4 -->Performance" },
 
   # Repo-facing only.
-  { message = "^refactor", group = "<!-- 4 -->Internal" },
-  { message = "^docs", group = "<!-- 4 -->Internal" },
-  { message = "^test", group = "<!-- 4 -->Internal" },
-  { message = "^build", group = "<!-- 4 -->Internal" },
-  { message = "^ci", group = "<!-- 4 -->Internal" },
-  { message = "^style", group = "<!-- 4 -->Internal" },
-  { message = "^chore", group = "<!-- 4 -->Internal" },
-  { message = "^revert", group = "<!-- 4 -->Internal" },
+  { message = "^refactor", group = "<!-- 6 -->Internal" },
+  { message = "^docs", group = "<!-- 6 -->Internal" },
+  { message = "^test", group = "<!-- 6 -->Internal" },
+  { message = "^build", group = "<!-- 6 -->Internal" },
+  { message = "^ci", group = "<!-- 6 -->Internal" },
+  { message = "^style", group = "<!-- 6 -->Internal" },
+  { message = "^chore", group = "<!-- 6 -->Internal" },
+  { message = "^revert", group = "<!-- 6 -->Internal" },
 ]
