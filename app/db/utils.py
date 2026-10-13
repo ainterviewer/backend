@@ -106,6 +106,14 @@ def messages_to_dataframe(
 
         rows.append(d)
 
+    if not rows:
+        # An interview nobody wrote in yet. There is nothing to infer a schema
+        # from, so the header is spelled out: an empty export, not a 500.
+        columns = [*MessagePublic.model_fields] + [
+            f"{EXTERNAL_PARAM_PREFIX}{name}" for name in param_names
+        ]
+        return pl.DataFrame(schema=dict.fromkeys(columns, pl.String))
+
     # Infer from every row: optional columns (pid, ext_* params) can be null
     # for the first 100 rows and then hold strings, which the default sample
     # types as Null and then fails to append to.

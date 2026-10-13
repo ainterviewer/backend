@@ -1,5 +1,6 @@
 import datetime
 from typing import Annotated, Any, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Query
 from pydantic import (
@@ -91,8 +92,25 @@ class InterviewSelectionRequest(BaseModel):
 class DeleteInterviewRequest(InterviewSelectionRequest): ...
 
 
+def _known_timezone(name: str | None) -> str | None:
+    if name is None:
+        return None
+    try:
+        ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise ValueError(f"Unknown time zone: {name}")
+    return name
+
+
 class ExportMessagesRequest(InterviewSelectionRequest):
-    format: Literal["csv", "xlsx"] = "csv"
+    """`csv` and `xlsx` export the message table, `docx` and `pdf` readable
+    transcripts. `archive` makes it a ZIP with one file per interview."""
+
+    format: Literal["csv", "xlsx", "docx", "pdf"] = "csv"
+    archive: bool = False
+    #: IANA name the transcript times are shown in, normally the browser's.
+    #: The app's own time zone when absent.
+    timezone: Annotated[str | None, AfterValidator(_known_timezone)] = None
 
 
 class PromptRequest(BaseModel):

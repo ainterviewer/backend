@@ -8,10 +8,13 @@ ENV UV_LINK_MODE=copy \
   UV_NO_MANAGED_PYTHON=1 \
   PATH="/app/.venv/bin:/root/.local/bin:$PATH"
 
+# Pango and HarfBuzz are WeasyPrint's text layout, needed at runtime by the
+# PDF exports.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked \
   apt-get update && \
-  apt-get install -y --no-install-recommends ca-certificates curl make && \
+  apt-get install -y --no-install-recommends ca-certificates curl make \
+  libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 && \
   rm -rf /var/lib/apt/lists/*
 
 # bring uv into all stages

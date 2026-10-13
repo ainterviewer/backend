@@ -1,0 +1,180 @@
+{% extends "base.html.j2" %}
+
+{% block title %}{{ transcripts[0].title if transcripts | length == 1 else "Interview transcripts" }}{% endblock %}
+
+{# Laid out after the platform's transcript view (MessageBubble.svelte): the
+   interviewer in grey on the left, the participant in the accent colour on
+   the right, guide numbers on questions, sections divided, control tokens
+   as pills. #}
+{% block style %}
+.transcript + .transcript { break-before: page; }
+
+.eyebrow {
+  font-size: 7.5pt;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  margin: 0 0 0.2em;
+}
+
+.meta {
+  columns: 2;
+  column-gap: 2em;
+  margin: 0.4em 0 1.6em;
+  padding: 0.7em 0.9em;
+  border: 1px solid var(--color-rule);
+  border-radius: 6px;
+  font-size: 8pt;
+}
+.meta div { break-inside: avoid; padding: 1px 0; }
+.meta dt { display: inline; color: var(--color-muted); }
+.meta dt::after { content: "  "; white-space: pre; }
+.meta dd { display: inline; margin: 0; overflow-wrap: anywhere; }
+
+/* The bubble is a table so it shrinks to its text, and tables ignore
+   max-width; the row's padding is what keeps it to 80% of the page. */
+/* A message moves to the next page whole rather than splitting; only one
+   longer than a page breaks, and then each half is a bubble of its own. */
+.row { margin: 0 0 9pt; padding-right: 20%; break-inside: avoid; }
+.row.participant { padding: 0 0 0 20%; text-align: right; }
+
+.bubble {
+  display: table;
+  box-decoration-break: clone;
+  text-align: left;
+  padding: 6pt 8pt;
+  border-radius: 9pt 9pt 9pt 2pt;
+  background: var(--color-bubble-interviewer);
+  overflow-wrap: break-word;
+}
+.participant .bubble {
+  margin-left: auto;
+  border-radius: 9pt 9pt 2pt 9pt;
+  background: var(--color-bubble-participant);
+  color: var(--color-on-bubble-participant);
+}
+.bubble .text { white-space: pre-wrap; }
+.bubble .link { font-weight: bold; text-decoration: underline; }
+.bubble code { font-size: 0.92em; }
+/* The platform's header row: guide number left, time against the right. */
+.head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12pt;
+  font-size: 7.5pt;
+  opacity: 0.6;
+  margin-bottom: 2pt;
+}
+.head .label { font-weight: bold; }
+.head .time { margin-left: auto; }
+
+.token {
+  display: inline-block;
+  padding: 0 5pt;
+  border-radius: 3pt;
+  font-size: 0.85em;
+  font-weight: bold;
+  background: rgba(0, 0, 0, 0.08);
+}
+.pill-row { text-align: center; margin: 0 0 9pt; break-after: avoid; }
+.pill-row.participant { text-align: right; }
+.pill {
+  display: inline-block;
+  padding: 3pt 10pt;
+  border-radius: 99pt;
+  font-size: 8pt;
+  font-weight: bold;
+  color: var(--color-muted);
+  background: #f3f4f6;
+}
+
+.section {
+  display: flex;
+  align-items: center;
+  margin: 16pt 0 12pt;
+  font-size: 7.5pt;
+  font-weight: bold;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  break-after: avoid;
+}
+.section::before, .section::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--color-rule);
+}
+.section::before { margin-right: 10pt; }
+.section::after { margin-left: 10pt; }
+
+/* A survey answer is the option set with the choice marked, as a card. */
+.participant .bubble.survey {
+  background: #e5e7eb;
+  color: var(--color-text);
+  border-radius: 9pt;
+  padding: 7pt 8pt;
+}
+.survey .head { margin-bottom: 5pt; }
+.option {
+  display: inline-block;
+  margin: 0 2pt 3pt 0;
+  padding: 2pt 7pt;
+  border-radius: 6pt;
+  background: #ffffff;
+  font-size: 8.5pt;
+}
+.option.chosen {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: bold;
+}
+.option.chosen::before { content: "✓ "; }
+.survey .scale { display: block; font-size: 7pt; color: var(--color-muted); margin-top: 3pt; text-align: center; }
+.survey .value { background: #ffffff; border-radius: 6pt; padding: 3pt 7pt; font-weight: bold; }
+
+.empty { font-style: italic; }
+{% endblock %}
+
+{% block body %}
+{% for transcript in transcripts %}
+<section class="transcript">
+  <p class="eyebrow">Interview transcript</p>
+  <h1>{{ transcript.title }}</h1>
+  <dl class="meta">
+  {% for label, value in transcript.meta %}
+    <div><dt>{{ label }}</dt><dd>{{ value }}</dd></div>
+  {% endfor %}
+  </dl>
+  {% for turn in transcript.turns %}
+  {% set side = 'participant' if turn.is_participant else 'interviewer' %}
+  {% if turn.kind == 'section' %}
+  <div class="section">{{ turn.text }}</div>
+  {% elif turn.kind == 'token' %}
+  <div class="pill-row {{ side }}"><span class="pill">{{ turn.text }}</span></div>
+  {% else %}
+  <div class="row {{ side }}">
+    {% if turn.survey %}
+    <div class="bubble survey">
+      <div class="head"><span class="label">{{ turn.survey.kind }}</span><span class="time">{{ turn.time }}</span></div>
+      {% for option, chosen in turn.survey.options %}
+      <span class="option{{ ' chosen' if chosen }}">{{ option }}</span>
+      {% else %}
+      <div class="value">{{ turn.survey.answer }}</div>
+      {% if turn.survey.scale %}<span class="scale">{{ turn.survey.scale }}</span>{% endif %}
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="bubble">
+      <div class="head">{% if turn.label %}<span class="label">{{ turn.label }}</span>{% endif %}<span class="time">{{ turn.time }}</span></div>
+      <div class="text">{{ turn.html }}</div>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% else %}
+  <p class="muted empty">No messages.</p>
+  {% endfor %}
+</section>
+{% endfor %}
+{% endblock %}

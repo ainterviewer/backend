@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="{{ lang | default('en') }}">
+<head>
+<meta charset="utf-8">
+<title>{% block title %}{% endblock %}</title>
+<style>
+@font-face { font-family: "Noto Sans"; src: url("fonts/NotoSans-Regular.ttf"); }
+@font-face { font-family: "Noto Sans"; font-weight: bold; src: url("fonts/NotoSans-Bold.ttf"); }
+@font-face { font-family: "Noto Sans"; font-style: italic; src: url("fonts/NotoSans-Italic.ttf"); }
+
+/* The theme. Per-project styling is meant to override these, not the rules
+   below them. */
+:root {
+  --font-body: "Noto Sans", sans-serif;
+  --font-size: 10pt;
+  --color-text: #1f2937;
+  --color-muted: #6b7280;
+  --color-rule: #e5e7eb;
+  /* The platform's primary, and what sits on it. */
+  --color-accent: #196858;
+  --color-on-accent: #ffffff;
+  --color-accent-soft: #eef4f1;
+  /* Chat bubbles, as in the platform's transcript view. */
+  --color-bubble-interviewer: #eeeeee;
+  --color-bubble-participant: var(--color-accent);
+  --color-on-bubble-participant: var(--color-on-accent);
+}
+
+@page {
+  size: A4;
+  margin: 18mm 16mm 20mm;
+  @bottom-left {
+    content: string(document-title);
+    font: 8pt var(--font-body);
+    color: var(--color-muted);
+  }
+  @bottom-right {
+    content: counter(page) " / " counter(pages);
+    font: 8pt var(--font-body);
+    color: var(--color-muted);
+  }
+}
+
+html {
+  font-family: var(--font-body);
+  font-size: var(--font-size);
+  line-height: 1.45;
+  color: var(--color-text);
+}
+
+h1, h2, h3 { color: var(--color-accent); line-height: 1.2; margin: 0 0 0.4em; }
+h1 { font-size: 16pt; string-set: document-title content(); }
+h2 { font-size: 13pt; }
+.muted { color: var(--color-muted); }
+{% block style %}{% endblock %}
+</style>
+</head>
+<body>
+{% block body %}{% endblock %}
+</body>
+</html>

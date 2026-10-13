@@ -4,6 +4,7 @@ import logging
 from base64 import b64decode
 from pathlib import Path
 from typing import Annotated
+from zoneinfo import ZoneInfo
 
 import aiofiles
 from fastapi import (
@@ -14,8 +15,10 @@ from fastapi import (
     HTTPException,
     Query,
     Request,
+    Response,
     UploadFile,
 )
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from pydantic import UUID4, EmailStr
 from sqlalchemy.exc import IntegrityError, NoResultFound
@@ -50,7 +53,6 @@ from ...db.repositories.errors import ProjectLanguageError
 from ...db.repositories.interview import SORTABLE_INTERVIEW_COLUMNS
 from ...db.tables import InterviewResumeTokenTable
 from ...db.types import InterviewType
-from ...db.utils import fix_nested_columns, messages_to_dataframe, write_messages_xlsx
 from ...dependencies import (
     DBSession,
     DemoToken,
@@ -59,6 +61,7 @@ from ...dependencies import (
     ProjectViewer,
     UserToken,
 )
+from ...services.exports.transcripts import InterviewExport, export_interviews
 from ...services.project_storage import copy_email_attachments, delete_project_storage
 from ...settings import app_settings
 from ...types import CollaboratorRole, Scope
@@ -1018,46 +1021,42 @@ async def export_messages(
     _: ProjectViewer,
 ):
     interview_ids = _selected_interview_ids(db, project_id, export_request)
-    messages: list[MessagePublic] = [
-        message
-        for interview in (
-            db.interviews.get_messages(interview_id, project_id)
-            for interview_id in interview_ids
+    summaries = db.interviews.get_interview_summaries(project_id, interview_ids)
+    param_values = db.projects.get_external_param_values_for_interviews(
+        project_id, interview_ids
+    )
+    interviews = [
+        InterviewExport(
+            summary=summaries[interview_id],
+            messages=db.interviews.get_messages(interview_id, project_id),
+            external_params=param_values.get(interview_id) or {},
         )
-        for message in interview
+        for interview_id in interview_ids
+        # Gone since the selection was made, or never in this project.
+        if interview_id in summaries
     ]
-
-    df = messages_to_dataframe(
-        messages,
-        external_params=db.projects.get_external_params(project_id),
-        external_param_values=db.projects.get_external_param_values_for_interviews(
-            project_id, interview_ids
-        ),
+    tz = (
+        ZoneInfo(export_request.timezone)
+        if export_request.timezone
+        else lib_settings.tzinfo
     )
 
-    with io.BytesIO() as stream:
-        match export_request.format:
-            case "csv":
-                df = fix_nested_columns(df)
-                df.write_csv(stream)
-
-            case "xlsx":
-                write_messages_xlsx(df, stream)
-
-            case _:
-                raise ValueError(f"Unsupported format: {format}")
-
-        media_type = (
-            "text/csv"
-            if export_request.format == "csv"
-            else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        response = StreamingResponse(iter([stream.getvalue()]), media_type=media_type)
-        response.headers["Content-Disposition"] = (
-            f'attachment; filename="{project_id}-messages.{export_request.format}"'
-        )
-
-        return response
+    # Laying out a PDF of a hundred transcripts takes seconds of CPU; off the
+    # event loop, so it does not stall every other request meanwhile.
+    export = await run_in_threadpool(
+        export_interviews,
+        interviews,
+        project_id=project_id,
+        format=export_request.format,
+        archive=export_request.archive,
+        external_params=db.projects.get_external_params(project_id),
+        tz=tz,
+    )
+    return Response(
+        content=export.content,
+        media_type=export.media_type,
+        headers={"Content-Disposition": f'attachment; filename="{export.filename}"'},
+    )
 
 
 @router.get("/projects/{project_id}/qr.png")

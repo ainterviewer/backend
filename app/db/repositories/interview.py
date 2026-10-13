@@ -293,6 +293,49 @@ class InterviewRepository(BaseRepository):
 
         return filters
 
+    @classmethod
+    def _summary_statement(cls, test_name, pid_column):
+        """The columns of an `InterviewSummaryPublic`, joined but unfiltered.
+
+        Takes the computed columns rather than building them, because
+        `get_interviews` sorts by the same expressions.
+        """
+        return cls._join_filter_sources(
+            select(
+                InterviewTable.id,
+                InterviewTable.language,
+                InterviewTable.interviewer,
+                InterviewTable.status,
+                InterviewTable.type,
+                InterviewTable.created_at,
+                InterviewTable.last_updated,
+                InterviewTable.total_time_spent,
+                InterviewTable.n_messages.label("n_messages"),
+                test_name,
+                pid_column,
+            )
+        )
+
+    def get_interview_summaries(
+        self, project_id: UUID4, interview_ids: Sequence[UUID4]
+    ) -> dict[UUID4, InterviewSummaryPublic]:
+        """The list rows for these interviews, keyed by id.
+
+        Ids from another project, or of deleted interviews, are left out.
+        """
+        if not interview_ids:
+            return {}
+        statement = self._summary_statement(
+            self._test_name_column(), ParticipantTable.pid.label("pid")
+        ).where(
+            InterviewTable.project_id == project_id,
+            InterviewTable.id.in_(interview_ids),
+        )
+        return {
+            row.id: InterviewSummaryPublic.model_validate(row._mapping)
+            for row in self.session.execute(statement).all()
+        }
+
     def get_interviews(
         self,
         project_id: UUID4,
@@ -359,21 +402,7 @@ class InterviewRepository(BaseRepository):
         )
 
         statement = (
-            self._join_filter_sources(
-                select(
-                    InterviewTable.id,
-                    InterviewTable.language,
-                    InterviewTable.interviewer,
-                    InterviewTable.status,
-                    InterviewTable.type,
-                    InterviewTable.created_at,
-                    InterviewTable.last_updated,
-                    InterviewTable.total_time_spent,
-                    InterviewTable.n_messages.label("n_messages"),
-                    test_name,
-                    pid_column,
-                )
-            )
+            self._summary_statement(test_name, pid_column)
             .where(*conditions)
             .order_by(
                 _sorting_col.desc() if sorting_order == "desc" else _sorting_col.asc()

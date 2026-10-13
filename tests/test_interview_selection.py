@@ -128,3 +128,9 @@ def test_filter_selection_deletes_everything_matching(db):
         ),
     )
     assert remaining == [ids["test"]]
+
+
+@pytest.mark.parametrize("timezone", ["Mars/Olympus", "../etc/passwd"])
+def test_unknown_timezone_is_rejected(timezone):
+    with pytest.raises(ValidationError):
+        ExportMessagesRequest(interview_ids=[], format="pdf", timezone=timezone)
