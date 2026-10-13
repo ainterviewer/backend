@@ -4,7 +4,7 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.routing import APIRoute
 from sqlalchemy.exc import NoResultFound
 
-from ..dependencies import DBSession
+from ..dependencies import DBSession, OptionalToken
 from ..openapi import build_openapi_schema
 from ..platform_release import PlatformManifest, PlatformRelease
 from . import auth, interview, misc
@@ -67,18 +67,29 @@ def platform_version(db: DBSession, platform_version: str):
 
 
 @router.get("/releases")
-def releases(db: DBSession, limit: int = 10) -> list[PlatformRelease]:
+def releases(
+    db: DBSession, token: OptionalToken, limit: int = 10
+) -> list[PlatformRelease]:
     """Recent releases for the "What's new" dialog.
 
     Only the curated, user-facing view: per-component `notes` and git hashes
     stay out of it. A release that has not been curated yet (`highlights` is
     None) is omitted rather than shown empty.
+
+    Highlights about preview features are served only to callers whose token
+    carries `preview_features`. A release announcing nothing else then reaches
+    everyone else as curated-but-empty, the same as a maintenance release.
     """
+    preview = token is not None and token.preview_features
     return [
         PlatformRelease(
             platform_version=manifest.platform_version,
             released_at=manifest.build_time,
-            highlights=manifest.highlights or [],
+            highlights=[
+                highlight
+                for highlight in manifest.highlights
+                if preview or highlight.audience == "all"
+            ],
         )
         for manifest in db.get_platform_releases(limit=limit)
         if manifest.highlights is not None

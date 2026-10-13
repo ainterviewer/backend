@@ -50,6 +50,10 @@ class Highlight(BaseModel):
     kind: Literal["new", "improved", "fixed"]
     title: str
     body: str | None = None
+    # "preview" for a change to a preview feature: only users with preview
+    # features enabled are shown it. Defaulted so highlights curated before the
+    # field existed still validate.
+    audience: Literal["all", "preview"] = "all"
 
 
 class PlatformManifest(BaseModel):

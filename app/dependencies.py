@@ -71,6 +71,22 @@ def _decode_token(
         raise AuthError(status_code=401, detail="Could not validate credentials")
 
 
+def _decode_optional_token(
+    token: str | None = Depends(auth_cookie_scheme),
+) -> AuthToken | None:
+    """The caller's token if they sent a valid one, otherwise None.
+
+    For endpoints that serve everyone but tailor the response to who is asking.
+    An expired or malformed token is treated as no token rather than refused.
+    """
+    if token is None:
+        return None
+    try:
+        return AuthToken.decode(token)
+    except (JWTError, ValidationError):
+        return None
+
+
 class ScopeChecker:
     def __init__(self, required_scope: Scope = Scope.ADMIN):
         self.required_scope = required_scope
@@ -219,6 +235,9 @@ DemoToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.DEMO))]
 # restricted account tier, `with_preview_features` is early access to unfinished
 # features.
 PreviewFeatures = Annotated[AuthToken, Depends(require_preview_features)]
+
+# The caller's token when there is one; never refuses.
+OptionalToken = Annotated[AuthToken | None, Depends(_decode_optional_token)]
 
 
 # Resource checks
