@@ -293,12 +293,12 @@ if __name__ == "__main__":
 
 
 def as_aware(value: datetime.datetime) -> datetime.datetime:
-    """Attach the app timezone to a naive datetime read back from the database.
+    """Attach the app timezone to a naive datetime.
 
-    The datetime columns are timezone-less, so a value that went in as
-    `ainterviewer.utils.now()` (aware) comes back naive, and comparing it to
-    `now()` raises TypeError rather than returning a wrong answer. Every
-    expiry check has to normalise first.
+    Values read from datetime columns already come back aware (see
+    `app.db.types.AppDateTime`), so for them this is a no-op. It is for naive
+    values from elsewhere -- a model built by hand, an old row in a test --
+    which mean app wall-clock time, like everything stored.
     """
     if value.tzinfo is None:
         return value.replace(tzinfo=lib_settings.tzinfo)

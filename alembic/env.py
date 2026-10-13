@@ -22,6 +22,7 @@ from app.db.triggers import (
     register_trigger_functions,
     uninstall_triggers,
 )
+from app.db.types import AppDateTime
 
 target_metadata = Base.metadata
 
@@ -44,6 +45,8 @@ def render_item(type_, obj, autogen_context):
     """Apply custom rendering for PydanticType."""
     if type_ == "type" and isinstance(obj, PydanticJSONB):
         return "sa.JSON()"
+    if type_ == "type" and isinstance(obj, AppDateTime):
+        return "sa.DateTime()"
     return False
 
 

@@ -1,6 +1,6 @@
 import datetime
 import uuid
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 from uuid import uuid4
 
 import sqlalchemy as sa
@@ -48,6 +48,7 @@ from ..types import CollaboratorRole, ExternalParam, ProjectStatus, Scope, TestR
 from ._extra import PydanticJSONB
 from .types import (
     AccessRequestStatus,
+    AppDateTime,
     CodeKind,
     EmbeddingTask,
     InterviewType,
@@ -68,6 +69,8 @@ metadata_obj = MetaData(naming_convention=naming_convention)
 
 class Base(DeclarativeBase):
     metadata = metadata_obj
+    # Every datetime column reads back aware; see AppDateTime.
+    type_annotation_map: ClassVar = {datetime.datetime: AppDateTime}
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True

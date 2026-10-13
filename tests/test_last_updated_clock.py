@@ -78,7 +78,7 @@ def test_a_trigger_bump_writes_the_app_clock():
         session.expire_all()
         bumped = session.get_one(ProjectTable, setup.project_id).last_updated
         assert bumped is not None
-        assert abs(now().replace(tzinfo=None) - bumped) < timedelta(minutes=1)
+        assert abs(now() - bumped) < timedelta(minutes=1)
 
 
 def test_without_the_function_a_triggering_write_fails_loudly():
