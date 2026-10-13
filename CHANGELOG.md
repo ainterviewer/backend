@@ -4,6 +4,16 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.6.6] - 2026-10-13
+
+### Features
+
+- (releases) Serve preview highlights only to preview users
+
+### Internal
+
+- Route preview and graduation trailers in the changelog
+
 ## [0.6.5] - 2026-10-13
 
 ### Features
