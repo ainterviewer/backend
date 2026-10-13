@@ -20,16 +20,16 @@ from ....db.models import (
 from ....db.repositories.errors import CommentThreadError
 from ....dependencies import (
     DBSession,
+    DemoToken,
     ProjectAnnotator,
     ProjectViewer,
-    UserToken,
 )
 
 router = APIRouter()
 
 
 def _require_modify_rights(
-    db: DBSession, project_id: UUID4, comment_id: UUID4, jwt: UserToken
+    db: DBSession, project_id: UUID4, comment_id: UUID4, jwt: DemoToken
 ) -> None:
     try:
         allowed = db.analysis.can_modify_comment(
@@ -47,7 +47,7 @@ async def get_message_comments(
     project_id: UUID4,
     message_id: UUID4,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectViewer,
 ) -> list[MessageCommentPublic]:
     try:
@@ -62,7 +62,7 @@ async def add_message_comment(
     message_id: UUID4,
     comment: MessageCommentCreate,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectAnnotator,
 ) -> MessageCommentPublic:
     try:
@@ -81,7 +81,7 @@ async def update_message_comment(
     comment_id: UUID4,
     comment: MessageCommentUpdate,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectAnnotator,
 ) -> MessageCommentPublic:
     _require_modify_rights(db, project_id, comment_id, jwt)
@@ -93,7 +93,7 @@ async def delete_message_comment(
     project_id: UUID4,
     comment_id: UUID4,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectAnnotator,
 ):
     _require_modify_rights(db, project_id, comment_id, jwt)

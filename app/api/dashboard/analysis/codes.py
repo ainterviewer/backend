@@ -27,10 +27,10 @@ from ....db.models import (
 from ....db.repositories.errors import CodebookError, CodingError
 from ....dependencies import (
     DBSession,
+    DemoToken,
     ProjectAnnotator,
     ProjectEditor,
     ProjectViewer,
-    UserToken,
     require_preview_features,
 )
 
@@ -43,7 +43,7 @@ _preview = [Depends(require_preview_features)]
 
 
 def _require_modify_rights(
-    db: DBSession, project_id: UUID4, coding_id: UUID4, jwt: UserToken
+    db: DBSession, project_id: UUID4, coding_id: UUID4, jwt: DemoToken
 ) -> None:
     """Its author, or somebody who moderates the project.
 
@@ -67,7 +67,7 @@ def _require_modify_rights(
 async def get_codebook(
     project_id: UUID4,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectViewer,
 ) -> CodebookPublic:
     return db.analysis.get_codebook(project_id)
@@ -78,7 +78,7 @@ async def save_codebook(
     project_id: UUID4,
     codebook: CodebookPut,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectEditor,
 ) -> CodebookPublic:
     try:
@@ -91,7 +91,7 @@ async def save_codebook(
 async def get_code_counts(
     project_id: UUID4,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectViewer,
 ) -> dict[UUID4, int]:
     """How many passages carry each code. Codes with none are left out."""
@@ -103,7 +103,7 @@ async def get_message_codings(
     project_id: UUID4,
     message_id: UUID4,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectViewer,
 ) -> list[CodingPublic]:
     try:
@@ -117,7 +117,7 @@ async def get_codings_for_messages(
     project_id: UUID4,
     lookup: CodingsForMessages,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectViewer,
 ) -> dict[UUID4, list[CodingPublic]]:
     """The codings on a set of messages, keyed by message id.
@@ -136,7 +136,7 @@ async def add_message_coding(
     message_id: UUID4,
     coding: CodingCreate,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectAnnotator,
 ) -> CodingPublic:
     """Code a passage. The coder is the caller, never the payload."""
@@ -156,7 +156,7 @@ async def update_message_coding(
     coding_id: UUID4,
     coding: CodingCreate,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectAnnotator,
 ) -> CodingPublic:
     _require_modify_rights(db, project_id, coding_id, jwt)
@@ -173,7 +173,7 @@ async def delete_message_coding(
     project_id: UUID4,
     coding_id: UUID4,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectAnnotator,
 ):
     _require_modify_rights(db, project_id, coding_id, jwt)
@@ -185,7 +185,7 @@ async def get_filtered_messages_count(
     project_id: UUID4,
     filters: FilteredMessagesRequest,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectViewer,
 ) -> int:
     return db.analysis.count_filtered_messages(
@@ -203,7 +203,7 @@ async def get_filtered_messages(
     project_id: UUID4,
     filters: FilteredMessagesRequest,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectViewer,
     skip: Annotated[int, Query()] = 0,
     limit: Annotated[int, Query()] = 20,
@@ -230,7 +230,7 @@ async def get_message_context_before(
     interview_id: UUID4,
     message_id: UUID4,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectViewer,
 ) -> list[MessagePublic]:
     return db.analysis.get_message_context(
@@ -250,7 +250,7 @@ async def get_message_context_after(
     interview_id: UUID4,
     message_id: UUID4,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectViewer,
 ) -> list[MessagePublic]:
     return db.analysis.get_message_context(
