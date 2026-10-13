@@ -4,6 +4,169 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.6.5] - 2026-10-13
+
+### Features
+
+- Improved embedding batching
+- (synthesize) Limit demo users' synthetic interviews per user
+- (auth) Add password reset via emailed magic link
+- (auth) Enforce preview features on the API
+- (db) Enforce foreign keys by default
+- (codebook) Carry merges in the codebook save
+- (embed) Add a live flag to stop embedding during interviews
+
+### Bug Fixes
+
+- (export) Infer the messages dataframe schema from every row
+- (migrations) Keep the testrun triggers through the started_by migration
+- (migrations) Let alembic own the touch-last_updated triggers
+- (participants) Return 404 for opt-out links that match nobody
+- (websockets) End live sessions before deleting their interviews
+- (interviews) Refuse stale test-run, participant and interview ids
+- (interviews) End the session when a write hits a deleted interview
+- (synthesize) Scope test-setup routes to the project in their path
+- (db) Stamp trigger-bumped last_updated with the app clock
+- (migrations) Register app_now on alembic's engine
+- (migrations) Stop the orphan sweep deleting children of live parents
+- (ws) Run AI interviews in the interview's own language
+
+### Performance
+
+- (db) Index every foreign-key column
+
+### Internal
+
+- Update just backup-db recipe to use sudo when running backup script on remote
+- (migrations) Merge the release/0.4.x hotfix migrations into main
+- (release) Let only the final-release rule set latest
+- (migrations) Name e5f2a91c4d80 as the cause of the lost testrun triggers
+- (users) Rename with_demo_features to with_preview_features
+- Keep main linear with rebase and fast-forward merges
+- (settings) Correct the database env-var prefix and Postgres notes
+- (migrations) Delete foreign-key orphans again
+- (settings) Regenerate config.schema.json
+- Record the per-process session registry and last_updated clocks
+- (just) Disable two-factor on fetched database copies
+## [0.6.4] - 2026-09-22
+
+### Internal
+
+- Update db justfile recipes to match new ENV structure
+- Fix service settings default values
+## [0.6.3] - 2026-09-22
+
+### Internal
+
+- Remove old dead translations module
+- Publish a staging tag on every release
+- Preview a feature branch on staging
+- Reenable pytest in release wf and run on pull requests
+- Better release version detection in wf
+- Bump lib version
+## [0.6.2] - 2026-09-17
+
+### Features
+
+- Implement better code exploration integration
+- Add similarity search based on coded turns
+## [0.6.1] - 2026-09-16
+
+### Features
+
+- Improve duration trimming for interviews by capping answer gaps to 5min
+## [0.6.0] - 2026-09-16
+
+### Features
+
+- Switch from old annotations to new codebook analytical framework
+## [0.5.8] - 2026-09-14
+
+### Features
+
+- Implement shared interview filtering for report, and add deduplicate_by_pid argument
+
+### Internal
+
+- Move interview filtering to standalone module
+## [0.5.7] - 2026-09-14
+
+### Internal
+
+- Bump lib version
+## [0.5.6] - 2026-09-14
+
+### Features
+
+- Add condition carrier counts to report
+## [0.5.5] - 2026-09-11
+
+### Internal
+
+- Move relabel resumed survey answers from scripts to alemibc migration
+## [0.5.4] - 2026-09-11
+
+### Internal
+
+- Bump lib version
+## [0.5.3] - 2026-09-11
+
+### Internal
+
+- (scripts) Relabel survey answers stored as free text
+## [0.5.2] - 2026-09-11
+
+### Features
+
+- Add groupby controls (interview/guide) and question filtering to all units
+## [0.5.1] - 2026-09-10
+
+### Features
+
+- Improve embeddings service
+- Add chunks for interview kinds
+## [0.5.0] - 2026-09-10
+
+### Features
+
+- Add report endpoint
+- Let comments be author specific and implement comment replies
+- Add comment authorship and permissions
+- (report) Add conditions to report payload
+- (monitoring) Change characters to log scale and duration from seconds -> minutes
+- Add embedding components
+- Implement new and better any-llm exception handling
+- Improved embedding chunk turn identification and grouping
+- Add umap embeddings and add language information to embedding chunks
+- Improve language filtering for embeddings
+- Implement pagination for embeddings endpoints
+- Add question filtering for data exploration
+- Add browsing with keywords
+- Improve keyword search match
+- Streamline transcript payloads
+- Add survey filtering for embeddings
+- Add order and filtering to browsing endpoints
+- Add sections as embedding kind
+
+### Bug Fixes
+
+- Cascade delete annotations when interviews are deleted
+- (build) Commit only release files in publish recipe
+- Update a users last_active status on token refresh
+- Better timeout handling for embedding client
+- Harden language type across api
+- Don't cast synthetic messages to ReceivedData before sumbission
+- Harden API authorization for annotations
+
+### Internal
+
+- Move histogram utility tools from monitor.py to shared histogram.py module
+- Bump ruff pre-commit
+- Update dev dependencies
+- Filter unnecessary umap warning
+- Refine db backup commands
+- Bump lib version
+
 ## [0.6.4] - 2026-09-22
 
 ### Internal
