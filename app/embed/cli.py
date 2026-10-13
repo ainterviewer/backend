@@ -27,6 +27,7 @@ def status():
 
     typer.echo(f"endpoint: {settings.endpoint or '(not configured)'}")
     typer.echo(f"enabled:  {settings.enabled}")
+    typer.echo(f"live:     {client.live}")
     typer.echo(f"model:    {settings.model} ({settings.dimension}d)")
     typer.echo(f"health:   {asyncio.run(client.health())}")
 

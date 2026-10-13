@@ -283,6 +283,14 @@ the gaps the live path cannot see: an abandoned interview never completes its
 last question group, and a resumed one replays without re-emitting. **The
 backfill is not a one-off migration tool** -- run it on a schedule.
 
+`live = false` (`APP_SERVICE__EMBEDDING__LIVE`) turns the live path off to save
+inference cost: interviews get no embedder, and the server is only called for
+search and for a backfill someone requested from the dashboard or the CLI. The
+worker keeps running regardless, because the dashboard backfill goes through
+it. There is no automatic backfill to switch off -- a schedule is a cron
+running the CLI, outside this app. The status endpoint reports `live`, so a
+corpus that lags behind its interviews reads as configuration, not a fault.
+
 Two ways to run it, for two different situations:
 
 ```bash

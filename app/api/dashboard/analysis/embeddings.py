@@ -1458,6 +1458,7 @@ async def get_embedding_status(
 
     return EmbeddingStatus(
         enabled=embedding_client.enabled,
+        live=embedding_client.live,
         healthy=await embedding_client.health(),
         model=settings.model,
         dimension=settings.dimension,

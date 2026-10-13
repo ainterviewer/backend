@@ -46,6 +46,11 @@ class EmbeddingClient:
     def enabled(self) -> bool:
         return self.settings.enabled and bool(self.settings.base_url)
 
+    @property
+    def live(self) -> bool:
+        """Whether interviews should embed as they run (see `EmbeddingSettings.live`)."""
+        return self.enabled and self.settings.live
+
     def _http(self) -> httpx.AsyncClient:
         if self._client is None:
             if not self.settings.base_url:

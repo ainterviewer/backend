@@ -1091,6 +1091,9 @@ class EmbeddingStatus(_BaseModel):
     """Whether a project's corpus is embedded, and whether it could be."""
 
     enabled: bool
+    # Whether interviews embed as they run. When false, a project's coverage
+    # only moves when a backfill is requested.
+    live: bool = False
     healthy: bool
     model: str
     dimension: int

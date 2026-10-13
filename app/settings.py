@@ -184,6 +184,14 @@ class EmbeddingSettings(BaseModel):
     """
 
     enabled: bool = False
+
+    # Embed chunks as interviews run. Off, interviews emit nothing and the
+    # server is only called for search and for a backfill someone asked for --
+    # the dashboard's or the CLI's -- which trades freshness for inference
+    # cost. Nothing is lost: the backfill re-derives every chunk from the
+    # stored messages. Has no effect while `enabled` is false.
+    live: bool = True
+
     endpoint: str | None = None
     model: str = "microsoft/harrier-oss-v1-0.6b"
     dimension: int = 1024

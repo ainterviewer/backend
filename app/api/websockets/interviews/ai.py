@@ -267,9 +267,9 @@ async def _run_interview(
 
     wmh = WebsocketMessageHandler(websocket, project_id, interview_id)
 
-    # None when embedding is disabled or unconfigured, which makes the interview
-    # loop emit no chunks at all.
-    embedder = QueueEmbedder(chunk_queue) if embedding_client.enabled else None
+    # None when embedding is disabled, unconfigured or not live, which makes the
+    # interview loop emit no chunks at all.
+    embedder = QueueEmbedder(chunk_queue) if embedding_client.live else None
 
     try:
         async with AInterviewer(
