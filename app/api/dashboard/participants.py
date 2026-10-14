@@ -25,11 +25,13 @@ from ...db.models import (
 from ...db.repositories.errors import OptOutTokenError
 from ...dependencies import (
     DBSession,
+    IfMatch,
     ProjectAdmin,
     ProjectEditor,
     ProjectViewer,
     UserToken,
     require_preview_features,
+    set_etag,
 )
 from ...services.email.mail import send_email
 from ...services.email.participant_template import (
@@ -168,7 +170,9 @@ async def export_email_bundle(
         "project_id": str(project_id),
         "project_title": project.title,
         "base_url": base_url,
-        "default_language": db.projects.get_default_language(project_id),
+        # The published version's, like the templates: they are listed
+        # default first.
+        "default_language": localizations[0][0],
         "languages": [lang for (lang, _, _) in localizations],
     }
 
@@ -360,7 +364,10 @@ async def get_participant_email_template(
     db: DBSession,
     jwt: UserToken,
     _: ProjectViewer,
+    response: Response,
 ) -> ParticipantEmailTemplateRequest:
+    """The draft's template; `ETag` is the content's revision."""
+    set_etag(response, db.projects.get_revision(project_id))
     subject, template = db.projects.get_participant_email_template(project_id, language)
     return ParticipantEmailTemplateRequest(subject=subject, template=template)
 
@@ -373,12 +380,17 @@ async def set_participant_email_template(
     db: DBSession,
     jwt: UserToken,
     _: ProjectEditor,
+    revision: IfMatch,
+    response: Response,
 ) -> ParticipantEmailTemplateRequest:
+    """Save the draft's template; it is sent once published. A 412 if the
+    content changed since `If-Match`'s revision."""
     _validate_template_request(request)
 
     db.projects.set_participant_email_template(
-        project_id, language, request.subject, request.template
+        project_id, language, request.subject, request.template, revision
     )
+    set_etag(response, db.projects.get_revision(project_id))
     return ParticipantEmailTemplateRequest(
         subject=request.subject, template=request.template
     )
@@ -700,7 +712,10 @@ async def get_participant_reminder_email_template(
     db: DBSession,
     jwt: UserToken,
     _: ProjectViewer,
+    response: Response,
 ) -> ParticipantEmailTemplateRequest:
+    """The draft's template; `ETag` is the content's revision."""
+    set_etag(response, db.projects.get_revision(project_id))
     subject, template = db.projects.get_participant_reminder_email_template(
         project_id, language
     )
@@ -715,12 +730,17 @@ async def set_participant_reminder_email_template(
     db: DBSession,
     jwt: UserToken,
     _: ProjectEditor,
+    revision: IfMatch,
+    response: Response,
 ) -> ParticipantEmailTemplateRequest:
+    """Save the draft's template; it is sent once published. A 412 if the
+    content changed since `If-Match`'s revision."""
     _validate_template_request(request)
 
     db.projects.set_participant_reminder_email_template(
-        project_id, language, request.subject, request.template
+        project_id, language, request.subject, request.template, revision
     )
+    set_etag(response, db.projects.get_revision(project_id))
     return ParticipantEmailTemplateRequest(
         subject=request.subject, template=request.template
     )

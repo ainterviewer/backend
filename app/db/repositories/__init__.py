@@ -10,6 +10,7 @@ from .project import ProjectRepository
 from .test import TestRepository
 from .user import UserRepository
 from .verification import VerificationRepository
+from .version import VersionRepository
 
 __all__ = [
     "AnalysisRepository",
@@ -24,4 +25,5 @@ __all__ = [
     "TestRepository",
     "UserRepository",
     "VerificationRepository",
+    "VersionRepository",
 ]

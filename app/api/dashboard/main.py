@@ -8,6 +8,7 @@ from . import (
     participants,
     projects,
     synthesize,
+    versions,
 )
 
 router = APIRouter()
@@ -20,3 +21,4 @@ router.include_router(participants.router)
 router.include_router(participants.public_router)
 router.include_router(projects.router)
 router.include_router(synthesize.router)
+router.include_router(versions.router)

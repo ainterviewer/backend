@@ -8,7 +8,7 @@ in step.
 """
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 from sqlalchemy import create_engine, event, update
 from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlalchemy.orm import Session
@@ -31,7 +31,7 @@ from ainterviewer.interview_guides.types import ConditionAction
 from app.api.dashboard import projects as projects_api
 from app.db import InterviewDataBase
 from app.db.repositories import project as project_repository
-from app.db.repositories.errors import ProjectLanguageError
+from app.db.repositories.errors import NotPublishedError, ProjectLanguageError
 from app.db.repositories.project import render_default_guide
 from app.db.tables import Base, ProjectContentTable, ProjectFolderTable, UserTable
 
@@ -200,7 +200,15 @@ async def test_saving_a_condition_on_a_later_question_is_rejected(db):
     )
 
     with pytest.raises(HTTPException) as error:
-        await projects_api.update_guide(project_id, guide, database, None, None)  # ty: ignore[invalid-argument-type]
+        await projects_api.update_guide(
+            project_id,
+            guide,
+            database,
+            None,  # ty: ignore[invalid-argument-type]
+            None,  # ty: ignore[invalid-argument-type]
+            database.projects.get_revision(project_id),
+            Response(),
+        )
 
     assert error.value.status_code == 422
 
@@ -220,14 +228,32 @@ async def test_emails_are_text_per_language(db):
         "<p>Hej</p>",
     )
     # The default first, then the rest; a language with nothing reads as None.
-    assert projects.get_participant_email_templates_ordered(project_id) == [
+    assert projects.get_participant_email_templates_ordered(
+        project_id, source="draft"
+    ) == [
         ("EN", "Hi", "<p>Hi</p>"),
         ("DA", "Hej", "<p>Hej</p>"),
     ]
-    assert projects.get_participant_reminder_email_templates_ordered(project_id) == [
+    assert projects.get_participant_reminder_email_templates_ordered(
+        project_id, source="draft"
+    ) == [
         ("EN", None, None),
         ("DA", None, "<p>!</p>"),
     ]
+
+    # What is sent is the published version's: nothing until it is published.
+    with pytest.raises(NotPublishedError):
+        projects.get_participant_email_templates_ordered(project_id)
+    projects.set_participant_email_template(project_id, "DA", "Hej", "<p>Hej</p>")
+    # Publishing needs every language complete, the reminder included.
+    projects.set_participant_reminder_email_template(project_id, "EN", None, "<p>!</p>")
+    database.versions.publish(project_id, None, None)
+    projects.set_participant_email_template(project_id, "EN", "Hello", "<p>Hi</p>")
+    assert projects.get_participant_email_templates_ordered(project_id)[0] == (
+        "EN",
+        "Hi",
+        "<p>Hi</p>",
+    )
 
     # Clearing a field removes it rather than storing an empty translation.
     projects.set_participant_email_template(project_id, "DA", None, None)

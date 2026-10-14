@@ -21,6 +21,7 @@ from .repositories import (
     TestRepository,
     UserRepository,
     VerificationRepository,
+    VersionRepository,
 )
 from .tables import Base, PlatformReleaseTable
 from .triggers import install_triggers, missing_triggers
@@ -63,6 +64,7 @@ class InterviewDataBase(PersistenceProtocol):
         self.assistance: AssistanceRepository = AssistanceRepository(session)
         self.newsletter: NewsletterRepository = NewsletterRepository(session)
         self.embeddings: EmbeddingRepository = EmbeddingRepository(session)
+        self.versions: VersionRepository = VersionRepository(session)
 
     # ==================== Database Management ====================
 

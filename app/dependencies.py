@@ -1,7 +1,7 @@
 from collections.abc import Generator
 from typing import Annotated, Literal
 
-from fastapi import Cookie, Depends, HTTPException
+from fastapi import Cookie, Depends, Header, HTTPException, Response
 from fastapi.security import APIKeyCookie
 from jose import JWTError
 from pydantic import UUID4, ValidationError
@@ -266,3 +266,59 @@ FolderEditor = Annotated[
 FolderAdmin = Annotated[
     AuthToken, Depends(ResourceRoleChecker(CollaboratorRole.ADMIN, "folder"))
 ]
+
+
+def _respondent_content(
+    project_id: UUID4,
+    db: DBSession,
+    token: OptionalToken,
+    draft: bool = False,
+) -> Literal["draft", "published"]:
+    """Which content a public, respondent-facing route serves: the published
+    version, or with `?draft=true` the draft, for a viewer of the project.
+
+    Test interviews run the draft through the same interview page
+    respondents use, so that page has to be able to ask for it; nobody else
+    may, because the draft is unreleased work.
+    """
+    if not draft:
+        return "published"
+    if token is None:
+        raise AuthError(status_code=401, detail="Not authenticated")
+    ScopeChecker(Scope.DEMO)(auth_token=token)
+    ResourceRoleChecker(CollaboratorRole.VIEWER, "project")(
+        project_id=project_id, token=token, db=db
+    )
+    return "draft"
+
+
+RespondentContent = Annotated[
+    Literal["draft", "published"], Depends(_respondent_content)
+]
+
+
+def _if_match(if_match: Annotated[str | None, Header()] = None) -> int:
+    """The content revision a write is based on, from `If-Match`.
+
+    Required: a write that does not say what it was based on could overwrite
+    anyone's work (428). The value is the `ETag` the GET returned, quoted.
+    """
+    if if_match is None:
+        raise HTTPException(
+            status_code=428,
+            detail="Send the content's ETag as If-Match, so a save cannot "
+            "overwrite changes you have not seen.",
+        )
+    try:
+        return int(if_match.removeprefix("W/").strip().strip('"'))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Malformed If-Match") from exc
+
+
+#: The revision a content write is based on; see `ProjectContentTable.revision`.
+IfMatch = Annotated[int, Depends(_if_match)]
+
+
+def set_etag(response: Response, revision: int) -> None:
+    """Tell the client the content's revision, to send back as If-Match."""
+    response.headers["ETag"] = f'"{revision}"'

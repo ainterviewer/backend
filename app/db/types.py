@@ -52,6 +52,27 @@ class InterviewType(StrEnum):
     DISTRIBUTED = "distributed"
 
 
+class ContentVersionKind(StrEnum):
+    """Why a `projectcontentversion` was written.
+
+    `PUBLISH` and `MANUAL` are saved by someone on purpose and are never
+    deleted. The rest are written as a side effect -- `TEST` for the draft a
+    test interview ran on, `RESTORE` for the draft a restore replaced, `AUTO`
+    for the autosave snapshots of Phase 4 -- and may be pruned once no
+    interview points at them (`VersionRepository.prune`).
+    """
+
+    PUBLISH = "publish"
+    MANUAL = "manual"
+    TEST = "test"
+    RESTORE = "restore"
+    AUTO = "auto"
+
+    @property
+    def is_automatic(self) -> bool:
+        return self not in (ContentVersionKind.PUBLISH, ContentVersionKind.MANUAL)
+
+
 class VerificationPurpose(StrEnum):
     EMAIL_VERIFICATION = "email_verification"
     LOGIN = "login"

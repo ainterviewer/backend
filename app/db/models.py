@@ -20,7 +20,14 @@ from pydantic import (
 
 from ainterviewer.agents.config import AgentConfigs
 from ainterviewer.config import InterviewConfig
-from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
+from ainterviewer.interview_guides import (
+    Image,
+    InterviewGuide,
+    LocalizedConsent,
+    LocalizedInterviewGuide,
+    LocalizedWelcome,
+    SurveyItem,
+)
 from ainterviewer.interview_guides.extra import Consent, Welcome
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions, InterviewSubject
@@ -43,6 +50,7 @@ from ..types import (
     CollaboratorRole,
     ExternalParam,
     GroupKind,
+    ParticipantEmails,
     Projection,
     ProjectStatus,
     Scope,
@@ -50,7 +58,8 @@ from ..types import (
     TurnRole,
 )
 from ._extra import CustomEmailStr
-from .types import AccessRequestStatus, CodeKind, InterviewType
+from .types import AccessRequestStatus, CodeKind, ContentVersionKind, InterviewType
+from .versioning import BumpName
 
 
 # TODO: Implement across more endpoints
@@ -225,6 +234,56 @@ class ProjectLocalizationPublic(_BaseModel):
     interview_guide: InterviewGuide
     prompt_overrides: dict[str, str]
     agent_configs: AgentConfigs
+    #: The version rendered, None when it was the draft.
+    content_version_id: UUID4 | None = None
+
+
+class ContentVersionSummary(_BaseModel):
+    """One version of a project's content, as the history lists it."""
+
+    id: UUID4
+    version_no: int
+    kind: ContentVersionKind
+    #: "2.1.0" on published versions, None on every other kind.
+    semver: str | None
+    label: str | None
+    created_at: datetime
+    created_by_id: UUID4 | None
+    #: The author's name, None once the user is deleted.
+    created_by_name: str | None
+    is_published: bool
+    languages: list[LanguageCode]
+    default_language: LanguageCode
+
+
+class ContentVersionPublic(ContentVersionSummary):
+    """A version with its content, for previewing it read-only."""
+
+    guide: LocalizedInterviewGuide
+    consent: LocalizedConsent | None
+    welcome: LocalizedWelcome | None
+    emails: ParticipantEmails
+    agent_configs: AgentConfigs
+    prompt_overrides: dict[str, str]
+
+
+class ContentStatus(_BaseModel):
+    """Where the draft stands against what respondents get."""
+
+    #: The draft's revision, what `If-Match` must carry.
+    revision: int
+    published: ContentVersionSummary | None
+    #: The draft differs from the published version (always true while the
+    #: project has never been published).
+    has_unpublished_changes: bool
+    #: How far the draft is from the published version, so what publishing
+    #: it now would bump ("none" when it is the same). See app/db/versioning.py.
+    pending_bump: BumpName
+    #: The version publishing it now would get, with `pending_bump`.
+    next_semver: str
+    #: Per offered language, the paths of text it lacks. Publishing is
+    #: refused while this is not empty.
+    missing: dict[LanguageCode, list[str]]
 
 
 class ProjectFolderBase(_BaseModel):
@@ -351,6 +410,8 @@ class InterviewBase(_BaseModel):
     referer: str | None = None
     platform_version: str | None = None
     test_name: str | None = None
+    #: The version of the project's content it runs; see InterviewTable.
+    content_version_id: UUID4 | None = None
 
 
 class InterviewCreate(_BaseModel):

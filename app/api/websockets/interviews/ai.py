@@ -40,7 +40,8 @@ from ainterviewer.interview import AInterviewer
 from ainterviewer.lpm.types import CustomToken
 
 from ....db import InterviewDataBase
-from ....db.repositories.errors import InterviewGoneError
+from ....db.repositories.errors import InterviewGoneError, NotPublishedError
+from ....db.repositories.project import ContentSource
 from ....dependencies import DBSession
 from ....embed.client import embedding_client
 from ....embed.queue import QueueEmbedder, chunk_queue
@@ -221,16 +222,21 @@ async def _run_interview(
     # back to the project default ran Danish interviews with English agents.
     language = interview.language
 
+    # The agent configs and prompt overrides of the version the interview
+    # runs, so republishing mid-interview does not change how it is probed.
+    # Interviews from before versions existed (and tests whose snapshot was
+    # pruned) take the published version's, or the draft's if nothing is.
+    # The guide itself lives on the interview row. `or_default` because they
+    # are the same in every language: one removed since the interview began
+    # must not stop it.
+    source: ContentSource = interview.content_version_id or "published"
     try:
         project_localization = db.projects.get_project_localization(
-            project_id, language
+            project_id, language, source=source, or_default=True
         )
-    except NoResultFound:
-        # The language was removed from the project mid-interview. Its guide
-        # lives on the interview row, so keep speaking it; the agent configs
-        # and prompt overrides are the project's, the same in every language.
+    except NotPublishedError:
         project_localization = db.projects.get_project_localization(
-            project_id, db.projects.get_default_language(project_id)
+            project_id, language, or_default=True
         )
 
     if interview_history:

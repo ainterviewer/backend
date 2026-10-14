@@ -7,6 +7,45 @@ class ProjectLanguageError(Exception):
     """
 
 
+class ContentRevisionError(Exception):
+    """A write to a project's content was based on a revision that is no
+    longer current: someone else saved in between.
+
+    The API maps this to a 412 carrying `current`, so the editor can offer to
+    reload or to overwrite with that revision.
+    """
+
+    def __init__(self, expected: int, current: int):
+        super().__init__(
+            f"The content changed since it was loaded (revision {expected}, "
+            f"now {current})."
+        )
+        self.expected = expected
+        self.current = current
+
+
+class NotPublishedError(Exception):
+    """Respondents asked for a project that has never been published.
+
+    Distributed interviews, the public consent/welcome/language routes and
+    participant emails read the published version only, and never fall back to
+    the draft. The API maps this to a 409, so keep messages user-facing.
+    """
+
+
+class PublishError(Exception):
+    """The draft cannot be published as it stands.
+
+    Raised while an offered language has untranslated text; `missing` maps
+    each such language to the paths of what it lacks. The API maps this to a
+    409 and shows the message.
+    """
+
+    def __init__(self, message: str, missing: dict[str, list[str]]):
+        super().__init__(message)
+        self.missing = missing
+
+
 class ResumeTokenError(Exception):
     """A resume link could not be redeemed.
 

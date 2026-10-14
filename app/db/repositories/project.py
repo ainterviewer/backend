@@ -46,6 +46,7 @@ from ..tables import (
     CollaboratorTable,
     InterviewTable,
     ProjectContentTable,
+    ProjectContentVersionTable,
     ProjectFolderTable,
     ProjectTable,
     TestSetupTable,
@@ -53,10 +54,14 @@ from ..tables import (
 )
 from ..types import InterviewType
 from .base import BaseRepository
-from .errors import ProjectLanguageError
+from .errors import ContentRevisionError, NotPublishedError, ProjectLanguageError
 from .permissions import can_moderate_project
 
 TRANSLATION_MODEL = "openai:gpt-5.4-mini"
+
+#: Which of a project's content to read: the draft the editor edits, the
+#: version respondents get, or a version by id. See `VersionRepository`.
+type ContentSource = Literal["draft", "published"] | UUID4
 
 
 def _sorted_project_languages(
@@ -557,21 +562,55 @@ class ProjectRepository(BaseRepository):
 
     # ==================== Localization Methods ====================
 
+    def _source(
+        self, project_id: UUID4, source: ContentSource
+    ) -> ProjectContentTable | ProjectContentVersionTable:
+        """The draft, the published version or a given version of the
+        project's content. Raises NotPublishedError for "published" when
+        nothing is, and NoResultFound for a version that is not this
+        project's."""
+        if source == "draft":
+            return self._content(project_id)
+        if source == "published":
+            version = self._content(project_id).published_version
+            if version is None:
+                raise NotPublishedError("This study has not been published yet.")
+            return version
+        return self.session.execute(
+            select(ProjectContentVersionTable).where(
+                ProjectContentVersionTable.id == source,
+                ProjectContentVersionTable.project_id == project_id,
+            )
+        ).scalar_one()
+
     def get_project_localization(
         self,
         project_id: UUID4,
         language: LanguageCode,
+        *,
+        source: ContentSource = "draft",
+        or_default: bool = False,
     ) -> ProjectLocalizationPublic:
         """The project as respondents in `language` get it: the content
         rendered in that language, untranslated text in the default's.
 
-        Raises NoResultFound if the project does not offer `language`.
+        `source` picks what is rendered: the draft (the editor's previews and
+        test interviews' snapshots go through their version id), the
+        published version (respondents) or a version by id.
+
+        Raises NoResultFound if that content does not offer `language`, unless
+        `or_default`, which renders its default language instead.
         """
-        content = self._content(project_id)
+        content = self._source(project_id, source)
+        if or_default and language not in content.languages:
+            language = content.default_language
         self._require_language(content, language)
         fallback = [content.default_language]
         return ProjectLocalizationPublic(
             project_id=project_id,
+            content_version_id=None
+            if isinstance(content, ProjectContentTable)
+            else content.id,
             language=language,
             interview_guide=content.guide.render(language, fallback),
             consent=None
@@ -585,7 +624,10 @@ class ProjectRepository(BaseRepository):
         )
 
     @staticmethod
-    def _require_language(content: ProjectContentTable, language: LanguageCode):
+    def _require_language(
+        content: ProjectContentTable | ProjectContentVersionTable,
+        language: LanguageCode,
+    ):
         if language not in content.languages:
             raise NoResultFound(
                 f"Project {content.project_id} does not offer {language}."
@@ -700,9 +742,17 @@ class ProjectRepository(BaseRepository):
         return self.session.execute(statement).scalar_one()
 
     def get_available_languages_optimized(
-        self, project_id: uuid.UUID
+        self, project_id: uuid.UUID, source: ContentSource = "draft"
     ) -> list[ProjectLanguage]:
-        """The languages the project offers, without loading its content."""
+        """The languages the project offers, without loading its content when
+        they are the draft's. Respondents get the published version's: a
+        language added to the draft is not theirs until it is published."""
+        if source != "draft":
+            version = self._source(project_id, source)
+            return _sorted_project_languages(
+                (language, language == version.default_language)
+                for language in version.languages
+            )
         row = self.session.execute(
             select(
                 ProjectContentTable.languages, ProjectContentTable.default_language
@@ -733,17 +783,38 @@ class ProjectRepository(BaseRepository):
 
     # ==================== Interview Guide / Config Methods ====================
 
-    def _content(self, project_id: UUID4) -> ProjectContentTable:
+    def _content(
+        self, project_id: UUID4, revision: int | None = None
+    ) -> ProjectContentTable:
+        """The draft. With `revision`, for writing: raises
+        ContentRevisionError unless the draft is still at it, so a save based
+        on what someone else has since changed is refused, not applied."""
         statement = select(ProjectContentTable).where(
             ProjectContentTable.project_id == project_id
         )
-        return self.session.execute(statement).scalar_one()
+        content = self.session.execute(statement).scalar_one()
+        if revision is not None and content.revision != revision:
+            raise ContentRevisionError(revision, content.revision)
+        return content
+
+    def get_revision(self, project_id: UUID4) -> int:
+        """The draft's revision, what `If-Match` must carry to write it."""
+        return self.session.execute(
+            select(ProjectContentTable.revision).where(
+                ProjectContentTable.project_id == project_id
+            )
+        ).scalar_one()
 
     def get_guide(self, project_id: UUID4) -> LocalizedInterviewGuide:
         return self._content(project_id).guide
 
-    def update_guide(self, project_id: UUID4, guide: LocalizedInterviewGuide):
-        self._content(project_id).guide = guide
+    def update_guide(
+        self,
+        project_id: UUID4,
+        guide: LocalizedInterviewGuide,
+        revision: int | None = None,
+    ):
+        self._content(project_id, revision).guide = guide
         self.session.commit()
 
     def update_interview_config(
@@ -812,11 +883,18 @@ class ProjectRepository(BaseRepository):
         self.session.execute(statement)
         self.session.commit()
 
-    def get_agent_configs(self, project_id: UUID4) -> AgentConfigs:
-        return self._content(project_id).agent_configs
+    def get_agent_configs(
+        self, project_id: UUID4, source: ContentSource = "draft"
+    ) -> AgentConfigs:
+        return self._source(project_id, source).agent_configs
 
-    def update_agent_configs(self, project_id: UUID4, agent_configs: AgentConfigs):
-        self._content(project_id).agent_configs = agent_configs
+    def update_agent_configs(
+        self,
+        project_id: UUID4,
+        agent_configs: AgentConfigs,
+        revision: int | None = None,
+    ):
+        self._content(project_id, revision).agent_configs = agent_configs
         self.session.commit()
 
     # ==================== Consent / Welcome Methods ====================
@@ -824,25 +902,43 @@ class ProjectRepository(BaseRepository):
     def get_consent(self, project_id: UUID4) -> LocalizedConsent | None:
         return self._content(project_id).consent
 
-    def update_consent(self, project_id: UUID4, consent: LocalizedConsent | None):
-        self._content(project_id).consent = consent
+    def update_consent(
+        self,
+        project_id: UUID4,
+        consent: LocalizedConsent | None,
+        revision: int | None = None,
+    ):
+        self._content(project_id, revision).consent = consent
         self.session.commit()
 
     def get_welcome(self, project_id: UUID4) -> LocalizedWelcome | None:
         return self._content(project_id).welcome
 
-    def update_welcome(self, project_id: UUID4, welcome: LocalizedWelcome | None):
-        self._content(project_id).welcome = welcome
+    def update_welcome(
+        self,
+        project_id: UUID4,
+        welcome: LocalizedWelcome | None,
+        revision: int | None = None,
+    ):
+        self._content(project_id, revision).welcome = welcome
         self.session.commit()
 
     # ============ Participant Email Template Methods ============
 
-    def _email(self, project_id: UUID4, reminder: bool) -> ParticipantEmail:
-        emails = self._content(project_id).emails
+    def _email(
+        self, project_id: UUID4, reminder: bool, source: ContentSource = "draft"
+    ) -> ParticipantEmail:
+        emails = self._source(project_id, source).emails
         return emails.reminder if reminder else emails.invite
 
-    def _set_email(self, project_id: UUID4, reminder: bool, email: ParticipantEmail):
-        content = self._content(project_id)
+    def _set_email(
+        self,
+        project_id: UUID4,
+        reminder: bool,
+        email: ParticipantEmail,
+        revision: int | None,
+    ):
+        content = self._content(project_id, revision)
         content.emails = content.emails.model_copy(
             update={"reminder" if reminder else "invite": email}
         )
@@ -855,10 +951,10 @@ class ProjectRepository(BaseRepository):
         return self._email(project_id, reminder).get(language)
 
     def _emails_ordered(
-        self, project_id: UUID4, reminder: bool
+        self, project_id: UUID4, reminder: bool, source: ContentSource
     ) -> list[tuple[LanguageCode, str | None, str | None]]:
-        content = self._content(project_id)
-        email = self._email(project_id, reminder)
+        content = self._source(project_id, source)
+        email = self._email(project_id, reminder, source)
         languages = sorted(
             content.languages,
             key=lambda language: (language != content.default_language, language),
@@ -877,16 +973,22 @@ class ProjectRepository(BaseRepository):
         language: LanguageCode,
         subject: str | None,
         template: str | None,
+        revision: int | None = None,
     ) -> None:
         email = self._email(project_id, reminder=False)
-        self._set_email(project_id, False, email.set(language, subject, template))
+        self._set_email(
+            project_id, False, email.set(language, subject, template), revision
+        )
 
     def get_participant_email_templates_ordered(
-        self, project_id: UUID4
+        self,
+        project_id: UUID4,
+        source: ContentSource = "published",
     ) -> list[tuple[LanguageCode, str | None, str | None]]:
         """Return (language, subject, template) of the invitation for every
-        language the project offers, the default first."""
-        return self._emails_ordered(project_id, reminder=False)
+        language `source` offers, the default first. The published version's
+        by default: this is what is sent."""
+        return self._emails_ordered(project_id, reminder=False, source=source)
 
     # ====== Participant Reminder Email Template Methods ======
 
@@ -902,16 +1004,22 @@ class ProjectRepository(BaseRepository):
         language: LanguageCode,
         subject: str | None,
         template: str | None,
+        revision: int | None = None,
     ) -> None:
         email = self._email(project_id, reminder=True)
-        self._set_email(project_id, True, email.set(language, subject, template))
+        self._set_email(
+            project_id, True, email.set(language, subject, template), revision
+        )
 
     def get_participant_reminder_email_templates_ordered(
-        self, project_id: UUID4
+        self,
+        project_id: UUID4,
+        source: ContentSource = "published",
     ) -> list[tuple[LanguageCode, str | None, str | None]]:
         """Return (language, subject, template) of the reminder email for every
-        language the project offers, the default first."""
-        return self._emails_ordered(project_id, reminder=True)
+        language `source` offers, the default first. The published version's
+        by default: this is what is sent."""
+        return self._emails_ordered(project_id, reminder=True, source=source)
 
     # ==================== Authorization Methods ====================
 

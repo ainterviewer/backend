@@ -14,6 +14,8 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    event,
+    inspect,
     select,
 )
 from sqlalchemy import Enum as SQLEnum
@@ -64,6 +66,7 @@ from .types import (
     AccessRequestStatus,
     AppDateTime,
     CodeKind,
+    ContentVersionKind,
     EmbeddingTask,
     InterviewType,
     LanguageType,
@@ -416,37 +419,17 @@ class ProjectTable(Base):
         return self.folder.collaborators if self.folder else []
 
 
-class ProjectContentTable(Base):
-    """Everything a project says, in every language it offers, and how its
-    agents run.
+class ContentColumns:
+    """The columns a version of a project's content captures: everything the
+    project says, in every language it offers, and how its agents run.
 
-    The guide, consent, welcome and participant emails are stored once per
-    project with their text per language (`ainterviewer.interview_guides.
-    localized`): every language asks the same questions in the same order, so
-    only the wording is per-language. Read one language through `render`.
-
-    `languages` is what the project offers and `default_language` the one
-    whose text fills anything untranslated and is the translation source. They
-    sit on this row, beside the text they govern, so adding or removing a
-    language and its text is one write; the CHECK holds the default to a
-    language the project offers. A separate table rather than `ProjectTable`
-    columns so that listing projects never loads a guide.
+    Shared by the draft (`ProjectContentTable`) and its snapshots
+    (`ProjectContentVersionTable`), so a column added here is versioned without
+    anyone having to remember to. Anything that changes what respondents get
+    belongs here; bookkeeping (revision, timestamps, the published pointer)
+    does not.
     """
 
-    __tablename__ = "projectcontent"
-    __table_args__ = (
-        # SQLite stores the JSON list as text, and a language code is two
-        # upper-case letters, so a quoted substring match is exact.
-        CheckConstraint(
-            """instr(languages, '"' || default_language || '"') > 0""",
-            name="default_language_offered",
-        ),
-    )
-
-    # One row per project; the unique index also serves the foreign key.
-    project_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("project.id", ondelete="CASCADE"), unique=True, index=True
-    )
     #: In the order they were added, the default first when migrated.
     languages: Mapped[list[LanguageCode]] = mapped_column(JSON)
     default_language: Mapped[LanguageCode] = mapped_column(LanguageType)
@@ -471,11 +454,73 @@ class ProjectContentTable(Base):
         PydanticJSONB(AgentConfigs),
         default=lambda: AgentConfigs(),
     )
-    #: The invitation and reminder emails sent to participants. Not part of
-    #: what an interview runs on, but text per language like the rest.
+    #: The invitation and reminder emails sent to participants, text per
+    #: language like the rest. Sending reads the published version's.
     emails: Mapped[ParticipantEmails] = mapped_column(
         PydanticJSONB(ParticipantEmails),
         default=lambda: ParticipantEmails(),
+    )
+
+    #: The attribute names of the columns above, for copying between the
+    #: draft and a version.
+    CONTENT_FIELDS: ClassVar[tuple[str, ...]] = (
+        "languages",
+        "default_language",
+        "guide",
+        "consent",
+        "welcome",
+        "prompt_overrides",
+        "agent_configs",
+        "emails",
+    )
+
+
+class ProjectContentTable(ContentColumns, Base):
+    """The draft of everything a project says, in every language it offers,
+    and how its agents run. What the editor reads and writes.
+
+    The guide, consent, welcome and participant emails are stored once per
+    project with their text per language (`ainterviewer.interview_guides.
+    localized`): every language asks the same questions in the same order, so
+    only the wording is per-language. Read one language through `render`.
+
+    `languages` is what the project offers and `default_language` the one
+    whose text fills anything untranslated and is the translation source. They
+    sit on this row, beside the text they govern, so adding or removing a
+    language and its text is one write; the CHECK holds the default to a
+    language the project offers. A separate table rather than `ProjectTable`
+    columns so that listing projects never loads a guide.
+
+    Respondents never read this row: distributed interviews, the public routes
+    and participant emails read `published_version`, a snapshot in
+    `projectcontentversion`. Test interviews run the draft through a snapshot
+    of their own. See `VersionRepository`.
+    """
+
+    __tablename__ = "projectcontent"
+    __table_args__ = (
+        # SQLite stores the JSON list as text, and a language code is two
+        # upper-case letters, so a quoted substring match is exact.
+        CheckConstraint(
+            """instr(languages, '"' || default_language || '"') > 0""",
+            name="default_language_offered",
+        ),
+    )
+
+    # One row per project; the unique index also serves the foreign key.
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    #: Bumped on every write to a content column (see the `before_update`
+    #: listener below), never by publishing. Editors send it back as
+    #: `If-Match`, and a write based on an older one is refused, so concurrent
+    #: editors cannot silently overwrite each other.
+    revision: Mapped[int] = mapped_column(default=1, server_default=sa.text("1"))
+    #: What respondents get. NULL until the project is first published.
+    published_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projectcontentversion.id", ondelete="SET NULL"),
+        index=True,
+        default=None,
     )
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     # Changes here also bump ProjectTable.last_updated via a DB trigger;
@@ -485,6 +530,66 @@ class ProjectContentTable(Base):
     )
 
     project: Mapped["ProjectTable"] = relationship(back_populates="content")
+    published_version: Mapped[Optional["ProjectContentVersionTable"]] = relationship(
+        foreign_keys=[published_version_id]
+    )
+
+
+@event.listens_for(ProjectContentTable, "before_update")
+def _bump_content_revision(_mapper, _connection, target: ProjectContentTable):
+    # In a listener rather than in each writer, so a new way of changing the
+    # content cannot forget it. Only the content columns count: publishing
+    # moves `published_version_id`, and must not make every open editor's
+    # next save look stale.
+    state = inspect(target)
+    if any(
+        state.attrs[field].history.has_changes()
+        for field in ContentColumns.CONTENT_FIELDS
+    ):
+        target.revision = (target.revision or 0) + 1
+
+
+class ProjectContentVersionTable(ContentColumns, Base):
+    """A snapshot of a project's content: the whole study, every language.
+
+    Written by publishing, by saving a named version, before a restore and for
+    each distinct draft a test interview runs. Immutable once written.
+    `content_hash` dedupes them: a snapshot of content an existing version
+    already holds reuses that version instead. See `VersionRepository`.
+    """
+
+    __tablename__ = "projectcontentversion"
+    __table_args__ = (
+        UniqueConstraint("project_id", "version_no", name="project_version_no"),
+        UniqueConstraint(
+            "project_id", "major", "minor", "patch", name="project_semver"
+        ),
+    )
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE"), index=True
+    )
+    #: 1, 2, 3... per project, in the order written. Never reused, even after
+    #: a prune, so "version 7" names the same thing for as long as it exists.
+    version_no: Mapped[int] = mapped_column()
+    kind: Mapped[ContentVersionKind] = mapped_column(SQLEnum(ContentVersionKind))
+    #: The semantic version, on `publish` versions only: how far each is from
+    #: the one published before it, by whether interviews stay comparable
+    #: (app/db/versioning.py). NULL on every other kind.
+    major: Mapped[int | None] = mapped_column(default=None)
+    minor: Mapped[int | None] = mapped_column(default=None)
+    patch: Mapped[int | None] = mapped_column(default=None)
+    label: Mapped[str | None] = mapped_column(default=None)
+    #: sha256 of the content columns' canonical JSON (`content_hash`). NULL for
+    #: the versions revision 1a7c2e94b5d3 migrated, which no new snapshot
+    #: dedupes against.
+    content_hash: Mapped[str | None] = mapped_column(index=True, default=None)
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), index=True, default=None
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(default=now)
+
+    created_by: Mapped[Optional["UserTable"]] = relationship()
 
 
 ################
@@ -737,6 +842,17 @@ class InterviewTable(Base):
     test_run_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("testrun.id", ondelete="CASCADE"),
         index=True,
+    )
+    #: The version of the project's content this interview runs: the published
+    #: one for a distributed interview, a snapshot of the draft for a test.
+    #: Its agent configs and prompt overrides are what the websocket uses;
+    #: the guide itself is `interview_guide`, this interview's own rendered,
+    #: shuffled copy. NULL for interviews from before versions existed, and
+    #: for a test whose snapshot was pruned.
+    content_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projectcontentversion.id", ondelete="SET NULL"),
+        index=True,
+        default=None,
     )
     participant_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("project_participant.id", ondelete="SET NULL"),

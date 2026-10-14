@@ -625,6 +625,64 @@ The public language lists use `ProjectLanguage` (`app/db/models.py`), which is
 stays free of the flag: it comes straight out of the shared `LANGUAGES`
 constant and knows nothing about projects.
 
+### Content versions: draft, published, revision
+
+**`projectcontent` is the draft; respondents never read it.** They get the
+version `projectcontent.published_version_id` points at, an immutable copy of
+the content columns in `projectcontentversion` (`VersionRepository`,
+`app/db/repositories/version.py`). The columns a version captures are the
+`ContentColumns` mixin's, shared by both tables, so a column added there is
+versioned automatically; anything that changes what respondents get belongs on
+it. The participant emails are versioned too; attachments (files on disk) are
+not.
+
+- **Who reads what.** Distributed interviews, the public `available_languages`,
+  `guide/consent|welcome/{lang}` and `models` routes, and participant email
+  sending (invites, reminders, the bundle) read the **published** version, and
+  answer `NotPublishedError` (409, `code: not_published`) until there is one --
+  never a fallback to the draft. A new project is unpublished. Test interviews
+  (manual, synthetic) run the **draft** through a `test` snapshot, deduped by
+  content hash. The public routes serve the draft with `?draft=true` to a
+  viewer of the project (`RespondentContent`, `app/dependencies.py`), because
+  manual tests go through the respondent interview page. The editor and the
+  analysis views read the draft.
+- **Render through `get_project_localization(..., source=...)`** (`"draft"`,
+  `"published"` or a version id), never a second renderer.
+  `InterviewTable.content_version_id` records what an interview ran; the
+  websocket takes its agent configs and prompt overrides from there, so
+  republishing mid-interview changes nothing for it.
+- **Publishing** (`POST /projects/{id}/versions` with `publish: true`) is
+  refused while any offered language has untranslated text in the guide,
+  consent, welcome or emails (`PublishError`, 409, `code: cannot_publish`,
+  `missing` per language).
+- **Semantic versions.** A publish is numbered by how far it is from the
+  published version, by whether interviews stay comparable
+  (`app/db/versioning.py`): major when something answered is removed or
+  reshaped (a section, question or option removed; a survey item's type or
+  scale; conditions), minor for additions and settings (questions added,
+  reordering, probing, agent configs, languages), patch for text only. So
+  every interview within one major answered the same questions. The diff
+  cannot read meaning, so the publisher may raise the bump, never lower it.
+  Only `publish` versions carry one; numbering continues from the highest
+  published, so republishing restored content still moves forward.
+- **Retention.** `publish` and `manual` versions are never deleted. Automatic
+  ones (`test`, `restore`, `auto`) beyond the newest
+  `KEEP_AUTOMATIC_VERSIONS` are pruned, except those an interview references.
+- **Restore** copies a version, languages and all, into the draft after keeping
+  the draft it replaces as a `restore` version. It publishes nothing.
+
+**Revisions stop concurrent editors overwriting each other.**
+`projectcontent.revision` is bumped by a `before_update` listener whenever a
+content column changes (not when publishing). The editor GETs return it as
+`ETag`; every content write (`PUT /guide`, `/consent`, `/welcome`,
+`POST /agents`, the email template PUTs, publish and restore) requires it back
+as `If-Match` (`IfMatch`): missing is 428, stale is `ContentRevisionError`
+(412, `code: stale_revision`, `current_revision`). New writes go through
+`ProjectRepository._content(project_id, revision)`, which does the check. The
+three errors are mapped once in `app/main.py`. Server-side writes that are
+whole replacements (guide generation, translation, language changes) take no
+`If-Match` but still bump the revision and return the new `ETag`.
+
 ### Repository Session Management
 
 Never create new sessions within repository methods. Always use `self.session`:

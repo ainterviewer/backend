@@ -62,15 +62,19 @@ from ...db.models import (
 )
 from ...db.repositories.errors import ProjectLanguageError
 from ...db.repositories.interview import SORTABLE_INTERVIEW_COLUMNS
+from ...db.repositories.project import ContentSource
 from ...db.tables import InterviewResumeTokenTable
 from ...db.types import InterviewType
 from ...dependencies import (
     DBSession,
     DemoToken,
+    IfMatch,
     ProjectAdmin,
     ProjectEditor,
     ProjectViewer,
+    RespondentContent,
     UserToken,
+    set_etag,
 )
 from ...services.exports.transcripts import InterviewExport, export_interviews
 from ...services.project_storage import copy_email_attachments, delete_project_storage
@@ -154,8 +158,11 @@ async def clone_project(
 async def get_project_languages(
     project_id: UUID4,
     db: DBSession,
+    source: RespondentContent,
 ):
-    return db.projects.get_available_languages_optimized(project_id)
+    """The languages respondents can pick: the published version's. A 409
+    until the project is published."""
+    return db.projects.get_available_languages_optimized(project_id, source)
 
 
 @router.post(
@@ -310,9 +317,14 @@ async def get_project_permissions(
     )
 
 
-def _localization_or_404(db: DBSession, project_id: UUID4, lang: LanguageCode):
+def _localization_or_404(
+    db: DBSession,
+    project_id: UUID4,
+    lang: LanguageCode,
+    source: ContentSource = "draft",
+):
     try:
-        return db.projects.get_project_localization(project_id, lang)
+        return db.projects.get_project_localization(project_id, lang, source=source)
     except NoResultFound as exc:
         raise HTTPException(
             status_code=404,
@@ -326,8 +338,11 @@ async def get_localized_guide(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectViewer,
+    response: Response,
 ) -> LocalizedInterviewGuide:
-    """The guide with its text in every language: what the editor edits."""
+    """The guide with its text in every language: what the editor edits.
+    `ETag` is the content's revision, to send back as `If-Match`."""
+    set_etag(response, db.projects.get_revision(project_id))
     return db.projects.get_guide(project_id)
 
 
@@ -338,7 +353,13 @@ async def update_guide(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
+    revision: IfMatch,
+    response: Response,
 ) -> LocalizedInterviewGuide:
+    """Save the guide. A 412 if the content changed since `If-Match`'s
+    revision; the new revision comes back as `ETag`."""
+    # Before writing the images, so a refused save leaves no files behind.
+    db.versions.check_revision(project_id, revision)
     # Not a validator on the guide: interview copies shuffled before the
     # constraint existed must still load. Checking it here is what keeps
     # `shuffle`'s fallback to the authored order valid. The structure is the
@@ -369,7 +390,8 @@ async def update_guide(
             async with aiofiles.open(filepath, "wb") as f:
                 await f.write(data)
 
-    db.projects.update_guide(project_id, guide)
+    db.projects.update_guide(project_id, guide, revision)
+    set_etag(response, db.projects.get_revision(project_id))
     return guide
 
 
@@ -393,11 +415,14 @@ async def translate_missing(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
+    response: Response,
 ) -> ProjectContentPublic:
     """Machine-translate the text the guide, consent and welcome lack in
-    `lang` from the default language. Text `lang` already has is kept."""
+    `lang` from the default language. Text `lang` already has is kept.
+    The new revision comes back as `ETag`."""
     _localization_or_404(db, project_id, lang)
     content = await db.projects.translate_missing(project_id, lang)
+    set_etag(response, content.revision)
     return ProjectContentPublic(
         guide=content.guide, consent=content.consent, welcome=content.welcome
     )
@@ -415,6 +440,7 @@ async def generate_guide(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
+    response: Response,
 ) -> LocalizedInterviewGuide:
     language = get_language_dict(language_code=lang)["name"]
 
@@ -427,7 +453,9 @@ async def generate_guide(
     )
     guide = LocalizedInterviewGuide.from_rendered({lang: generated}, structure=lang)
 
+    # No If-Match: replacing the whole guide is what was asked for.
     db.projects.update_guide(project_id, guide)
+    set_etag(response, db.projects.get_revision(project_id))
 
     return guide
 
@@ -518,7 +546,9 @@ async def get_interview_agents(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectViewer,
+    response: Response,
 ) -> AgentConfigs:
+    set_etag(response, db.projects.get_revision(project_id))
     return db.projects.get_agent_configs(project_id)
 
 
@@ -529,8 +559,13 @@ async def create_interview_agents(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
+    revision: IfMatch,
+    response: Response,
 ):
-    db.projects.update_agent_configs(project_id=project_id, agent_configs=config)
+    db.projects.update_agent_configs(
+        project_id=project_id, agent_configs=config, revision=revision
+    )
+    set_etag(response, db.projects.get_revision(project_id))
 
 
 # Labelled stand-ins for the interview-time context the instruction prompt
@@ -604,10 +639,12 @@ async def get_interview_config(
 async def get_interview_models(
     project_id: UUID4,
     db: DBSession,
+    source: RespondentContent,
 ) -> set[str]:
+    """The models respondents' interviews run on: the published version's."""
     return {
         agent_config.model
-        for agent, agent_config in db.projects.get_agent_configs(project_id)
+        for agent, agent_config in db.projects.get_agent_configs(project_id, source)
         if agent in _RESPONDENT_FACING_AGENTS
     }
 
@@ -662,13 +699,15 @@ async def get_consent(
     project_id: UUID4,
     db: DBSession,
     language: LanguageCode,
+    source: RespondentContent,
 ) -> Consent | None:
-    """The consent as respondents in `language` see it."""
+    """The consent as respondents in `language` see it: the published
+    version's, a 409 until there is one."""
     # A language the project does not offer is a 404, distinct from a 200 `null` meaning the
     # project has no consent configured. The interview page relies on that
     # distinction: it may only start an interview without a consent screen
     # for the second case.
-    return _localization_or_404(db, project_id, language).consent
+    return _localization_or_404(db, project_id, language, source).consent
 
 
 @router.get("/projects/{project_id}/consent")
@@ -677,8 +716,10 @@ async def get_localized_consent(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectViewer,
+    response: Response,
 ) -> LocalizedConsent | None:
     """The consent with its text in every language: what the editor edits."""
+    set_etag(response, db.projects.get_revision(project_id))
     return db.projects.get_consent(project_id)
 
 
@@ -689,8 +730,11 @@ async def update_consent(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
+    revision: IfMatch,
+    response: Response,
 ) -> LocalizedConsent:
-    db.projects.update_consent(project_id, consent)
+    db.projects.update_consent(project_id, consent, revision)
+    set_etag(response, db.projects.get_revision(project_id))
     return consent
 
 
@@ -701,10 +745,12 @@ async def get_welcome(
     project_id: UUID4,
     language: LanguageCode,
     db: DBSession,
+    source: RespondentContent,
 ) -> Welcome | None:
-    """The welcome screen as respondents in `language` see it."""
+    """The welcome screen as respondents in `language` see it: the published
+    version's, a 409 until there is one."""
     # See `get_consent`: a language not offered is a 404, not a 500.
-    return _localization_or_404(db, project_id, language).welcome
+    return _localization_or_404(db, project_id, language, source).welcome
 
 
 @router.get("/projects/{project_id}/welcome")
@@ -713,9 +759,11 @@ async def get_localized_welcome(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectViewer,
+    response: Response,
 ) -> LocalizedWelcome | None:
     """The welcome screen with its text in every language: what the editor
     edits."""
+    set_etag(response, db.projects.get_revision(project_id))
     return db.projects.get_welcome(project_id)
 
 
@@ -726,11 +774,14 @@ async def update_welcome(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
+    revision: IfMatch,
+    response: Response,
 ) -> LocalizedWelcome:
     """Save the welcome screen. Upload its video first
     (`POST .../welcome/video`) and pass the returned name as
     `video_file_name`."""
-    db.projects.update_welcome(project_id, welcome)
+    db.projects.update_welcome(project_id, welcome, revision)
+    set_etag(response, db.projects.get_revision(project_id))
     return welcome
 
 

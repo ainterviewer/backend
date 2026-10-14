@@ -23,7 +23,8 @@ from ainterviewer.types import LanguageCode, MessageRole, TestType
 
 from ..auth import AuthToken, InterviewToken, create_interview_token, hash_token
 from ..db.repositories.errors import ResumeTokenError
-from ..db.types import InterviewType
+from ..db.repositories.project import ContentSource
+from ..db.types import ContentVersionKind, InterviewType
 from ..dependencies import (
     AdminToken,
     AuthError,
@@ -153,19 +154,6 @@ async def create_interview(
 ) -> str:
     project = db.projects.get_project(project_id)
 
-    try:
-        project_localization = db.projects.get_project_localization(
-            project_id,
-            language=lang,
-        )
-    except NoResultFound:
-        # FIXME: This should probably trigger an error allowing the user to pick
-        # a language instead of just returning the default
-        project_localization = db.projects.get_project_localization(
-            project_id,
-            language=db.projects.get_default_language(project_id),
-        )
-
     if new_interview.interview_type == InterviewType.DISTRIBUTED:
         if project.owner.scope == Scope.DEMO:
             raise AuthError(
@@ -195,6 +183,22 @@ async def create_interview(
         validate_external_params(
             project.external_params, new_interview.external_params, project_id
         )
+
+    # Respondents get the published version, and nothing until there is one
+    # (NotPublishedError, a 409). A test runs the draft, through a snapshot so
+    # the interview records exactly what it ran; after the auth checks above,
+    # so nobody without access to the project writes one.
+    source: ContentSource
+    if new_interview.interview_type == InterviewType.DISTRIBUTED:
+        source = "published"
+    else:
+        source = db.versions.snapshot(project_id, ContentVersionKind.TEST).id
+
+    # FIXME: A language the project does not offer should let the respondent
+    # pick one instead of falling back to the default
+    project_localization = db.projects.get_project_localization(
+        project_id, lang, source=source, or_default=True
+    )
 
     if not (interview_guide := project_localization.interview_guide):
         raise ValueError("Interview guide is not set")
@@ -245,6 +249,7 @@ async def create_interview(
         ip_address=ip_address,
         language=project_localization.language,
         participant_id=participant_id,
+        content_version_id=project_localization.content_version_id,
     )
 
     interview_token = create_interview_token(
