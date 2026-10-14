@@ -578,8 +578,14 @@ _PREVIEW_PLACEHOLDERS = {
     "main_question": "«main question — filled in during the interview»",
     "interview_transcript": "«transcript so far — filled in during the interview»",
     "suggested_probes": "«suggested probes for this question — included when configured»",
-    "translation": "«interview language — included when the interview is not in English»",
 }
+
+# Not passed with the rest: ProbingAgentPrompts derives `translation` from the
+# language itself. Only stood in for where it derives none -- an English
+# interview -- so the preview still shows where that line goes.
+_PREVIEW_TRANSLATION = (
+    "«interview language — included when the interview is not in English»"
+)
 
 
 @router.post("/projects/{project_id}/{lang}/agents/prompts/preview")
@@ -593,6 +599,7 @@ async def preview_probing_prompts(
     """Render the probing agent's system and instruction prompts with the
     supplied (possibly unsaved) slot overrides injected, for a read-only preview."""
     prompts = ProbingAgentPrompts(prompt_slots=config.prompt_slots, lang=lang)
+    prompts.translation = prompts.translation or _PREVIEW_TRANSLATION
 
     instruction = prompts.generate_probing_prompt(
         **_PREVIEW_PLACEHOLDERS,
