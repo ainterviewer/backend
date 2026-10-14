@@ -103,97 +103,100 @@ def _as_dict(value):
     return value
 
 
-@cli.command()
-def fix_invalid_models(dry_run: bool = False):
-    """Replace any LLM model references not in lib_settings.llm.available_models
-    with lib_settings.llm.default_model across all DB tables that store a model.
+def invalid_model_changes(session: Session, to: str) -> list[str]:
+    """Point every configured model that is not available at `to`, and
+    describe each change. Writes in `session`; the caller commits or rolls
+    back.
 
-    Uses raw SQL to avoid ORM-level pydantic validation on unrelated JSON columns
-    that may have drifted from the current schema.
+    Only where a model is *configured* -- the agents of the draft and of every
+    version (respondents run the published one), and test setups -- never
+    where one is *recorded*: `testrun.answering_model` and `task.model` say
+    what ran at the time.
+
+    An agent's own default counts as valid even when it is not in
+    `available_models`: the visual agent defaults to `llava`, off and hidden in
+    the UI. Raw SQL, so unrelated JSON that has drifted from the current schema
+    does not have to validate.
     """
+    available = set(lib_settings.llm.available_models)
+    defaults = AgentConfigs()
+    valid = {
+        name: available | {getattr(defaults, name).model}
+        for name in AgentConfigs.model_fields
+    }
+    changes: list[str] = []
 
-    available = lib_settings.llm.available_models
-    default = lib_settings.llm.default_model
-
-    prefix = "[DRY-RUN] " if dry_run else ""
-    typer.echo(f"{prefix}Available models: {sorted(available)}")
-    typer.echo(f"{prefix}Default model: {default}")
-
-    changes = 0
-    agent_fields = list(AgentConfigs.model_fields)
-
-    with Session(engine) as session:
-        # ProjectContentTable.agent_configs (JSON)
-        rows = session.execute(
-            text("SELECT project_id, agent_configs FROM projectcontent")
-        ).all()
+    for table in ("projectcontent", "projectcontentversion"):
+        rows = session.execute(text(f"SELECT id, agent_configs FROM {table}")).all()
         for row_id, raw in rows:
             data = _as_dict(raw)
             if not isinstance(data, dict):
                 continue
             mutated = False
-            for field_name in agent_fields:
-                sub = data.get(field_name)
-                if isinstance(sub, dict) and sub.get("model") not in available:
-                    typer.echo(
-                        f"ProjectContent {row_id} agent_configs.{field_name}.model: "
-                        f"{sub.get('model')!r} -> {default!r}"
+            for name, allowed in valid.items():
+                sub = data.get(name)
+                if isinstance(sub, dict) and sub.get("model") not in allowed:
+                    changes.append(
+                        f"{table} {row_id} agent_configs.{name}.model: "
+                        f"{sub.get('model')!r} -> {to!r}"
                     )
-                    sub["model"] = default
+                    sub["model"] = to
                     mutated = True
-                    changes += 1
             if mutated:
+                # The draft's revision as well, as an ORM write would bump it,
+                # so an editor that loaded the old model gets a conflict
+                # rather than saving it back.
+                bump = ", revision = revision + 1" if table == "projectcontent" else ""
                 session.execute(
-                    text(
-                        "UPDATE projectcontent SET agent_configs = :v "
-                        "WHERE project_id = :id"
-                    ),
+                    text(f"UPDATE {table} SET agent_configs = :v{bump} WHERE id = :id"),
                     {"v": json.dumps(data), "id": row_id},
                 )
 
-        # TestSetupTable.answering_model
-        rows = session.execute(text("SELECT id, answering_model FROM testsetup")).all()
-        for row_id, model in rows:
-            if model is not None and model not in available:
-                typer.echo(
-                    f"TestSetup {row_id} answering_model: {model!r} -> {default!r}"
-                )
-                session.execute(
-                    text("UPDATE testsetup SET answering_model = :v WHERE id = :id"),
-                    {"v": default, "id": row_id},
-                )
-                changes += 1
+    rows = session.execute(text("SELECT id, answering_model FROM testsetup")).all()
+    for row_id, model in rows:
+        if model is not None and model not in available:
+            changes.append(f"testsetup {row_id} answering_model: {model!r} -> {to!r}")
+            session.execute(
+                text("UPDATE testsetup SET answering_model = :v WHERE id = :id"),
+                {"v": to, "id": row_id},
+            )
 
-        # TestRunTable.answering_model
-        rows = session.execute(text("SELECT id, answering_model FROM testrun")).all()
-        for row_id, model in rows:
-            if model is not None and model not in available:
-                typer.echo(
-                    f"TestRun {row_id} answering_model: {model!r} -> {default!r}"
-                )
-                session.execute(
-                    text("UPDATE testrun SET answering_model = :v WHERE id = :id"),
-                    {"v": default, "id": row_id},
-                )
-                changes += 1
+    return changes
 
-        # TaskTable.model
-        rows = session.execute(text("SELECT id, model FROM task")).all()
-        for row_id, model in rows:
-            if model is not None and model not in available:
-                typer.echo(f"Task {row_id} model: {model!r} -> {default!r}")
-                session.execute(
-                    text("UPDATE task SET model = :v WHERE id = :id"),
-                    {"v": default, "id": row_id},
-                )
-                changes += 1
 
+@cli.command()
+def fix_invalid_models(
+    to: str = typer.Option(
+        ...,
+        "--to",
+        help="The available model to configure instead. Required, not the "
+        "default model: choosing one chooses a provider, and so where "
+        "respondents' answers are sent.",
+    ),
+    dry_run: bool = False,
+):
+    """Replace configured models that are not in `available_models` with `--to`.
+
+    See `invalid_model_changes` for what counts and what is left alone. For a
+    model that was only renamed, prefer a migration with an explicit mapping
+    (revision 6b9e3953fd38): this replaces every unknown model with one.
+    """
+    available = lib_settings.llm.available_models
+    if to not in available:
+        typer.echo(f"{to!r} is not one of the available models: {sorted(available)}")
+        raise typer.Exit(1)
+
+    prefix = "[DRY-RUN] " if dry_run else ""
+    with Session(engine) as session:
+        changes = invalid_model_changes(session, to)
+        for change in changes:
+            typer.echo(f"{prefix}{change}")
         if dry_run:
             session.rollback()
-            typer.echo(f"[DRY-RUN] Would update {changes} model reference(s).")
+            typer.echo(f"[DRY-RUN] Would update {len(changes)} model reference(s).")
         else:
             session.commit()
-            typer.echo(f"Updated {changes} model reference(s).")
+            typer.echo(f"Updated {len(changes)} model reference(s).")
 
 
 @cli.command()
