@@ -7,8 +7,9 @@ last published one, judged by whether interviews remain comparable.
   of a major bump may not line up.
 - **Minor**: something was added or a setting changed -- a section, question
   or option added, items reordered or moved, probing and other question
-  settings, agent configs, prompt overrides, the languages offered. Every
-  question earlier interviews answered is still there, asked the same way.
+  settings, agent configs, prompt overrides, the languages offered (one marked
+  ready included). Every question earlier interviews answered is still there,
+  asked the same way.
 - **Patch**: text only -- wording, translations, consent, welcome, emails.
 
 So every interview within one major version answered the same questions,
@@ -189,7 +190,10 @@ def classify(old: ContentColumns, new: ContentColumns) -> Bump:
     bump = guide
 
     if (
-        list(old.languages) != list(new.languages)
+        # Which languages respondents may pick: marking one ready (or back in
+        # progress) changes that as much as adding or removing it does.
+        old.offered != new.offered
+        or list(old.languages) != list(new.languages)
         or old.default_language != new.default_language
         or _dump(old.agent_configs) != _dump(new.agent_configs)
         or dict(old.prompt_overrides) != dict(new.prompt_overrides)

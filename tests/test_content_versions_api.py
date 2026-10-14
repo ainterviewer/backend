@@ -147,6 +147,12 @@ def test_publishing_reports_what_blocks_it(setup):
         json={"language": "DA", "translate": False},
         cookies=cookies,
     )
+    # Ready: a language still in progress would not hold publishing back.
+    client.put(
+        f"/api/projects/{project_id}/available_languages/DA/in_progress",
+        json={"in_progress": False},
+        cookies=cookies,
+    )
     url = f"/api/projects/{project_id}/guide"
     loaded = client.get(url, cookies=cookies)
     guide = loaded.json()

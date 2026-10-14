@@ -254,6 +254,9 @@ class ContentVersionSummary(_BaseModel):
     is_published: bool
     languages: list[LanguageCode]
     default_language: LanguageCode
+    #: Of `languages`, those still being translated: not offered to
+    #: respondents when this version is the published one.
+    languages_in_progress: list[LanguageCode]
 
 
 class ContentVersionPublic(ContentVersionSummary):
@@ -281,6 +284,8 @@ class ContentStatus(_BaseModel):
     pending_bump: BumpName
     #: The version publishing it now would get, with `pending_bump`.
     next_semver: str
+    #: Languages in the draft that publishing leaves out: still in progress.
+    languages_in_progress: list[LanguageCode]
     #: Per offered language, the paths of text it lacks. Publishing is
     #: refused while this is not empty.
     missing: dict[LanguageCode, list[str]]
@@ -332,12 +337,14 @@ class ProjectLanguage(LanguageDict):
     """A language a project offers.
 
     Same shape as the library's `LanguageDict` plus whether it is the
-    project's default. `LanguageDict` itself stays free of the flag: it comes
+    project's default and whether it is still in progress. `LanguageDict` itself stays free of the flag: it comes
     straight out of the shared `LANGUAGES` constant and knows nothing about
     projects.
     """
 
     is_default: bool
+    #: Still being translated: in the draft but not offered to respondents.
+    in_progress: bool
 
 
 class ProjectPublic(ProjectBase):

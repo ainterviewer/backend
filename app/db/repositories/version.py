@@ -68,7 +68,9 @@ def copy_content(source: ContentColumns, target: ContentColumns) -> None:
 
 def missing_text(source: ContentColumns) -> dict[str, list[str]]:
     """Per offered language, the paths of the text it lacks: written in some
-    language, but not in it. Languages lacking nothing are left out."""
+    language, but not in it. Languages lacking nothing are left out, and so
+    are those in progress: respondents are not offered them, so they do not
+    hold back publishing the rest."""
     parts = {
         "guide": source.guide,
         "consent": source.consent,
@@ -76,7 +78,7 @@ def missing_text(source: ContentColumns) -> dict[str, list[str]]:
         "emails": source.emails,
     }
     missing: dict[str, list[str]] = {}
-    for language in source.languages:
+    for language in source.offered:
         paths = [
             f"{name}.{path}"
             for name, part in parts.items()
@@ -150,6 +152,7 @@ class VersionRepository(BaseRepository):
             is_published=version.id == published_id,
             languages=version.languages,
             default_language=version.default_language,
+            languages_in_progress=list(version.languages_in_progress),
         )
 
     def list_versions(
@@ -233,6 +236,7 @@ class VersionRepository(BaseRepository):
             has_unpublished_changes=published is None
             or content_hash(published) != content_hash(content),
             pending_bump=bump.label,
+            languages_in_progress=list(content.languages_in_progress),
             next_semver=format_semver(next_semver),
             missing=missing_text(content),
         )

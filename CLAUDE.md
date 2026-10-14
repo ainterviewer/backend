@@ -655,6 +655,15 @@ not.
   refused while any offered language has untranslated text in the guide,
   consent, welcome or emails (`PublishError`, 409, `code: cannot_publish`,
   `missing` per language).
+- **Languages in progress** (`languages_in_progress`, versioned like the rest)
+  are in the draft but not *offered*: `ContentColumns.offered` is
+  `languages` minus them, and the `"published"` source -- respondents'
+  language list, interview creation, consent/welcome, sent emails -- uses
+  only that, while the draft and test snapshots keep them so they can be
+  tested. Their missing text does not block publishing. A newly added
+  language starts in progress until someone marks it ready
+  (`PUT …/available_languages/{lang}/in_progress`); marking one ready is a
+  minor bump. The default is never in progress (a CHECK, and a 409).
 - **Semantic versions.** A publish is numbered by how far it is from the
   published version, by whether interviews stay comparable
   (`app/db/versioning.py`): major when something answered is removed or

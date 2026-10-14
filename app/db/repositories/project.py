@@ -65,13 +65,20 @@ type ContentSource = Literal["draft", "published"] | UUID4
 
 
 def _sorted_project_languages(
-    rows: Iterable[tuple[LanguageCode, bool]],
+    languages: Iterable[LanguageCode],
+    default: LanguageCode,
+    in_progress: Iterable[LanguageCode] = (),
 ) -> list[ProjectLanguage]:
-    """Build the public language list, sorted by name, from (code, is_default)."""
+    """Build the public language list, sorted by name."""
+    in_progress = set(in_progress)
     return sorted(
         (
-            ProjectLanguage(**get_language_dict(language), is_default=is_default)
-            for language, is_default in rows
+            ProjectLanguage(
+                **get_language_dict(language),
+                is_default=language == default,
+                in_progress=language in in_progress,
+            )
+            for language in languages
         ),
         key=lambda lan: lan["name"],
     )
@@ -375,6 +382,7 @@ class ProjectRepository(BaseRepository):
                 project_id=new_project.id,
                 languages=list(content.languages),
                 default_language=content.default_language,
+                languages_in_progress=list(content.languages_in_progress),
                 guide=content.guide,
                 consent=content.consent,
                 welcome=content.welcome,
@@ -602,9 +610,12 @@ class ProjectRepository(BaseRepository):
         `or_default`, which renders its default language instead.
         """
         content = self._source(project_id, source)
-        if or_default and language not in content.languages:
+        # Respondents are offered what is not in progress; a test, running the
+        # draft or its snapshot, may try a language that still is.
+        offered = content.offered if source == "published" else content.languages
+        if or_default and language not in offered:
             language = content.default_language
-        self._require_language(content, language)
+        self._require_language(content, language, offered)
         fallback = [content.default_language]
         return ProjectLocalizationPublic(
             project_id=project_id,
@@ -627,8 +638,9 @@ class ProjectRepository(BaseRepository):
     def _require_language(
         content: ProjectContentTable | ProjectContentVersionTable,
         language: LanguageCode,
+        offered: Iterable[LanguageCode] | None = None,
     ):
-        if language not in content.languages:
+        if language not in (content.languages if offered is None else offered):
             raise NoResultFound(
                 f"Project {content.project_id} does not offer {language}."
             )
@@ -642,6 +654,10 @@ class ProjectRepository(BaseRepository):
         content = self._content(project_id)
         if language not in content.languages:
             content.languages = [*content.languages, language]
+            # In progress until someone marks it ready: untranslated, or only
+            # machine-translated, it should neither reach respondents nor
+            # block publishing everything else.
+            content.languages_in_progress = [*content.languages_in_progress, language]
             self.session.flush()
             if translate:
                 await self._translate_missing(content, language)
@@ -674,6 +690,9 @@ class ProjectRepository(BaseRepository):
         # it would come back as a stale translation if the language were
         # re-added.
         content.languages = [lang for lang in content.languages if lang != language]
+        content.languages_in_progress = [
+            lang for lang in content.languages_in_progress if lang != language
+        ]
         content.guide = _without_language(content.guide, language)
         if content.consent is not None:
             content.consent = _without_language(content.consent, language)
@@ -695,7 +714,39 @@ class ProjectRepository(BaseRepository):
                 "localization, so it cannot be the default. Add the language first."
             )
 
+        if language in content.languages_in_progress:
+            raise ProjectLanguageError(
+                f"{get_language_dict(language)['name']} is still in progress. "
+                "Mark it ready before making it the default."
+            )
+
         content.default_language = language
+        self.session.commit()
+
+        return self.get_available_languages_optimized(project_id)
+
+    def set_language_in_progress(
+        self, project_id: UUID4, language: LanguageCode, in_progress: bool
+    ) -> list[ProjectLanguage]:
+        """Mark a language the project offers as still being translated, or
+        as ready.
+
+        In progress, it stays in the draft -- editors and test interviews use
+        it -- but publishing neither offers it to respondents nor requires it to
+        be complete. Refuses the default language, which every other one falls
+        back to.
+        """
+        content = self._content(project_id)
+        self._require_language(content, language)
+        if in_progress and language == content.default_language:
+            raise ProjectLanguageError(
+                f"{get_language_dict(language)['name']} is the project's default "
+                "language, which respondents always get. Pick a different "
+                "default first."
+            )
+
+        rest = [lang for lang in content.languages_in_progress if lang != language]
+        content.languages_in_progress = [*rest, language] if in_progress else rest
         self.session.commit()
 
         return self.get_available_languages_optimized(project_id)
@@ -749,17 +800,19 @@ class ProjectRepository(BaseRepository):
         language added to the draft is not theirs until it is published."""
         if source != "draft":
             version = self._source(project_id, source)
+            offered = version.offered if source == "published" else version.languages
             return _sorted_project_languages(
-                (language, language == version.default_language)
-                for language in version.languages
+                offered, version.default_language, version.languages_in_progress
             )
         row = self.session.execute(
             select(
-                ProjectContentTable.languages, ProjectContentTable.default_language
+                ProjectContentTable.languages,
+                ProjectContentTable.default_language,
+                ProjectContentTable.languages_in_progress,
             ).where(ProjectContentTable.project_id == project_id)
         ).one()
         return _sorted_project_languages(
-            (language, language == row.default_language) for language in row.languages
+            row.languages, row.default_language, row.languages_in_progress
         )
 
     def get_interview_count_optimized(
@@ -956,7 +1009,8 @@ class ProjectRepository(BaseRepository):
         content = self._source(project_id, source)
         email = self._email(project_id, reminder, source)
         languages = sorted(
-            content.languages,
+            # What is sent goes to languages respondents are offered.
+            content.offered if source == "published" else content.languages,
             key=lambda language: (language != content.default_language, language),
         )
         return [(language, *email.get(language)) for language in languages]

@@ -281,6 +281,10 @@ async def test_the_default_must_be_offered_and_cannot_be_removed(db):
         projects.remove_project_language(project_id, "EN")
 
     await _add(database, project_id, "DA")
+    # A new language starts in progress, and the default cannot be.
+    with pytest.raises(ProjectLanguageError):
+        projects.set_default_language(project_id, "DA")
+    projects.set_language_in_progress(project_id, "DA", False)
     languages = projects.set_default_language(project_id, "DA")
 
     assert {lang["code"] for lang in languages if lang["is_default"]} == {"DA"}

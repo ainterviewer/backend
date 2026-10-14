@@ -433,6 +433,12 @@ class ContentColumns:
     #: In the order they were added, the default first when migrated.
     languages: Mapped[list[LanguageCode]] = mapped_column(JSON)
     default_language: Mapped[LanguageCode] = mapped_column(LanguageType)
+    #: Languages still being translated: in the draft, so editors and test
+    #: interviews can use them, but not offered to respondents and not held to
+    #: being complete when publishing. Never the default. See `offered`.
+    languages_in_progress: Mapped[list[LanguageCode]] = mapped_column(
+        JSON, default=list, server_default=sa.text("'[]'")
+    )
     guide: Mapped[LocalizedInterviewGuide] = mapped_column(
         PydanticJSONB(LocalizedInterviewGuide),
         default=lambda: LocalizedInterviewGuide(),
@@ -463,9 +469,17 @@ class ContentColumns:
 
     #: The attribute names of the columns above, for copying between the
     #: draft and a version.
+    @property
+    def offered(self) -> list[LanguageCode]:
+        """The languages respondents may choose: all but those in progress."""
+        return [
+            lang for lang in self.languages if lang not in self.languages_in_progress
+        ]
+
     CONTENT_FIELDS: ClassVar[tuple[str, ...]] = (
         "languages",
         "default_language",
+        "languages_in_progress",
         "guide",
         "consent",
         "welcome",
@@ -504,6 +518,12 @@ class ProjectContentTable(ContentColumns, Base):
         CheckConstraint(
             """instr(languages, '"' || default_language || '"') > 0""",
             name="default_language_offered",
+        ),
+        # The default is what everything untranslated falls back to, so it
+        # cannot be one respondents are not offered.
+        CheckConstraint(
+            """instr(languages_in_progress, '"' || default_language || '"') = 0""",
+            name="default_language_not_in_progress",
         ),
     )
 

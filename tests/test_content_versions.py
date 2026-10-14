@@ -10,6 +10,7 @@ import uuid
 
 import pytest
 from sqlalchemy import create_engine, event, select
+from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlalchemy.orm import Session
 
 from ainterviewer.interview_guides import (
@@ -25,6 +26,7 @@ from app.db import InterviewDataBase
 from app.db.repositories.errors import (
     ContentRevisionError,
     NotPublishedError,
+    ProjectLanguageError,
     PublishError,
 )
 from app.db.tables import (
@@ -369,3 +371,90 @@ def test_a_content_write_bumps_the_revision_but_publishing_does_not(db):
     with pytest.raises(ContentRevisionError) as raised:
         database.versions.check_revision(project_id, start)
     assert raised.value.current == start + 1
+
+
+# ---- languages in progress ---------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_a_language_in_progress_is_drafted_but_not_published(db):
+    database, project_id, user_id = db
+    projects = database.projects
+    database.versions.publish(project_id, user_id, None)
+
+    await projects.add_project_language(project_id, "DA", translate=False)
+
+    # New, so in progress: it holds nothing back, and respondents get no DA.
+    assert database.versions.status(project_id).missing == {}
+    database.versions.publish(project_id, user_id, None)
+    published = projects.get_available_languages_optimized(project_id, "published")
+    assert [lang["code"] for lang in published] == ["EN"]
+    with pytest.raises(NoResultFound):
+        projects.get_project_localization(project_id, "DA", source="published")
+    fallback = projects.get_project_localization(
+        project_id, "DA", source="published", or_default=True
+    )
+    assert fallback.language == "EN"
+
+    # Editors and test interviews still have it.
+    draft = projects.get_available_languages_optimized(project_id)
+    assert {lang["code"]: lang["in_progress"] for lang in draft} == {
+        "DA": True,
+        "EN": False,
+    }
+    test = database.versions.snapshot(project_id, ContentVersionKind.TEST)
+    assert projects.get_project_localization(project_id, "DA", source=test.id)
+
+
+@pytest.mark.anyio
+async def test_marking_a_language_ready_offers_it_and_holds_it_to_complete(db):
+    database, project_id, user_id = db
+    projects = database.projects
+    await projects.add_project_language(project_id, "DA", translate=False)
+    database.versions.publish(project_id, user_id, None)
+    before = database.versions.snapshot(project_id, ContentVersionKind.MANUAL)
+
+    projects.set_language_in_progress(project_id, "DA", False)
+
+    assert classify(before, _content(database, project_id)) == Bump.MINOR
+    with pytest.raises(PublishError) as raised:
+        database.versions.publish(project_id, user_id, None)
+    assert "DA" in raised.value.missing
+
+
+@pytest.mark.anyio
+async def test_the_default_is_never_in_progress(db):
+    database, project_id, _ = db
+
+    with pytest.raises(ProjectLanguageError):
+        database.projects.set_language_in_progress(project_id, "EN", True)
+
+    content = _content(database, project_id)
+    content.languages_in_progress = ["EN"]
+    with pytest.raises(IntegrityError):
+        database.session.commit()
+    database.session.rollback()
+
+
+@pytest.mark.anyio
+async def test_removing_a_language_takes_it_out_of_progress_too(db):
+    database, project_id, _ = db
+    await database.projects.add_project_language(project_id, "DA", translate=False)
+
+    database.projects.remove_project_language(project_id, "DA")
+
+    assert _content(database, project_id).languages_in_progress == []
+
+
+@pytest.mark.anyio
+async def test_emails_go_out_only_in_offered_languages(db):
+    database, project_id, user_id = db
+    projects = database.projects
+    projects.set_participant_email_template(project_id, "EN", "Hi", "<p>Hi</p>")
+    await projects.add_project_language(project_id, "DA", translate=False)
+    projects.set_participant_email_template(project_id, "DA", "Hej", "<p>Hej</p>")
+    database.versions.publish(project_id, user_id, None)
+
+    sent = projects.get_participant_email_templates_ordered(project_id)
+
+    assert [language for language, _, _ in sent] == ["EN"]

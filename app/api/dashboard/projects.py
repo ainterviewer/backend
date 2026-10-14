@@ -213,6 +213,32 @@ async def remove_project_language(
 
 
 @router.put(
+    "/projects/{project_id}/available_languages/{language}/in_progress",
+    description="Mark a language as still being translated, or as ready",
+    response_model=list[ProjectLanguage],
+)
+async def set_language_in_progress(
+    project_id: UUID4,
+    language: LanguageCode,
+    in_progress: Annotated[bool, Body(embed=True)],
+    db: DBSession,
+    jwt: DemoToken,
+    _: ProjectEditor,
+):
+    """A language in progress stays in the draft, for editing and test
+    interviews, but publishing leaves it out: respondents are not offered it,
+    and its missing text does not block publishing. Not the default (409)."""
+    try:
+        return db.projects.set_language_in_progress(project_id, language, in_progress)
+    except ProjectLanguageError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except NoResultFound as exc:
+        raise HTTPException(
+            status_code=404, detail="The project has no localization for that language."
+        ) from exc
+
+
+@router.put(
     "/projects/{project_id}/default_language",
     description="Set the project's default language",
     response_model=list[ProjectLanguage],
