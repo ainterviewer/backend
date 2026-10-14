@@ -149,7 +149,10 @@ def upgrade() -> None:
 
     # ### end Alembic commands ###
 
-    # Version 1 of every project: its content as published until now.
+    # Version 1 of every project: its content as published until now. No
+    # label: a label is the note someone writes when publishing, and the
+    # people reading the history -- third parties among them -- should not
+    # find this migration's bookkeeping in it.
     connection = op.get_bind()
     fields = (
         "languages, default_language, guide, consent, welcome, "
@@ -168,7 +171,7 @@ def upgrade() -> None:
                      label, content_hash,
                      created_by_id, created_at, {fields})
                 SELECT :version_id, project_id, 1, 'PUBLISH', 1, 0, 0,
-                    'Published before version history', NULL, NULL, app_now(),
+                    NULL, NULL, NULL, app_now(),
                     {fields}
                 FROM projectcontent WHERE id = :content_id
                 """
