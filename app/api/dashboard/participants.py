@@ -23,6 +23,7 @@ from ...db.models import (
     ParticipantUpdate,
 )
 from ...db.repositories.errors import OptOutTokenError
+from ...db.types import ContentPart
 from ...dependencies import (
     DBSession,
     IfMatch,
@@ -366,8 +367,8 @@ async def get_participant_email_template(
     _: ProjectViewer,
     response: Response,
 ) -> ParticipantEmailTemplateRequest:
-    """The draft's template; `ETag` is the content's revision."""
-    set_etag(response, db.projects.get_revision(project_id))
+    """The draft's template; `ETag` is the emails' revision."""
+    set_etag(response, db.projects.get_revision(project_id, ContentPart.EMAILS))
     subject, template = db.projects.get_participant_email_template(project_id, language)
     return ParticipantEmailTemplateRequest(subject=subject, template=template)
 
@@ -384,13 +385,13 @@ async def set_participant_email_template(
     response: Response,
 ) -> ParticipantEmailTemplateRequest:
     """Save the draft's template; it is sent once published. A 412 if the
-    content changed since `If-Match`'s revision."""
+    emails changed since `If-Match`'s revision."""
     _validate_template_request(request)
 
     db.projects.set_participant_email_template(
         project_id, language, request.subject, request.template, revision
     )
-    set_etag(response, db.projects.get_revision(project_id))
+    set_etag(response, db.projects.get_revision(project_id, ContentPart.EMAILS))
     return ParticipantEmailTemplateRequest(
         subject=request.subject, template=request.template
     )
@@ -714,8 +715,8 @@ async def get_participant_reminder_email_template(
     _: ProjectViewer,
     response: Response,
 ) -> ParticipantEmailTemplateRequest:
-    """The draft's template; `ETag` is the content's revision."""
-    set_etag(response, db.projects.get_revision(project_id))
+    """The draft's template; `ETag` is the emails' revision."""
+    set_etag(response, db.projects.get_revision(project_id, ContentPart.EMAILS))
     subject, template = db.projects.get_participant_reminder_email_template(
         project_id, language
     )
@@ -734,13 +735,13 @@ async def set_participant_reminder_email_template(
     response: Response,
 ) -> ParticipantEmailTemplateRequest:
     """Save the draft's template; it is sent once published. A 412 if the
-    content changed since `If-Match`'s revision."""
+    emails changed since `If-Match`'s revision."""
     _validate_template_request(request)
 
     db.projects.set_participant_reminder_email_template(
         project_id, language, request.subject, request.template, revision
     )
-    set_etag(response, db.projects.get_revision(project_id))
+    set_etag(response, db.projects.get_revision(project_id, ContentPart.EMAILS))
     return ParticipantEmailTemplateRequest(
         subject=request.subject, template=request.template
     )

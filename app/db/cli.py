@@ -143,10 +143,14 @@ def invalid_model_changes(session: Session, to: str) -> list[str]:
                     sub["model"] = to
                     mutated = True
             if mutated:
-                # The draft's revision as well, as an ORM write would bump it,
-                # so an editor that loaded the old model gets a conflict
+                # The draft's revisions as well, as an ORM write would bump
+                # them, so an editor that loaded the old model gets a conflict
                 # rather than saving it back.
-                bump = ", revision = revision + 1" if table == "projectcontent" else ""
+                bump = (
+                    ", revision = revision + 1, agents_revision = agents_revision + 1"
+                    if table == "projectcontent"
+                    else ""
+                )
                 session.execute(
                     text(f"UPDATE {table} SET agent_configs = :v{bump} WHERE id = :id"),
                     {"v": json.dumps(data), "id": row_id},

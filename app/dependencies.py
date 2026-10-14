@@ -315,10 +315,11 @@ def _if_match(if_match: Annotated[str | None, Header()] = None) -> int:
         raise HTTPException(status_code=400, detail="Malformed If-Match") from exc
 
 
-#: The revision a content write is based on; see `ProjectContentTable.revision`.
+#: The revision a content write is based on: its part's, or the overall one
+#: for publish and restore. See `ProjectContentTable.revision`.
 IfMatch = Annotated[int, Depends(_if_match)]
 
 
 def set_etag(response: Response, revision: int) -> None:
-    """Tell the client the content's revision, to send back as If-Match."""
+    """Tell the client a revision, to send back as If-Match."""
     response.headers["ETag"] = f'"{revision}"'

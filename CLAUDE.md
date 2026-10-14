@@ -680,17 +680,27 @@ not.
 - **Restore** copies a version, languages and all, into the draft after keeping
   the draft it replaces as a `restore` version. It publishes nothing.
 
-**Revisions stop concurrent editors overwriting each other.**
-`projectcontent.revision` is bumped by a `before_update` listener whenever a
-content column changes (not when publishing). The editor GETs return it as
-`ETag`; every content write (`PUT /guide`, `/consent`, `/welcome`,
-`POST /agents`, the email template PUTs, publish and restore) requires it back
-as `If-Match` (`IfMatch`): missing is 428, stale is `ContentRevisionError`
-(412, `code: stale_revision`, `current_revision`). New writes go through
-`ProjectRepository._content(project_id, revision)`, which does the check. The
-three errors are mapped once in `app/main.py`. Server-side writes that are
-whole replacements (guide generation, translation, language changes) take no
-`If-Match` but still bump the revision and return the new `ETag`.
+**Revisions stop concurrent editors overwriting each other.** Each part
+of the content (`ContentPart`: guide, consent, welcome, agents, emails,
+languages; `ContentColumns.PART_FIELDS` maps them to columns) has its own
+counter, `projectcontent.<part>_revision`, and `projectcontent.revision`
+counts changes to any of them. A `before_update` listener bumps the changed
+parts' counters and the overall one whenever a content column changes (not
+when publishing). Each editor GET returns its part's as `ETag`, and that
+part's write (`PUT /guide`, `/consent`, `/welcome`, `POST /agents`, the email
+template PUTs) requires it back as `If-Match` (`IfMatch`), so saving one part
+never conflicts with someone editing another -- which the guide's autosave
+would otherwise turn into a 412 on every other page. Publish and restore
+cover every part, so they check the overall revision (the versions status
+`ETag`). Missing is 428, stale is `ContentRevisionError` (412,
+`code: stale_revision`, `current_revision`, `part`, null for the overall
+one). New writes go through `ProjectRepository._content(project_id, revision,
+part)`, which does the check. The three errors are mapped once in
+`app/main.py`. Server-side writes that are whole replacements (guide
+generation, translation, language changes) take no `If-Match` but still bump
+the revisions; translation, which touches three parts, returns each part's in
+`revisions`. Add a new content column to a part in `PART_FIELDS`, or to a new
+part with its own column and migration.
 
 ### Repository Session Management
 

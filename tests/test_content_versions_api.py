@@ -100,6 +100,55 @@ def test_a_save_must_be_based_on_the_current_revision(setup):
     assert f'"{stale.json()["current_revision"]}"' == saved.headers["ETag"]
 
 
+def test_saving_one_part_leaves_the_others_editable_but_not_publishable(setup):
+    client, project_id, cookies, _ = setup
+    guide_url = f"/api/projects/{project_id}/guide"
+    consent_url = f"/api/projects/{project_id}/consent"
+    guide = client.get(guide_url, cookies=cookies)
+    consent_etag = client.get(consent_url, cookies=cookies).headers["ETag"]
+    status = client.get(f"/api/projects/{project_id}/versions/status", cookies=cookies)
+
+    saved = client.put(
+        guide_url,
+        json={**guide.json(), "introduction": {"EN": "Hello"}},
+        headers={"If-Match": guide.headers["ETag"]},
+        cookies=cookies,
+    )
+    assert saved.status_code == 200
+
+    # The consent editor loaded before the guide was saved, and is not stale.
+    consent = {"title": {"EN": "Consent"}, "text": {"EN": "Agree?"}}
+    assert (
+        client.put(
+            consent_url,
+            json=consent,
+            headers={"If-Match": consent_etag},
+            cookies=cookies,
+        ).status_code
+        == 200
+    )
+
+    # Publishing covers every part, so it is stale after either save.
+    publish = client.post(
+        f"/api/projects/{project_id}/versions",
+        json={"publish": True},
+        headers={"If-Match": status.headers["ETag"]},
+        cookies=cookies,
+    )
+    assert publish.status_code == 412
+    assert publish.json()["part"] is None
+
+    # And a stale part names itself.
+    stale = client.put(
+        guide_url,
+        json=guide.json(),
+        headers={"If-Match": guide.headers["ETag"]},
+        cookies=cookies,
+    )
+    assert stale.status_code == 412
+    assert stale.json()["part"] == "guide"
+
+
 def test_respondents_get_nothing_until_the_project_is_published(setup):
     client, project_id, cookies, _ = setup
     languages = f"/api/projects/{project_id}/available_languages"

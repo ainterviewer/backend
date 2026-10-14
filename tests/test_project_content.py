@@ -34,6 +34,7 @@ from app.db.repositories import project as project_repository
 from app.db.repositories.errors import NotPublishedError, ProjectLanguageError
 from app.db.repositories.project import render_default_guide
 from app.db.tables import Base, ProjectContentTable, ProjectFolderTable, UserTable
+from app.db.types import ContentPart
 
 
 @pytest.fixture
@@ -206,7 +207,7 @@ async def test_saving_a_condition_on_a_later_question_is_rejected(db):
             database,
             None,  # ty: ignore[invalid-argument-type]
             None,  # ty: ignore[invalid-argument-type]
-            database.projects.get_revision(project_id),
+            database.projects.get_revision(project_id, ContentPart.GUIDE),
             Response(),
         )
 

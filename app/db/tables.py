@@ -66,6 +66,7 @@ from .types import (
     AccessRequestStatus,
     AppDateTime,
     CodeKind,
+    ContentPart,
     ContentVersionKind,
     EmbeddingTask,
     InterviewType,
@@ -467,8 +468,6 @@ class ContentColumns:
         default=lambda: ParticipantEmails(),
     )
 
-    #: The attribute names of the columns above, for copying between the
-    #: draft and a version.
     @property
     def offered(self) -> list[LanguageCode]:
         """The languages respondents may choose: all but those in progress."""
@@ -476,16 +475,24 @@ class ContentColumns:
             lang for lang in self.languages if lang not in self.languages_in_progress
         ]
 
-    CONTENT_FIELDS: ClassVar[tuple[str, ...]] = (
-        "languages",
-        "default_language",
-        "languages_in_progress",
-        "guide",
-        "consent",
-        "welcome",
-        "prompt_overrides",
-        "agent_configs",
-        "emails",
+    #: The columns above by the part they are edited and revisioned as.
+    PART_FIELDS: ClassVar[dict[ContentPart, tuple[str, ...]]] = {
+        ContentPart.LANGUAGES: (
+            "languages",
+            "default_language",
+            "languages_in_progress",
+        ),
+        ContentPart.GUIDE: ("guide",),
+        ContentPart.CONSENT: ("consent",),
+        ContentPart.WELCOME: ("welcome",),
+        ContentPart.AGENTS: ("prompt_overrides", "agent_configs"),
+        ContentPart.EMAILS: ("emails",),
+    }
+
+    #: The attribute names of the columns above, for copying between the
+    #: draft and a version.
+    CONTENT_FIELDS: ClassVar[tuple[str, ...]] = tuple(
+        field for fields in PART_FIELDS.values() for field in fields
     )
 
 
@@ -532,10 +539,26 @@ class ProjectContentTable(ContentColumns, Base):
         ForeignKey("project.id", ondelete="CASCADE"), unique=True, index=True
     )
     #: Bumped on every write to a content column (see the `before_update`
-    #: listener below), never by publishing. Editors send it back as
-    #: `If-Match`, and a write based on an older one is refused, so concurrent
-    #: editors cannot silently overwrite each other.
+    #: listener below), never by publishing. Publishing and restoring send it
+    #: back as `If-Match`: they cover every part, so a change to any part
+    #: since the caller looked is refused rather than released unreviewed.
     revision: Mapped[int] = mapped_column(default=1, server_default=sa.text("1"))
+    #: One counter per `ContentPart`, bumped with `revision` when that part's
+    #: columns change. Each editor sends its own part's back as `If-Match`, so
+    #: saving the consent never conflicts with someone editing the guide --
+    #: which, autosaving, would otherwise make every other save look stale.
+    guide_revision: Mapped[int] = mapped_column(default=1, server_default=sa.text("1"))
+    consent_revision: Mapped[int] = mapped_column(
+        default=1, server_default=sa.text("1")
+    )
+    welcome_revision: Mapped[int] = mapped_column(
+        default=1, server_default=sa.text("1")
+    )
+    agents_revision: Mapped[int] = mapped_column(default=1, server_default=sa.text("1"))
+    emails_revision: Mapped[int] = mapped_column(default=1, server_default=sa.text("1"))
+    languages_revision: Mapped[int] = mapped_column(
+        default=1, server_default=sa.text("1")
+    )
     #: What respondents get. NULL until the project is first published.
     published_version_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("projectcontentversion.id", ondelete="SET NULL"),
@@ -554,6 +577,10 @@ class ProjectContentTable(ContentColumns, Base):
         foreign_keys=[published_version_id]
     )
 
+    def revision_of(self, part: ContentPart | None) -> int:
+        """`part`'s revision, or the overall one for None."""
+        return self.revision if part is None else getattr(self, part.revision_column)
+
 
 @event.listens_for(ProjectContentTable, "before_update")
 def _bump_content_revision(_mapper, _connection, target: ProjectContentTable):
@@ -562,10 +589,15 @@ def _bump_content_revision(_mapper, _connection, target: ProjectContentTable):
     # moves `published_version_id`, and must not make every open editor's
     # next save look stale.
     state = inspect(target)
-    if any(
-        state.attrs[field].history.has_changes()
-        for field in ContentColumns.CONTENT_FIELDS
-    ):
+    changed = [
+        part
+        for part, fields in ContentColumns.PART_FIELDS.items()
+        if any(state.attrs[field].history.has_changes() for field in fields)
+    ]
+    for part in changed:
+        column = part.revision_column
+        setattr(target, column, (getattr(target, column) or 0) + 1)
+    if changed:
         target.revision = (target.revision or 0) + 1
 
 

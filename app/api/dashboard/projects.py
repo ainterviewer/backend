@@ -64,7 +64,7 @@ from ...db.repositories.errors import ProjectLanguageError
 from ...db.repositories.interview import SORTABLE_INTERVIEW_COLUMNS
 from ...db.repositories.project import ContentSource
 from ...db.tables import InterviewResumeTokenTable
-from ...db.types import InterviewType
+from ...db.types import ContentPart, InterviewType
 from ...dependencies import (
     DBSession,
     DemoToken,
@@ -367,8 +367,8 @@ async def get_localized_guide(
     response: Response,
 ) -> LocalizedInterviewGuide:
     """The guide with its text in every language: what the editor edits.
-    `ETag` is the content's revision, to send back as `If-Match`."""
-    set_etag(response, db.projects.get_revision(project_id))
+    `ETag` is the guide's revision, to send back as `If-Match`."""
+    set_etag(response, db.projects.get_revision(project_id, ContentPart.GUIDE))
     return db.projects.get_guide(project_id)
 
 
@@ -382,10 +382,10 @@ async def update_guide(
     revision: IfMatch,
     response: Response,
 ) -> LocalizedInterviewGuide:
-    """Save the guide. A 412 if the content changed since `If-Match`'s
+    """Save the guide. A 412 if the guide changed since `If-Match`'s
     revision; the new revision comes back as `ETag`."""
     # Before writing the images, so a refused save leaves no files behind.
-    db.versions.check_revision(project_id, revision)
+    db.versions.check_revision(project_id, revision, ContentPart.GUIDE)
     # Not a validator on the guide: interview copies shuffled before the
     # constraint existed must still load. Checking it here is what keeps
     # `shuffle`'s fallback to the authored order valid. The structure is the
@@ -417,7 +417,7 @@ async def update_guide(
                 await f.write(data)
 
     db.projects.update_guide(project_id, guide, revision)
-    set_etag(response, db.projects.get_revision(project_id))
+    set_etag(response, db.projects.get_revision(project_id, ContentPart.GUIDE))
     return guide
 
 
@@ -445,12 +445,17 @@ async def translate_missing(
 ) -> ProjectContentPublic:
     """Machine-translate the text the guide, consent and welcome lack in
     `lang` from the default language. Text `lang` already has is kept.
-    The new revision comes back as `ETag`."""
+    Each part's new revision is in `revisions`: they are three editors'."""
     _localization_or_404(db, project_id, lang)
     content = await db.projects.translate_missing(project_id, lang)
-    set_etag(response, content.revision)
     return ProjectContentPublic(
-        guide=content.guide, consent=content.consent, welcome=content.welcome
+        guide=content.guide,
+        consent=content.consent,
+        welcome=content.welcome,
+        revisions={
+            part: content.revision_of(part)
+            for part in (ContentPart.GUIDE, ContentPart.CONSENT, ContentPart.WELCOME)
+        },
     )
 
 
@@ -481,7 +486,7 @@ async def generate_guide(
 
     # No If-Match: replacing the whole guide is what was asked for.
     db.projects.update_guide(project_id, guide)
-    set_etag(response, db.projects.get_revision(project_id))
+    set_etag(response, db.projects.get_revision(project_id, ContentPart.GUIDE))
 
     return guide
 
@@ -574,7 +579,7 @@ async def get_interview_agents(
     _: ProjectViewer,
     response: Response,
 ) -> AgentConfigs:
-    set_etag(response, db.projects.get_revision(project_id))
+    set_etag(response, db.projects.get_revision(project_id, ContentPart.AGENTS))
     return db.projects.get_agent_configs(project_id)
 
 
@@ -591,7 +596,7 @@ async def create_interview_agents(
     db.projects.update_agent_configs(
         project_id=project_id, agent_configs=config, revision=revision
     )
-    set_etag(response, db.projects.get_revision(project_id))
+    set_etag(response, db.projects.get_revision(project_id, ContentPart.AGENTS))
 
 
 # Labelled stand-ins for the interview-time context the instruction prompt
@@ -752,7 +757,7 @@ async def get_localized_consent(
     response: Response,
 ) -> LocalizedConsent | None:
     """The consent with its text in every language: what the editor edits."""
-    set_etag(response, db.projects.get_revision(project_id))
+    set_etag(response, db.projects.get_revision(project_id, ContentPart.CONSENT))
     return db.projects.get_consent(project_id)
 
 
@@ -767,7 +772,7 @@ async def update_consent(
     response: Response,
 ) -> LocalizedConsent:
     db.projects.update_consent(project_id, consent, revision)
-    set_etag(response, db.projects.get_revision(project_id))
+    set_etag(response, db.projects.get_revision(project_id, ContentPart.CONSENT))
     return consent
 
 
@@ -796,7 +801,7 @@ async def get_localized_welcome(
 ) -> LocalizedWelcome | None:
     """The welcome screen with its text in every language: what the editor
     edits."""
-    set_etag(response, db.projects.get_revision(project_id))
+    set_etag(response, db.projects.get_revision(project_id, ContentPart.WELCOME))
     return db.projects.get_welcome(project_id)
 
 
@@ -814,7 +819,7 @@ async def update_welcome(
     (`POST .../welcome/video`) and pass the returned name as
     `video_file_name`."""
     db.projects.update_welcome(project_id, welcome, revision)
-    set_etag(response, db.projects.get_revision(project_id))
+    set_etag(response, db.projects.get_revision(project_id, ContentPart.WELCOME))
     return welcome
 
 

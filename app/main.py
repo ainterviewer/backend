@@ -133,6 +133,7 @@ async def _stale_revision(_request: Request, exc: ContentRevisionError):
             "detail": str(exc),
             "code": "stale_revision",
             "current_revision": exc.current,
+            "part": exc.part,
         },
         headers={"ETag": f'"{exc.current}"'},
     )

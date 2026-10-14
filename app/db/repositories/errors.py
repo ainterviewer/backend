@@ -11,17 +11,20 @@ class ContentRevisionError(Exception):
     """A write to a project's content was based on a revision that is no
     longer current: someone else saved in between.
 
-    The API maps this to a 412 carrying `current`, so the editor can offer to
-    reload or to overwrite with that revision.
+    `part` is the `ContentPart` whose revision was checked, or None for the
+    overall one (publish, restore). The API maps this to a 412 carrying
+    `current` and `part`, so the editor can offer to reload or to overwrite
+    with that revision.
     """
 
-    def __init__(self, expected: int, current: int):
+    def __init__(self, expected: int, current: int, part: str | None = None):
         super().__init__(
-            f"The content changed since it was loaded (revision {expected}, "
-            f"now {current})."
+            f"The {part or 'content'} changed since it was loaded "
+            f"(revision {expected}, now {current})."
         )
         self.expected = expected
         self.current = current
+        self.part = part
 
 
 class NotPublishedError(Exception):

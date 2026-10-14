@@ -73,6 +73,27 @@ class ContentVersionKind(StrEnum):
         return self not in (ContentVersionKind.PUBLISH, ContentVersionKind.MANUAL)
 
 
+class ContentPart(StrEnum):
+    """A part of a project's content that is edited, and revisioned, on its
+    own: each has its own counter on `projectcontent` (`<part>_revision`), so
+    a save to one never conflicts with a save to another. See
+    `ContentColumns.PART_FIELDS` for the columns each part covers.
+    """
+
+    GUIDE = "guide"
+    CONSENT = "consent"
+    WELCOME = "welcome"
+    #: `agent_configs` and `prompt_overrides`.
+    AGENTS = "agents"
+    EMAILS = "emails"
+    #: `languages`, `default_language` and `languages_in_progress`.
+    LANGUAGES = "languages"
+
+    @property
+    def revision_column(self) -> str:
+        return f"{self.value}_revision"
+
+
 class VerificationPurpose(StrEnum):
     EMAIL_VERIFICATION = "email_verification"
     LOGIN = "login"

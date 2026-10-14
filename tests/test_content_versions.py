@@ -37,7 +37,7 @@ from app.db.tables import (
     ProjectFolderTable,
     UserTable,
 )
-from app.db.types import ContentVersionKind, InterviewType
+from app.db.types import ContentPart, ContentVersionKind, InterviewType
 from app.db.versioning import Bump, classify
 
 
@@ -371,6 +371,32 @@ def test_a_content_write_bumps_the_revision_but_publishing_does_not(db):
     with pytest.raises(ContentRevisionError) as raised:
         database.versions.check_revision(project_id, start)
     assert raised.value.current == start + 1
+
+
+def test_a_write_bumps_only_its_own_part_and_the_overall_revision(db):
+    database, project_id, _ = db
+    before = _content(database, project_id)
+    start = {part: before.revision_of(part) for part in ContentPart}
+    overall = before.revision
+
+    _edit_guide(database, project_id, lambda g: g.introduction.update(EN="Hi"))
+
+    after = _content(database, project_id)
+    assert after.revision == overall + 1
+    assert after.revision_of(ContentPart.GUIDE) == start[ContentPart.GUIDE] + 1
+    for part in set(ContentPart) - {ContentPart.GUIDE}:
+        assert after.revision_of(part) == start[part]
+
+    # So an editor holding the consent's revision can still save it, and one
+    # holding the guide's old one cannot.
+    database.versions.check_revision(
+        project_id, start[ContentPart.CONSENT], ContentPart.CONSENT
+    )
+    with pytest.raises(ContentRevisionError) as raised:
+        database.versions.check_revision(
+            project_id, start[ContentPart.GUIDE], ContentPart.GUIDE
+        )
+    assert raised.value.part == ContentPart.GUIDE
 
 
 # ---- languages in progress ---------------------------------------------------

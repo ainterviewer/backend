@@ -24,7 +24,7 @@ from ..tables import (
     ProjectContentTable,
     ProjectContentVersionTable,
 )
-from ..types import ContentVersionKind
+from ..types import ContentPart, ContentVersionKind
 from ..versioning import FIRST_VERSION, Bump, SemVer, bumped, classify, format_semver
 from .base import BaseRepository
 from .errors import ContentRevisionError, NotPublishedError, PublishError
@@ -126,11 +126,15 @@ class VersionRepository(BaseRepository):
             raise NotPublishedError("This study has not been published yet.")
         return version
 
-    def check_revision(self, project_id: UUID4, revision: int) -> None:
-        """Raise ContentRevisionError unless the draft is at `revision`."""
-        current = self._content(project_id).revision
+    def check_revision(
+        self, project_id: UUID4, revision: int, part: ContentPart | None = None
+    ) -> None:
+        """Raise ContentRevisionError unless `part` of the draft is at
+        `revision`. The overall revision by default: what publishing and
+        restoring cover is every part."""
+        current = self._content(project_id).revision_of(part)
         if current != revision:
-            raise ContentRevisionError(revision, current)
+            raise ContentRevisionError(revision, current, part)
 
     def _summary(
         self, version: ProjectContentVersionTable, published_id: UUID4 | None

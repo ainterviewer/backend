@@ -52,7 +52,7 @@ from ..tables import (
     TestSetupTable,
     UserTable,
 )
-from ..types import InterviewType
+from ..types import ContentPart, InterviewType
 from .base import BaseRepository
 from .errors import ContentRevisionError, NotPublishedError, ProjectLanguageError
 from .permissions import can_moderate_project
@@ -837,23 +837,26 @@ class ProjectRepository(BaseRepository):
     # ==================== Interview Guide / Config Methods ====================
 
     def _content(
-        self, project_id: UUID4, revision: int | None = None
+        self,
+        project_id: UUID4,
+        revision: int | None = None,
+        part: ContentPart | None = None,
     ) -> ProjectContentTable:
-        """The draft. With `revision`, for writing: raises
-        ContentRevisionError unless the draft is still at it, so a save based
+        """The draft. With `revision`, for writing `part`: raises
+        ContentRevisionError unless that part is still at it, so a save based
         on what someone else has since changed is refused, not applied."""
         statement = select(ProjectContentTable).where(
             ProjectContentTable.project_id == project_id
         )
         content = self.session.execute(statement).scalar_one()
-        if revision is not None and content.revision != revision:
-            raise ContentRevisionError(revision, content.revision)
+        if revision is not None and (current := content.revision_of(part)) != revision:
+            raise ContentRevisionError(revision, current, part)
         return content
 
-    def get_revision(self, project_id: UUID4) -> int:
-        """The draft's revision, what `If-Match` must carry to write it."""
+    def get_revision(self, project_id: UUID4, part: ContentPart) -> int:
+        """`part`'s revision, what `If-Match` must carry to write it."""
         return self.session.execute(
-            select(ProjectContentTable.revision).where(
+            select(getattr(ProjectContentTable, part.revision_column)).where(
                 ProjectContentTable.project_id == project_id
             )
         ).scalar_one()
@@ -867,7 +870,7 @@ class ProjectRepository(BaseRepository):
         guide: LocalizedInterviewGuide,
         revision: int | None = None,
     ):
-        self._content(project_id, revision).guide = guide
+        self._content(project_id, revision, ContentPart.GUIDE).guide = guide
         self.session.commit()
 
     def update_interview_config(
@@ -947,7 +950,9 @@ class ProjectRepository(BaseRepository):
         agent_configs: AgentConfigs,
         revision: int | None = None,
     ):
-        self._content(project_id, revision).agent_configs = agent_configs
+        self._content(
+            project_id, revision, ContentPart.AGENTS
+        ).agent_configs = agent_configs
         self.session.commit()
 
     # ==================== Consent / Welcome Methods ====================
@@ -961,7 +966,7 @@ class ProjectRepository(BaseRepository):
         consent: LocalizedConsent | None,
         revision: int | None = None,
     ):
-        self._content(project_id, revision).consent = consent
+        self._content(project_id, revision, ContentPart.CONSENT).consent = consent
         self.session.commit()
 
     def get_welcome(self, project_id: UUID4) -> LocalizedWelcome | None:
@@ -973,7 +978,7 @@ class ProjectRepository(BaseRepository):
         welcome: LocalizedWelcome | None,
         revision: int | None = None,
     ):
-        self._content(project_id, revision).welcome = welcome
+        self._content(project_id, revision, ContentPart.WELCOME).welcome = welcome
         self.session.commit()
 
     # ============ Participant Email Template Methods ============
@@ -991,7 +996,7 @@ class ProjectRepository(BaseRepository):
         email: ParticipantEmail,
         revision: int | None,
     ):
-        content = self._content(project_id, revision)
+        content = self._content(project_id, revision, ContentPart.EMAILS)
         content.emails = content.emails.model_copy(
             update={"reminder" if reminder else "invite": email}
         )

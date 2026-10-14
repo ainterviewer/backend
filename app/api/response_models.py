@@ -10,6 +10,7 @@ from ainterviewer.interview_guides import (
 from ainterviewer.types import Feedback
 
 from ..db.models import InterviewSummaryPublic, ParticipantPublic
+from ..db.types import ContentPart
 
 
 class PaginatedResponse[T](BaseModel):
@@ -133,3 +134,5 @@ class ProjectContentPublic(BaseModel):
     guide: LocalizedInterviewGuide
     consent: LocalizedConsent | None
     welcome: LocalizedWelcome | None
+    #: Each part's revision, for its editor's next `If-Match`.
+    revisions: dict[ContentPart, int]
