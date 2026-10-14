@@ -1,7 +1,7 @@
 """Scaffolding for rendering participant invitation email templates.
 
-The subject line and the HTML body are stored per-localization on
-`ProjectLocalizationTable` and both are authored by users in Jinja2 syntax
+The subject line and the HTML body are stored per language in
+`ProjectContentTable.emails` and both are authored by users in Jinja2 syntax
 against the same context -- they differ only in escaping, since a subject is a
 plain-text header rather than markup. This module centralizes the template
 environment and the context builder, so additional validation hooks can be

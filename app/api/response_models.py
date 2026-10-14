@@ -2,6 +2,11 @@ from datetime import datetime
 
 from pydantic import UUID4, BaseModel
 
+from ainterviewer.interview_guides import (
+    LocalizedConsent,
+    LocalizedInterviewGuide,
+    LocalizedWelcome,
+)
 from ainterviewer.types import Feedback
 
 from ..db.models import InterviewSummaryPublic, ParticipantPublic
@@ -120,3 +125,11 @@ class ProbingPromptPreview(BaseModel):
 
     system: str
     instruction: str
+
+
+class ProjectContentPublic(BaseModel):
+    """A project's guide, consent and welcome with their text per language."""
+
+    guide: LocalizedInterviewGuide
+    consent: LocalizedConsent | None
+    welcome: LocalizedWelcome | None

@@ -20,7 +20,7 @@ from fastapi import (
 )
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
-from pydantic import UUID4, EmailStr
+from pydantic import UUID4
 from sqlalchemy.exc import IntegrityError, NoResultFound
 
 from ainterviewer.agents.config import (
@@ -31,12 +31,23 @@ from ainterviewer.agents.config import (
 )
 from ainterviewer.agents.prompts.agent_prompts import ProbingAgentPrompts
 from ainterviewer.config import InterviewConfig
-from ainterviewer.interview_guides import InterviewGuide, Question, QuestionSection
+from ainterviewer.interview_guides import (
+    InterviewGuide,
+    LocalizedConsent,
+    LocalizedInterviewGuide,
+    LocalizedWelcome,
+    Question,
+    QuestionSection,
+)
 from ainterviewer.interview_guides.extra import Consent, Welcome
 from ainterviewer.interview_guides.generate import (
     generate_interview_guide,
     generate_question,
     generate_section,
+)
+from ainterviewer.interview_guides.localized import (
+    LocalizedQuestion,
+    LocalizedQuestionSection,
 )
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import InterviewStatus, LanguageCode
@@ -87,6 +98,7 @@ from ..response_models import (
     InterviewResumeLinkCreated,
     InterviewResumeLinkPublic,
     ProbingPromptPreview,
+    ProjectContentPublic,
 )
 from ..websockets.manager import session_manager
 
@@ -136,7 +148,7 @@ async def clone_project(
 
 @router.get(
     "/projects/{project_id}/available_languages",
-    description="List the languages the project has a localization for",
+    description="List the languages the project offers",
     response_model=list[ProjectLanguage],
 )
 async def get_project_languages(
@@ -148,7 +160,7 @@ async def get_project_languages(
 
 @router.post(
     "/projects/{project_id}/available_languages",
-    description="Adds a new localization to the project",
+    description="Offer another language, optionally machine-translating the content into it",
     response_model=list[ProjectLanguage],
 )
 async def add_project_language(
@@ -298,31 +310,41 @@ async def get_project_permissions(
     )
 
 
-@router.get("/projects/{project_id}/{lang}/guide")
-async def get_guide(
+def _localization_or_404(db: DBSession, project_id: UUID4, lang: LanguageCode):
+    try:
+        return db.projects.get_project_localization(project_id, lang)
+    except NoResultFound as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="The project has no localization for that language.",
+        ) from exc
+
+
+@router.get("/projects/{project_id}/guide")
+async def get_localized_guide(
     project_id: UUID4,
-    lang: LanguageCode,
     db: DBSession,
     jwt: DemoToken,
     _: ProjectViewer,
-) -> InterviewGuide:
-    project_localization = db.projects.get_project_localization(project_id, lang)
-    return project_localization.interview_guide or InterviewGuide()
+) -> LocalizedInterviewGuide:
+    """The guide with its text in every language: what the editor edits."""
+    return db.projects.get_guide(project_id)
 
 
-@router.post("/projects/{project_id}/{lang}/guide")
-async def create_guide(
+@router.put("/projects/{project_id}/guide")
+async def update_guide(
     project_id: UUID4,
-    lang: LanguageCode,
-    guide: InterviewGuide,
+    guide: LocalizedInterviewGuide,
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
-):
+) -> LocalizedInterviewGuide:
     # Not a validator on the guide: interview copies shuffled before the
     # constraint existed must still load. Checking it here is what keeps
-    # `shuffle`'s fallback to the authored order valid.
-    if order_errors := guide.condition_order_errors():
+    # `shuffle`'s fallback to the authored order valid. The structure is the
+    # same in every language, so one rendering answers for all of them.
+    rendered = guide.render(db.projects.get_default_language(project_id))
+    if order_errors := rendered.condition_order_errors():
         raise HTTPException(
             status_code=422,
             detail="Conditions must read questions asked before the one they gate: "
@@ -347,10 +369,45 @@ async def create_guide(
             async with aiofiles.open(filepath, "wb") as f:
                 await f.write(data)
 
-    db.projects.update_interview_guide(project_id, guide, language=lang)
+    db.projects.update_guide(project_id, guide)
+    return guide
 
 
-@router.post("/projects/{project_id}/{lang}/guide/generate")
+@router.get("/projects/{project_id}/{lang}/guide")
+async def get_guide(
+    project_id: UUID4,
+    lang: LanguageCode,
+    db: DBSession,
+    jwt: DemoToken,
+    _: ProjectViewer,
+) -> InterviewGuide:
+    """The guide as an interview in `lang` gets it, untranslated text in the
+    default language's."""
+    return _localization_or_404(db, project_id, lang).interview_guide
+
+
+@router.post("/projects/{project_id}/{lang}/translate")
+async def translate_missing(
+    project_id: UUID4,
+    lang: LanguageCode,
+    db: DBSession,
+    jwt: DemoToken,
+    _: ProjectEditor,
+) -> ProjectContentPublic:
+    """Machine-translate the text the guide, consent and welcome lack in
+    `lang` from the default language. Text `lang` already has is kept."""
+    _localization_or_404(db, project_id, lang)
+    content = await db.projects.translate_missing(project_id, lang)
+    return ProjectContentPublic(
+        guide=content.guide, consent=content.consent, welcome=content.welcome
+    )
+
+
+@router.post(
+    "/projects/{project_id}/{lang}/guide/generate",
+    description="Generate a new guide in `lang`. It replaces the guide in every "
+    "language: the others keep no text and show as untranslated.",
+)
 async def generate_guide(
     project_id: UUID4,
     lang: LanguageCode,
@@ -358,18 +415,19 @@ async def generate_guide(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
-) -> InterviewGuide:
+) -> LocalizedInterviewGuide:
     language = get_language_dict(language_code=lang)["name"]
 
     data.prompt += f"\n\nYou must generate the interview guide in the following language: {language}"
 
-    guide = await generate_interview_guide(
+    generated = await generate_interview_guide(
         data.prompt,
         model=lib_settings.llm.default_model,
         output_path=None,
     )
+    guide = LocalizedInterviewGuide.from_rendered({lang: generated}, structure=lang)
 
-    db.projects.update_interview_guide(project_id, guide, language=lang)
+    db.projects.update_guide(project_id, guide)
 
     return guide
 
@@ -382,8 +440,9 @@ async def generate_guide_section(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
-) -> QuestionSection:
-    project = db.projects.get_project_localization(project_id, lang)
+) -> LocalizedQuestionSection:
+    """A new section in `lang`, for the editor to insert. Not saved."""
+    project = _localization_or_404(db, project_id, lang)
 
     section = await generate_section(
         data.prompt,
@@ -391,7 +450,7 @@ async def generate_guide_section(
         guide=project.interview_guide,
     )
 
-    return section
+    return LocalizedQuestionSection.from_rendered({lang: section}, structure=lang)
 
 
 @router.post("/projects/{project_id}/{lang}/guide/section/question/generate")
@@ -402,19 +461,33 @@ async def generate_section_question(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
-) -> Question:
-    project = db.projects.get_project_localization(project_id, lang)
+) -> LocalizedQuestion:
+    """A new question in `lang` for the section `data.section_id`, for the
+    editor to insert. Not saved."""
+    project = _localization_or_404(db, project_id, lang)
+    guide = project.interview_guide
+
+    section = next(
+        (s for s in guide.question_sections if s.id == data.section_id), None
+    )
+    if section is None:
+        raise HTTPException(status_code=404, detail="No such section in the guide")
 
     question = await generate_question(
         data.prompt,
         model=lib_settings.llm.default_model,
-        guide=project.interview_guide,
-        section=project.interview_guide.question_sections[data.section_idx],
+        guide=guide,
+        section=section,
         max_probes_n=data.max_probes_n,
         max_probes_time=data.max_probes_time,
     )
 
-    return question
+    # Built through a section: that is the level the lib merges renderings at.
+    (localized,) = LocalizedQuestionSection.from_rendered(
+        {lang: QuestionSection[Question](description="", questions=[question])},
+        structure=lang,
+    ).questions
+    return localized
 
 
 @router.post("/projects/{project_id}/image")
@@ -439,36 +512,25 @@ async def upload_image(
         await f.write(contents)
 
 
-@router.get("/projects/{project_id}/{lang}/agents")
+@router.get("/projects/{project_id}/agents")
 async def get_interview_agents(
     project_id: UUID4,
-    lang: LanguageCode,
     db: DBSession,
     jwt: DemoToken,
     _: ProjectViewer,
 ) -> AgentConfigs:
-    project_localization = db.projects.get_project_localization(
-        project_id,
-        language=lang,
-    )
-
-    return project_localization.agent_configs
+    return db.projects.get_agent_configs(project_id)
 
 
-@router.post("/projects/{project_id}/{lang}/agents")
+@router.post("/projects/{project_id}/agents")
 async def create_interview_agents(
     project_id: UUID4,
-    lang: LanguageCode,
     config: AgentConfigs,
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
 ):
-    db.projects.update_agent_configs(
-        project_id=project_id,
-        language=lang,
-        agent_configs=config,
-    )
+    db.projects.update_agent_configs(project_id=project_id, agent_configs=config)
 
 
 # Labelled stand-ins for the interview-time context the instruction prompt
@@ -543,22 +605,11 @@ async def get_interview_models(
     project_id: UUID4,
     db: DBSession,
 ) -> set[str]:
-    project = db.projects.get_project(project_id)
-
-    models: set[str] = set()
-
-    for language in project.available_languages:  # ty: ignore[not-iterable]
-        project_localization = db.projects.get_project_localization(
-            project_id=project_id, language=language["code"]
-        )
-
-        models.update(
-            agent_config.model
-            for agent, agent_config in project_localization.agent_configs
-            if agent in _RESPONDENT_FACING_AGENTS
-        )
-
-    return models
+    return {
+        agent_config.model
+        for agent, agent_config in db.projects.get_agent_configs(project_id)
+        if agent in _RESPONDENT_FACING_AGENTS
+    }
 
 
 @router.post("/projects/{project_id}/config")
@@ -612,32 +663,35 @@ async def get_consent(
     db: DBSession,
     language: LanguageCode,
 ) -> Consent | None:
-    # A missing localization is a 404, distinct from a 200 `null` meaning the
-    # localization exists but has no consent configured. The interview page
-    # relies on that distinction: it may only start an interview without a
-    # consent screen for the second case.
-    try:
-        return db.projects.get_consent(
-            project_id,
-            language=language,
-        )
-    except NoResultFound as exc:
-        raise HTTPException(
-            status_code=404,
-            detail="The project has no localization for that language.",
-        ) from exc
+    """The consent as respondents in `language` see it."""
+    # A language the project does not offer is a 404, distinct from a 200 `null` meaning the
+    # project has no consent configured. The interview page relies on that
+    # distinction: it may only start an interview without a consent screen
+    # for the second case.
+    return _localization_or_404(db, project_id, language).consent
 
 
-@router.post("/projects/{project_id}/guide/consent/{language}")
-async def create_consent(
+@router.get("/projects/{project_id}/consent")
+async def get_localized_consent(
     project_id: UUID4,
-    language: LanguageCode,
-    consent: Consent,
+    db: DBSession,
+    jwt: DemoToken,
+    _: ProjectViewer,
+) -> LocalizedConsent | None:
+    """The consent with its text in every language: what the editor edits."""
+    return db.projects.get_consent(project_id)
+
+
+@router.put("/projects/{project_id}/consent")
+async def update_consent(
+    project_id: UUID4,
+    consent: LocalizedConsent,
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
-):
-    db.projects.update_consent(project_id, consent, language)
+) -> LocalizedConsent:
+    db.projects.update_consent(project_id, consent)
+    return consent
 
 
 # NOTE: Doesn't require auth since it's not sensitive and has to be read
@@ -648,49 +702,57 @@ async def get_welcome(
     language: LanguageCode,
     db: DBSession,
 ) -> Welcome | None:
-    # See `get_consent`: missing localization is a 404, not a 500.
-    try:
-        return db.projects.get_welcome(
-            project_id=project_id,
-            language=language,
-        )
-    except NoResultFound as exc:
-        raise HTTPException(
-            status_code=404,
-            detail="The project has no localization for that language.",
-        ) from exc
+    """The welcome screen as respondents in `language` see it."""
+    # See `get_consent`: a language not offered is a 404, not a 500.
+    return _localization_or_404(db, project_id, language).welcome
 
 
-@router.post("/projects/{project_id}/guide/welcome/{language}")
-async def create_welcome(
+@router.get("/projects/{project_id}/welcome")
+async def get_localized_welcome(
     project_id: UUID4,
-    language: LanguageCode,
+    db: DBSession,
+    jwt: DemoToken,
+    _: ProjectViewer,
+) -> LocalizedWelcome | None:
+    """The welcome screen with its text in every language: what the editor
+    edits."""
+    return db.projects.get_welcome(project_id)
+
+
+@router.put("/projects/{project_id}/welcome")
+async def update_welcome(
+    project_id: UUID4,
+    welcome: LocalizedWelcome,
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
-    title: Annotated[str, Form()],
-    text: Annotated[str, Form()],
-    email: Annotated[EmailStr, Form()],
-    video: UploadFile | None = None,
-):
-    welcome = Welcome(title=title, text=text, email=email)
+) -> LocalizedWelcome:
+    """Save the welcome screen. Upload its video first
+    (`POST .../welcome/video`) and pass the returned name as
+    `video_file_name`."""
+    db.projects.update_welcome(project_id, welcome)
+    return welcome
 
-    if video:
-        data = await video.read()
 
-        if not video.filename:
-            raise ValueError()
+@router.post("/projects/{project_id}/welcome/video")
+async def upload_welcome_video(
+    project_id: UUID4,
+    video: UploadFile,
+    jwt: DemoToken,
+    _: ProjectEditor,
+) -> str:
+    """Store a welcome video, shared by every language. Returns the file name
+    to save as the welcome's `video_file_name`."""
+    if not video.filename:
+        raise HTTPException(status_code=422, detail="The video has no file name")
 
-        async with aiofiles.open(
-            lib_settings.storage.project_storage.video_path(project_id)
-            / video.filename,
-            "wb",
-        ) as f:
-            await f.write(data)
+    async with aiofiles.open(
+        lib_settings.storage.project_storage.video_path(project_id) / video.filename,
+        "wb",
+    ) as f:
+        await f.write(await video.read())
 
-        welcome.video_file_name = video.filename
-
-    db.projects.update_welcome(project_id, welcome, language)
+    return video.filename
 
 
 def _filter_kwargs(filters: InterviewFilters) -> dict:

@@ -59,14 +59,14 @@ wheels = [
 
 [[package]]
 name = "ainterviewer"
-version = "0.5.0"
-source = { git = "https://github.com/ainterviewer/lib.git?tag=v0.5.0#516984810ca825589747ea8120fc7095d7f16e6f" }
+version = "0.6.0"
+source = { git = "https://github.com/ainterviewer/lib.git?tag=v0.6.0#864586b7c6107b3161644faf33eea45afe822d9b" }
 dependencies = [
     { name = "any-llm-sdk", extra = ["gemini"] },
     { name = "jinja2" },
     { name = "polars" },
     { name = "pyarrow" },
-    { name = "pydantic" },
+    { name = "pydantic", extra = ["email"] },
     { name = "pydantic-extra-types" },
     { name = "pydantic-settings" },
     { name = "pyyaml" },
@@ -145,7 +145,7 @@ dev = [
 requires-dist = [
     { name = "adbc-driver-postgresql", specifier = ">=1.6.0" },
     { name = "adbc-driver-sqlite", marker = "extra == 'analysis'", specifier = ">=1.6.0" },
-    { name = "ainterviewer", git = "https://github.com/ainterviewer/lib.git?tag=v0.5.0" },
+    { name = "ainterviewer", git = "https://github.com/ainterviewer/lib.git?tag=v0.6.0" },
     { name = "aiofiles", specifier = ">=25.1.0" },
     { name = "aiohttp", specifier = ">=3.13.5" },
     { name = "aiosmtplib", specifier = ">=4.0.1" },

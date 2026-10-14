@@ -7,7 +7,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import UUID4
-from sqlalchemy import select
 from sqlalchemy.exc import NoResultFound
 from starlette.concurrency import run_in_threadpool
 
@@ -48,6 +47,7 @@ from ....db.repositories.embedding import (
     CoderJoin,
     EmbeddingFilters,
 )
+from ....db.repositories.project import render_default_guide
 from ....db.survey_answers import (
     CATEGORICAL_TYPES,
     NUMERIC_TYPES,
@@ -64,7 +64,6 @@ from ....db.survey_answers import (
     options_of,
     values_of,
 )
-from ....db.tables import ProjectLocalizationTable
 from ....dependencies import (
     DBSession,
     ProjectEditor,
@@ -765,12 +764,7 @@ def survey_facets(
     # The current draft, for the authored wording and the option labels. The
     # interviews ran against per-interview snapshots, so this is what the
     # questions are *called* and not what they were.
-    guide = session.execute(
-        select(ProjectLocalizationTable.interview_guide).where(
-            ProjectLocalizationTable.project_id == project_id,
-            ProjectLocalizationTable.is_default.is_(True),
-        )
-    ).scalar_one_or_none()
+    guide = render_default_guide(session, project_id)
 
     authored: dict[Coordinate, tuple[str, SurveyItem | None]] = {}
     if guide is not None:
@@ -1221,12 +1215,7 @@ def _point_groups(
     if not section_sizes:
         return language_groups
 
-    guide = session.execute(
-        select(ProjectLocalizationTable.interview_guide).where(
-            ProjectLocalizationTable.project_id == project_id,
-            ProjectLocalizationTable.is_default.is_(True),
-        )
-    ).scalar_one_or_none()
+    guide = render_default_guide(session, project_id)
 
     section_text: dict[int, str] = {}
     question_text: dict[tuple[int, int], str] = {}

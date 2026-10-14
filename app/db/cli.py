@@ -123,9 +123,9 @@ def fix_invalid_models(dry_run: bool = False):
     agent_fields = list(AgentConfigs.model_fields)
 
     with Session(engine) as session:
-        # ProjectLocalizationTable.agent_configs (JSON)
+        # ProjectContentTable.agent_configs (JSON)
         rows = session.execute(
-            text("SELECT id, agent_configs FROM projectlocalization")
+            text("SELECT project_id, agent_configs FROM projectcontent")
         ).all()
         for row_id, raw in rows:
             data = _as_dict(raw)
@@ -136,7 +136,7 @@ def fix_invalid_models(dry_run: bool = False):
                 sub = data.get(field_name)
                 if isinstance(sub, dict) and sub.get("model") not in available:
                     typer.echo(
-                        f"ProjectLocalization {row_id} agent_configs.{field_name}.model: "
+                        f"ProjectContent {row_id} agent_configs.{field_name}.model: "
                         f"{sub.get('model')!r} -> {default!r}"
                     )
                     sub["model"] = default
@@ -145,7 +145,8 @@ def fix_invalid_models(dry_run: bool = False):
             if mutated:
                 session.execute(
                     text(
-                        "UPDATE projectlocalization SET agent_configs = :v WHERE id = :id"
+                        "UPDATE projectcontent SET agent_configs = :v "
+                        "WHERE project_id = :id"
                     ),
                     {"v": json.dumps(data), "id": row_id},
                 )

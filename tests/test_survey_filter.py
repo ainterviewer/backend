@@ -17,7 +17,12 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from ainterviewer.interview_guides import InterviewGuide, Question, QuestionSection
+from ainterviewer.interview_guides import (
+    InterviewGuide,
+    LocalizedInterviewGuide,
+    Question,
+    QuestionSection,
+)
 from ainterviewer.interview_guides.survey_items import (
     CheckboxItem,
     DateItem,
@@ -42,7 +47,7 @@ from app.db.tables import (
     Base,
     InterviewTable,
     MessageTable,
-    ProjectLocalizationTable,
+    ProjectContentTable,
 )
 from app.db.types import InterviewType
 
@@ -339,24 +344,24 @@ class TestWhichAnswersCount:
 
 
 def guide(session, *items):
-    """A default localization holding one section of survey questions."""
+    """Content holding one section of survey questions, in English."""
+    rendered = InterviewGuide(
+        question_sections=[
+            QuestionSection(
+                description="About you",
+                questions=[
+                    Question(main_question=prompt, survey_item=item)
+                    for prompt, item in items
+                ],
+            )
+        ]
+    )
     session.add(
-        ProjectLocalizationTable(
-            id=uuid.uuid4(),
+        ProjectContentTable(
             project_id=PROJECT,
-            language="en",
-            is_default=True,
-            interview_guide=InterviewGuide(
-                question_sections=[
-                    QuestionSection(
-                        description="About you",
-                        questions=[
-                            Question(main_question=prompt, survey_item=item)
-                            for prompt, item in items
-                        ],
-                    )
-                ]
-            ),
+            languages=["EN"],
+            default_language="EN",
+            guide=LocalizedInterviewGuide.from_rendered({"EN": rendered}, "EN"),
         )
     )
 

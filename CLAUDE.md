@@ -192,7 +192,7 @@ The backend is tightly coupled with the `ainterviewer` library (sibling package 
   it is UTC with whole seconds, which is how projects came to show a
   `last_updated` hours before their `created_at` (fixed by revision
   `6b1d0e7a9c35`). The cost is that a connection without the function -- the
-  `sqlite3` shell, a new engine -- fails writes to `projectlocalization`,
+  `sqlite3` shell, a new engine -- fails writes to `projectcontent`,
   `testsetup` and `testrun` with "no such function: app_now"; register it on
   any engine you build. That includes Alembic's (`alembic/env.py`): older
   migrations call `install_triggers()` mid-run, so the triggers can fire
@@ -494,7 +494,7 @@ The agents' Jinja prompt templates live in the library
 interview time via `PackageLoader`, so **editing a template there is enough --
 no migration is needed and every project picks it up on the next deploy.**
 
-`ProjectLocalizationTable.prompt_overrides` holds only per-project overrides,
+`ProjectContentTable.prompt_overrides` holds only per-project overrides,
 keyed by template name (`"probing_agent/system_prompt.jinja"`). It is empty for
 virtually every project. The interview loader is a `ChoiceLoader` that tries the
 overrides first and falls through to the package
@@ -564,30 +564,61 @@ async def list_items(
     return PaginatedResponse(results=items, total=total)
 ```
 
-### Project languages and the default localization
+### Project languages and content
 
-A project's languages are its `projectlocalization` rows. Exactly one of them
-carries `is_default = True`, enforced by the partial unique index
-`uq_project_default_language`. That row is the project's fallback language: it
-is seeded at project creation, used when a requested language has no
-localization (`app/api/interview.py`, `app/api/websockets/interviews/ai.py`),
-used as the translation source when a language is added, and sorted first in
-the participant email templates.
+**Everything a project says is stored once, not per language.** One
+`projectcontent` row (`ProjectContentTable`) per project holds the guide,
+consent, welcome and participant emails, plus `agent_configs` and
+`prompt_overrides`. Text is stored in the library's localized form
+(`ainterviewer.interview_guides.localized`): the structure once -- sections,
+questions and their order, settings, survey items, conditions -- and every
+piece of text a `{language: text}` map. Every language asks the same questions
+in the same order; only the wording differs.
 
-Read it through `ProjectRepository.get_default_language` /
-`_get_default_localization`, and change it only through `set_default_language`,
-which clears the old flag before setting the new one. `remove_project_language`
-refuses to delete the default localization or the last remaining one, raising
-`ProjectLanguageError`, which the API maps to a 409.
+The same row says which languages the project offers (`languages`) and which is
+the default (`default_language`). The default is the project's fallback: seeded
+at project creation, used when a respondent requests a language the project
+does not offer (`app/api/interview.py`, `app/api/websockets/interviews/ai.py`),
+the text of anything not yet translated, the translation source, and first in
+the participant email templates. A CHECK constraint holds it to a language in
+`languages`; a scalar column cannot name two defaults.
 
-Do **not** reintroduce a `default_language` field on `InterviewConfig`. That was
-the old design: a bare language string in the project's JSON config with nothing
-tying it to the rows it named. Deleting the localization it pointed at left it
-dangling, which made localization lookup raise, broke interview creation and the
-translation source, and sent the dashboard's per-language routes to a language
-with no data. Nothing validated writes to it either. See revision
-`a1c4e9f30b57`, which moved the flag onto the row and stripped the key from
-every stored config.
+- Read one language through `ProjectRepository.get_project_localization`, which
+  renders the content in it with the default as fallback and raises
+  `NoResultFound` for a language the project does not offer. The interview,
+  the websocket and the public consent/welcome routes use it; the analysis
+  views use `render_default_guide`. The editor reads and writes the localized
+  form: `GET`/`PUT /projects/{id}/guide`, `/consent`, `/welcome`, `/agents`.
+- A condition on a choice question names the option by `option_id`; rendering
+  writes that option's text in the interview's language into `trigger_value`.
+  There is nothing to remap when a language is added or reworded.
+- Change the languages only through `add_project_language` (which can
+  machine-translate the missing text, as can `POST /projects/{id}/{lang}/translate`),
+  `remove_project_language` and `set_default_language`. Removing a language
+  deletes its text in the same write, so no translation outlives its language;
+  it refuses the default and the last language with `ProjectLanguageError`,
+  which the API maps to a 409. Keep the language list out of the Phase 4
+  collaborative document: a removal racing someone's typing would bring the
+  removed language's text back.
+- The participant emails are HTML with Jinja placeholders, so
+  `translate_missing` leaves them alone.
+- Interviews still store their own rendered, shuffled copy of the guide.
+
+Do **not** go back to content per language. That was the old design: a
+`projectlocalization` row per language held a full copy of the guide, consent,
+welcome and emails. The copies drifted -- an edit to one language's structure
+never reached the others, so the same project asked different questions in
+different orders, and every condition on a choice had to be remapped onto each
+translation's option text. Revision `916e657898af` merged them, the default
+supplying the structure, and dropped the table.
+
+Do **not** reintroduce a `default_language` field on `InterviewConfig` either.
+A bare language string in the project's JSON config, with nothing tying it to
+the languages it named, went dangling when one was deleted: localization lookup
+raised, interview creation and the translation source broke, and the
+dashboard's per-language routes went to a language with no data (revision
+`a1c4e9f30b57`). `projectcontent.default_language` avoids that by sitting on
+the same row as `languages` and the text, under a CHECK.
 
 The public language lists use `ProjectLanguage` (`app/db/models.py`), which is
 `LanguageDict` plus `is_default`. The library's `LanguageDict` deliberately
@@ -636,7 +667,7 @@ await self.message_queue.put(
   `ainterviewer` library has its own suite under `../lib/tests`.
 - OpenAPI SDK generation pattern needs full implementation (see the TODO at the top of `app/main.py`)
 - `create_interview` falls back to the project's default language when a
-  respondent requests one the project has no localization for, instead of
+  respondent requests one the project does not offer, instead of
   surfacing the choice (see the `FIXME` in `app/api/interview.py`)
 
 ## Branching & Merging

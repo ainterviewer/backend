@@ -10,18 +10,28 @@ from sqlalchemy.orm import Session
 
 from ainterviewer.agents.config import AgentConfigs
 from ainterviewer.config import InterviewConfig
-from ainterviewer.interview_guides import InterviewGuide, Question
-from ainterviewer.interview_guides.extra import Consent, Welcome
-from ainterviewer.interview_guides.sections import QuestionSection
-from ainterviewer.interview_guides.translate import (
-    translate_consent,
-    translate_interview_guide,
-    translate_welcome,
+from ainterviewer.interview_guides import (
+    InterviewGuide,
+    LocalizedConsent,
+    LocalizedInterviewGuide,
+    LocalizedWelcome,
 )
+from ainterviewer.interview_guides.localized import (
+    LocalizedQuestion,
+    LocalizedQuestionSection,
+)
+from ainterviewer.interview_guides.translate import translate_missing
 from ainterviewer.types import LanguageCode
 from ainterviewer.utils import get_language_dict
 
-from ...types import CollaboratorRole, ExternalParam, ProjectStatus, Scope
+from ...types import (
+    CollaboratorRole,
+    ExternalParam,
+    ParticipantEmail,
+    ParticipantEmails,
+    ProjectStatus,
+    Scope,
+)
 from ..models import (
     Collaborator,
     CollaboratorPublic,
@@ -35,8 +45,8 @@ from ..models import (
 from ..tables import (
     CollaboratorTable,
     InterviewTable,
+    ProjectContentTable,
     ProjectFolderTable,
-    ProjectLocalizationTable,
     ProjectTable,
     TestSetupTable,
     UserTable,
@@ -60,6 +70,29 @@ def _sorted_project_languages(
         ),
         key=lambda lan: lan["name"],
     )
+
+
+def render_default_guide(session: Session, project_id: UUID4) -> InterviewGuide | None:
+    """The project's guide in its default language, None if it has none.
+
+    For the analysis views, which label positions with the authored wording.
+    """
+    row = session.execute(
+        select(ProjectContentTable.guide, ProjectContentTable.default_language).where(
+            ProjectContentTable.project_id == project_id
+        )
+    ).one_or_none()
+    return None if row is None else row.guide.render(row.default_language)
+
+
+def _without_language[
+    T: (LocalizedInterviewGuide, LocalizedConsent, LocalizedWelcome, ParticipantEmails)
+](content: T, language: LanguageCode) -> T:
+    """A copy of `content` with every text in `language` removed."""
+    stripped = content.model_copy(deep=True)
+    for _, text in stripped.texts():
+        text.pop(language, None)
+    return stripped
 
 
 class ProjectRepository(BaseRepository):
@@ -240,9 +273,6 @@ class ProjectRepository(BaseRepository):
         owner_id: UUID4,
         default_language: LanguageCode = "EN",
         interview_config: InterviewConfig | None = None,
-        interview_guide_content: InterviewGuide | None = None,
-        agent_configs: AgentConfigs | None = None,
-        prompt_overrides: dict[str, str] | None = None,
         project_id: UUID4 | None = None,
     ) -> UUID4:
         project_kwargs = {}
@@ -262,33 +292,20 @@ class ProjectRepository(BaseRepository):
         self.session.add(project)
         self.session.flush()
 
-        localization_kwargs = {}
-        if interview_guide_content:
-            localization_kwargs["interview_guide"] = interview_guide_content
-        else:
-            # New projects start with a guide containing one empty question so
-            # the editor has something to fill in.
-            localization_kwargs["interview_guide"] = InterviewGuide(
-                question_sections=[
-                    QuestionSection(
-                        description="",
-                        questions=[Question(main_question="")],
-                    )
-                ]
+        # New projects start with a guide containing one empty question so
+        # the editor has something to fill in.
+        self.session.add(
+            ProjectContentTable(
+                project_id=project.id,
+                languages=[default_language],
+                default_language=default_language,
+                guide=LocalizedInterviewGuide(
+                    question_sections=[
+                        LocalizedQuestionSection(questions=[LocalizedQuestion()])
+                    ]
+                ),
             )
-        if agent_configs:
-            localization_kwargs["agent_configs"] = agent_configs
-        if prompt_overrides:
-            localization_kwargs["prompt_overrides"] = prompt_overrides
-
-        default_localization = ProjectLocalizationTable(
-            project_id=project.id,
-            language=default_language,
-            is_default=True,
-            **localization_kwargs,
         )
-        self.session.add(default_localization)
-
         self.session.commit()
 
         return project.id
@@ -346,33 +363,21 @@ class ProjectRepository(BaseRepository):
 
         assert new_project is not None
 
-        # 3. Copy all project localizations
-        localizations = (
-            self.session.execute(
-                select(ProjectLocalizationTable).where(
-                    ProjectLocalizationTable.project_id == project_id
-                )
-            )
-            .scalars()
-            .all()
-        )
-
-        for loc in localizations:
-            new_loc = ProjectLocalizationTable(
+        # 3. Copy the content, languages and all
+        content = self._content(project_id)
+        self.session.add(
+            ProjectContentTable(
                 project_id=new_project.id,
-                language=loc.language,
-                is_default=loc.is_default,
-                interview_guide=loc.interview_guide,
-                prompt_overrides=dict(loc.prompt_overrides),
-                agent_configs=loc.agent_configs,
-                consent=loc.consent,
-                welcome=loc.welcome,
-                participant_email_subject=loc.participant_email_subject,
-                participant_email_template=loc.participant_email_template,
-                participant_reminder_email_subject=loc.participant_reminder_email_subject,
-                participant_reminder_email_template=loc.participant_reminder_email_template,
+                languages=list(content.languages),
+                default_language=content.default_language,
+                guide=content.guide,
+                consent=content.consent,
+                welcome=content.welcome,
+                emails=content.emails,
+                prompt_overrides=dict(content.prompt_overrides),
+                agent_configs=content.agent_configs,
             )
-            self.session.add(new_loc)
+        )
 
         # 4. Copy all test setups (configurations only, not their runs/interviews)
         test_setups = (
@@ -557,61 +562,82 @@ class ProjectRepository(BaseRepository):
         project_id: UUID4,
         language: LanguageCode,
     ) -> ProjectLocalizationPublic:
-        statement = select(ProjectLocalizationTable).where(
-            ProjectLocalizationTable.project_id == project_id,
-            ProjectLocalizationTable.language == language,
+        """The project as respondents in `language` get it: the content
+        rendered in that language, untranslated text in the default's.
+
+        Raises NoResultFound if the project does not offer `language`.
+        """
+        content = self._content(project_id)
+        self._require_language(content, language)
+        fallback = [content.default_language]
+        return ProjectLocalizationPublic(
+            project_id=project_id,
+            language=language,
+            interview_guide=content.guide.render(language, fallback),
+            consent=None
+            if content.consent is None
+            else content.consent.render(language, fallback),
+            welcome=None
+            if content.welcome is None
+            else content.welcome.render(language, fallback),
+            prompt_overrides=dict(content.prompt_overrides),
+            agent_configs=content.agent_configs,
         )
 
-        project_localization = self.session.execute(statement).scalar_one()
-
-        return ProjectLocalizationPublic.model_validate(project_localization)
+    @staticmethod
+    def _require_language(content: ProjectContentTable, language: LanguageCode):
+        if language not in content.languages:
+            raise NoResultFound(
+                f"Project {content.project_id} does not offer {language}."
+            )
 
     async def add_project_language(
         self, project_id: UUID4, language: LanguageCode, translate: bool
-    ):
-        statement = select(ProjectTable).where(ProjectTable.id == project_id)
-        project = self.session.execute(statement).scalar_one()
-        await self._add_localization(project, language, translate)
-        self.session.add(project)
+    ) -> list[ProjectLanguage]:
+        """Offer `language`, machine-translating the content's text into it
+        from the default language if `translate`. Adding one already offered
+        changes nothing."""
+        content = self._content(project_id)
+        if language not in content.languages:
+            content.languages = [*content.languages, language]
+            self.session.flush()
+            if translate:
+                await self._translate_missing(content, language)
         self.session.commit()
 
-        return self.get_available_languages_optimized(project.id)
+        return self.get_available_languages_optimized(project_id)
 
     def remove_project_language(
         self, project_id: UUID4, language: LanguageCode
     ) -> list[ProjectLanguage]:
-        """Delete a project's localization for `language`.
+        """Stop offering `language`, and delete its text.
 
-        Refuses to delete the default localization or the last remaining one:
+        Refuses to remove the default language or the last remaining one:
         either would leave the project without a fallback language, which the
         interview and translation paths assume exists.
         """
-        localizations = (
-            self.session.execute(
-                select(ProjectLocalizationTable).where(
-                    ProjectLocalizationTable.project_id == project_id
-                )
-            )
-            .scalars()
-            .all()
-        )
+        content = self._content(project_id)
+        self._require_language(content, language)
 
-        target = next((loc for loc in localizations if loc.language == language), None)
-        if target is None:
-            raise NoResultFound(
-                f"Project {project_id} has no localization for {language}."
-            )
-
-        if len(localizations) <= 1:
+        if len(content.languages) <= 1:
             raise ProjectLanguageError("A project must keep at least one language.")
 
-        if target.is_default:
+        if language == content.default_language:
             raise ProjectLanguageError(
                 f"{get_language_dict(language)['name']} is the project's default "
                 "language. Pick a different default before removing it."
             )
 
-        self.session.delete(target)
+        # In one write with the list, so no text outlives its language: kept,
+        # it would come back as a stale translation if the language were
+        # re-added.
+        content.languages = [lang for lang in content.languages if lang != language]
+        content.guide = _without_language(content.guide, language)
+        if content.consent is not None:
+            content.consent = _without_language(content.consent, language)
+        if content.welcome is not None:
+            content.welcome = _without_language(content.welcome, language)
+        content.emails = _without_language(content.emails, language)
         self.session.commit()
 
         return self.get_available_languages_optimized(project_id)
@@ -619,157 +645,72 @@ class ProjectRepository(BaseRepository):
     def set_default_language(
         self, project_id: UUID4, language: LanguageCode
     ) -> list[ProjectLanguage]:
-        """Make `language` the project's default localization.
-
-        The partial unique index only allows one default per project, so the
-        old default is cleared before the new one is set.
-        """
-        localizations = (
-            self.session.execute(
-                select(ProjectLocalizationTable).where(
-                    ProjectLocalizationTable.project_id == project_id
-                )
-            )
-            .scalars()
-            .all()
-        )
-
-        target = next((loc for loc in localizations if loc.language == language), None)
-        if target is None:
+        """Make `language`, which the project must offer, its default."""
+        content = self._content(project_id)
+        if language not in content.languages:
             raise ProjectLanguageError(
                 f"The project has no {get_language_dict(language)['name']} "
                 "localization, so it cannot be the default. Add the language first."
             )
 
-        if target.is_default:
-            return self.get_available_languages_optimized(project_id)
-
-        for loc in localizations:
-            if loc.is_default:
-                loc.is_default = False
-        self.session.flush()
-
-        target.is_default = True
+        content.default_language = language
         self.session.commit()
 
         return self.get_available_languages_optimized(project_id)
 
-    async def _add_localization(
-        self, project: ProjectTable, language: LanguageCode, translate: bool
-    ):
-        """Add a new localization to the project"""
-        # Check if localization already exists
-        if any(loc.language == language for loc in project.localizations):
-            return
+    async def translate_missing(
+        self, project_id: UUID4, language: LanguageCode
+    ) -> ProjectContentTable:
+        """Translate whatever text the guide, consent and welcome lack in
+        `language` from the default language, leaving what it has alone.
 
-        default_loc = self._get_default_localization(project)
+        Not the participant emails: they are HTML with Jinja placeholders,
+        which the string translator does not preserve.
+        """
+        content = self._content(project_id)
+        self._require_language(content, language)
+        await self._translate_missing(content, language)
+        self.session.commit()
+        return content
 
-        consent, welcome, interview_guide = (
-            default_loc.consent,
-            default_loc.welcome,
-            default_loc.interview_guide,
+    async def _translate_missing(
+        self, content: ProjectContentTable, language: LanguageCode
+    ) -> None:
+        kwargs = {
+            "target": language,
+            "source": content.default_language,
+            "model": TRANSLATION_MODEL,
+        }
+
+        async def maybe[T: (LocalizedConsent, LocalizedWelcome)](part: T | None):
+            return None if part is None else await translate_missing(part, **kwargs)
+
+        guide, consent, welcome = await asyncio.gather(
+            translate_missing(content.guide, **kwargs),
+            maybe(content.consent),
+            maybe(content.welcome),
         )
-
-        if translate:
-
-            async def _none():
-                return None
-
-            target_language = get_language_dict(language)["name"]
-            tasks = []
-            if interview_guide is not None:
-                tasks.append(
-                    translate_interview_guide(
-                        interview_guide,
-                        target_language=target_language,
-                        model=TRANSLATION_MODEL,
-                    )
-                )
-            if consent is not None:
-                tasks.append(
-                    translate_consent(
-                        consent,
-                        target_language=target_language,
-                        model=TRANSLATION_MODEL,
-                    )
-                )
-            if welcome is not None:
-                tasks.append(
-                    translate_welcome(
-                        welcome,
-                        target_language=target_language,
-                        model=TRANSLATION_MODEL,
-                    )
-                )
-            tasks += [_none(), _none(), _none()]
-
-            interview_guide, consent, welcome, *_ = await asyncio.gather(*tasks)
-
-        new_loc = ProjectLocalizationTable(
-            project_id=project.id,
-            language=language,
-            consent=consent,
-            welcome=welcome,
-            interview_guide=interview_guide,
-            prompt_overrides=dict(default_loc.prompt_overrides),
-            agent_configs=default_loc.agent_configs,
-        )
-        self.session.add(new_loc)
-        self.session.flush()
-
-    def _get_localization(
-        self, project: ProjectTable, language: LanguageCode
-    ) -> ProjectLocalizationTable:
-        """Get localization for a specific language, falls back to default if not found"""
-        # Try to find the requested language
-        for loc in project.localizations:
-            if loc.language == language:
-                return loc
-
-        return self._get_default_localization(project)
-
-    def _get_default_localization(
-        self, project: ProjectTable
-    ) -> ProjectLocalizationTable:
-        """Get the default localization for this project."""
-        for loc in project.localizations:
-            if loc.is_default:
-                return loc
-
-        # This should not happen if data integrity is maintained
-        raise ValueError(f"No default localization found for project {project.id}")
+        content.guide, content.consent, content.welcome = guide, consent, welcome
 
     def get_default_language(self, project_id: UUID4) -> LanguageCode:
-        """The project's default language, without loading the whole project."""
-        statement = select(ProjectLocalizationTable.language).where(
-            ProjectLocalizationTable.project_id == project_id,
-            ProjectLocalizationTable.is_default,
+        """The project's default language, without loading its content."""
+        statement = select(ProjectContentTable.default_language).where(
+            ProjectContentTable.project_id == project_id
         )
         return self.session.execute(statement).scalar_one()
-
-    def get_available_languages(self, project: ProjectTable) -> list[ProjectLanguage]:
-        """Get list of available languages for the project"""
-        return _sorted_project_languages(
-            (localization.language, localization.is_default)
-            for localization in project.localizations
-        )
 
     def get_available_languages_optimized(
         self, project_id: uuid.UUID
     ) -> list[ProjectLanguage]:
-        """
-        Get available languages without loading the full project.
-        Optimized query that only fetches language codes.
-        """
-        rows = (
-            self.session.query(
-                ProjectLocalizationTable.language,
-                ProjectLocalizationTable.is_default,
-            )
-            .filter(ProjectLocalizationTable.project_id == project_id)
-            .all()
+        """The languages the project offers, without loading its content."""
+        row = self.session.execute(
+            select(
+                ProjectContentTable.languages, ProjectContentTable.default_language
+            ).where(ProjectContentTable.project_id == project_id)
+        ).one()
+        return _sorted_project_languages(
+            (language, language == row.default_language) for language in row.languages
         )
-        return _sorted_project_languages((row.language, row.is_default) for row in rows)
 
     def get_interview_count_optimized(
         self, project_id: uuid.UUID, exclude_tests: bool = True
@@ -792,21 +733,17 @@ class ProjectRepository(BaseRepository):
 
     # ==================== Interview Guide / Config Methods ====================
 
-    def update_interview_guide(
-        self,
-        project_id: UUID4,
-        interview_guide_content: InterviewGuide,
-        language: LanguageCode,
-    ):
-        statement = (
-            update(ProjectLocalizationTable)
-            .where(
-                ProjectLocalizationTable.project_id == project_id,
-                ProjectLocalizationTable.language == language,
-            )
-            .values(interview_guide=interview_guide_content)
+    def _content(self, project_id: UUID4) -> ProjectContentTable:
+        statement = select(ProjectContentTable).where(
+            ProjectContentTable.project_id == project_id
         )
-        self.session.execute(statement)
+        return self.session.execute(statement).scalar_one()
+
+    def get_guide(self, project_id: UUID4) -> LocalizedInterviewGuide:
+        return self._content(project_id).guide
+
+    def update_guide(self, project_id: UUID4, guide: LocalizedInterviewGuide):
+        self._content(project_id).guide = guide
         self.session.commit()
 
     def update_interview_config(
@@ -875,83 +812,64 @@ class ProjectRepository(BaseRepository):
         self.session.execute(statement)
         self.session.commit()
 
-    def update_agent_configs(
-        self,
-        project_id: UUID4,
-        language: LanguageCode,
-        agent_configs: AgentConfigs,
-    ):
-        # FIXME: Update permissions to collab
-        statement = (
-            update(ProjectLocalizationTable)
-            .where(
-                ProjectLocalizationTable.project_id == project_id,
-                ProjectLocalizationTable.language == language,
-            )
-            .values(agent_configs=agent_configs)
-        )
-        self.session.execute(statement)
+    def get_agent_configs(self, project_id: UUID4) -> AgentConfigs:
+        return self._content(project_id).agent_configs
+
+    def update_agent_configs(self, project_id: UUID4, agent_configs: AgentConfigs):
+        self._content(project_id).agent_configs = agent_configs
         self.session.commit()
 
     # ==================== Consent / Welcome Methods ====================
 
-    def get_consent(self, project_id: UUID4, language: LanguageCode) -> Consent | None:
-        statement = select(ProjectLocalizationTable).where(
-            ProjectLocalizationTable.project_id == project_id,
-            ProjectLocalizationTable.language == language,
-        )
-        return self.session.execute(statement).scalar_one().consent
+    def get_consent(self, project_id: UUID4) -> LocalizedConsent | None:
+        return self._content(project_id).consent
 
-    def update_consent(
-        self, project_id: UUID4, consent: Consent, language: LanguageCode
-    ):
-        statement = (
-            update(ProjectLocalizationTable)
-            .where(
-                ProjectLocalizationTable.project_id == project_id,
-                ProjectLocalizationTable.language == language,
-            )
-            .values(consent=consent)
-        )
-        self.session.execute(statement)
+    def update_consent(self, project_id: UUID4, consent: LocalizedConsent | None):
+        self._content(project_id).consent = consent
         self.session.commit()
 
-    def get_welcome(self, project_id: UUID4, language: LanguageCode) -> Welcome | None:
-        statement = select(ProjectLocalizationTable).where(
-            ProjectLocalizationTable.project_id == project_id,
-            ProjectLocalizationTable.language == language,
-        )
-        return self.session.execute(statement).scalar_one().welcome
+    def get_welcome(self, project_id: UUID4) -> LocalizedWelcome | None:
+        return self._content(project_id).welcome
 
-    def update_welcome(
-        self, project_id: UUID4, welcome: Welcome, language: LanguageCode
-    ):
-        statement = (
-            update(ProjectLocalizationTable)
-            .where(
-                ProjectLocalizationTable.project_id == project_id,
-                ProjectLocalizationTable.language == language,
-            )
-            .values(welcome=welcome)
-        )
-        self.session.execute(statement)
+    def update_welcome(self, project_id: UUID4, welcome: LocalizedWelcome | None):
+        self._content(project_id).welcome = welcome
         self.session.commit()
 
     # ============ Participant Email Template Methods ============
 
+    def _email(self, project_id: UUID4, reminder: bool) -> ParticipantEmail:
+        emails = self._content(project_id).emails
+        return emails.reminder if reminder else emails.invite
+
+    def _set_email(self, project_id: UUID4, reminder: bool, email: ParticipantEmail):
+        content = self._content(project_id)
+        content.emails = content.emails.model_copy(
+            update={"reminder" if reminder else "invite": email}
+        )
+        self.session.commit()
+
+    def _email_in(
+        self, project_id: UUID4, language: LanguageCode, reminder: bool
+    ) -> tuple[str | None, str | None]:
+        self._require_language(self._content(project_id), language)
+        return self._email(project_id, reminder).get(language)
+
+    def _emails_ordered(
+        self, project_id: UUID4, reminder: bool
+    ) -> list[tuple[LanguageCode, str | None, str | None]]:
+        content = self._content(project_id)
+        email = self._email(project_id, reminder)
+        languages = sorted(
+            content.languages,
+            key=lambda language: (language != content.default_language, language),
+        )
+        return [(language, *email.get(language)) for language in languages]
+
     def get_participant_email_template(
         self, project_id: UUID4, language: LanguageCode
     ) -> tuple[str | None, str | None]:
-        """Return (subject, template) for the given localization."""
-        statement = select(
-            ProjectLocalizationTable.participant_email_subject,
-            ProjectLocalizationTable.participant_email_template,
-        ).where(
-            ProjectLocalizationTable.project_id == project_id,
-            ProjectLocalizationTable.language == language,
-        )
-        row = self.session.execute(statement).one()
-        return row[0], row[1]
+        """Return (subject, template) of the invitation in `language`."""
+        return self._email_in(project_id, language, reminder=False)
 
     def set_participant_email_template(
         self,
@@ -960,55 +878,23 @@ class ProjectRepository(BaseRepository):
         subject: str | None,
         template: str | None,
     ) -> None:
-        statement = (
-            update(ProjectLocalizationTable)
-            .where(
-                ProjectLocalizationTable.project_id == project_id,
-                ProjectLocalizationTable.language == language,
-            )
-            .values(
-                participant_email_subject=subject,
-                participant_email_template=template,
-            )
-        )
-        self.session.execute(statement)
-        self.session.commit()
+        email = self._email(project_id, reminder=False)
+        self._set_email(project_id, False, email.set(language, subject, template))
 
     def get_participant_email_templates_ordered(
         self, project_id: UUID4
     ) -> list[tuple[LanguageCode, str | None, str | None]]:
-        """Return (language, subject, template) for every localization, with
-        the project's default language first."""
-        default_lang = self.get_default_language(project_id)
-
-        rows = self.session.execute(
-            select(
-                ProjectLocalizationTable.language,
-                ProjectLocalizationTable.participant_email_subject,
-                ProjectLocalizationTable.participant_email_template,
-            ).where(ProjectLocalizationTable.project_id == project_id)
-        ).all()
-        ordered = sorted(
-            (tuple(r) for r in rows),
-            key=lambda r: (r[0] != default_lang, r[0]),
-        )
-        return [(lang, subj, tmpl) for (lang, subj, tmpl) in ordered]
+        """Return (language, subject, template) of the invitation for every
+        language the project offers, the default first."""
+        return self._emails_ordered(project_id, reminder=False)
 
     # ====== Participant Reminder Email Template Methods ======
 
     def get_participant_reminder_email_template(
         self, project_id: UUID4, language: LanguageCode
     ) -> tuple[str | None, str | None]:
-        """Return (subject, template) of the reminder email for the given localization."""
-        statement = select(
-            ProjectLocalizationTable.participant_reminder_email_subject,
-            ProjectLocalizationTable.participant_reminder_email_template,
-        ).where(
-            ProjectLocalizationTable.project_id == project_id,
-            ProjectLocalizationTable.language == language,
-        )
-        row = self.session.execute(statement).one()
-        return row[0], row[1]
+        """Return (subject, template) of the reminder email in `language`."""
+        return self._email_in(project_id, language, reminder=True)
 
     def set_participant_reminder_email_template(
         self,
@@ -1017,39 +903,15 @@ class ProjectRepository(BaseRepository):
         subject: str | None,
         template: str | None,
     ) -> None:
-        statement = (
-            update(ProjectLocalizationTable)
-            .where(
-                ProjectLocalizationTable.project_id == project_id,
-                ProjectLocalizationTable.language == language,
-            )
-            .values(
-                participant_reminder_email_subject=subject,
-                participant_reminder_email_template=template,
-            )
-        )
-        self.session.execute(statement)
-        self.session.commit()
+        email = self._email(project_id, reminder=True)
+        self._set_email(project_id, True, email.set(language, subject, template))
 
     def get_participant_reminder_email_templates_ordered(
         self, project_id: UUID4
     ) -> list[tuple[LanguageCode, str | None, str | None]]:
         """Return (language, subject, template) of the reminder email for every
-        localization, with the project's default language first."""
-        default_lang = self.get_default_language(project_id)
-
-        rows = self.session.execute(
-            select(
-                ProjectLocalizationTable.language,
-                ProjectLocalizationTable.participant_reminder_email_subject,
-                ProjectLocalizationTable.participant_reminder_email_template,
-            ).where(ProjectLocalizationTable.project_id == project_id)
-        ).all()
-        ordered = sorted(
-            (tuple(r) for r in rows),
-            key=lambda r: (r[0] != default_lang, r[0]),
-        )
-        return [(lang, subj, tmpl) for (lang, subj, tmpl) in ordered]
+        language the project offers, the default first."""
+        return self._emails_ordered(project_id, reminder=True)
 
     # ==================== Authorization Methods ====================
 

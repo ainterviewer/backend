@@ -42,10 +42,10 @@ from ainterviewer.types import (
     MessageType,
 )
 
+from ....db.repositories.project import render_default_guide
 from ....db.tables import (
     InterviewTable,
     MessageTable,
-    ProjectLocalizationTable,
     TaskTable,
 )
 from ....db.types import InterviewType
@@ -953,12 +953,7 @@ def get_project_item_distributions(
     # was actually asked, which for a shuffled section is not the guide's
     # authored order. Pairing them with the guide is therefore an
     # approximation of "the Nth question of section M".
-    default_guide = session.execute(
-        select(ProjectLocalizationTable.interview_guide).where(
-            ProjectLocalizationTable.project_id == project_id,
-            ProjectLocalizationTable.is_default.is_(True),
-        )
-    ).scalar_one_or_none()
+    default_guide = render_default_guide(session, project_id)
 
     sections: list[GuideSection] = []
     authored: dict[

@@ -20,7 +20,7 @@ clock has to come from Python.
 
 The cost: a connection without the function -- the `sqlite3` shell, a DB
 browser, an engine that skipped `register_trigger_functions` -- fails any write
-to `projectlocalization`, `testsetup` or `testrun` with "no such function:
+to `projectcontent`, `testsetup` or `testrun` with "no such function:
 app_now" rather than stamping the wrong clock. Alembic's engine registers it
 too: env.py uninstalls the triggers before a run, but older migrations call
 `install_triggers` mid-run, so they can fire during later ones. (The PostgreSQL
@@ -29,7 +29,7 @@ functions use `NOW()`, which follows the session time zone.)
 
 import logging
 
-from sqlalchemy import event, text
+from sqlalchemy import event, inspect, text
 from sqlalchemy.engine import Connection, Engine
 
 from ainterviewer.utils import now
@@ -66,10 +66,10 @@ def register_trigger_functions(engine: Engine) -> None:
             logger.exception("Failed to register %s on a new connection", APP_NOW)
 
 
-# ----- touch project.last_updated when a localization changes -----------------
+# ----- touch project.last_updated when its content changes --------------------
 
-_PG_FUNCTION = """
-CREATE OR REPLACE FUNCTION touch_project_last_updated_from_localization()
+_PG_FUNCTION_CONTENT_TO_PROJECT = """
+CREATE OR REPLACE FUNCTION touch_project_last_updated_from_content()
 RETURNS TRIGGER AS $$
 BEGIN
     UPDATE project
@@ -81,33 +81,31 @@ END;
 $$ LANGUAGE plpgsql;
 """
 
-_PG_DROP_TRIGGER = (
-    "DROP TRIGGER IF EXISTS trg_projectlocalization_touch_project "
-    "ON projectlocalization;"
+_PG_DROP_TRIGGER_CONTENT_TO_PROJECT = (
+    "DROP TRIGGER IF EXISTS trg_projectcontent_touch_project ON projectcontent;"
 )
 
-_PG_CREATE_TRIGGER = """
-CREATE TRIGGER trg_projectlocalization_touch_project
-AFTER INSERT OR UPDATE OR DELETE ON projectlocalization
+_PG_CREATE_TRIGGER_CONTENT_TO_PROJECT = """
+CREATE TRIGGER trg_projectcontent_touch_project
+AFTER INSERT OR UPDATE OR DELETE ON projectcontent
 FOR EACH ROW
-EXECUTE FUNCTION touch_project_last_updated_from_localization();
+EXECUTE FUNCTION touch_project_last_updated_from_content();
 """
 
-_PG_DROP_FUNCTION = (
-    "DROP FUNCTION IF EXISTS touch_project_last_updated_from_localization();"
+_PG_DROP_FUNCTION_CONTENT_TO_PROJECT = (
+    "DROP FUNCTION IF EXISTS touch_project_last_updated_from_content();"
 )
 
-
-_SQLITE_TRIGGER_NAMES = (
-    "trg_projectlocalization_touch_project_insert",
-    "trg_projectlocalization_touch_project_update",
-    "trg_projectlocalization_touch_project_delete",
+_SQLITE_TRIGGER_NAMES_CONTENT_TO_PROJECT = (
+    "trg_projectcontent_touch_project_insert",
+    "trg_projectcontent_touch_project_update",
+    "trg_projectcontent_touch_project_delete",
 )
 
-_SQLITE_CREATE_STATEMENTS = (
+_SQLITE_CREATE_STATEMENTS_CONTENT_TO_PROJECT = (
     """
-    CREATE TRIGGER trg_projectlocalization_touch_project_insert
-    AFTER INSERT ON projectlocalization
+    CREATE TRIGGER trg_projectcontent_touch_project_insert
+    AFTER INSERT ON projectcontent
     FOR EACH ROW
     BEGIN
         UPDATE project
@@ -116,8 +114,8 @@ _SQLITE_CREATE_STATEMENTS = (
     END;
     """,
     """
-    CREATE TRIGGER trg_projectlocalization_touch_project_update
-    AFTER UPDATE ON projectlocalization
+    CREATE TRIGGER trg_projectcontent_touch_project_update
+    AFTER UPDATE ON projectcontent
     FOR EACH ROW
     BEGIN
         UPDATE project
@@ -126,8 +124,8 @@ _SQLITE_CREATE_STATEMENTS = (
     END;
     """,
     """
-    CREATE TRIGGER trg_projectlocalization_touch_project_delete
-    AFTER DELETE ON projectlocalization
+    CREATE TRIGGER trg_projectcontent_touch_project_delete
+    AFTER DELETE ON projectcontent
     FOR EACH ROW
     BEGIN
         UPDATE project
@@ -135,6 +133,22 @@ _SQLITE_CREATE_STATEMENTS = (
         WHERE id = OLD.project_id;
     END;
     """,
+)
+
+# `projectlocalization` held per-language content until revision 916e657898af
+# moved it to `projectcontent` and dropped the table. Its triggers are still
+# dropped by name, for a database restored from before then.
+_SQLITE_LEGACY_TRIGGER_NAMES = (
+    "trg_projectlocalization_touch_project_insert",
+    "trg_projectlocalization_touch_project_update",
+    "trg_projectlocalization_touch_project_delete",
+)
+_PG_DROP_LEGACY_TRIGGER = (
+    "DROP TRIGGER IF EXISTS trg_projectlocalization_touch_project "
+    "ON projectlocalization;"
+)
+_PG_DROP_LEGACY_FUNCTION = (
+    "DROP FUNCTION IF EXISTS touch_project_last_updated_from_localization();"
 )
 
 
@@ -352,17 +366,23 @@ _SQLITE_CREATE_STATEMENTS_TESTRUN_TO_PROJECT = (
 # Every trigger this module maintains, per dialect -- what `install_triggers`
 # creates and what `missing_triggers` expects to find.
 _SQLITE_ALL_TRIGGER_NAMES = (
-    _SQLITE_TRIGGER_NAMES
+    _SQLITE_TRIGGER_NAMES_CONTENT_TO_PROJECT
     + _SQLITE_TRIGGER_NAMES_TESTRUN_TO_TESTSETUP
     + _SQLITE_TRIGGER_NAMES_TESTSETUP_TO_PROJECT
     + _SQLITE_TRIGGER_NAMES_TESTRUN_TO_PROJECT
 )
 _PG_ALL_TRIGGER_NAMES = (
-    "trg_projectlocalization_touch_project",
+    "trg_projectcontent_touch_project",
     "trg_testrun_touch_testsetup",
     "trg_testsetup_touch_project",
     "trg_testrun_touch_project",
 )
+
+
+def _has_table(connection: Connection, name: str) -> bool:
+    """Older migrations call `install_triggers` mid-run, before tables added
+    later exist; their triggers are installed by the run that creates them."""
+    return inspect(connection).has_table(name)
 
 
 def install_triggers(connection: Connection) -> None:
@@ -370,9 +390,10 @@ def install_triggers(connection: Connection) -> None:
     dialect = connection.dialect.name
 
     if dialect == "postgresql":
-        connection.execute(text(_PG_DROP_TRIGGER))
-        connection.execute(text(_PG_FUNCTION))
-        connection.execute(text(_PG_CREATE_TRIGGER))
+        if _has_table(connection, "projectcontent"):
+            connection.execute(text(_PG_DROP_TRIGGER_CONTENT_TO_PROJECT))
+            connection.execute(text(_PG_FUNCTION_CONTENT_TO_PROJECT))
+            connection.execute(text(_PG_CREATE_TRIGGER_CONTENT_TO_PROJECT))
 
         connection.execute(text(_PG_DROP_TRIGGER_TESTRUN_TO_TESTSETUP))
         connection.execute(text(_PG_FUNCTION_TESTRUN_TO_TESTSETUP))
@@ -389,12 +410,16 @@ def install_triggers(connection: Connection) -> None:
 
     if dialect == "sqlite":
         all_statements = (
-            _SQLITE_CREATE_STATEMENTS
+            (
+                _SQLITE_CREATE_STATEMENTS_CONTENT_TO_PROJECT
+                if _has_table(connection, "projectcontent")
+                else ()
+            )
             + _SQLITE_CREATE_STATEMENTS_TESTRUN_TO_TESTSETUP
             + _SQLITE_CREATE_STATEMENTS_TESTSETUP_TO_PROJECT
             + _SQLITE_CREATE_STATEMENTS_TESTRUN_TO_PROJECT
         )
-        for name in _SQLITE_ALL_TRIGGER_NAMES:
+        for name in _SQLITE_ALL_TRIGGER_NAMES + _SQLITE_LEGACY_TRIGGER_NAMES:
             connection.execute(text(f"DROP TRIGGER IF EXISTS {name};"))
         for stmt in all_statements:
             connection.execute(text(stmt))
@@ -408,8 +433,12 @@ def uninstall_triggers(connection: Connection) -> None:
     dialect = connection.dialect.name
 
     if dialect == "postgresql":
-        connection.execute(text(_PG_DROP_TRIGGER))
-        connection.execute(text(_PG_DROP_FUNCTION))
+        if _has_table(connection, "projectcontent"):
+            connection.execute(text(_PG_DROP_TRIGGER_CONTENT_TO_PROJECT))
+        connection.execute(text(_PG_DROP_FUNCTION_CONTENT_TO_PROJECT))
+        if _has_table(connection, "projectlocalization"):
+            connection.execute(text(_PG_DROP_LEGACY_TRIGGER))
+        connection.execute(text(_PG_DROP_LEGACY_FUNCTION))
 
         connection.execute(text(_PG_DROP_TRIGGER_TESTRUN_TO_TESTSETUP))
         connection.execute(text(_PG_DROP_FUNCTION_TESTRUN_TO_TESTSETUP))
@@ -422,7 +451,7 @@ def uninstall_triggers(connection: Connection) -> None:
         return
 
     if dialect == "sqlite":
-        for name in _SQLITE_ALL_TRIGGER_NAMES:
+        for name in _SQLITE_ALL_TRIGGER_NAMES + _SQLITE_LEGACY_TRIGGER_NAMES:
             connection.execute(text(f"DROP TRIGGER IF EXISTS {name};"))
         return
 

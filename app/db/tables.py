@@ -6,6 +6,7 @@ from uuid import uuid4
 import sqlalchemy as sa
 from sqlalchemy import (
     JSON,
+    CheckConstraint,
     ForeignKey,
     Index,
     LargeBinary,
@@ -23,8 +24,14 @@ from sqlalchemy.sql import func
 
 from ainterviewer.agents.config import AgentConfigs
 from ainterviewer.config import InterviewConfig
-from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
-from ainterviewer.interview_guides.extra import Consent, Welcome
+from ainterviewer.interview_guides import (
+    Image,
+    InterviewGuide,
+    LocalizedConsent,
+    LocalizedInterviewGuide,
+    LocalizedWelcome,
+    SurveyItem,
+)
 from ainterviewer.synthesize.interviewees import (
     DEFAULT_BACKGROUND_INFO_OPTIONS,
     BackgroundInfoOptions,
@@ -44,7 +51,14 @@ from ainterviewer.types import (
 from ainterviewer.utils import now
 from app.platform_release import PlatformManifest
 
-from ..types import CollaboratorRole, ExternalParam, ProjectStatus, Scope, TestRunStatus
+from ..types import (
+    CollaboratorRole,
+    ExternalParam,
+    ParticipantEmails,
+    ProjectStatus,
+    Scope,
+    TestRunStatus,
+)
 from ._extra import PydanticJSONB
 from .types import (
     AccessRequestStatus,
@@ -335,7 +349,7 @@ class ProjectTable(Base):
     )
     title: Mapped[str] = mapped_column()
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
-    # Also bumped by DB triggers when any ProjectLocalization, TestSetup, or
+    # Also bumped by DB triggers when its ProjectContent, or any TestSetup or
     # TestRun row changes; see app/db/triggers.py.
     last_updated: Mapped[datetime.datetime | None] = mapped_column(
         default=now, onupdate=now
@@ -370,7 +384,7 @@ class ProjectTable(Base):
     interviews: Mapped[list["InterviewTable"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
-    localizations: Mapped[list["ProjectLocalizationTable"]] = relationship(
+    content: Mapped["ProjectContentTable"] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
     folder: Mapped["ProjectFolderTable"] = relationship(back_populates="projects")
@@ -402,33 +416,49 @@ class ProjectTable(Base):
         return self.folder.collaborators if self.folder else []
 
 
-class ProjectLocalizationTable(Base):
-    __tablename__ = "projectlocalization"
+class ProjectContentTable(Base):
+    """Everything a project says, in every language it offers, and how its
+    agents run.
+
+    The guide, consent, welcome and participant emails are stored once per
+    project with their text per language (`ainterviewer.interview_guides.
+    localized`): every language asks the same questions in the same order, so
+    only the wording is per-language. Read one language through `render`.
+
+    `languages` is what the project offers and `default_language` the one
+    whose text fills anything untranslated and is the translation source. They
+    sit on this row, beside the text they govern, so adding or removing a
+    language and its text is one write; the CHECK holds the default to a
+    language the project offers. A separate table rather than `ProjectTable`
+    columns so that listing projects never loads a guide.
+    """
+
+    __tablename__ = "projectcontent"
     __table_args__ = (
-        UniqueConstraint("project_id", "language", name="unique_project_language"),
-        # Exactly one default localization per project. The partial index lets
-        # the database hold the invariant instead of the application; see
-        # ProjectRepository.set_default_language.
-        Index(
-            "uq_project_default_language",
-            "project_id",
-            unique=True,
-            sqlite_where=sa.text("is_default"),
-            postgresql_where=sa.text("is_default"),
+        # SQLite stores the JSON list as text, and a language code is two
+        # upper-case letters, so a quoted substring match is exact.
+        CheckConstraint(
+            """instr(languages, '"' || default_language || '"') > 0""",
+            name="default_language_offered",
         ),
     )
 
-    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"))
-    language: Mapped[LanguageCode] = mapped_column(LanguageType, index=True)
-    # The project's fallback language: seeded at project creation, used when a
-    # requested language has no localization, and the source the other
-    # localizations are translated from.
-    is_default: Mapped[bool] = mapped_column(default=False, server_default=sa.false())
-    consent: Mapped[Consent | None] = mapped_column(PydanticJSONB(Consent))
-    welcome: Mapped[Welcome | None] = mapped_column(PydanticJSONB(Welcome))
-    interview_guide: Mapped[InterviewGuide] = mapped_column(
-        PydanticJSONB(InterviewGuide),
-        default=lambda: InterviewGuide(),
+    # One row per project; the unique index also serves the foreign key.
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    #: In the order they were added, the default first when migrated.
+    languages: Mapped[list[LanguageCode]] = mapped_column(JSON)
+    default_language: Mapped[LanguageCode] = mapped_column(LanguageType)
+    guide: Mapped[LocalizedInterviewGuide] = mapped_column(
+        PydanticJSONB(LocalizedInterviewGuide),
+        default=lambda: LocalizedInterviewGuide(),
+    )
+    consent: Mapped[LocalizedConsent | None] = mapped_column(
+        PydanticJSONB(LocalizedConsent), default=None
+    )
+    welcome: Mapped[LocalizedWelcome | None] = mapped_column(
+        PydanticJSONB(LocalizedWelcome), default=None
     )
     # Overrides for the agents' Jinja prompt templates, keyed by template name
     # (e.g. "probing_agent/system_prompt.jinja"). Usually empty; the templates
@@ -441,21 +471,20 @@ class ProjectLocalizationTable(Base):
         PydanticJSONB(AgentConfigs),
         default=lambda: AgentConfigs(),
     )
+    #: The invitation and reminder emails sent to participants. Not part of
+    #: what an interview runs on, but text per language like the rest.
+    emails: Mapped[ParticipantEmails] = mapped_column(
+        PydanticJSONB(ParticipantEmails),
+        default=lambda: ParticipantEmails(),
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     # Changes here also bump ProjectTable.last_updated via a DB trigger;
     # see app/db/triggers.py.
     last_updated: Mapped[datetime.datetime | None] = mapped_column(
         default=now, onupdate=now
     )
-    participant_email_subject: Mapped[str | None] = mapped_column(default=None)
-    participant_email_template: Mapped[str | None] = mapped_column(default=None)
-    participant_reminder_email_subject: Mapped[str | None] = mapped_column(default=None)
-    participant_reminder_email_template: Mapped[str | None] = mapped_column(
-        default=None
-    )
 
-    # Relationships
-    project: Mapped["ProjectTable"] = relationship(back_populates="localizations")
+    project: Mapped["ProjectTable"] = relationship(back_populates="content")
 
 
 ################

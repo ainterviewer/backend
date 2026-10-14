@@ -6,6 +6,9 @@ from typing import Any, Literal, NotRequired, TypedDict
 from fastapi import WebSocket
 from pydantic import BaseModel, Field, model_validator
 
+from ainterviewer.interview_guides import LocalizedText
+from ainterviewer.types import LanguageCode
+
 
 class Scope(StrEnum):
     ADMIN = "admin"
@@ -140,6 +143,44 @@ class TestRunStatus(StrEnum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class ParticipantEmail(BaseModel):
+    """One email to participants, its subject and HTML body per language."""
+
+    subject: LocalizedText = Field(default_factory=dict)
+    template: LocalizedText = Field(default_factory=dict)
+
+    def get(self, language: LanguageCode) -> tuple[str | None, str | None]:
+        """(subject, template) in `language`, None where it has none. No
+        fallback: sending picks one per participant (see
+        `api/dashboard/participants.py`)."""
+        return self.subject.get(language) or None, self.template.get(language) or None
+
+    def set(
+        self, language: LanguageCode, subject: str | None, template: str | None
+    ) -> ParticipantEmail:
+        """A copy with `language`'s subject and template replaced; None clears."""
+        updated = self.model_copy(deep=True)
+        for texts, value in ((updated.subject, subject), (updated.template, template)):
+            if value:
+                texts[language] = value
+            else:
+                texts.pop(language, None)
+        return updated
+
+
+class ParticipantEmails(BaseModel):
+    """The emails a project sends its participants."""
+
+    invite: ParticipantEmail = Field(default_factory=ParticipantEmail)
+    reminder: ParticipantEmail = Field(default_factory=ParticipantEmail)
+
+    def texts(self):
+        for name in ("invite", "reminder"):
+            email: ParticipantEmail = getattr(self, name)
+            yield f"{name}.subject", email.subject
+            yield f"{name}.template", email.template
 
 
 class ExternalParam(BaseModel):

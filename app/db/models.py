@@ -213,7 +213,11 @@ class CollaboratorPublic(CollaboratorBase):
     added_at: datetime
 
 
-class ProjectLocalizationBase(_BaseModel):
+class ProjectLocalizationPublic(_BaseModel):
+    """A project as respondents in one language get it: its content rendered
+    in `language`, untranslated text in the default language's. Built by
+    `ProjectRepository.get_project_localization`; nothing stores it."""
+
     project_id: UUID4
     language: LanguageCode
     consent: Consent | None
@@ -221,19 +225,6 @@ class ProjectLocalizationBase(_BaseModel):
     interview_guide: InterviewGuide
     prompt_overrides: dict[str, str]
     agent_configs: AgentConfigs
-    created_at: datetime
-    last_updated: datetime | None = None
-
-
-class ProjectLocalizationCreate(_BaseModel):
-    language: LanguageCode
-    interview_guide: InterviewGuide | None = None
-    prompt_overrides: dict[str, str] | None = None
-    agent_configs: AgentConfigs | None = None
-
-
-class ProjectLocalizationPublic(ProjectLocalizationBase):
-    id: UUID4
 
 
 class ProjectFolderBase(_BaseModel):
@@ -279,7 +270,7 @@ class ProjectCreate(_BaseModel):
 
 
 class ProjectLanguage(LanguageDict):
-    """A language a project has a localization for.
+    """A language a project offers.
 
     Same shape as the library's `LanguageDict` plus whether it is the
     project's default. `LanguageDict` itself stays free of the flag: it comes

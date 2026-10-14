@@ -227,8 +227,8 @@ async def _run_interview(
         )
     except NoResultFound:
         # The language was removed from the project mid-interview. Its guide
-        # lives on the interview row, so keep speaking it and borrow only the
-        # agent configs from the default localization.
+        # lives on the interview row, so keep speaking it; the agent configs
+        # and prompt overrides are the project's, the same in every language.
         project_localization = db.projects.get_project_localization(
             project_id, db.projects.get_default_language(project_id)
         )
