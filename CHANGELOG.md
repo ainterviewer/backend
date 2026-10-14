@@ -4,6 +4,28 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.7.0] - 2026-10-14
+
+### Breaking Changes
+
+- (guide) Conditions in the guide API carry `question_index` and a
+required `question_id` instead of `section` and `question`.
+
+### Features
+
+- (interviews) Bulk delete and export by list filters
+- (analysis) Let demo users comment and code
+- (interviews) Export as CSV, Excel, Word or PDF, one file or a ZIP
+- (guide) Stable ids on guide sections and questions [**breaking**]
+
+### Bug Fixes
+
+- (db) Read datetimes back aware and honour offsets on the way in
+
+### Internal
+
+- (deps) Bump ainterviewer to v0.5.0
+
 ## [0.6.7] - 2026-10-13
 
 ### Internal
