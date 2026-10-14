@@ -319,6 +319,16 @@ async def create_guide(
     jwt: DemoToken,
     _: ProjectEditor,
 ):
+    # Not a validator on the guide: interview copies shuffled before the
+    # constraint existed must still load. Checking it here is what keeps
+    # `shuffle`'s fallback to the authored order valid.
+    if order_errors := guide.condition_order_errors():
+        raise HTTPException(
+            status_code=422,
+            detail="Conditions must read questions asked before the one they gate: "
+            + "; ".join(order_errors),
+        )
+
     images = [
         question.image
         for section in guide.question_sections

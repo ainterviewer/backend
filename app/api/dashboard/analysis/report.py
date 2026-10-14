@@ -662,7 +662,7 @@ def _checked_after_answer(conditions: Conditions | None, key: QuestionKey) -> bo
     if conditions is None:
         return False
     return any(
-        (condition.question_context.section, condition.question_context.question) == key
+        tuple(condition.question_context.question_index) == key
         for condition in conditions.conditions
     )
 
