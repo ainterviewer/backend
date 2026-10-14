@@ -4,6 +4,17 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.8.1] - 2026-10-14
+
+### Features
+
+- Languages in progress
+
+### Bug Fixes
+
+- Never move a model to another provider unasked
+- Give the migrated first version no label
+
 ## [0.8.0] - 2026-10-14
 
 ### Breaking Changes
