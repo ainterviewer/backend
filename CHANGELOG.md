@@ -4,6 +4,37 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.8.0] - 2026-10-14
+
+### Breaking Changes
+
+- The dashboard reads and writes the guide, consent,
+welcome and agents at the project level (GET/PUT /projects/{id}/guide,
+/consent, /welcome; GET/POST /projects/{id}/agents) in their localized
+form. POST /projects/{id}/{lang}/guide, /{lang}/agents and
+/guide/consent|welcome/{language} are gone; the welcome video uploads
+through POST /projects/{id}/welcome/video; question generation takes a
+section_id. POST /projects/{id}/{lang}/translate fills in a language's
+missing text.
+- Content saves need If-Match; projects must be published
+before respondents can start interviews (migration 1a7c2e94b5d3 publishes
+every existing project as 1.0.0).
+
+### Features
+
+- One multilingual content row per project [**breaking**]
+- Versions of project content, publishing and revision checks [**breaking**]
+
+### Bug Fixes
+
+- Render the probing prompt preview again
+- Rename the gpt-oss-120b model to openai/gpt-oss-120b
+
+### Internal
+
+- Move migration tests to the local-only tests/migrations
+- Keep the live trigger clock tests apart from their migration test
+
 ## [0.7.0] - 2026-10-14
 
 ### Breaking Changes
