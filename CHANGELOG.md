@@ -4,6 +4,24 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.9.0] - 2026-10-15
+
+### Features
+
+- A revision per part of the content
+- Co-edit the guide over a Yjs document
+- Co-edit the consent and welcome pages live
+- Refuse stale saves of a test setup
+
+### Bug Fixes
+
+- Match a guide's list entries by content, not position
+- Key fixed answers by question id
+
+### Internal
+
+- (deps) Ainterviewer v0.6.1
+
 ## [0.8.1] - 2026-10-14
 
 ### Features
