@@ -23,7 +23,7 @@ from ...db.models import (
     TestSetupCreate,
     TestSetupPublic,
 )
-from ...dependencies import DBSession, ProjectEditor, ProjectViewer
+from ...dependencies import DBSession, IfMatch, ProjectEditor, ProjectViewer, set_etag
 from ...settings import app_settings
 from ...synthesize.core import (
     run_synthesis_job_fixed_ai,
@@ -116,6 +116,7 @@ async def get_background_info(
     db: DBSession,
     jwt: ProjectViewer,
 ) -> BackgroundInfoOptions:
+    set_etag(response, db.tests.get_setup_revision(test_id))
     return db.tests.get_background_info(project_id, test_id)
 
 
@@ -129,8 +130,13 @@ async def update_background_info(
     request: UpdateBackgroundInfoRequest,
     db: DBSession,
     jwt: ProjectEditor,
-):
-    return db.tests.update_background_info(test_id, request.background_info)
+    revision: IfMatch,
+    response: Response,
+) -> None:
+    set_etag(
+        response,
+        db.tests.update_background_info(test_id, request.background_info, revision),
+    )
 
 
 @router.get(
@@ -144,6 +150,7 @@ async def get_fixed_personas(
     db: DBSession,
     jwt: ProjectViewer,
 ) -> list[str] | None:
+    set_etag(response, db.tests.get_setup_revision(test_id))
     return db.tests.get_fixed_personas(project_id, test_id)
 
 
@@ -157,8 +164,13 @@ async def update_fixed_personas(
     request: UpdateFixedPersonasRequest,
     db: DBSession,
     jwt: ProjectEditor,
-):
-    return db.tests.update_fixed_personas(test_id, request.fixed_personas)
+    revision: IfMatch,
+    response: Response,
+) -> None:
+    set_etag(
+        response,
+        db.tests.update_fixed_personas(test_id, request.fixed_personas, revision),
+    )
 
 
 @router.get(
@@ -166,11 +178,13 @@ async def update_fixed_personas(
     dependencies=_test_in_project,
 )
 async def get_fixed_answers(
+    response: Response,
     project_id: UUID4,
     test_id: UUID4,
     db: DBSession,
     jwt: ProjectViewer,
 ) -> dict[UUID4, str] | None:
+    set_etag(response, db.tests.get_setup_revision(test_id))
     return db.tests.get_fixed_answers(test_id)
 
 
@@ -184,8 +198,12 @@ async def update_fixed_answers(
     request: UpdateFixedAnswersRequest,
     db: DBSession,
     jwt: ProjectEditor,
-):
-    return db.tests.update_fixed_answers(test_id, request.answers)
+    revision: IfMatch,
+    response: Response,
+) -> None:
+    set_etag(
+        response, db.tests.update_fixed_answers(test_id, request.answers, revision)
+    )
 
 
 @router.get("/projects/{project_id}/tests")

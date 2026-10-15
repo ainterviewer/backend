@@ -30,6 +30,7 @@ from ..tables import (
     TestSetupTable,
 )
 from .base import BaseRepository
+from .errors import ContentRevisionError
 
 
 class TestRepository(BaseRepository):
@@ -146,6 +147,27 @@ class TestRepository(BaseRepository):
 
         return TestSetupPublic.model_validate(test)
 
+    def get_setup_revision(self, test_id: UUID4) -> int:
+        """What `If-Match` must carry to save the setup page."""
+        return self.session.execute(
+            select(TestSetupTable.revision).where(TestSetupTable.id == test_id)
+        ).scalar_one()
+
+    def _write_setup(self, test_id: UUID4, revision: int, **values) -> int:
+        """Save the setup page's `values` if the setup is still at `revision`,
+        moving it on; ContentRevisionError if someone saved since. The new
+        revision."""
+        test = self.session.execute(
+            select(TestSetupTable).where(TestSetupTable.id == test_id)
+        ).scalar_one()
+        if test.revision != revision:
+            raise ContentRevisionError(revision, test.revision, "test setup")
+        for key, value in values.items():
+            setattr(test, key, value)
+        test.revision += 1
+        self.session.commit()
+        return test.revision
+
     def get_background_info(
         self, project_id: UUID4, test_id: UUID4
     ) -> BackgroundInfoOptions:
@@ -157,15 +179,9 @@ class TestRepository(BaseRepository):
         return test.background_info
 
     def update_background_info(
-        self, test_id: UUID4, background_info: BackgroundInfoOptions
-    ):
-        statement = (
-            update(TestSetupTable)
-            .where(TestSetupTable.id == test_id)
-            .values(background_info=background_info.model_dump())
-        )
-        self.session.execute(statement)
-        self.session.commit()
+        self, test_id: UUID4, background_info: BackgroundInfoOptions, revision: int
+    ) -> int:
+        return self._write_setup(test_id, revision, background_info=background_info)
 
     def get_fixed_personas(self, project_id: UUID4, test_id: UUID4) -> list[str] | None:
         statement = select(TestSetupTable).where(
@@ -176,15 +192,10 @@ class TestRepository(BaseRepository):
 
         return test.fixed_personas
 
-    def update_fixed_personas(self, test_id: UUID4, personas: list[str]):
-        statement = (
-            update(TestSetupTable)
-            .where(TestSetupTable.id == test_id)
-            .values(fixed_personas=personas)
-        )
-
-        self.session.execute(statement)
-        self.session.commit()
+    def update_fixed_personas(
+        self, test_id: UUID4, personas: list[str], revision: int
+    ) -> int:
+        return self._write_setup(test_id, revision, fixed_personas=personas)
 
     def get_fixed_answers(self, test_id: UUID4) -> dict[uuid.UUID, str] | None:
         statement = select(TestSetupTable).where(TestSetupTable.id == test_id)
@@ -193,14 +204,14 @@ class TestRepository(BaseRepository):
             return None
         return {uuid.UUID(key): answer for key, answer in test.fixed_answers.items()}
 
-    def update_fixed_answers(self, test_id: UUID4, answers: dict[UUID4, str]):
-        statement = (
-            update(TestSetupTable)
-            .where(TestSetupTable.id == test_id)
-            .values(fixed_answers={str(key): value for key, value in answers.items()})
+    def update_fixed_answers(
+        self, test_id: UUID4, answers: dict[UUID4, str], revision: int
+    ) -> int:
+        return self._write_setup(
+            test_id,
+            revision,
+            fixed_answers={str(key): value for key, value in answers.items()},
         )
-        self.session.execute(statement)
-        self.session.commit()
 
     # ==================== Test Run Methods ====================
 

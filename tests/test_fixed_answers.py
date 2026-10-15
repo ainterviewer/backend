@@ -15,6 +15,7 @@ from ainterviewer.interfaces import OutgoingMessage
 from ainterviewer.lpm.types import CustomToken
 from ainterviewer.types import MessageRole, TestType
 from app.db import InterviewDataBase
+from app.db.repositories.errors import ContentRevisionError
 from app.db.tables import Base, TestSetupTable
 from app.synthesize import core
 
@@ -86,7 +87,7 @@ def test_blank_answers_are_left_out():
     assert request.answers == {FIRST: "kept"}
 
 
-def test_answers_round_trip_through_the_table():
+def test_answers_round_trip_and_a_stale_save_is_refused():
     engine = create_engine("sqlite://")
     Base.metadata.create_all(engine)
     with Session(engine) as session:
@@ -99,6 +100,12 @@ def test_answers_round_trip_through_the_table():
         session.commit()
         db = InterviewDataBase(session)
 
-        db.tests.update_fixed_answers(setup.id, {FIRST: "first"})
+        assert db.tests.update_fixed_answers(setup.id, {FIRST: "first"}, 1) == 2
 
+        assert db.tests.get_fixed_answers(setup.id) == {FIRST: "first"}
+
+        # A save based on the revision before it: someone else saved since.
+        with pytest.raises(ContentRevisionError) as stale:
+            db.tests.update_fixed_answers(setup.id, {FIRST: "theirs"}, 1)
+        assert stale.value.current == 2
         assert db.tests.get_fixed_answers(setup.id) == {FIRST: "first"}

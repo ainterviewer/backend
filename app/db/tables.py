@@ -1181,6 +1181,11 @@ class TestSetupTable(Base):
     #: reordered, or the interview shuffles or skips one.
     fixed_answers: Mapped[dict[str, str] | None] = mapped_column(JSON)
     fixed_personas: Mapped[list[str] | None] = mapped_column(JSON)
+    #: Moves on every save of what the setup page edits -- background info,
+    #: fixed answers, fixed personas -- so a save based on an older one is
+    #: refused (412) rather than overwriting someone else's. The GETs return
+    #: it as `ETag`; the writes require it as `If-Match`.
+    revision: Mapped[int] = mapped_column(default=1, server_default=sa.text("1"))
 
     # Relationships
     test_runs: Mapped[list["TestRunTable"]] = relationship(
