@@ -28,6 +28,7 @@ from ainterviewer.interview_guides.media import Image
 from ainterviewer.interview_guides.survey_items import SliderItem
 from ainterviewer.interview_guides.types import ConditionAction
 from app.collab.guide_doc import (
+    align,
     apply_guide,
     apply_guide_data,
     doc_id,
@@ -200,6 +201,85 @@ def test_a_server_write_keeps_what_someone_is_typing():
     question = read_guide(doc).question_sections[0].questions[1]
     assert question.main_question == {"EN": "So, EN why?", "DA": "DA hvorfor?"}
     assert read_guide(other).introduction["EN"] == "EN hello there"
+
+
+def _probe(doc: Doc, index: int, language: str = "EN") -> Text:
+    *_, questions = roots(doc)
+    return questions[str(_ids["gated"])]["probes"][index][language]
+
+
+def test_a_probe_removed_above_keeps_what_someone_types_below():
+    guide = _guide()
+    doc = new_doc(guide)
+    other = _copy(doc)
+
+    # An editor types in the second probe while a server write removes the
+    # first: the second must keep its item, not be rewritten into the first.
+    _probe(other, 1).insert(0, "Or ")
+    changed = guide.model_copy(deep=True)
+    removed = changed.question_sections[0].questions[1].probes
+    assert removed is not None
+    del removed[0]
+    apply_guide(doc, changed)
+    _sync(doc, other)
+
+    probes = read_guide(doc).question_sections[0].questions[1].probes
+    assert probes == [{"EN": "Or EN else", "DA": "DA else"}]
+    assert _dump(read_guide(other)) == _dump(read_guide(doc))
+
+
+def test_a_probe_added_above_keeps_what_someone_types_below():
+    guide = _guide()
+    doc = new_doc(guide)
+    other = _copy(doc)
+
+    _probe(other, 0).insert(0, "Tell me ")
+    changed = guide.model_copy(deep=True)
+    added = changed.question_sections[0].questions[1].probes
+    assert added is not None
+    added.insert(0, {"EN": "EN first", "DA": "DA først"})
+    apply_guide(doc, changed)
+    _sync(doc, other)
+
+    probes = read_guide(doc).question_sections[0].questions[1].probes
+    assert [p["EN"] for p in probes or []] == [
+        "EN first",
+        "Tell me EN more",
+        "EN else",
+    ]
+
+
+def test_a_timed_message_added_keeps_the_others():
+    guide = _guide()
+    doc = new_doc(guide)
+    other = _copy(doc)
+
+    _, top, *_ = roots(other)
+    top["timed_messages"][0]["message"]["EN"].insert(0, "Please ")
+    changed = guide.model_copy(deep=True)
+    messages = changed.timed_messages
+    assert messages is not None
+    sooner = messages[0].model_copy(deep=True)
+    sooner.message = {"EN": "EN soon", "DA": "DA snart"}
+    sooner.time = 30
+    messages.insert(0, sooner)
+    apply_guide(doc, changed)
+    _sync(doc, other)
+
+    timed = read_guide(doc).timed_messages
+    assert [(m.message["EN"], m.time) for m in timed or []] == [
+        ("EN soon", 30),
+        ("Please EN hurry", 60),
+    ]
+
+
+def test_list_entries_pair_by_content_and_edits_stay_in_place():
+    # Unchanged entries pair with themselves, an edited one with what it
+    # was, and a rewritten one is still edited rather than replaced.
+    assert align(["a", "b", "c"], ["a", "c!"]) == [0, 2]
+    assert align(["a", "b"], ["new", "a", "b"]) == [None, 0, 1]
+    assert align(["one"], ["two"]) == [0]
+    assert align([], ["x"]) == [None]
 
 
 def test_the_smallest_change_is_written_to_a_text():

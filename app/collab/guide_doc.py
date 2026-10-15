@@ -15,7 +15,8 @@ The shape keeps concurrent edits apart wherever they can be:
   values, so an edit to its text is never lost to a concurrent move -- a
   `Y.Array` would need delete-and-insert, and two concurrent moves would
   duplicate the item.
-- Probes and alternative wordings are `Y.Array`s of texts: inserted and
+- Probes, alternative wordings and timed messages are `Y.Array`s of maps,
+  matched by content when a write changes them (`align`): inserted and
   removed, never moved.
 - Everything else -- flags, settings, conditions, references -- is a plain
   value holding JSON text. Last writer wins per field. Always JSON text, never
@@ -143,23 +144,115 @@ def _set_texts(parent: Map, key: str, texts: dict[str, str] | None) -> None:
         parent[key] = _new_texts(texts)
 
 
+def _similarity(a: str, b: str) -> float:
+    """How much of `a` and `b` is one common prefix and suffix, 0 to 1: what
+    `_set_text` would keep of one when turning it into the other."""
+    if a == b:
+        return 1.0
+    limit = min(len(a), len(b))
+    start = 0
+    while start < limit and a[start] == b[start]:
+        start += 1
+    end = 0
+    while end < limit - start and a[-1 - end] == b[-1 - end]:
+        end += 1
+    return (start + end) / max(len(a), len(b))
+
+
+def align(old: list[str], new: list[str]) -> list[int | None]:
+    """For each of `new`, the entry of `old` it continues, or None for one to
+    insert; entries of `old` no one continues are to be deleted. Entries are
+    compared as text (canonical JSON).
+
+    The order is kept and the pairs are those with the most text in common,
+    so an unchanged entry keeps its item and an edited one is edited in
+    place: whoever is typing in a probe keeps typing in it when another one
+    is removed or added above it. Any pairing scores a little over none, so
+    a rewritten entry is still edited rather than replaced. Lists are a
+    handful of entries, so the quadratic table is nothing."""
+    n, m = len(old), len(new)
+    score = [[_similarity(a, b) + _PAIRED for b in new] for a in old]
+    best = [[0.0] * (m + 1) for _ in range(n + 1)]
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            best[i][j] = max(
+                best[i - 1][j - 1] + score[i - 1][j - 1],
+                best[i - 1][j],
+                best[i][j - 1],
+            )
+    pairs: list[int | None] = [None] * m
+    i, j = n, m
+    while i and j:
+        if best[i][j] == best[i - 1][j - 1] + score[i - 1][j - 1]:
+            pairs[j - 1] = i - 1
+            i, j = i - 1, j - 1
+        elif best[i][j] == best[i - 1][j]:
+            i -= 1
+        else:
+            j -= 1
+    return pairs
+
+
+#: What pairing two entries scores on top of their similarity; see `align`.
+_PAIRED = 0.01
+
+
+def _canonical(value: Any) -> str:
+    return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
+
+def _set_list(
+    parent: Map,
+    key: str,
+    items: list[Any],
+    read: Callable[[Map], Any],
+    normalize: Callable[[Any], Any],
+    create: Callable[[Any], Map],
+    fill: Callable[[Map, Any], None],
+) -> None:
+    """`parent[key]` as a `Y.Array` of maps reading `items`, changed as
+    little as `align` can: entries are matched by content, not position.
+    Each is filled once it is in the array, a new one included (`create` may
+    make it empty)."""
+    current = parent.get(key)
+    if not isinstance(current, Array):
+        parent[key] = Array()
+        current = parent[key]
+    entries = list(current)
+    pairs = align(
+        [_canonical(read(e)) if isinstance(e, Map) else "" for e in entries],
+        [_canonical(normalize(item)) for item in items],
+    )
+    kept = {i for i in pairs if i is not None and isinstance(entries[i], Map)}
+    for index in reversed(range(len(entries))):
+        if index not in kept:
+            del current[index]
+    # What is left is the kept entries in order, each at the position of the
+    # item it continues once the new ones before it are inserted.
+    for index, (item, paired) in enumerate(zip(items, pairs, strict=True)):
+        if paired not in kept:
+            current.insert(index, create(item))
+        fill(current[index], item)
+
+
+def _nonempty(texts: dict[str, str]) -> dict[str, str]:
+    return {language: text for language, text in texts.items() if text}
+
+
 def _set_text_list(parent: Map, key: str, items: list[dict[str, str]] | None) -> None:
     if items is None:
         if key in parent:
             del parent[key]
         return
-    current = parent.get(key)
-    if not isinstance(current, Array) or len(current) != len(items):
-        # Probes are short: a changed count rewrites the list rather than
-        # guessing which ones moved.
-        parent[key] = Array([_new_texts(texts) for texts in items])
-        return
-    for index, texts in enumerate(items):
-        entry = current[index]
-        if isinstance(entry, Map):
-            _fill_texts(entry, texts)
-        else:
-            current[index] = _new_texts(texts)
+    _set_list(
+        parent,
+        key,
+        items,
+        read=_read_texts,
+        normalize=_nonempty,
+        create=_new_texts,
+        fill=_fill_texts,
+    )
 
 
 def _set_value(parent: Map, key: str, value: Any) -> None:
@@ -306,12 +399,22 @@ def _write_timed(target: Map, items: list[Json] | None) -> None:
         if "timed_messages" in target:
             del target["timed_messages"]
         return
-    current = target.get("timed_messages")
-    if not isinstance(current, Array) or len(current) != len(items):
-        target["timed_messages"] = Array([Map() for _ in items])
-        current = target["timed_messages"]
-    for index, item in enumerate(items):
-        _set_fields(current[index], item, texts=_TIMED_TEXTS)
+    _set_list(
+        target,
+        "timed_messages",
+        items,
+        read=lambda entry: _read_entity(entry, _TIMED_TEXTS),
+        normalize=_normalize_timed,
+        create=lambda _item: Map(),
+        fill=lambda entry, item: _set_fields(entry, item, texts=_TIMED_TEXTS),
+    )
+
+
+def _normalize_timed(item: Json) -> Json:
+    return {
+        key: _nonempty(value) if key in _TIMED_TEXTS and value else value
+        for key, value in item.items()
+    }
 
 
 def _write_question(entry: Map, data: Json) -> None:
