@@ -54,6 +54,7 @@ from ainterviewer.types import InterviewStatus, LanguageCode
 from ainterviewer.utils import get_language_dict, now
 
 from ...auth import generate_resume_token, hash_token
+from ...collab.rooms import guide_rooms
 from ...db.models import (
     MessagePublic,
     ProjectLanguage,
@@ -181,6 +182,7 @@ async def add_project_language(
     if isinstance(jwt, RedirectResponse):
         return jwt
 
+    await guide_rooms.flush(project_id)
     available_languages = await db.projects.add_project_language(
         project_id, language, translate
     )
@@ -447,6 +449,8 @@ async def translate_missing(
     `lang` from the default language. Text `lang` already has is kept.
     Each part's new revision is in `revisions`: they are three editors'."""
     _localization_or_404(db, project_id, lang)
+    # Translating what editors see, not what was last saved.
+    await guide_rooms.flush(project_id)
     content = await db.projects.translate_missing(project_id, lang)
     return ProjectContentPublic(
         guide=content.guide,
@@ -552,14 +556,18 @@ async def generate_section_question(
 @router.post("/projects/{project_id}/image")
 async def upload_image(
     project_id: UUID4,
-    primer: Annotated[str, Form()],
-    description: Annotated[str, Form()],
-    alt: Annotated[str, Form()],
     file: UploadFile,
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
-):
+    # Unused: the image's texts live in the guide. Kept so older clients that
+    # send them are not refused.
+    primer: Annotated[str, Form()] = "",
+    description: Annotated[str, Form()] = "",
+    alt: Annotated[str, Form()] = "",
+) -> str:
+    """Store a guide image. Returns the name to put in the question's
+    `image.name`; the guide never carries the image itself."""
     filename = ensure_filename(file.filename)
 
     filepath: Path = (
@@ -569,6 +577,9 @@ async def upload_image(
     async with aiofiles.open(filepath, "wb") as f:
         contents = await file.read()
         await f.write(contents)
+
+    # The name it was stored under, for the guide to refer to.
+    return filename
 
 
 @router.get("/projects/{project_id}/agents")

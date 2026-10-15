@@ -20,6 +20,7 @@ from ainterviewer.utils import get_language_dict
 from ..models import ContentStatus, ContentVersionPublic, ContentVersionSummary
 from ..tables import (
     ContentColumns,
+    GuideDocTable,
     InterviewTable,
     ProjectContentTable,
     ProjectContentVersionTable,
@@ -243,6 +244,17 @@ class VersionRepository(BaseRepository):
             languages_in_progress=list(content.languages_in_progress),
             next_semver=format_semver(next_semver),
             missing=missing_text(content),
+            guide_errors=self._guide_errors(project_id),
+        )
+
+    def _guide_errors(self, project_id: UUID4) -> list[str]:
+        return (
+            self.session.execute(
+                select(GuideDocTable.errors).where(
+                    GuideDocTable.project_id == project_id
+                )
+            ).scalar_one_or_none()
+            or []
         )
 
     # ==================== Writing ====================
@@ -339,6 +351,12 @@ class VersionRepository(BaseRepository):
         changes nothing.
         """
         content = self._content(project_id)
+        if self._guide_errors(project_id):
+            raise PublishError(
+                "Fix the problems in the guide before publishing: it would "
+                "publish the guide as it was before them.",
+                {},
+            )
         if missing := missing_text(content):
             names = ", ".join(get_language_dict(lang)["name"] for lang in missing)
             raise PublishError(

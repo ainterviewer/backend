@@ -644,6 +644,34 @@ class ProjectContentVersionTable(ContentColumns, Base):
     created_by: Mapped[Optional["UserTable"]] = relationship()
 
 
+class GuideDocTable(Base):
+    """The guide's collaborative document: the Yjs state open editors share
+    (`app/collab/`).
+
+    The draft guide stays `projectcontent.guide`, which everything else reads;
+    the room projects the doc into it whenever it validates. The doc is kept
+    rather than re-seeded from the column because Yjs merges by item identity:
+    an editor reconnecting with a copy of an older seed would add every item a
+    second time.
+
+    `guide_revision` is the guide revision the doc last agreed with. A write to
+    the column the doc did not make (restore, translate, a language removed)
+    leaves the two apart, and the room applies the column into the doc before
+    it next saves. `errors` holds why the doc does not make a guide, while it
+    does not; publishing is refused meanwhile.
+    """
+
+    __tablename__ = "guidedoc"
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    state: Mapped[bytes] = mapped_column(LargeBinary)
+    guide_revision: Mapped[int] = mapped_column()
+    errors: Mapped[list[str] | None] = mapped_column(JSON, default=None)
+    updated_at: Mapped[datetime.datetime] = mapped_column(default=now, onupdate=now)
+
+
 ################
 # Participants #
 ################

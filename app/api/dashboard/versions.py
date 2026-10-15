@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import UUID4, BaseModel, Field
 from sqlalchemy.exc import NoResultFound
 
+from ...collab.rooms import guide_rooms
 from ...db.models import ContentStatus, ContentVersionPublic, ContentVersionSummary
 from ...db.versioning import Bump, BumpName
 from ...dependencies import (
@@ -44,6 +45,8 @@ async def get_content_status(
 ) -> ContentStatus:
     """Whether the draft differs from what respondents get, what publishing
     it would be numbered, and what blocks publishing."""
+    # The draft as editors see it: an open guide room saves first.
+    await guide_rooms.flush(project_id)
     status = db.versions.status(project_id)
     set_etag(response, status.revision)
     return status
@@ -95,6 +98,9 @@ async def save_content_version(
     Publishing is refused (409) while a language lacks text, or for a bump
     lower than the changes need.
     """
+    # So what is published is what editors see. Anything it saves that the
+    # caller has not seen moves the revision, and is a 412 below.
+    await guide_rooms.flush(project_id)
     db.versions.check_revision(project_id, revision)
     if request.publish:
         return db.versions.publish(
@@ -118,6 +124,8 @@ async def restore_content_version(
 ) -> ContentStatus:
     """Replace the draft with a version, keeping the draft it replaces in
     the history. Publishes nothing. The new revision comes back as `ETag`."""
+    # The draft it keeps as a `restore` version is what editors see.
+    await guide_rooms.flush(project_id)
     db.versions.check_revision(project_id, revision)
     try:
         db.versions.restore(project_id, version_id, jwt.user_id)

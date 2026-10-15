@@ -289,6 +289,10 @@ class ContentStatus(_BaseModel):
     #: Per offered language, the paths of text it lacks. Publishing is
     #: refused while this is not empty.
     missing: dict[LanguageCode, list[str]]
+    #: Why what editors have written in the guide is not a valid guide, while
+    #: it is not (`guidedoc.errors`). The draft keeps the last valid one, and
+    #: publishing is refused meanwhile.
+    guide_errors: list[str] = []
 
 
 class ProjectFolderBase(_BaseModel):
