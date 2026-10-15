@@ -11,6 +11,7 @@ import platform
 import random
 from collections.abc import AsyncGenerator
 from typing import Any
+from uuid import UUID
 
 import aiohttp
 from pydantic import UUID4
@@ -139,14 +140,10 @@ async def run_synthetic_fixed_answers(
     user_token: str,
     project_id: str,
     test_run_id: str,
-    fixed_answers: list[str],
+    fixed_answers: dict[UUID, str],
     language: LanguageCode | None = None,
     delay_before_answer: tuple[float, float] | None = None,
 ):
-    # NOTE: We need to copy the list to avoid modifying the original which may be used
-    # other places.
-    fixed_answers = fixed_answers.copy()
-
     interview_token = await fetch_token(
         auth_token=user_token,
         project_id=project_id,
@@ -161,11 +158,19 @@ async def run_synthetic_fixed_answers(
             case "message":
                 message = OutgoingMessage(**json_data)
                 if message.can_answer:
-                    if message.is_probe:
+                    # By the question asked, never by counting: shuffled
+                    # sections and conditions change which question comes
+                    # next. A question with no answer is skipped.
+                    answer = (
+                        fixed_answers.get(message.question_id)
+                        if message.question_id is not None
+                        else None
+                    )
+                    if message.is_probe or not answer:
                         response_text = CustomToken.skip_question
                         delay = None
                     else:
-                        response_text = fixed_answers.pop(0)
+                        response_text = answer
                         delay = delay_before_answer
 
                     await _send_response(websocket, response_text, delay)
@@ -218,7 +223,7 @@ async def run_synthesis_job_fixed_answers(
     project_id: str,
     test_run_id: str,
     user_token: str,
-    fixed_answers: list[str],
+    fixed_answers: dict[UUID, str],
     n_interviews: int,
     language: LanguageCode,
     delay_before_answer: tuple[float, float] | None = None,

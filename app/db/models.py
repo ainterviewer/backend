@@ -577,7 +577,7 @@ class TestSetupPublic(TestSetupBase):
     id: UUID4
     created_at: datetime
     background_info: BackgroundInfoOptions | None = None
-    fixed_answers: list[str] | None = None
+    fixed_answers: dict[UUID4, str] | None = None
     fixed_personas: list[str] | None = None
 
 

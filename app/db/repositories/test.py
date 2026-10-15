@@ -186,16 +186,18 @@ class TestRepository(BaseRepository):
         self.session.execute(statement)
         self.session.commit()
 
-    def get_fixed_answers(self, test_id: UUID4) -> list[str] | None:
+    def get_fixed_answers(self, test_id: UUID4) -> dict[uuid.UUID, str] | None:
         statement = select(TestSetupTable).where(TestSetupTable.id == test_id)
         test = self.session.execute(statement).scalar_one()
-        return test.fixed_answers
+        if test.fixed_answers is None:
+            return None
+        return {uuid.UUID(key): answer for key, answer in test.fixed_answers.items()}
 
-    def update_fixed_answers(self, test_id: UUID4, answers: list[str]):
+    def update_fixed_answers(self, test_id: UUID4, answers: dict[UUID4, str]):
         statement = (
             update(TestSetupTable)
             .where(TestSetupTable.id == test_id)
-            .values(fixed_answers=answers)
+            .values(fixed_answers={str(key): value for key, value in answers.items()})
         )
         self.session.execute(statement)
         self.session.commit()

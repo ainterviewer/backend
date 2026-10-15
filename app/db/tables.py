@@ -1172,7 +1172,10 @@ class TestSetupTable(Base):
         PydanticJSONB(BackgroundInfoOptions),
         default=DEFAULT_BACKGROUND_INFO_OPTIONS,
     )
-    fixed_answers: Mapped[list[str] | None] = mapped_column(JSON)
+    #: The answer to each answerable question, by the guide question's id:
+    #: a position would land on another question once the guide is
+    #: reordered, or the interview shuffles or skips one.
+    fixed_answers: Mapped[dict[str, str] | None] = mapped_column(JSON)
     fixed_personas: Mapped[list[str] | None] = mapped_column(JSON)
 
     # Relationships

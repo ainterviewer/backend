@@ -51,7 +51,7 @@ def setup(session) -> TestSetupTable:
         project_id=PROJECT,
         type=TestType.FIXED_ANSWERS,
         answering_model="gpt-oss-120b",
-        fixed_answers=["Yes."],
+        fixed_answers={str(uuid.uuid4()): "Yes."},
     )
     session.add(test_setup)
     session.commit()

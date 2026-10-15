@@ -240,12 +240,15 @@ class UpdateFixedPersonasRequest(BaseModel):
 
 
 class UpdateFixedAnswersRequest(BaseModel):
-    answers: list[str]
+    #: By guide question id. A blank answer is left out: the question then
+    #: has none, and the synthetic interviewee skips it.
+    answers: dict[UUID4, str]
 
     @field_validator("answers")
     @classmethod
-    def validate_answers(cls, value):
-        return [answer.strip() for answer in value]
+    def validate_answers(cls, value: dict[UUID4, str]) -> dict[UUID4, str]:
+        stripped = {key: answer.strip() for key, answer in value.items()}
+        return {key: answer for key, answer in stripped.items() if answer}
 
 
 class TestSetupRequest(BaseModel):

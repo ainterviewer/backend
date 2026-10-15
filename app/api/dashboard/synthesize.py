@@ -170,7 +170,7 @@ async def get_fixed_answers(
     test_id: UUID4,
     db: DBSession,
     jwt: ProjectViewer,
-):
+) -> dict[UUID4, str] | None:
     return db.tests.get_fixed_answers(test_id)
 
 
@@ -326,7 +326,7 @@ async def run_synthetic_test(
                 project_id=str(project_id),
                 test_run_id=str(test_run_id),
                 user_token=request.cookies["access_token"],
-                fixed_answers=test_setup.fixed_answers,
+                fixed_answers=test_setup.fixed_answers or {},
                 n_interviews=request_data.n_interviews,
                 language=request_data.language,
                 delay_before_answer=request_data.delay_before_answers,
