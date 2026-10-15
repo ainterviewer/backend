@@ -27,17 +27,19 @@ from websockets.exceptions import ConnectionClosed
 
 from app.auth import AuthToken
 from app.collab import rooms
+from app.collab.flat_doc import roots as flat_roots
 from app.collab.guide_doc import doc_id, roots
 from app.db import InterviewDataBase
 from app.db.tables import (
     Base,
     CollaboratorTable,
-    GuideDocTable,
+    ContentDocTable,
     ProjectContentTable,
     ProjectFolderTable,
     UserTable,
 )
 from app.db.triggers import register_trigger_functions
+from app.db.types import ContentPart
 from app.dependencies import get_db
 from app.main import app
 from app.types import CollaboratorRole, Scope
@@ -96,10 +98,14 @@ def server(tmp_path, monkeypatch):
             yield database
 
     app.dependency_overrides[get_db] = _db
-    registry = rooms.GuideRooms(db)
-    monkeypatch.setattr(rooms, "guide_rooms", registry)
-    for module in ("app.api.websockets.guide", "app.api.dashboard.versions"):
-        monkeypatch.setattr(f"{module}.guide_rooms", registry)
+    registry = rooms.ContentRooms(db)
+    monkeypatch.setattr(rooms, "content_rooms", registry)
+    for module in (
+        "app.api.websockets.content",
+        "app.api.dashboard.versions",
+        "app.api.dashboard.projects",
+    ):
+        monkeypatch.setattr(f"{module}.content_rooms", registry)
     monkeypatch.setattr(rooms, "SAVE_DELAY", 0.05)
 
     with socket.socket() as probe:
@@ -112,7 +118,7 @@ def server(tmp_path, monkeypatch):
     while not uv.started:
         time.sleep(0.01)
 
-    yield f"ws://127.0.0.1:{port}/ws/guide/{project_id}", tokens, db, project_id
+    yield f"ws://127.0.0.1:{port}/ws/content/{project_id}/guide", tokens, db, project_id
 
     uv.should_exit = True
     thread.join(5)
@@ -196,9 +202,9 @@ def column(db, project_id) -> ProjectContentTable:
         return content
 
 
-def guide_doc(db, project_id) -> GuideDocTable | None:
+def guide_doc(db, project_id) -> ContentDocTable | None:
     with db() as database:
-        row = database.guide_docs.get(project_id)
+        row = database.content_docs.get(project_id, ContentPart.GUIDE)
         if row is not None:
             database.session.expunge(row)
         return row
@@ -222,7 +228,7 @@ async def test_two_editors_converge_and_the_guide_is_saved(server):
     assert content.guide_revision > revision
     stored = guide_doc(db, project_id)
     assert stored is not None and stored.errors is None
-    assert stored.guide_revision == content.guide_revision
+    assert stored.revision == content.guide_revision
 
 
 async def test_a_viewer_cannot_change_the_guide(server):
@@ -248,11 +254,13 @@ async def test_a_doc_that_is_not_a_guide_never_overwrites_it(server):
         )
         _meta, top, *_ = roots(a)
         top["ai_generated_sections"] = json.dumps("not a number")
-        await until(lambda: bool((guide_doc(db, project_id) or GuideDocTable()).errors))
+        await until(
+            lambda: bool((guide_doc(db, project_id) or ContentDocTable()).errors)
+        )
 
     assert column(db, project_id).guide.introduction.get("EN") == "Kept"
     with db() as database:
-        assert database.versions.status(project_id).guide_errors
+        assert database.versions.status(project_id).doc_errors[ContentPart.GUIDE]
 
 
 async def test_a_write_the_doc_did_not_make_reaches_its_editors(server):
@@ -298,3 +306,105 @@ async def test_a_copy_of_another_lineage_is_told_to_start_over(server):
             while True:
                 await ws.recv()
     assert closed.value.rcvd is not None and closed.value.rcvd.code == 4409
+
+
+# -- Consent and welcome: the same rooms, a flat doc ----------------------------
+
+
+def part_url(url: str, part: str) -> str:
+    return url.rsplit("/", 1)[0] + f"/{part}"
+
+
+def flat_text(doc: Doc, field: str, language: str = "EN") -> Text:
+    _meta, content = flat_roots(doc)
+    return content[field][language]
+
+
+async def test_two_editors_write_the_consent(server):
+    url, tokens, db, project_id = server
+    url = part_url(url, "consent")
+    assert column(db, project_id).consent is None
+
+    async with editor(url, tokens["editor"]) as a, editor(url, tokens["other"]) as b:
+        flat_text(a, "title").insert(0, "Consent")
+        await until(lambda: str(flat_text(b, "title")) == "Consent")
+        flat_text(b, "text").insert(0, "You agree.")
+        await until(
+            lambda: (
+                (consent := column(db, project_id).consent) is not None
+                and consent.text.get("EN") == "You agree."
+            )
+        )
+
+    consent = column(db, project_id).consent
+    assert consent is not None and consent.title == {"EN": "Consent"}
+
+
+async def test_opening_an_empty_consent_configures_none(server):
+    url, tokens, db, project_id = server
+
+    async with editor(part_url(url, "consent"), tokens["editor"]):
+        await asyncio.sleep(0.2)
+
+    # No text is no consent screen, not an empty one.
+    assert column(db, project_id).consent is None
+
+
+async def test_a_welcome_without_a_valid_email_is_not_saved(server):
+    url, tokens, db, project_id = server
+
+    async with editor(part_url(url, "welcome"), tokens["editor"]) as a:
+        flat_text(a, "title").insert(0, "Welcome")
+        await until(
+            lambda: bool(
+                (row := welcome_doc(db, project_id)) is not None and row.errors
+            )
+        )
+        assert column(db, project_id).welcome is None
+        with db() as database:
+            errors = database.versions.status(project_id).doc_errors
+        assert errors[ContentPart.WELCOME] == ["Enter a valid contact email address."]
+
+        _meta, content = flat_roots(a)
+        content["email"] = json.dumps("team@example.com")
+        await until(lambda: column(db, project_id).welcome is not None)
+
+    welcome = column(db, project_id).welcome
+    assert welcome is not None and welcome.title == {"EN": "Welcome"}
+    assert welcome.email == "team@example.com"
+
+
+async def test_a_consent_write_the_doc_did_not_make_reaches_its_editors(server):
+    url, tokens, db, project_id = server
+
+    async with editor(part_url(url, "consent"), tokens["editor"]) as a:
+        flat_text(a, "title").insert(0, "Typed")
+        await until(lambda: column(db, project_id).consent is not None)
+
+        # A translation, a restore: written straight to the column.
+        with db() as database:
+            consent = database.projects.get_consent(project_id)
+            assert consent is not None
+            consent.text = {"EN": "From the server"}
+            database.projects.update_consent(project_id, consent)
+
+        await until(lambda: str(flat_text(a, "text")) == "From the server")
+        assert str(flat_text(a, "title")) == "Typed"
+
+
+async def test_a_part_that_is_not_live_is_refused(server):
+    url, tokens, *_ = server
+    headers = {"Cookie": f"access_token={tokens['editor']}"}
+
+    async with connect(part_url(url, "agents"), additional_headers=headers) as ws:
+        with pytest.raises(ConnectionClosed) as closed:
+            await ws.recv()
+    assert closed.value.rcvd is not None and closed.value.rcvd.code == 4404
+
+
+def welcome_doc(db, project_id) -> ContentDocTable | None:
+    with db() as database:
+        row = database.content_docs.get(project_id, ContentPart.WELCOME)
+        if row is not None:
+            database.session.expunge(row)
+        return row

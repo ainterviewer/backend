@@ -20,7 +20,7 @@ from ainterviewer.utils import get_language_dict
 from ..models import ContentStatus, ContentVersionPublic, ContentVersionSummary
 from ..tables import (
     ContentColumns,
-    GuideDocTable,
+    ContentDocTable,
     InterviewTable,
     ProjectContentTable,
     ProjectContentVersionTable,
@@ -29,6 +29,13 @@ from ..types import ContentPart, ContentVersionKind
 from ..versioning import FIRST_VERSION, Bump, SemVer, bumped, classify, format_semver
 from .base import BaseRepository
 from .errors import ContentRevisionError, NotPublishedError, PublishError
+
+#: What the publish refusal calls a part whose doc has errors.
+_PAGE_NAMES = {
+    ContentPart.GUIDE: "guide",
+    ContentPart.CONSENT: "consent",
+    ContentPart.WELCOME: "welcome page",
+}
 
 #: Automatic versions kept per project by `prune`, newest first. Ones an
 #: interview runs on, and the published one, are kept beyond it.
@@ -244,18 +251,17 @@ class VersionRepository(BaseRepository):
             languages_in_progress=list(content.languages_in_progress),
             next_semver=format_semver(next_semver),
             missing=missing_text(content),
-            guide_errors=self._guide_errors(project_id),
+            doc_errors=self._doc_errors(project_id),
         )
 
-    def _guide_errors(self, project_id: UUID4) -> list[str]:
-        return (
-            self.session.execute(
-                select(GuideDocTable.errors).where(
-                    GuideDocTable.project_id == project_id
-                )
-            ).scalar_one_or_none()
-            or []
+    def _doc_errors(self, project_id: UUID4) -> dict[ContentPart, list[str]]:
+        rows = self.session.execute(
+            select(ContentDocTable.part, ContentDocTable.errors).where(
+                ContentDocTable.project_id == project_id,
+                ContentDocTable.errors.is_not(None),
+            )
         )
+        return {part: errors for part, errors in rows if errors}
 
     # ==================== Writing ====================
 
@@ -351,10 +357,11 @@ class VersionRepository(BaseRepository):
         changes nothing.
         """
         content = self._content(project_id)
-        if self._guide_errors(project_id):
+        if errors := self._doc_errors(project_id):
+            pages = " and ".join(_PAGE_NAMES.get(part, part.value) for part in errors)
             raise PublishError(
-                "Fix the problems in the guide before publishing: it would "
-                "publish the guide as it was before them.",
+                f"Fix the problems in the {pages} before publishing: it would "
+                "publish them as they were before.",
                 {},
             )
         if missing := missing_text(content):

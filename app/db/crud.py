@@ -13,8 +13,8 @@ from .repositories import (
     AnalysisRepository,
     AssistanceRepository,
     AuthRepository,
+    ContentDocRepository,
     EmbeddingRepository,
-    GuideDocRepository,
     InterviewRepository,
     NewsletterRepository,
     ParticipantRepository,
@@ -66,7 +66,7 @@ class InterviewDataBase(PersistenceProtocol):
         self.newsletter: NewsletterRepository = NewsletterRepository(session)
         self.embeddings: EmbeddingRepository = EmbeddingRepository(session)
         self.versions: VersionRepository = VersionRepository(session)
-        self.guide_docs: GuideDocRepository = GuideDocRepository(session)
+        self.content_docs: ContentDocRepository = ContentDocRepository(session)
 
     # ==================== Database Management ====================
 

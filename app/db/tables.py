@@ -644,30 +644,34 @@ class ProjectContentVersionTable(ContentColumns, Base):
     created_by: Mapped[Optional["UserTable"]] = relationship()
 
 
-class GuideDocTable(Base):
-    """The guide's collaborative document: the Yjs state open editors share
-    (`app/collab/`).
+class ContentDocTable(Base):
+    """A collaborative document a setup page is co-edited through: the Yjs
+    state open editors share (`app/collab/`), one per project and live part
+    (guide, consent, welcome).
 
-    The draft guide stays `projectcontent.guide`, which everything else reads;
-    the room projects the doc into it whenever it validates. The doc is kept
-    rather than re-seeded from the column because Yjs merges by item identity:
-    an editor reconnecting with a copy of an older seed would add every item a
-    second time.
+    The draft stays the part's column on `projectcontent`, which everything
+    else reads; the room projects the doc into it whenever it validates. The
+    doc is kept rather than re-seeded from the column because Yjs merges by
+    item identity: an editor reconnecting with a copy of an older seed would
+    add every item a second time.
 
-    `guide_revision` is the guide revision the doc last agreed with. A write to
-    the column the doc did not make (restore, translate, a language removed)
-    leaves the two apart, and the room applies the column into the doc before
-    it next saves. `errors` holds why the doc does not make a guide, while it
-    does not; publishing is refused meanwhile.
+    `revision` is the part's revision (`projectcontent.<part>_revision`) the
+    doc last agreed with. A write to the column the doc did not make (restore,
+    translate, a language removed) leaves the two apart, and the room merges
+    the column into the doc before it next saves. `errors` holds why the doc
+    does not make a valid part, while it does not; publishing is refused
+    meanwhile.
     """
 
-    __tablename__ = "guidedoc"
+    __tablename__ = "contentdoc"
+    __table_args__ = (UniqueConstraint("project_id", "part", name="project_part"),)
 
     project_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("project.id", ondelete="CASCADE"), unique=True, index=True
+        ForeignKey("project.id", ondelete="CASCADE"), index=True
     )
+    part: Mapped[ContentPart] = mapped_column(SQLEnum(ContentPart))
     state: Mapped[bytes] = mapped_column(LargeBinary)
-    guide_revision: Mapped[int] = mapped_column()
+    revision: Mapped[int] = mapped_column()
     errors: Mapped[list[str] | None] = mapped_column(JSON, default=None)
     updated_at: Mapped[datetime.datetime] = mapped_column(default=now, onupdate=now)
 

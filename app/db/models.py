@@ -58,7 +58,13 @@ from ..types import (
     TurnRole,
 )
 from ._extra import CustomEmailStr
-from .types import AccessRequestStatus, CodeKind, ContentVersionKind, InterviewType
+from .types import (
+    AccessRequestStatus,
+    CodeKind,
+    ContentPart,
+    ContentVersionKind,
+    InterviewType,
+)
 from .versioning import BumpName
 
 
@@ -289,10 +295,10 @@ class ContentStatus(_BaseModel):
     #: Per offered language, the paths of text it lacks. Publishing is
     #: refused while this is not empty.
     missing: dict[LanguageCode, list[str]]
-    #: Why what editors have written in the guide is not a valid guide, while
-    #: it is not (`guidedoc.errors`). The draft keeps the last valid one, and
-    #: publishing is refused meanwhile.
-    guide_errors: list[str] = []
+    #: Per co-edited part (guide, consent, welcome), why what editors have
+    #: written is not valid, while it is not (`contentdoc.errors`). The draft
+    #: keeps the last valid one, and publishing is refused meanwhile.
+    doc_errors: dict[ContentPart, list[str]] = {}
 
 
 class ProjectFolderBase(_BaseModel):

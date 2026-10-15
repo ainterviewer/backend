@@ -702,34 +702,46 @@ the revisions; translation, which touches three parts, returns each part's in
 `revisions`. Add a new content column to a part in `PART_FIELDS`, or to a new
 part with its own column and migration.
 
-### Collaborative guide editing
+### Collaborative editing of the setup pages
 
-The guide editor co-edits a Yjs document over `/ws/guide/{project_id}`
-(`app/api/websockets/guide.py`), one room per project (`app/collab/rooms.py`,
-on `pycrdt` / `pycrdt-websocket`). **`projectcontent.guide` stays the draft
-everything else reads**; the doc is how editors write it.
+The guide, consent and welcome editors co-edit a Yjs document each over
+`/ws/content/{project_id}/{part}` (`app/api/websockets/content.py`), one
+room per project and part (`app/collab/rooms.py`, on `pycrdt` /
+`pycrdt-websocket`). **The part's column on `projectcontent` stays the
+draft everything else reads**; the doc is how editors write it. The parts
+edited live are `LIVE_PARTS` in `app/collab/parts.py`, which holds what
+differs per part (how it maps to a doc, what makes it valid); the room is
+generic. Other editing pages (agents, emails, simulation setups) save over
+HTTP with `If-Match`.
 
-- **The mapping** lives in `app/collab/guide_doc.py` and nowhere else
-  server-side; the frontend's `src/lib/collab/` mirrors it key for key. Every
-  text is a `Y.Map` of language to `Y.Text`, with an (empty) entry for each of
-  the project's languages so nobody creates one by typing; sections, questions
-  and survey options are keyed by id with fractional `order` keys (questions
-  flat, with `section_id`), so a move never races an edit; every other value is
-  JSON *text*, because Yjs has only doubles and an int coming back a float reads
-  as a changed scale to versioning. pycrdt indexes `Text` in UTF-8 bytes (the
-  browser's Yjs in UTF-16), so convert character positions before editing one.
+- **The mappings** live in `app/collab/guide_doc.py` (the guide) and
+  `flat_doc.py` (consent, welcome: one `content` map) and nowhere else
+  server-side; the frontend's `src/lib/collab/` mirrors them key for key.
+  Every text is a `Y.Map` of language to `Y.Text`, with an (empty) entry for
+  each of the project's languages so nobody creates one by typing; in the
+  guide, sections, questions and survey options are keyed by id with
+  fractional `order` keys (questions flat, with `section_id`), so a move
+  never races an edit, and probes, alternative wordings and timed messages
+  are matched by content (`align`) when a write changes them; every other
+  value is JSON *text*, because Yjs has only doubles and an int coming back
+  a float reads as a changed scale to versioning. pycrdt indexes `Text` in
+  UTF-8 bytes (the browser's Yjs in UTF-16), so convert character positions
+  before editing one.
 - **Saving.** About two seconds after a change the room stores the doc's
-  state in `guidedoc` and, when it validates (`validate`: the model and
-  condition order, as the PUT checks), writes it to `projectcontent.guide`,
-  bumping the guide's revision. A doc that does not validate never overwrites
-  the column: its errors go in `guidedoc.errors`, reach editors through the
-  server's awareness entry, show in the versions status (`guide_errors`) and
-  block publishing. Status, publish, restore, translate and adding a language
-  flush an open room first, so they act on what editors see. After ~5 idle
-  minutes a room keeps an `auto` version.
+  state in `contentdoc` and, when it validates (`DocPart.validate`; for the
+  guide, the model and condition order, as the PUT checks), writes it to
+  the column, bumping that part's revision. A doc that does not validate
+  never overwrites the column: its errors go in `contentdoc.errors`, reach
+  editors through the server's awareness entry, show in the versions status
+  (`doc_errors`, per part) and block publishing. A consent or welcome doc
+  with no text (and, for the welcome, no email or video) saves as NULL --
+  no screen for respondents -- never as an empty one. Status, publish,
+  restore, translate and adding a language flush a project's open rooms
+  first, so they act on what editors see. After ~5 idle minutes a room
+  keeps an `auto` version.
 - **Writes the doc did not make** (restore, translate, generate, a language
-  removed, `PUT /guide`, a CLI) write the column as before. A session
-  listener in `rooms.py` notices the guide or the languages changing on
+  removed, the PUTs, a CLI) write the column as before. A session listener
+  in `rooms.py` notices a live part's column or the languages changing on
   commit and asks an open room to save; a save that finds the column moved
   three-way merges that write into the doc (`merge_guide_data`; the column
   wins where both changed the same leaf) instead of saving over it. Nothing
@@ -738,10 +750,13 @@ everything else reads**; the doc is how editors write it.
   tab holding a copy of an older seed would add every item again. `meta.doc_id`
   names a doc's lineage so a client can tell.
 - Viewers are served through `ReadOnlyChannel`, which drops their updates.
-  Auth is the dashboard cookie; close codes 4401 (signed out) and 4403.
+  Auth is the dashboard cookie; close codes 4401 (signed out), 4403, 4404 (a
+  part not edited live) and 4409 (another lineage: reload).
+- The welcome video is uploaded over HTTP first; only its file name goes in
+  the doc.
 - pycrdt objects must be freed on the thread that made them: never touch a
   doc from `asyncio.to_thread`, and a closing room collects its cycles on the
-  loop (`gc.collect()` in `GuideRooms.serve`).
+  loop (`gc.collect()` in `ContentRooms.serve`).
 
 ### Repository Session Management
 
@@ -776,8 +791,8 @@ await self.message_queue.put(
 
 ## Known Issues & TODOs
 
-- The guide rooms (`app/collab/rooms.py`) are per-process: with more than one
-  worker, two rooms for one project would save over each other. Relay them
+- The content rooms (`app/collab/rooms.py`) are per-process: with more than
+  one worker, two rooms for one project and part would save over each other. Relay them
   (Redis pub/sub) before adding workers.
 - The interview session registry is per-process, so ending sessions on delete
   and `claim`'s takeover only work within one worker; see

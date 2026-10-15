@@ -1,5 +1,5 @@
-"""The guide editor's websocket: y-sync and awareness over one room per
-project (`app/collab/rooms.py`).
+"""The setup pages' websocket: y-sync and awareness over one room per
+project and live part -- guide, consent, welcome (`app/collab/rooms.py`).
 
 Authenticated with the dashboard's `access_token` cookie. Editors may change
 the doc; viewers sync and show presence, and their changes are dropped.
@@ -12,18 +12,23 @@ from jose import JWTError
 from pydantic import UUID4, ValidationError
 
 from ...auth import AuthToken
-from ...collab.rooms import DocMismatchError, ReadOnlyChannel, guide_rooms
+from ...collab.parts import LIVE_PARTS
+from ...collab.rooms import DocMismatchError, ReadOnlyChannel, content_rooms
+from ...db.types import ContentPart
 from ...dependencies import DBSession
 from ...types import CollaboratorRole, Scope
 from .auth import WS_UNAUTHORIZED
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/ws", tags=["guide"])
+router = APIRouter(prefix="/ws", tags=["content"])
 
 #: Close code for "signed in, but not a collaborator on this project".
 #: Private-use range, echoing HTTP 403.
 WS_FORBIDDEN = 4403
+#: Close code for "no such live part": only those in `LIVE_PARTS` have a
+#: doc. Echoes HTTP 404.
+WS_NOT_FOUND = 4404
 #: Close code for "your copy of the doc is of another lineage": drop it and
 #: connect again without `doc_id`. Echoes HTTP 409.
 WS_DOC_MISMATCH = 4409
@@ -56,7 +61,7 @@ class WebSocketChannel:
         try:
             await self._websocket.send_bytes(message)
         except Exception:
-            logger.debug("Dropped a guide doc message to a closed socket")
+            logger.debug("Dropped a doc message to a closed socket")
 
     async def recv(self) -> bytes:
         return await self._websocket.receive_bytes()
@@ -71,10 +76,11 @@ def _role(db, token: AuthToken, project_id: UUID4) -> CollaboratorRole | None:
     return db.projects.get_user_role_on_project(token.user_id, project_id)
 
 
-@router.websocket("/guide/{project_id}")
-async def guide_websocket(
+@router.websocket("/content/{project_id}/{part}")
+async def content_websocket(
     websocket: WebSocket,
     project_id: UUID4,
+    part: ContentPart,
     db: DBSession,
     doc_id: str | None = None,
 ):
@@ -83,6 +89,9 @@ async def guide_websocket(
     # Accepted before refusing, so the browser can read the close code (see
     # `WS_UNAUTHORIZED`).
     await websocket.accept()
+    if part not in LIVE_PARTS:
+        await websocket.close(WS_NOT_FOUND, f"The {part} is not edited live")
+        return
     cookie = websocket.cookies.get("access_token")
     try:
         token = AuthToken.decode(cookie) if cookie else None
@@ -98,14 +107,15 @@ async def guide_websocket(
         await websocket.close(WS_FORBIDDEN, "Not a collaborator on this project")
         return
 
-    channel = WebSocketChannel(websocket, f"guide/{project_id}/{token.user_id}")
+    channel = WebSocketChannel(websocket, f"{part}/{project_id}/{token.user_id}")
     try:
-        await guide_rooms.serve(
+        await content_rooms.serve(
             project_id,
+            part,
             channel
             if role.includes(CollaboratorRole.EDITOR)
             else ReadOnlyChannel(channel),
             doc_id,
         )
     except DocMismatchError:
-        await websocket.close(WS_DOC_MISMATCH, "The guide was reset; reload it")
+        await websocket.close(WS_DOC_MISMATCH, f"The {part} was reset; reload it")

@@ -54,7 +54,7 @@ from ainterviewer.types import InterviewStatus, LanguageCode
 from ainterviewer.utils import get_language_dict, now
 
 from ...auth import generate_resume_token, hash_token
-from ...collab.rooms import guide_rooms
+from ...collab.rooms import content_rooms
 from ...db.models import (
     MessagePublic,
     ProjectLanguage,
@@ -182,7 +182,7 @@ async def add_project_language(
     if isinstance(jwt, RedirectResponse):
         return jwt
 
-    await guide_rooms.flush(project_id)
+    await content_rooms.flush(project_id)
     available_languages = await db.projects.add_project_language(
         project_id, language, translate
     )
@@ -450,7 +450,7 @@ async def translate_missing(
     Each part's new revision is in `revisions`: they are three editors'."""
     _localization_or_404(db, project_id, lang)
     # Translating what editors see, not what was last saved.
-    await guide_rooms.flush(project_id)
+    await content_rooms.flush(project_id)
     content = await db.projects.translate_missing(project_id, lang)
     return ProjectContentPublic(
         guide=content.guide,

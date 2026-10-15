@@ -1,21 +1,22 @@
-"""Rooms: the guide docs editors are connected to, one per project.
+"""Rooms: the docs editors of a setup page are connected to, one per
+project and live part (guide, consent, welcome; `parts.py`).
 
-A room holds the project's doc (`guide_doc`), relays the y-sync and
-awareness protocols between its editors (`pycrdt.websocket.YRoom`), and
-saves: a couple of seconds after the last change, the doc's state is stored
-and, when it makes a valid guide, projected into `projectcontent.guide`,
-which moves the guide's revision. Everything else -- publishing, tests,
-analysis -- goes on reading the column.
+A room holds the part's doc, relays the y-sync and awareness protocols
+between its editors (`pycrdt.websocket.YRoom`), and saves: a couple of
+seconds after the last change, the doc's state is stored and, when it makes
+a valid value, projected into the part's column on `projectcontent`, which
+moves the part's revision. Everything else -- publishing, tests, analysis
+-- goes on reading the column.
 
 **The registry is per-process**, like `InterviewSessionManager`. Two workers
 would hold two rooms for one project, each saving over the other; more than
 one worker needs the rooms relayed (Redis pub/sub) first.
 
 Writes to the column the doc did not make -- restore, translation, a
-language removed, the import PUT -- are merged into an open room's doc
-rather than lost under its next save: a session listener (below) notices
-the guide changing on commit and asks the room to save, and a save that
-finds the column moved first merges that write in (`merge_guide_data`).
+language removed, the PUTs -- are merged into an open room's doc rather
+than lost under its next save: a session listener (below) notices the
+column changing on commit and asks the room to save, and a save that finds
+the column moved first merges that write in (`merge_guide_data`).
 With no room open the next one to open does the same.
 
 The server's own state reaches editors through awareness, as the server's
@@ -42,22 +43,14 @@ from pycrdt import (
     create_awareness_message,
 )
 from pycrdt.websocket import YRoom
-from pydantic import ValidationError
 from sqlalchemy import event, inspect
 from sqlalchemy.orm import Session, object_session
 
-from ainterviewer.interview_guides.localized import LocalizedInterviewGuide
-
 from ..db import InterviewDataBase
 from ..db.tables import ProjectContentTable
-from ..db.types import ContentVersionKind
-from .guide_doc import (
-    apply_guide,
-    apply_guide_data,
-    doc_id,
-    merge_guide_data,
-    read_guide_data,
-)
+from ..db.types import ContentPart, ContentVersionKind
+from .guide_doc import doc_id, merge_guide_data
+from .parts import LIVE_PARTS, DocPart
 
 logger = logging.getLogger(__name__)
 
@@ -70,37 +63,6 @@ SNAPSHOT_IDLE = 300.0
 SERVER_ORIGIN = "server"
 
 type DBFactory = Callable[[], AbstractContextManager[InterviewDataBase]]
-
-
-def validate(
-    data: dict[str, Any], language: str
-) -> tuple[LocalizedInterviewGuide | None, list[str]]:
-    """The guide `data` makes, or why it makes none. Held to what the PUT
-    holds a guide to, conditions included."""
-    try:
-        guide = LocalizedInterviewGuide.model_validate(data)
-    except ValidationError as error:
-        return None, [
-            f"{'.'.join(str(part) for part in e['loc'])}: {e['msg']}"
-            for e in error.errors()
-        ]
-    if order_errors := guide.render(language).condition_order_errors():
-        return None, [
-            "Conditions must read questions asked before the one they gate: "
-            + "; ".join(order_errors)
-        ]
-    _trim_options(guide)
-    return guide, []
-
-
-def _trim_options(guide: LocalizedInterviewGuide) -> None:
-    """Strip stray whitespace from survey options' text, in the guide saved
-    rather than in the doc: answers are matched against option text verbatim,
-    and trimming the doc would eat the space someone just typed."""
-    for section in guide.question_sections:
-        for question in section.questions:
-            for option in getattr(question.survey_item, "options", None) or []:
-                option.text = {lang: text.strip() for lang, text in option.text.items()}
 
 
 class ReadOnlyChannel(Channel):
@@ -138,10 +100,11 @@ class DocMismatchError(Exception):
     every item a second time, so it must start over."""
 
 
-class GuideRoom:
+class ContentRoom:
     def __init__(
         self,
         project_id: UUID,
+        part: DocPart,
         db: DBFactory,
         doc: Doc,
         synced_revision: int,
@@ -151,10 +114,11 @@ class GuideRoom:
         errors: list[str] | None,
     ):
         self.project_id = project_id
+        self.part = part
         self._db = db
         self.doc = doc
         self.doc_id = doc_id(doc)
-        #: The guide revision the doc last agreed with, and the guide's JSON
+        #: The part's revision the doc last agreed with, and the part's JSON
         #: then: the base of a merge when the column moves.
         self.synced_revision = synced_revision
         self.base = base
@@ -165,7 +129,7 @@ class GuideRoom:
         self.room = YRoom(ydoc=doc, log=logger)
         self._lock = asyncio.Lock()
         self._changed = asyncio.Event()
-        #: A save changed the guide since the last `auto` version.
+        #: A save changed the part since the last `auto` version.
         self._unsnapshotted = False
         self._last_change = time.monotonic()
         self._tasks: list[asyncio.Task] = []
@@ -223,7 +187,9 @@ class GuideRoom:
             try:
                 await self.save()
             except Exception:
-                logger.exception("Saving the guide doc of %s failed", self.project_id)
+                logger.exception(
+                    "Saving the %s doc of %s failed", self.part.part, self.project_id
+                )
 
     async def _snapshotter(self) -> None:
         while True:
@@ -234,7 +200,7 @@ class GuideRoom:
                     await self._snapshot()
                 except Exception:
                     logger.exception(
-                        "Snapshotting the guide of %s failed", self.project_id
+                        "Snapshotting the content of %s failed", self.project_id
                     )
 
     async def _snapshot(self) -> None:
@@ -248,29 +214,31 @@ class GuideRoom:
 
     async def save(self) -> list[str] | None:
         """Save the doc now, merging in whatever wrote the column since. The
-        errors that keep it from being a guide, if any."""
+        errors that keep it from being valid, if any."""
+        part = self.part
         async with self._lock:
             for _ in range(5):
-                data = read_guide_data(self.doc)
-                guide, errors = validate(data, self.default_language)
+                data = part.read(self.doc)
+                value, errors = part.validate(data, self.default_language)
                 state = self.doc.get_update()
 
-                def write(guide=guide, errors=errors, state=state):
+                def write(value=value, errors=errors, state=state):
                     with self._db() as db:
-                        revision = db.guide_docs.save(
+                        revision = db.content_docs.save(
                             self.project_id,
+                            part.part,
                             state,
                             self.synced_revision,
-                            guide,
+                            value,
                             errors or None,
                         )
                         # This write is the doc's own: no need to merge it
                         # back in.
-                        db.session.info.get("guide_changed", set()).discard(
-                            self.project_id
+                        db.session.info.get(_CHANGED, set()).discard(
+                            (self.project_id, part.part)
                         )
                         db.session.commit()
-                        column = db.guide_docs.column(self.project_id)
+                        column = db.content_docs.column(self.project_id, part.part)
                         return revision, column.languages, column.default_language
 
                 revision, languages, self.default_language = await asyncio.to_thread(
@@ -280,33 +248,33 @@ class GuideRoom:
                     # A language added or removed: every text gets one in it,
                     # or loses it (its text went with the language already).
                     self.languages = languages
-                    apply_guide_data(
-                        self.doc, read_guide_data(self.doc), languages, SERVER_ORIGIN
-                    )
+                    part.apply(self.doc, part.read(self.doc), languages, SERVER_ORIGIN)
                 if revision is not None:
                     if revision != self.synced_revision:
                         self._unsnapshotted = True
                     self.synced_revision = revision
-                    if guide is not None:
-                        self.base = guide.model_dump(mode="json")
+                    if not errors:
+                        self.base = part.dump(value)
                     self.errors = errors or None
                     self._announce()
                     return self.errors
                 await self._merge_column()
-            raise RuntimeError("The guide kept changing under the doc")
+            raise RuntimeError(f"The {part.part} kept changing under the doc")
 
     async def _merge_column(self) -> None:
         """Merge a write to the column the doc did not make into the doc."""
 
+        part = self.part
+
         def read():
             with self._db() as db:
-                return db.guide_docs.column(self.project_id)
+                return db.content_docs.column(self.project_id, part.part)
 
         column = await asyncio.to_thread(read)
-        theirs = column.guide.model_dump(mode="json")
-        merged = merge_guide_data(self.base, theirs, read_guide_data(self.doc))
+        theirs = part.dump(column.value)
+        merged = merge_guide_data(self.base, theirs, part.read(self.doc))
         self.languages = column.languages
-        apply_guide_data(self.doc, merged, column.languages, SERVER_ORIGIN)
+        part.apply(self.doc, merged, column.languages, SERVER_ORIGIN)
         self.synced_revision = column.revision
         self.base = theirs
 
@@ -318,53 +286,53 @@ class GuideRoom:
                 "revision": self.synced_revision,
                 "errors": self.errors or [],
                 # Moves on every save, so editors can tell their changes have
-                # been saved even when the guide's revision did not move.
+                # been saved even when the part's revision did not move.
                 "saved_at": time.time(),
             }
         )
 
 
-class GuideRooms:
+type RoomKey = tuple[UUID, ContentPart]
+
+
+class ContentRooms:
     """The registry. See the module docstring."""
 
     def __init__(self, db: DBFactory):
         self._db = db
-        self._rooms: dict[UUID, GuideRoom] = {}
+        self._rooms: dict[RoomKey, ContentRoom] = {}
         self._lock = asyncio.Lock()
         self._loop: asyncio.AbstractEventLoop | None = None
 
-    def get(self, project_id: UUID) -> GuideRoom | None:
-        return self._rooms.get(project_id)
+    def get(self, project_id: UUID, part: ContentPart) -> ContentRoom | None:
+        return self._rooms.get((project_id, part))
 
-    async def _open(self, project_id: UUID) -> GuideRoom:
+    async def _open(self, project_id: UUID, part: DocPart) -> ContentRoom:
         def load():
             with self._db() as db:
-                column = db.guide_docs.column(project_id)
-                row = db.guide_docs.get(project_id)
+                column = db.content_docs.column(project_id, part.part)
+                row = db.content_docs.get(project_id, part.part)
                 if row is None:
                     return column, None, None, None
-                return column, row.state, row.guide_revision, row.errors
+                return column, row.state, row.revision, row.errors
 
         column, state, doc_revision, errors = await asyncio.to_thread(load)
-        guide, revision = column.guide, column.revision
+        value, revision = part.dump(column.value), column.revision
         doc = Doc()
         if state is None:
-            apply_guide(doc, guide, column.languages, SERVER_ORIGIN)
-            base, synced = guide.model_dump(mode="json"), revision
+            part.apply(doc, value, column.languages, SERVER_ORIGIN)
+            base, synced = value, revision
         else:
             doc.apply_update(state)
             # Languages may have come or gone while it was closed.
-            apply_guide_data(doc, read_guide_data(doc), column.languages, SERVER_ORIGIN)
+            part.apply(doc, part.read(doc), column.languages, SERVER_ORIGIN)
             # When the doc last agreed with the column. If the column has
             # moved since, the first save merges that in, from here.
-            base = (
-                guide.model_dump(mode="json")
-                if doc_revision == revision
-                else read_guide_data(doc)
-            )
+            base = value if doc_revision == revision else part.read(doc)
             synced = doc_revision
-        room = GuideRoom(
+        room = ContentRoom(
             project_id,
+            part,
             self._db,
             doc,
             synced,
@@ -379,25 +347,30 @@ class GuideRooms:
         return room
 
     async def serve(
-        self, project_id: UUID, channel: Channel, doc_id: str | None = None
+        self,
+        project_id: UUID,
+        part: ContentPart,
+        channel: Channel,
+        doc_id: str | None = None,
     ) -> None:
         """Serve one editor's connection until it closes; the room closes,
         saving, with its last editor. `doc_id` is the lineage of the copy
         the client already holds, if any; DocMismatchError if it is not the
         room's."""
+        key = (project_id, part)
         async with self._lock:
             self._loop = asyncio.get_running_loop()
-            room = self._rooms.get(project_id)
+            room = self._rooms.get(key)
             if room is None:
-                room = self._rooms[project_id] = await self._open(project_id)
+                room = self._rooms[key] = await self._open(project_id, LIVE_PARTS[part])
         try:
             if doc_id is not None and doc_id != room.doc_id:
                 raise DocMismatchError(doc_id)
             await room.serve(channel)
         finally:
             async with self._lock:
-                if room.clients == 0 and self._rooms.get(project_id) is room:
-                    del self._rooms[project_id]
+                if room.clients == 0 and self._rooms.get(key) is room:
+                    del self._rooms[key]
                     await room.stop()
                     del room
                     # pycrdt's objects must be freed on the thread that made
@@ -408,26 +381,28 @@ class GuideRooms:
                     gc.collect()
 
     async def flush(self, project_id: UUID) -> None:
-        """Save an open room now: before publishing, so what is published is
-        what editors see."""
-        if (room := self._rooms.get(project_id)) is not None:
-            await room.save()
+        """Save a project's open rooms now: before publishing, so what is
+        published is what editors see."""
+        for key, room in list(self._rooms.items()):
+            if key[0] == project_id:
+                await room.save()
 
-    def column_changed(self, project_id: UUID) -> None:
-        """Something committed a change to the guide column. Thread-safe."""
-        if self._loop is None or project_id not in self._rooms:
+    def column_changed(self, keys: set[RoomKey]) -> None:
+        """Something committed a change to these parts' columns. Thread-safe."""
+        if self._loop is None or not keys & self._rooms.keys():
             return
-        self._loop.call_soon_threadsafe(self._schedule_save, project_id)
+        self._loop.call_soon_threadsafe(self._schedule_saves, keys)
 
-    def _schedule_save(self, project_id: UUID) -> None:
-        if (room := self._rooms.get(project_id)) is not None:
-            task = asyncio.create_task(room.save())
-            task.add_done_callback(_log_failure)
+    def _schedule_saves(self, keys: set[RoomKey]) -> None:
+        for key in keys:
+            if (room := self._rooms.get(key)) is not None:
+                task = asyncio.create_task(room.save())
+                task.add_done_callback(_log_failure)
 
 
 def _log_failure(task: asyncio.Task) -> None:
     if not task.cancelled() and (error := task.exception()) is not None:
-        logger.error("Merging a guide write into its doc failed", exc_info=error)
+        logger.error("Merging a write into its doc failed", exc_info=error)
 
 
 def _default_db() -> AbstractContextManager[InterviewDataBase]:
@@ -443,31 +418,38 @@ def _default_db() -> AbstractContextManager[InterviewDataBase]:
     return session()
 
 
-guide_rooms = GuideRooms(_default_db)
+content_rooms = ContentRooms(_default_db)
 
 
-# ---- noticing writes to the guide column ----
+# ---- noticing writes to the live parts' columns ----
+
+#: `session.info` key: the (project, part) rooms a session's commit concerns.
+_CHANGED = "content_doc_changed"
+#: Fields that concern every live part: an open doc gives every text one per
+#: language.
+_LANGUAGE_FIELDS = ("languages", "default_language")
 
 
 @event.listens_for(ProjectContentTable, "before_update")
-def _note_guide_change(_mapper, _connection, target: ProjectContentTable) -> None:
-    # The languages too: an open doc gives every text one per language.
+def _note_change(_mapper, _connection, target: ProjectContentTable) -> None:
     attrs = inspect(target).attrs
-    if any(
-        attrs[field].history.has_changes()
-        for field in ("guide", "languages", "default_language")
-    ):
-        session = object_session(target)
-        if session is not None:
-            session.info.setdefault("guide_changed", set()).add(target.project_id)
+    languages = any(attrs[f].history.has_changes() for f in _LANGUAGE_FIELDS)
+    parts = {
+        part
+        for part in LIVE_PARTS
+        if languages or attrs[part.value].history.has_changes()
+    }
+    if parts and (session := object_session(target)) is not None:
+        changed = session.info.setdefault(_CHANGED, set())
+        changed.update((target.project_id, part) for part in parts)
 
 
 @event.listens_for(Session, "after_commit")
 def _notify_rooms(session: Session) -> None:
-    for project_id in session.info.pop("guide_changed", ()):
-        guide_rooms.column_changed(project_id)
+    if keys := session.info.pop(_CHANGED, None):
+        content_rooms.column_changed(keys)
 
 
 @event.listens_for(Session, "after_rollback")
 def _forget(session: Session) -> None:
-    session.info.pop("guide_changed", None)
+    session.info.pop(_CHANGED, None)
