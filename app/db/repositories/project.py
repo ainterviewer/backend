@@ -1,9 +1,10 @@
 import asyncio
+import logging
 import uuid
 from collections.abc import Iterable, Sequence
 from typing import Any, Literal, overload
 
-from pydantic import UUID4
+from pydantic import UUID4, BaseModel, ValidationError
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlalchemy.orm import Session
@@ -24,6 +25,7 @@ from ainterviewer.interview_guides.translate import translate_missing
 from ainterviewer.types import LanguageCode
 from ainterviewer.utils import get_language_dict
 
+from ...collab.guide_doc import merge_guide_data
 from ...types import (
     CollaboratorRole,
     ExternalParam,
@@ -56,6 +58,8 @@ from ..types import ContentPart, InterviewType
 from .base import BaseRepository
 from .errors import ContentRevisionError, NotPublishedError, ProjectLanguageError
 from .permissions import can_moderate_project
+
+logger = logging.getLogger(__name__)
 
 TRANSLATION_MODEL = "openai:gpt-5.4-mini"
 
@@ -95,6 +99,32 @@ def render_default_guide(session: Session, project_id: UUID4) -> InterviewGuide 
         )
     ).one_or_none()
     return None if row is None else row.guide.render(row.default_language)
+
+
+#: The parts `translate_missing` fills in.
+_TRANSLATED = ("guide", "consent", "welcome")
+
+
+def _dump(value: BaseModel | None) -> Any:
+    return None if value is None else value.model_dump(mode="json")
+
+
+def _merge_translation[T: BaseModel](
+    before: Any, current: T | None, translated: T | None
+) -> T | None:
+    """`translated` (made from `before`) merged into `current`, what the
+    column holds now: text an editor changed meanwhile is theirs, the rest
+    gains the translation. A part cleared meanwhile stays cleared."""
+    if current is None or translated is None:
+        return current
+    merged = merge_guide_data(before, _dump(current), _dump(translated))
+    try:
+        return type(translated).model_validate(merged)
+    except ValidationError:
+        # Edits since made the two incompatible; the editors' version stands
+        # and translating again picks up what is still missing.
+        logger.warning("Dropped a translation that no longer fits its content")
+        return current
 
 
 def _without_language[
@@ -658,9 +688,12 @@ class ProjectRepository(BaseRepository):
             # machine-translated, it should neither reach respondents nor
             # block publishing everything else.
             content.languages_in_progress = [*content.languages_in_progress, language]
-            self.session.flush()
+            # Committed before translating: an LLM call holding SQLite's
+            # write lock would make every other write wait on it, the
+            # editors' rooms included.
+            self.session.commit()
             if translate:
-                await self._translate_missing(content, language)
+                await self._translate_missing(project_id, language)
         self.session.commit()
 
         return self.get_available_languages_optimized(project_id)
@@ -760,15 +793,24 @@ class ProjectRepository(BaseRepository):
         Not the participant emails: they are HTML with Jinja placeholders,
         which the string translator does not preserve.
         """
-        content = self._content(project_id)
-        self._require_language(content, language)
-        await self._translate_missing(content, language)
-        self.session.commit()
-        return content
+        self._require_language(self._content(project_id), language)
+        await self._translate_missing(project_id, language)
+        return self._content(project_id)
 
-    async def _translate_missing(
-        self, content: ProjectContentTable, language: LanguageCode
-    ) -> None:
+    async def _translate_missing(self, project_id: UUID4, language: LanguageCode):
+        """Translate the guide, consent and welcome as they stand, then merge
+        the translation into them as they stand *after*, and commit.
+
+        The LLM call takes long enough for editors to save meanwhile (their
+        rooms write these columns every couple of seconds), and writing the
+        translated copies whole would undo whatever they saved. Where an
+        editor changed the same text in the meantime, the editor's is kept.
+        """
+        content = self._content(project_id)
+        # This session may have loaded the row before a room last saved it.
+        self.session.refresh(content)
+        # Dumped now: the translator may change what it is given in place.
+        before = {name: _dump(getattr(content, name)) for name in _TRANSLATED}
         kwargs = {
             "target": language,
             "source": content.default_language,
@@ -778,12 +820,16 @@ class ProjectRepository(BaseRepository):
         async def maybe[T: (LocalizedConsent, LocalizedWelcome)](part: T | None):
             return None if part is None else await translate_missing(part, **kwargs)
 
-        guide, consent, welcome = await asyncio.gather(
+        translated = await asyncio.gather(
             translate_missing(content.guide, **kwargs),
             maybe(content.consent),
             maybe(content.welcome),
         )
-        content.guide, content.consent, content.welcome = guide, consent, welcome
+        self.session.refresh(content)
+        for name, value in zip(_TRANSLATED, translated, strict=True):
+            current = getattr(content, name)
+            setattr(content, name, _merge_translation(before[name], current, value))
+        self.session.commit()
 
     def get_default_language(self, project_id: UUID4) -> LanguageCode:
         """The project's default language, without loading its content."""

@@ -22,6 +22,7 @@ from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode, MessageRole, TestType
 
 from ..auth import AuthToken, InterviewToken, create_interview_token, hash_token
+from ..collab.rooms import content_rooms
 from ..db.repositories.errors import ResumeTokenError
 from ..db.repositories.project import ContentSource
 from ..db.types import ContentVersionKind, InterviewType
@@ -192,6 +193,9 @@ async def create_interview(
     if new_interview.interview_type == InterviewType.DISTRIBUTED:
         source = "published"
     else:
+        # What editors see, not what their rooms last saved. A doc that does
+        # not validate is not saved: the test runs the last valid draft.
+        await content_rooms.flush(project_id)
         source = db.versions.snapshot(project_id, ContentVersionKind.TEST).id
 
     # FIXME: A language the project does not offer should let the respondent

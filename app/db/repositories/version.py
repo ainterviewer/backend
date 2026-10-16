@@ -20,7 +20,6 @@ from ainterviewer.utils import get_language_dict
 from ..models import ContentStatus, ContentVersionPublic, ContentVersionSummary
 from ..tables import (
     ContentColumns,
-    ContentDocTable,
     InterviewTable,
     ProjectContentTable,
     ProjectContentVersionTable,
@@ -28,6 +27,7 @@ from ..tables import (
 from ..types import ContentPart, ContentVersionKind
 from ..versioning import FIRST_VERSION, Bump, SemVer, bumped, classify, format_semver
 from .base import BaseRepository
+from .content_doc import ContentDocRepository
 from .errors import ContentRevisionError, NotPublishedError, PublishError
 
 #: What the publish refusal calls a part whose doc has errors.
@@ -255,13 +255,7 @@ class VersionRepository(BaseRepository):
         )
 
     def _doc_errors(self, project_id: UUID4) -> dict[ContentPart, list[str]]:
-        rows = self.session.execute(
-            select(ContentDocTable.part, ContentDocTable.errors).where(
-                ContentDocTable.project_id == project_id,
-                ContentDocTable.errors.is_not(None),
-            )
-        )
-        return {part: errors for part, errors in rows if errors}
+        return ContentDocRepository(self.session).errors(project_id)
 
     # ==================== Writing ====================
 

@@ -686,8 +686,11 @@ languages; `ContentColumns.PART_FIELDS` maps them to columns) has its own
 counter, `projectcontent.<part>_revision`, and `projectcontent.revision`
 counts changes to any of them. A `before_update` listener bumps the changed
 parts' counters and the overall one whenever a content column changes (not
-when publishing). Each editor GET returns its part's as `ETag`, and that
-part's write (`PUT /guide`, `/consent`, `/welcome`, `POST /agents`, the email
+when publishing), **in SQL** (`col = col + 1`), never from the value the
+session loaded: a session holding the row across another writer's commit
+would otherwise write that writer's number again, and a room comparing
+revisions would never see the write. Each editor GET returns its part's as
+`ETag`, and that part's write (`PUT /guide`, `/consent`, `/welcome`, `POST /agents`, the email
 template PUTs) requires it back as `If-Match` (`IfMatch`), so saving one part
 never conflicts with someone editing another -- which the guide's autosave
 would otherwise turn into a 412 on every other page. Publish and restore
@@ -733,23 +736,36 @@ HTTP with `If-Match`.
   the column, bumping that part's revision. A doc that does not validate
   never overwrites the column: its errors go in `contentdoc.errors`, reach
   editors through the server's awareness entry, show in the versions status
-  (`doc_errors`, per part) and block publishing. A consent or welcome doc
-  with no text (and, for the welcome, no email or video) saves as NULL --
+  (`doc_errors`, per part) and block publishing -- only while the doc is at
+  its column's revision: once a restore or PUT moves the column past a
+  closed doc, that doc becomes the column's value when it next opens, so
+  its errors no longer count. A consent or welcome doc with no text (and, for the welcome, no email or video) saves as NULL --
   no screen for respondents -- never as an empty one. Status, publish,
-  restore, translate and adding a language flush a project's open rooms
-  first, so they act on what editors see. After ~5 idle minutes a room
-  keeps an `auto` version.
+  restore, translate, adding a language and starting a test interview
+  flush a project's open rooms first, so they act on what editors see --
+  before anything in the request reads the draft, or the session keeps the
+  copy it read. After ~5 idle minutes a room keeps an `auto` version.
 - **Writes the doc did not make** (restore, translate, generate, a language
   removed, the PUTs, a CLI) write the column as before. A session listener
   in `rooms.py` notices a live part's column or the languages changing on
   commit and asks an open room to save; a save that finds the column moved
   three-way merges that write into the doc (`merge_guide_data`; the column
-  wins where both changed the same leaf) instead of saving over it. Nothing
-  needs to call the room, so a new writer cannot forget it.
+  wins where both changed the same leaf; probes, alternative wordings and
+  timed messages are merged entry by entry) instead of saving over it.
+  Nothing needs to call the room, so a new writer cannot forget it. A
+  writer that waits between reading and writing -- translation, on an LLM
+  -- must not write what it read back whole: rooms save meanwhile.
+  `_translate_missing` re-reads after the call and merges the translation
+  into what is there (`merge_guide_data`, editors winning), and adding a
+  language commits before translating, so the LLM call never holds
+  SQLite's write lock.
 - **The doc is kept, not re-seeded,** because Yjs merges by item identity: a
   tab holding a copy of an older seed would add every item again. `meta.doc_id`
   names a doc's lineage so a client can tell.
 - Viewers are served through `ReadOnlyChannel`, which drops their updates.
+  Nobody may speak in the server's name in awareness (its client id, or an
+  entry flagged `server`): editors trust that entry for the lineage and the
+  errors, so the room drops such updates from any client.
   Auth is the dashboard cookie; close codes 4401 (signed out), 4403, 4404 (a
   part not edited live) and 4409 (another lineage: reload).
 - The welcome video is uploaded over HTTP first; only its file name goes in

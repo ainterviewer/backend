@@ -588,6 +588,11 @@ def _bump_content_revision(_mapper, _connection, target: ProjectContentTable):
     # content cannot forget it. Only the content columns count: publishing
     # moves `published_version_id`, and must not make every open editor's
     # next save look stale.
+    #
+    # Counted up in SQL, not from the value this session loaded: a session
+    # that loaded the row before another one wrote it (a translation held
+    # across an LLM call) would otherwise write the same revision the other
+    # one did, and a room comparing revisions would never see its write.
     state = inspect(target)
     changed = [
         part
@@ -596,9 +601,9 @@ def _bump_content_revision(_mapper, _connection, target: ProjectContentTable):
     ]
     for part in changed:
         column = part.revision_column
-        setattr(target, column, (getattr(target, column) or 0) + 1)
+        setattr(target, column, getattr(ProjectContentTable, column) + 1)
     if changed:
-        target.revision = (target.revision or 0) + 1
+        target.revision = ProjectContentTable.revision + 1
 
 
 class ProjectContentVersionTable(ContentColumns, Base):

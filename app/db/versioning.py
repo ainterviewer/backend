@@ -27,6 +27,7 @@ from typing import Any, Literal
 from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
 
+from ainterviewer.constants import LANGUAGES
 from ainterviewer.interview_guides import LocalizedInterviewGuide
 from ainterviewer.interview_guides.localized import LocalizedQuestion
 
@@ -84,14 +85,16 @@ def _dump(value: Any) -> Any:
     return to_jsonable_python(value)
 
 
+#: What keys a `{language: text}` map has, and nothing structural has.
+_LANGUAGE_CODES = frozenset(entry["code"] for entry in LANGUAGES)
+
+
 def _without_text(dumped: Any) -> Any:
     """`dumped` with every text leaf dropped: a `{language: text}` map whose
     keys are language codes becomes None, so writing a first translation of an
     optional field does not read as a structural change."""
     if isinstance(dumped, dict):
-        if dumped and all(
-            isinstance(k, str) and len(k) == 2 and k.isupper() for k in dumped
-        ):
+        if dumped and dumped.keys() <= _LANGUAGE_CODES:
             return None
         if not dumped:
             return None

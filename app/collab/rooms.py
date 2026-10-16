@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import gc
+import json
 import logging
 import time
 from collections.abc import Callable
@@ -37,6 +38,7 @@ from uuid import UUID
 
 from pycrdt import (
     Channel,
+    Decoder,
     Doc,
     YMessageType,
     YSyncMessageType,
@@ -61,6 +63,9 @@ SAVE_DELAY = 2.0
 SNAPSHOT_IDLE = 300.0
 #: The transaction origin of the server's own writes to a doc.
 SERVER_ORIGIN = "server"
+#: What a save's write answers when the project's languages moved under the
+#: room: nothing was saved, and the doc is brought in line first.
+_LANGUAGES_MOVED: Any = object()
 
 type DBFactory = Callable[[], AbstractContextManager[InterviewDataBase]]
 
@@ -134,10 +139,17 @@ class ContentRoom:
         self._last_change = time.monotonic()
         self._tasks: list[asyncio.Task] = []
         self._subscription = None
+        #: Connections the registry has handed this room and not yet seen
+        #: close. Counted by the registry under its lock, from before the
+        #: connection reaches `YRoom.clients`: a room closing on an empty
+        #: `clients` could close on an editor still joining, whose edits would
+        #: then never be saved.
+        self.connections = 0
 
     # ---- lifecycle ----
 
     async def start(self) -> None:
+        self.room.on_message = self._speaks_for_server
         self._tasks.append(asyncio.create_task(self.room.start()))
         await self.room.started.wait()
         self._subscription = self.doc.observe(self._on_change)
@@ -150,11 +162,15 @@ class ContentRoom:
             self.doc.unobserve(self._subscription)
         for task in self._tasks[1:]:
             task.cancel()
-        await self.save()
-        if self._unsnapshotted:
-            await self._snapshot()
-        await self.room.stop()
-        self._tasks[0].cancel()
+        try:
+            await self.save()
+            if self._unsnapshotted:
+                await self._snapshot()
+        finally:
+            # Stopped even when the last save fails: the doc state stored
+            # before it is what the next room opens from.
+            await self.room.stop()
+            self._tasks[0].cancel()
 
     async def serve(self, channel: Channel) -> None:
         # Everyone already here, and the server's own state: y-websocket
@@ -169,9 +185,31 @@ class ContentRoom:
             )
         await self.room.serve(channel)
 
-    @property
-    def clients(self) -> int:
-        return len(self.room.clients)
+    def _speaks_for_server(self, message: bytes) -> bool:
+        """Whether `message` is an awareness update a client sent in the
+        server's name -- its client id, or an entry flagged `server` -- which
+        the room drops: editors trust that entry for the doc's lineage and
+        its errors, and anyone connected, a viewer included, could otherwise
+        tell them the doc was reset. A message that does not decode is
+        dropped too."""
+        if not message or message[0] != YMessageType.AWARENESS:
+            return False
+        try:
+            payload = Decoder(message[1:]).read_message()
+            if payload is None:
+                return True
+            update = Decoder(payload)
+            for _ in range(update.read_var_uint()):
+                client_id = update.read_var_uint()
+                update.read_var_uint()  # clock
+                state = json.loads(update.read_var_string())
+                if client_id == self.room.awareness.client_id or (
+                    isinstance(state, dict) and "server" in state
+                ):
+                    return True
+        except Exception:
+            return True
+        return False
 
     # ---- saving ----
 
@@ -224,6 +262,11 @@ class ContentRoom:
 
                 def write(value=value, errors=errors, state=state):
                     with self._db() as db:
+                        column = db.content_docs.column(self.project_id, part.part)
+                        if column.languages != self.languages:
+                            # Not saved: what the doc holds may be in a
+                            # language just removed. Brought in line first.
+                            return _LANGUAGES_MOVED, column
                         revision = db.content_docs.save(
                             self.project_id,
                             part.part,
@@ -238,17 +281,18 @@ class ContentRoom:
                             (self.project_id, part.part)
                         )
                         db.session.commit()
-                        column = db.content_docs.column(self.project_id, part.part)
-                        return revision, column.languages, column.default_language
+                        return revision, column
 
-                revision, languages, self.default_language = await asyncio.to_thread(
-                    write
-                )
-                if languages != self.languages:
+                revision, column = await asyncio.to_thread(write)
+                self.default_language = column.default_language
+                if revision is _LANGUAGES_MOVED:
                     # A language added or removed: every text gets one in it,
-                    # or loses it (its text went with the language already).
-                    self.languages = languages
-                    part.apply(self.doc, part.read(self.doc), languages, SERVER_ORIGIN)
+                    # or loses it, with whatever was typed into it.
+                    self.languages = column.languages
+                    part.apply(
+                        self.doc, part.read(self.doc), column.languages, SERVER_ORIGIN
+                    )
+                    continue
                 if revision is not None:
                     if revision != self.synced_revision:
                         self._unsnapshotted = True
@@ -301,7 +345,9 @@ class ContentRooms:
     def __init__(self, db: DBFactory):
         self._db = db
         self._rooms: dict[RoomKey, ContentRoom] = {}
-        self._lock = asyncio.Lock()
+        #: Kept once made: a lock dropped while a connection waits on it
+        #: would let a second one in. Three per project at most.
+        self._locks: dict[RoomKey, asyncio.Lock] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
 
     def get(self, project_id: UUID, part: ContentPart) -> ContentRoom | None:
@@ -358,20 +404,30 @@ class ContentRooms:
         the client already holds, if any; DocMismatchError if it is not the
         room's."""
         key = (project_id, part)
-        async with self._lock:
-            self._loop = asyncio.get_running_loop()
+        self._loop = asyncio.get_running_loop()
+        # One lock per room, so opening or closing one (database round trips)
+        # holds up no other project's editors.
+        lock = self._locks.setdefault(key, asyncio.Lock())
+        async with lock:
             room = self._rooms.get(key)
             if room is None:
                 room = self._rooms[key] = await self._open(project_id, LIVE_PARTS[part])
+            room.connections += 1
         try:
             if doc_id is not None and doc_id != room.doc_id:
                 raise DocMismatchError(doc_id)
             await room.serve(channel)
         finally:
-            async with self._lock:
-                if room.clients == 0 and self._rooms.get(key) is room:
+            async with lock:
+                room.connections -= 1
+                if room.connections == 0 and self._rooms.get(key) is room:
                     del self._rooms[key]
-                    await room.stop()
+                    try:
+                        await room.stop()
+                    except Exception:
+                        logger.exception(
+                            "Closing the %s room of %s failed", part, project_id
+                        )
                     del room
                     # pycrdt's objects must be freed on the thread that made
                     # them, and a closed room leaves cycles (the YRoom and its

@@ -448,9 +448,10 @@ async def translate_missing(
     """Machine-translate the text the guide, consent and welcome lack in
     `lang` from the default language. Text `lang` already has is kept.
     Each part's new revision is in `revisions`: they are three editors'."""
-    _localization_or_404(db, project_id, lang)
-    # Translating what editors see, not what was last saved.
+    # Translating what editors see, not what was last saved: before anything
+    # here reads the draft, which would keep this session on the older one.
     await content_rooms.flush(project_id)
+    _localization_or_404(db, project_id, lang)
     content = await db.projects.translate_missing(project_id, lang)
     return ProjectContentPublic(
         guide=content.guide,

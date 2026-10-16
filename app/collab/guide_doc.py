@@ -102,27 +102,36 @@ def _set_text(target: Text, value: str) -> None:
 #: per language, empty if untranslated. An editor typing into a language the
 #: text lacks would otherwise create it, and two creating it at once would
 #: each make their own, one of which -- with what was typed into it -- loses.
+#: When set, it is also all a text keeps: text in a language the project no
+#: longer offers (typed just as someone removed it) is dropped, so no
+#: translation outlives its language. Unset, every language written is kept.
 _LANGUAGES: ContextVar[tuple[str, ...]] = ContextVar("languages", default=())
+
+
+def _text_languages(texts: dict[str, str]) -> list[str]:
+    """The languages a text is written in: `texts`' own, then the project's
+    it lacks; only the project's when they are known."""
+    languages = _LANGUAGES.get()
+    if not languages:
+        return list(texts)
+    return [
+        *(lang for lang in texts if lang in languages),
+        *(lang for lang in languages if lang not in texts),
+    ]
 
 
 def _new_texts(texts: dict[str, str]) -> Map:
     return Map(
-        {
-            language: Text(texts.get(language, ""))
-            for language in [
-                *texts,
-                *(lang for lang in _LANGUAGES.get() if lang not in texts),
-            ]
-        }
+        {language: Text(texts.get(language, "")) for language in _text_languages(texts)}
     )
 
 
 def _fill_texts(current: Map, texts: dict[str, str]) -> None:
-    languages = _LANGUAGES.get()
+    wanted = _text_languages(texts)
     for language in list(current.keys()):
-        if language not in texts and language not in languages:
+        if language not in wanted:
             del current[language]
-    for language in [*texts, *(lang for lang in languages if lang not in texts)]:
+    for language in wanted:
         text = texts.get(language, "")
         existing = current.get(language)
         if isinstance(existing, Text):
@@ -516,7 +525,13 @@ def _is_entities(value: Any) -> bool:
     )
 
 
-def _merge(base: Any, theirs: Any, ours: Any) -> Any:
+#: Lists of entries without ids, merged entry by entry (`_merge_aligned`)
+#: rather than as one value: a translation filling in every probe must not
+#: undo a probe someone rewrote or added meanwhile.
+_ALIGNED_LISTS = frozenset((*_QUESTION_TEXT_LISTS, "timed_messages"))
+
+
+def _merge(base: Any, theirs: Any, ours: Any, key: str | None = None) -> Any:
     if theirs == ours:
         return theirs
     if theirs == base:
@@ -526,12 +541,15 @@ def _merge(base: Any, theirs: Any, ours: Any) -> Any:
     if isinstance(theirs, dict) and isinstance(ours, dict):
         base = base if isinstance(base, dict) else {}
         merged = {}
-        for key in [*ours, *(k for k in theirs if k not in ours)]:
+        for field in [*ours, *(k for k in theirs if k not in ours)]:
             value = _merge(
-                base.get(key, _ABSENT), theirs.get(key, _ABSENT), ours.get(key, _ABSENT)
+                base.get(field, _ABSENT),
+                theirs.get(field, _ABSENT),
+                ours.get(field, _ABSENT),
+                field,
             )
             if value is not _ABSENT:
-                merged[key] = value
+                merged[field] = value
         return merged
     if _is_entities(theirs) or _is_entities(ours):
         return _merge_entities(
@@ -539,8 +557,47 @@ def _merge(base: Any, theirs: Any, ours: Any) -> Any:
             theirs if isinstance(theirs, list) else [],
             ours if isinstance(ours, list) else [],
         )
+    if key in _ALIGNED_LISTS and isinstance(theirs, list) and isinstance(ours, list):
+        return _merge_aligned(base if isinstance(base, list) else [], theirs, ours)
     # Both changed one plain value: the write being merged in wins.
     return theirs
+
+
+def _merge_aligned(base: list[Any], theirs: list[Any], ours: list[Any]) -> list[Any]:
+    """Lists whose entries have no ids (probes, alternative wordings, timed
+    messages), merged entry by entry. Each side's entries are paired with
+    the base's by content, as `align` pairs them for the doc: an entry both
+    kept is merged, one either side removed (and the other left alone) is
+    gone, and what either side added is kept where it was added. The order
+    is `theirs`', with `ours`' additions after the entry they followed."""
+    canonical = [_canonical(entry) for entry in base]
+    to_base_theirs = align(canonical, [_canonical(entry) for entry in theirs])
+    to_base_ours = align(canonical, [_canonical(entry) for entry in ours])
+    ours_of = {i: k for k, i in enumerate(to_base_ours) if i is not None}
+    # Ours' additions, by the base entry they follow (-1: at the start).
+    added: dict[int, list[Any]] = {}
+    previous = -1
+    for k, i in enumerate(to_base_ours):
+        if i is None:
+            added.setdefault(previous, []).append(ours[k])
+        else:
+            previous = i
+    merged = list(added.pop(-1, []))
+    for j, i in enumerate(to_base_theirs):
+        if i is None:
+            merged.append(theirs[j])
+            continue
+        if i in ours_of:
+            merged.append(_merge(base[i], theirs[j], ours[ours_of[i]]))
+        elif theirs[j] != base[i]:
+            # Ours removed what theirs changed: the write merged in wins, as
+            # for a plain value.
+            merged.append(theirs[j])
+        merged.extend(added.pop(i, []))
+    # After entries theirs removed.
+    for i in sorted(added):
+        merged.extend(added[i])
+    return merged
 
 
 def _merge_entities(

@@ -16,10 +16,11 @@ import threading
 import time
 from collections.abc import Callable
 from contextlib import contextmanager
+from uuid import uuid4
 
 import pytest
 import uvicorn
-from pycrdt import Doc, Provider, Text
+from pycrdt import Awareness, Doc, Provider, Text, create_awareness_message
 from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import Session
 from websockets.asyncio.client import connect
@@ -29,6 +30,7 @@ from app.auth import AuthToken
 from app.collab import rooms
 from app.collab.flat_doc import roots as flat_roots
 from app.collab.guide_doc import doc_id, roots
+from app.collab.parts import LIVE_PARTS
 from app.db import InterviewDataBase
 from app.db.tables import (
     Base,
@@ -104,6 +106,7 @@ def server(tmp_path, monkeypatch):
         "app.api.websockets.content",
         "app.api.dashboard.versions",
         "app.api.dashboard.projects",
+        "app.api.interview",
     ):
         monkeypatch.setattr(f"{module}.content_rooms", registry)
     monkeypatch.setattr(rooms, "SAVE_DELAY", 0.05)
@@ -408,3 +411,98 @@ def welcome_doc(db, project_id) -> ContentDocTable | None:
         if row is not None:
             database.session.expunge(row)
         return row
+
+
+async def test_a_room_does_not_close_on_an_editor_still_joining():
+    # The registry hands a connection its room before the connection is in
+    # the room's `YRoom.clients`. The last editor leaving in between must
+    # not close the room under the one arriving, whose edits would then go
+    # to a room nobody saves.
+    stopped: list[bool] = []
+    gate = asyncio.Event()
+
+    class Room:
+        doc_id = "lineage"
+        connections = 0
+
+        async def serve(self, channel):
+            if channel == "joining":
+                await gate.wait()
+
+        async def stop(self):
+            stopped.append(True)
+
+    room = Room()
+    registry = rooms.ContentRooms(lambda: None)  # ty:ignore[invalid-argument-type]
+
+    async def _open(*_):
+        return room
+
+    registry._open = _open  # ty:ignore[invalid-assignment]
+    project_id = uuid4()
+    joining = asyncio.create_task(
+        registry.serve(project_id, ContentPart.GUIDE, "joining")  # ty:ignore[invalid-argument-type]
+    )
+    await asyncio.sleep(0.01)
+    await registry.serve(project_id, ContentPart.GUIDE, "leaving")  # ty:ignore[invalid-argument-type]
+
+    assert stopped == []
+    assert registry.get(project_id, ContentPart.GUIDE) is room
+
+    gate.set()
+    await joining
+    assert stopped == [True]
+    assert registry.get(project_id, ContentPart.GUIDE) is None
+
+
+def test_nobody_speaks_in_the_servers_name():
+    room = rooms.ContentRoom(
+        uuid4(),
+        LIVE_PARTS[ContentPart.GUIDE],
+        lambda: None,  # ty:ignore[invalid-argument-type]
+        Doc(),
+        1,
+        {},
+        ("EN",),
+        "EN",
+        None,
+    )
+
+    def presence(state: dict, client_id: int | None = None) -> bytes:
+        awareness = Awareness(Doc())
+        awareness.set_local_state(state)
+        update = awareness.encode_awareness_update([awareness.client_id])
+        if client_id is not None:
+            # The same entry, under another client's id.
+            other = Awareness(Doc(client_id=client_id))
+            other.set_local_state(state)
+            update = other.encode_awareness_update([client_id])
+        return create_awareness_message(update)
+
+    assert not room._speaks_for_server(presence({"user": {"name": "A"}}))
+    assert room._speaks_for_server(presence({"server": True, "doc_id": "other"}))
+    assert room._speaks_for_server(
+        presence({"user": {"name": "A"}}, room.room.awareness.client_id)
+    )
+
+
+async def test_text_typed_in_a_language_as_it_is_removed_is_not_saved(server):
+    _url, _tokens, db, project_id = server
+    with db() as database:
+        await database.projects.add_project_language(project_id, "DA", translate=False)
+    room = await rooms.content_rooms._open(project_id, LIVE_PARTS[ContentPart.CONSENT])
+    try:
+        _meta, content = flat_roots(room.doc)
+        content["title"]["EN"].insert(0, "Consent")
+        content["title"]["DA"].insert(0, "Samtykke")
+        # Removed before the room saved what was typed.
+        with db() as database:
+            database.projects.remove_project_language(project_id, "DA")
+
+        await room.save()
+
+        consent = column(db, project_id).consent
+        assert consent is not None and consent.title == {"EN": "Consent"}
+        assert "DA" not in flat_roots(room.doc)[1]["title"]
+    finally:
+        await room.stop()

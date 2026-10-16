@@ -408,6 +408,56 @@ def test_where_both_changed_one_text_the_column_wins():
     assert merged["introduction"]["EN"] == "theirs"
 
 
+def test_a_translation_of_the_probes_keeps_a_probe_rewritten_and_one_added():
+    # A translation (ours) fills in every probe's German while an editor
+    # (theirs) rewrites one probe and adds another: neither list may win
+    # whole, or one side's work is undone.
+    guide = _guide()
+    base = _dump(guide)
+    ours = guide.model_copy(deep=True)
+    translated = ours.question_sections[0].questions[1].probes
+    assert translated is not None
+    for probe in translated:
+        probe["DE"] = "DE " + probe["EN"]
+    theirs = guide.model_copy(deep=True)
+    probes = theirs.question_sections[0].questions[1].probes
+    assert probes is not None
+    probes[0]["EN"] = "EN tell me more"
+    probes.append({"EN": "EN anything else?"})
+
+    merged = merge_guide_data(base, _dump(theirs), _dump(ours))
+
+    assert merged["question_sections"][0]["questions"][1]["probes"] == [
+        {"EN": "EN tell me more", "DA": "DA more", "DE": "DE EN more"},
+        {"EN": "EN else", "DA": "DA else", "DE": "DE EN else"},
+        {"EN": "EN anything else?"},
+    ]
+
+
+def test_a_probe_one_side_added_lands_where_it_was_added():
+    base = {"probes": [{"EN": "a"}, {"EN": "c"}]}
+    ours = {"probes": [{"EN": "a"}, {"EN": "b"}, {"EN": "c"}]}
+    theirs = {"probes": [{"EN": "a", "DA": "å"}, {"EN": "c"}]}
+
+    merged = merge_guide_data(base, theirs, ours)
+
+    assert merged["probes"] == [{"EN": "a", "DA": "å"}, {"EN": "b"}, {"EN": "c"}]
+
+
+def test_text_in_a_language_the_project_dropped_is_not_kept():
+    # Typed into a language just as it was removed: applying with the
+    # project's languages drops it, so no translation outlives its language.
+    guide = _guide()
+    doc = new_doc(guide, ["EN", "DA"])
+
+    apply_guide_data(doc, read_guide_data(doc), ["EN"])
+
+    *_, questions = roots(doc)
+    assert "DA" not in questions[str(_ids["gated"])]["main_question"]
+    assert all("DA" not in entry for entry in questions[str(_ids["gated"])]["probes"])
+    assert "DA" not in read_guide(doc).question_sections[0].questions[1].main_question
+
+
 def test_every_text_has_one_in_each_language_even_if_empty():
     # So nobody has to create one by typing into it, racing someone else.
     guide = _guide()

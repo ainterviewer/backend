@@ -55,14 +55,27 @@ class ContentDocRepository(BaseRepository):
         )
 
     def errors(self, project_id: UUID4) -> dict[ContentPart, list[str]]:
-        """Per part, why its doc does not make a valid one, where it does not."""
+        """Per part, why its doc does not make a valid one, where it does not.
+
+        Only a doc still in step with its column counts. One the column has
+        moved past since -- a restore, a PUT, written with no room open --
+        becomes that column's value when its room next opens (the column wins
+        the merge wherever the two differ), so its errors no longer describe
+        anything, and must not hold back publishing the valid draft."""
+        content = self._content(project_id)
         rows = self.session.execute(
-            select(ContentDocTable.part, ContentDocTable.errors).where(
+            select(
+                ContentDocTable.part, ContentDocTable.errors, ContentDocTable.revision
+            ).where(
                 ContentDocTable.project_id == project_id,
                 ContentDocTable.errors.is_not(None),
             )
         )
-        return {part: errors for part, errors in rows if errors}
+        return {
+            part: errors
+            for part, errors, revision in rows
+            if errors and revision == content.revision_of(part)
+        }
 
     def save(
         self,
