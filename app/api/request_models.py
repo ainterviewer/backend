@@ -75,6 +75,7 @@ class InterviewFilters(BaseModel):
     search: str | None = Field(default=None, max_length=200)
     pid: str | None = Field(default=None, max_length=200)
     reported: bool | None = None
+    intervened: bool | None = None
 
 
 class InterviewSelectionRequest(BaseModel):

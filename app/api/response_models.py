@@ -39,6 +39,8 @@ class InterviewFacets(BaseModel):
     #: "true"/"false" rather than a set of values: the filter behind it asks
     #: whether an interview has any reported questions at all.
     reported: list[FacetCount] = []
+    #: Likewise: whether the safety check intervened in an interview at all.
+    intervened: list[FacetCount] = []
 
 
 class InterviewListResponse(PaginatedResponse[InterviewSummaryPublic]):

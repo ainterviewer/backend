@@ -1,17 +1,29 @@
 import datetime
+import json
 import logging
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal
 
 from pydantic import UUID4
-from sqlalchemy import String, case, cast, delete, exists, func, or_, select, update
+from sqlalchemy import (
+    String,
+    and_,
+    case,
+    cast,
+    delete,
+    exists,
+    func,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload, noload, selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.sql.elements import ColumnElement
 
-from ainterviewer.interfaces import SecurityIntervention
+from ainterviewer.interfaces import SecurityIntervention, SecurityOverride
 from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
 from ainterviewer.types import (
     Feedback,
@@ -49,12 +61,27 @@ from ..tables import (
     TestRunTable,
     TestSetupTable,
 )
-from ..types import InterviewType
+from ..types import InterviewType, ReportSource, SafetyFlag
 from ..utils import is_foreign_key_violation
 from .base import BaseRepository
 from .errors import InterviewGoneError, ResumeTokenError
 
 logger = logging.getLogger(__name__)
+
+#: The task the library writes for every safety assessment, its `reason` the
+#: decision that triggered (NULL when none did) and its `response` the whole
+#: assessment, one `{reasoning, probability}` per decision.
+SECURITY_TASK = "assess_security"
+
+
+def _evaluation(response: str | None, decision: str) -> dict:
+    """One decision's `{reasoning, probability}` out of an assessment, or {}
+    when the stored response cannot be read."""
+    try:
+        evaluation = json.loads(response or "").get(decision)
+    except (ValueError, AttributeError):
+        return {}
+    return evaluation if isinstance(evaluation, dict) else {}
 
 
 SORTABLE_INTERVIEW_COLUMNS = frozenset(
@@ -68,6 +95,7 @@ SORTABLE_INTERVIEW_COLUMNS = frozenset(
         "test_name",
         "pid",
         "n_reports",
+        "n_interventions",
     }
 )
 """Columns `get_interviews` will sort by.
@@ -184,7 +212,8 @@ class InterviewRepository(BaseRepository):
 
     @staticmethod
     def _n_reports_column():
-        """How many questions a respondent reported in this interview.
+        """How many messages in this interview were flagged for review, by the
+        respondent or by the safety check.
 
         A correlated count rather than a join: joining the reports would
         multiply the interview row by them, and the list is a page of
@@ -195,6 +224,41 @@ class InterviewRepository(BaseRepository):
             .where(MessageReportTable.interview_id == InterviewTable.id)
             .scalar_subquery()
             .label("n_reports")
+        )
+
+    @staticmethod
+    def _intervened(message=MessageTable):
+        """Whether a message is a safety-check intervention.
+
+        Both NULLs count as none: rows from before the column existed hold SQL
+        NULL, and the app's writes hold JSON ``null`` -- `PydanticJSONB` binds
+        None, and the JSON type serializes it.
+        """
+        return and_(
+            message.security_intervention.is_not(None),
+            cast(message.security_intervention, String) != "null",
+        )
+
+    @classmethod
+    def _n_interventions_column(cls):
+        """How many times the safety check intervened in this interview.
+
+        Counted off the messages rather than the review flags, which only
+        distributed interviews get: this is what the test results show.
+        """
+        return (
+            select(func.count(MessageTable.id))
+            .where(MessageTable.interview_id == InterviewTable.id, cls._intervened())
+            .scalar_subquery()
+            .label("n_interventions")
+        )
+
+    @classmethod
+    def _has_intervention(cls):
+        return (
+            select(MessageTable.id)
+            .where(MessageTable.interview_id == InterviewTable.id, cls._intervened())
+            .exists()
         )
 
     @staticmethod
@@ -234,8 +298,9 @@ class InterviewRepository(BaseRepository):
             )
         )
 
-    @staticmethod
+    @classmethod
     def _interview_filters(
+        cls,
         project_id: UUID4,
         interview_types: list[InterviewType] | None = None,
         selected_types: list[InterviewType] | None = None,
@@ -247,6 +312,7 @@ class InterviewRepository(BaseRepository):
         search: str | None = None,
         pid: str | None = None,
         reported: bool | None = None,
+        intervened: bool | None = None,
     ) -> dict[str, ColumnElement[bool]]:
         """The active filters, keyed by the facet each one belongs to.
 
@@ -311,6 +377,12 @@ class InterviewRepository(BaseRepository):
             )
             filters["reported"] = has_report if reported else ~has_report
 
+        if intervened is not None:
+            has_intervention = cls._has_intervention()
+            filters["intervened"] = (
+                has_intervention if intervened else ~has_intervention
+            )
+
         if search and (term := search.strip()):
             pattern = f"%{term}%"
             filters["search"] = or_(
@@ -326,7 +398,7 @@ class InterviewRepository(BaseRepository):
         return filters
 
     @classmethod
-    def _summary_statement(cls, test_name, pid_column, n_reports):
+    def _summary_statement(cls, test_name, pid_column, n_reports, n_interventions):
         """The columns of an `InterviewSummaryPublic`, joined but unfiltered.
 
         Takes the computed columns rather than building them, because
@@ -346,6 +418,7 @@ class InterviewRepository(BaseRepository):
                 test_name,
                 pid_column,
                 n_reports,
+                n_interventions,
             )
         )
 
@@ -362,6 +435,7 @@ class InterviewRepository(BaseRepository):
             self._test_name_column(),
             ParticipantTable.pid.label("pid"),
             self._n_reports_column(),
+            self._n_interventions_column(),
         ).where(
             InterviewTable.project_id == project_id,
             InterviewTable.id.in_(interview_ids),
@@ -388,6 +462,7 @@ class InterviewRepository(BaseRepository):
         search: str | None = None,
         pid: str | None = None,
         reported: bool | None = None,
+        intervened: bool | None = None,
     ) -> tuple[Sequence[InterviewSummaryPublic], int]:
         """One page of interview summaries, plus the total matching count.
 
@@ -404,6 +479,7 @@ class InterviewRepository(BaseRepository):
         test_name = self._test_name_column()
         pid_column = ParticipantTable.pid.label("pid")
         n_reports = self._n_reports_column()
+        n_interventions = self._n_interventions_column()
 
         if sorting_column == "last_updated":
             # Interviews written before last_updated was maintained still have
@@ -423,6 +499,8 @@ class InterviewRepository(BaseRepository):
         elif sorting_column == "n_reports":
             # Likewise a subquery rather than a column.
             _sorting_col = n_reports
+        elif sorting_column == "n_interventions":
+            _sorting_col = n_interventions
         else:
             _sorting_col = getattr(InterviewTable, sorting_column)
 
@@ -439,11 +517,12 @@ class InterviewRepository(BaseRepository):
                 search=search,
                 pid=pid,
                 reported=reported,
+                intervened=intervened,
             ).values()
         )
 
         statement = (
-            self._summary_statement(test_name, pid_column, n_reports)
+            self._summary_statement(test_name, pid_column, n_reports, n_interventions)
             .where(*conditions)
             .order_by(
                 _sorting_col.desc() if sorting_order == "desc" else _sorting_col.asc()
@@ -612,6 +691,7 @@ class InterviewRepository(BaseRepository):
         search: str | None = None,
         pid: str | None = None,
         reported: bool | None = None,
+        intervened: bool | None = None,
     ) -> dict[str, dict[str, int]]:
         """Distinct values and their counts for each filterable column.
 
@@ -631,6 +711,7 @@ class InterviewRepository(BaseRepository):
             search=search,
             pid=pid,
             reported=reported,
+            intervened=intervened,
         )
 
         columns = {
@@ -649,6 +730,7 @@ class InterviewRepository(BaseRepository):
                 ),
                 else_="false",
             ),
+            "intervened": case((self._has_intervention(), "true"), else_="false"),
         }
 
         facets: dict[str, dict[str, int]] = {}
@@ -848,7 +930,118 @@ class InterviewRepository(BaseRepository):
             )
             return message_id
 
+        if security_intervention is not None:
+            self._flag_safety_intervention(message, security_intervention)
+        elif message_type == MessageType.SECURITY_OVERRIDE:
+            self._record_safety_override(interview_id, content)
+
         return message.message_id
+
+    def _flag_safety_intervention(
+        self, message: MessageTable, intervention: SecurityIntervention
+    ) -> None:
+        """Put a safety-check intervention in the review queues.
+
+        Done here rather than in the library, which only knows the persistence
+        protocol: the queues are this app's, and the intervention message is
+        the one write that says the check acted -- a triggered assessment can
+        still be cancelled before the respondent is shown anything.
+
+        Only distributed interviews are flagged; see `MessageReportTable`. The
+        decision and its reasoning come off the `assess_security` task the
+        check wrote just before (`SafetyFlag`), and the flag names the answer
+        that task assessed, falling back to the intervention itself when it
+        cannot be found. Never raises: a review queue missing a row must not
+        cost a respondent their session.
+        """
+        try:
+            interview_type = self.session.scalar(
+                select(InterviewTable.type).where(
+                    InterviewTable.id == message.interview_id
+                )
+            )
+            if interview_type != InterviewType.DISTRIBUTED:
+                return
+
+            task = self.session.scalars(
+                select(TaskTable)
+                .where(
+                    TaskTable.interview_id == message.interview_id,
+                    TaskTable.task == SECURITY_TASK,
+                    TaskTable.reason.is_not(None),
+                )
+                .order_by(TaskTable.created_at.desc(), TaskTable.message_id.desc())
+                .limit(1)
+            ).first()
+
+            decision = task.reason if task and task.reason else "unknown"
+            evaluation = _evaluation(task.response if task else None, decision)
+
+            flagged_id = message.id
+            if task is not None:
+                flagged_id = (
+                    self.session.scalar(
+                        select(MessageTable.id).where(
+                            MessageTable.interview_id == message.interview_id,
+                            MessageTable.message_id == task.message_id,
+                            MessageTable.role == MessageRole.USER,
+                        )
+                    )
+                    or message.id
+                )
+
+            self.session.add(
+                MessageReportTable(
+                    message_id=flagged_id,
+                    interview_id=message.interview_id,
+                    project_id=message.project_id,
+                    source=ReportSource.SAFETY_CHECK,
+                    safety=SafetyFlag(
+                        decision=decision,
+                        probability=evaluation.get("probability"),
+                        reasoning=evaluation.get("reasoning"),
+                        action=intervention.action,
+                        respondent_override=intervention.respondent_override,
+                    ),
+                )
+            )
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            logger.exception(
+                "Could not flag the safety intervention on interview %s",
+                message.interview_id,
+            )
+
+    def _record_safety_override(self, interview_id: UUID4, answer: str) -> None:
+        """Note the respondent's answer to the latest intervention on its flag.
+
+        The answer arrives as a message of its own after the flag is written.
+        Reviewers need it on the flag: an intervention the respondent
+        overrode, carrying on past it, is the one most worth a look.
+        """
+        try:
+            report = self.session.scalars(
+                select(MessageReportTable)
+                .where(
+                    MessageReportTable.interview_id == interview_id,
+                    MessageReportTable.source == ReportSource.SAFETY_CHECK,
+                )
+                .order_by(MessageReportTable.created_at.desc())
+                .limit(1)
+            ).first()
+            if report is None or report.safety is None:
+                return
+
+            report.safety = report.safety.model_copy(
+                update={"override": SecurityOverride(answer)}
+            )
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            logger.exception(
+                "Could not record the safety override on interview %s", interview_id
+            )
 
     def save_image(self, image: Image): ...
 

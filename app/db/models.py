@@ -66,7 +66,9 @@ from .types import (
     ContentVersionKind,
     InterviewType,
     ReportReason,
+    ReportSource,
     ReportStatus,
+    SafetyFlag,
 )
 from .versioning import BumpName
 
@@ -465,8 +467,12 @@ class InterviewSummaryPublic(_BaseModel):
     last_updated: datetime | None = None
     total_time_spent: int = 0
     n_messages: int
-    #: How many of this interview's questions the respondent reported.
+    #: How many of this interview's messages were flagged for review: questions
+    #: the respondent reported, and answers the safety check intervened on.
     n_reports: int = 0
+    #: How many times the safety check intervened, counted off the transcript
+    #: -- test interviews included, which `n_reports` never flags.
+    n_interventions: int = 0
     test_name: str | None = None
     # The participant this interview belongs to, joined in from the
     # participant record. NULL for interviews that were never distributed to
@@ -868,8 +874,13 @@ class MessageReportPublic(_BaseModel):
     message_id: UUID4
     interview_id: UUID4
     project_id: UUID4
-    reason: ReportReason
+    source: ReportSource = ReportSource.RESPONDENT
+    #: Set when `source` is the respondent.
+    reason: ReportReason | None = None
     comment: str | None = None
+    #: Set when `source` is the safety check. Viewers of the project see it,
+    #: as they see the transcript it was raised on.
+    safety: SafetyFlag | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -906,6 +917,8 @@ class MessageReportRowPublic(MessageReportPublic):
     #: The interview-scoped number of the reported message, as the transcript
     #: shows it. `message_id` above is the row uuid.
     question_number: int
+    #: The flagged message's text: the interviewer's question for a
+    #: respondent report, the respondent's answer for a safety flag.
     question: str
     project_title: str
     language: LanguageCode = "EN"

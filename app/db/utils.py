@@ -51,6 +51,14 @@ def fix_nested_columns(df: pl.DataFrame) -> pl.DataFrame:
 EXTERNAL_PARAM_PREFIX = "ext_"
 
 
+def _report_reason(report: dict) -> str:
+    """A report's reason, or ``safety:<decision>`` for a safety-check flag,
+    which has no reason of its own."""
+    if report.get("reason"):
+        return report["reason"]
+    return f"safety:{(report.get('safety') or {}).get('decision', 'unknown')}"
+
+
 def messages_to_dataframe(
     messages: list[MessagePublic],
     external_params: Sequence[ExternalParam] | None = None,
@@ -121,7 +129,7 @@ def messages_to_dataframe(
         # fields above give an analyst. `comments` is still left to it.
         reports = d.get("reports") or []
         d["n_reports"] = len(reports)
-        d["report_reasons"] = "; ".join(report["reason"] for report in reports)
+        d["report_reasons"] = "; ".join(_report_reason(report) for report in reports)
         d["reports"] = json.dumps(reports) if reports else ""
 
         rows.append(d)

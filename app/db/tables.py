@@ -73,7 +73,9 @@ from .types import (
     InterviewType,
     LanguageType,
     ReportReason,
+    ReportSource,
     ReportStatus,
+    SafetyFlag,
     VerificationPurpose,
 )
 
@@ -1432,7 +1434,16 @@ class MessageCommentTable(Base):
 
 
 class MessageReportTable(Base):
-    """A respondent's report of one interviewer question.
+    """A message flagged for review: a respondent's report of one interviewer
+    question, or the safety check intervening on one of their answers.
+
+    ``source`` says which. A safety flag is written by the backend when the
+    intervention message is stored (``InterviewRepository.insert_message``),
+    names the respondent's answer the check assessed, has no ``reason`` and
+    carries ``safety`` instead. It is only written for distributed interviews:
+    a synthetic test built to probe the safety check would otherwise bury the
+    queue, and test runs show their interventions in their own results.
+    Everything below -- the two tracks, read state, the badges -- is shared.
 
     This is the respondent's own channel, and the only one they have: they
     hold no account, so the report is written under the ``interview_token``
@@ -1482,10 +1493,23 @@ class MessageReportTable(Base):
     project_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("project.id", ondelete="CASCADE")
     )
-    reason: Mapped[ReportReason] = mapped_column(SQLEnum(ReportReason))
+    source: Mapped[ReportSource] = mapped_column(
+        SQLEnum(ReportSource),
+        default=ReportSource.RESPONDENT,
+        # Every row written before safety flags existed is a respondent's.
+        server_default=ReportSource.RESPONDENT.name,
+    )
+    #: Set on every respondent report, never on a safety flag.
+    reason: Mapped[ReportReason | None] = mapped_column(
+        SQLEnum(ReportReason), default=None
+    )
     #: The respondent's own words. Optional on every reason but expected on
     #: ``OTHER``, which says nothing on its own.
     comment: Mapped[str | None] = mapped_column(Text, default=None)
+    #: Set on every safety flag, never on a respondent report.
+    safety: Mapped[SafetyFlag | None] = mapped_column(
+        PydanticJSONB(SafetyFlag), default=None
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     updated_at: Mapped[datetime.datetime] = mapped_column(default=now, onupdate=now)
 

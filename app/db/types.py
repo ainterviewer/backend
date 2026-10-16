@@ -4,8 +4,11 @@ import datetime
 from enum import StrEnum
 from typing import final
 
+from pydantic import BaseModel
 from sqlalchemy.types import VARCHAR, DateTime, TypeDecorator
 
+from ainterviewer.interfaces import SecurityOverride
+from ainterviewer.interview_guides.types import SecurityAction
 from ainterviewer.settings import settings as lib_settings
 
 
@@ -61,6 +64,42 @@ class ReportReason(StrEnum):
     OFFENSIVE = "offensive"
     IRRELEVANT = "irrelevant"
     OTHER = "other"
+
+
+class ReportSource(StrEnum):
+    """Who flagged a message: the respondent, or the interview's safety check.
+
+    Both land in the same queues because they ask a reviewer the same thing --
+    look at this part of the transcript -- and need the same two review tracks.
+    A respondent's report names an interviewer question and carries a
+    ``ReportReason``; a safety flag names the respondent answer the check
+    intervened on and carries a ``SafetyFlag`` instead.
+    """
+
+    RESPONDENT = "respondent"
+    SAFETY_CHECK = "safety_check"
+
+
+class SafetyFlag(BaseModel):
+    """What the safety check decided, kept on the report it raised.
+
+    Copied off the check's ``assess_security`` task when the intervention is
+    stored, because nothing else joins the two: the task names the answer it
+    assessed by its interview-scoped number, and the intervention message
+    deliberately carries no decision -- it is sent to the respondent's client.
+    Reviewers are not the respondent, and without the decision and its
+    reasoning a flag says only that something happened.
+    """
+
+    #: The policy decision that triggered, e.g. ``self_harm``.
+    decision: str
+    probability: float | None = None
+    reasoning: str | None = None
+    action: SecurityAction
+    respondent_override: bool = False
+    #: The respondent's answer in the modal, when they were allowed one and
+    #: gave it. NULL until then, and on interventions that offered none.
+    override: SecurityOverride | None = None
 
 
 class ReportStatus(StrEnum):
