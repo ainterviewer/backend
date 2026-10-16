@@ -17,7 +17,7 @@ whether a platform admin has reviewed it for safety.
 Both tables are new and start empty, so this is reversible as it stands.
 
 Revision ID: cc6e75238415
-Revises: da738218b8a4
+Revises: cebbae95f61d
 Create Date: 2026-09-17 13:07:58.559595
 
 """
@@ -38,7 +38,7 @@ import app.db.types  # noqa: F401
 
 # revision identifiers, used by Alembic.
 revision: str = "cc6e75238415"
-down_revision: str | None = "da738218b8a4"
+down_revision: str | None = "cebbae95f61d"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
