@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import UUID4, BaseModel
 
@@ -11,6 +11,7 @@ from ainterviewer.types import Feedback
 
 from ..db.models import InterviewSummaryPublic, ParticipantPublic
 from ..db.types import ContentPart
+from ..types import Scope
 
 
 class PaginatedResponse[T](BaseModel):
@@ -141,3 +142,82 @@ class ProjectContentPublic(BaseModel):
     welcome: LocalizedWelcome | None
     #: Each part's revision, for its editor's next `If-Match`.
     revisions: dict[ContentPart, int]
+
+
+#################
+# Admin overview #
+#################
+
+
+class ScopeCounts(BaseModel):
+    """A count split by account scope, so the overview can hide demo accounts
+    (invited in batches that would swamp real growth) without a refetch."""
+
+    admin: int = 0
+    user: int = 0
+    demo: int = 0
+
+
+class InterviewTypeCounts(BaseModel):
+    distributed: int = 0
+    manual_test: int = 0
+    synthetic_test: int = 0
+
+
+class DailyStats(BaseModel):
+    """One calendar day (app time zone) of the admin overview.
+
+    `accounts` and `usable` are of accounts that still exist: a deleted user
+    leaves no trace, so the history shrinks with them.
+    """
+
+    day: date
+    signups: ScopeCounts
+    # Accounts existing at the end of the day.
+    accounts: ScopeCounts
+    # Of those, the ones whose `expires_at` had not passed: what demo expiry
+    # takes out of `accounts`.
+    usable: ScopeCounts
+    # Distinct users active that day, and over the 7 days ending on it.
+    active: ScopeCounts
+    weekly_active: ScopeCounts
+    interviews: InterviewTypeCounts
+    projects: int
+
+
+class AdminStatsSummary(BaseModel):
+    """Headline figures as of today, independent of the requested range."""
+
+    accounts: ScopeCounts
+    usable: ScopeCounts
+    active_today: ScopeCounts
+    active_7d: ScopeCounts
+    active_30d: ScopeCounts
+    new_7d: ScopeCounts
+    new_30d: ScopeCounts
+
+
+class RetentionWeek(BaseModel):
+    """Of a cohort's `eligible` members -- those whose week `week` after
+    signing up has fully passed -- how many were active during it."""
+
+    week: int
+    eligible: int
+    retained: int
+
+
+class RetentionCohort(BaseModel):
+    """The users of one scope who signed up in one month (`YYYY-MM`)."""
+
+    month: str
+    scope: Scope
+    size: int
+    weeks: list[RetentionWeek]
+
+
+class AdminStats(BaseModel):
+    start: date
+    end: date
+    summary: AdminStatsSummary
+    days: list[DailyStats]
+    retention: list[RetentionCohort]

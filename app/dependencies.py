@@ -1,14 +1,20 @@
+import datetime
+import logging
+import threading
 from collections.abc import Generator
 from typing import Annotated, Literal
+from uuid import UUID
 
 from fastapi import Cookie, Depends, Header, HTTPException, Response
 from fastapi.security import APIKeyCookie
 from jose import JWTError
 from pydantic import UUID4, ValidationError
 from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ainterviewer.types import LanguageCode
+from ainterviewer.utils import now
 
 from .auth import AssistanceSessionToken, AuthToken, InterviewToken
 from .db import InterviewDataBase
@@ -20,6 +26,9 @@ from .settings import app_settings
 from .types import CollaboratorRole, Scope
 
 # from .websockets import WebSocketConnectionManager
+
+
+logger = logging.getLogger(__name__)
 
 
 class AuthError(HTTPException): ...
@@ -87,6 +96,48 @@ def _decode_optional_token(
         return None
 
 
+# When this process last recorded each user's activity. Per-process like the
+# session registry: with several workers each records once per debounce, which
+# only costs a few extra idempotent upserts.
+_activity_recorded: dict[UUID, datetime.datetime] = {}
+_activity_lock = threading.Lock()
+
+
+def _record_activity(
+    auth_token: AuthToken = Depends(_decode_token),
+    db: InterviewDataBase = Depends(get_db),
+) -> AuthToken:
+    """Note that the caller used the dashboard today; see `UserActivityTable`.
+
+    Every scope-checked endpoint passes through here, so this is what feeds
+    the admin overview's active-user counts and `user.last_active`. The
+    in-process cache keeps it off the database for all but the first request
+    of a day and one per `last_active_debounce` after that. `/refresh` does
+    not come through here, so a backgrounded tab refreshing its token does not
+    count as activity.
+
+    A failed write is logged and swallowed: losing a sample of activity must
+    never cost the user their request.
+    """
+    timestamp = now()
+    debounce = app_settings.app.last_active_debounce.to_timedelta()
+    with _activity_lock:
+        last = _activity_recorded.get(auth_token.user_id)
+        if (
+            last is not None
+            and last.date() == timestamp.date()
+            and timestamp - last < debounce
+        ):
+            return auth_token
+        _activity_recorded[auth_token.user_id] = timestamp
+    try:
+        db.users.record_activity(auth_token.user_id, timestamp)
+    except SQLAlchemyError:
+        db.session.rollback()
+        logger.exception("Could not record activity for %s", auth_token.user_id)
+    return auth_token
+
+
 class ScopeChecker:
     def __init__(self, required_scope: Scope = Scope.ADMIN):
         self.required_scope = required_scope
@@ -99,7 +150,7 @@ class ScopeChecker:
 
     def __call__(
         self,
-        auth_token: AuthToken = Depends(_decode_token),
+        auth_token: AuthToken = Depends(_record_activity),
     ) -> AuthToken:
         scope_strings = set(auth_token.scope.split())
         user_scopes = {Scope(scope) for scope in scope_strings}

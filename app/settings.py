@@ -97,9 +97,9 @@ class AppSettings(BaseModel):
 
     demo_limits: DemoLimits = Field(default_factory=DemoLimits)
 
-    # Debounce for the last_active touch on /refresh. A client with the app
-    # open refreshes every jwt_auth_token_expiration, so without this the
-    # column would be rewritten on that cadence for no extra resolution.
+    # Debounce for recording activity (user_activity.last_seen and
+    # user.last_active) from authenticated requests: a user is written at most
+    # once per window per process, plus once on the first request of a day.
     last_active_debounce: TimeDelta = Field(
         default_factory=lambda: TimeDelta(minutes=10)
     )

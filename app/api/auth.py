@@ -648,12 +648,9 @@ async def refresh(
     # Look up user for fresh scope (in case it changed since last login)
     user = db.users.get_user_by_id(stored.user_id)
 
-    # A refresh means a client is alive, not that a human did something --
-    # a backgrounded tab refreshes on its own. Good enough for session
-    # liveness, debounced so it isn't a write on every refresh.
-    db.users.touch_last_active(
-        user.id, app_settings.app.last_active_debounce.to_timedelta()
-    )
+    # No last_active touch here: a backgrounded tab refreshes on its own, so a
+    # refresh is not activity. Scope-checked requests record it instead
+    # (`_record_activity`, app/dependencies.py).
 
     # Issue new token pair, same family
     new_access = create_auth_token(

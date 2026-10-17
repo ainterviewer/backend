@@ -313,6 +313,35 @@ class UserTable(Base):
     verification_codes: Mapped[list["VerificationCodeTable"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    activity: Mapped[list["UserActivityTable"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class UserActivityTable(Base):
+    """One row per user per day on which they used the dashboard.
+
+    `UserTable.last_active` is a single overwritten stamp, so it can say who
+    was active recently but never who was active on a given day; this is the
+    history behind the admin overview's daily/weekly active counts and
+    retention. `day` is the app time zone's calendar date.
+
+    Written by `record_activity` (app/dependencies.py), debounced in-process
+    so a busy user costs one write per `last_active_debounce`, not one per
+    request.
+    """
+
+    __tablename__ = "user_activity"
+    __table_args__ = (UniqueConstraint("user_id", "day", name="user_day"),)
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), index=True
+    )
+    day: Mapped[datetime.date] = mapped_column(sa.Date, index=True)
+    first_seen: Mapped[datetime.datetime] = mapped_column(default=now)
+    last_seen: Mapped[datetime.datetime] = mapped_column(default=now)
+
+    user: Mapped["UserTable"] = relationship(back_populates="activity")
 
 
 #############

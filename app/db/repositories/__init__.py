@@ -9,6 +9,7 @@ from .newsletter import NewsletterRepository
 from .participant import ParticipantRepository
 from .project import ProjectRepository
 from .reports import ReportRepository
+from .stats import StatsRepository
 from .test import TestRepository
 from .user import UserRepository
 from .verification import VerificationRepository
@@ -26,6 +27,7 @@ __all__ = [
     "ParticipantRepository",
     "ProjectRepository",
     "ReportRepository",
+    "StatsRepository",
     "TestRepository",
     "UserRepository",
     "VerificationRepository",
