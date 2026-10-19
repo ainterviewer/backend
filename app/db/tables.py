@@ -262,7 +262,8 @@ class UserTable(Base):
     )
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     last_active: Mapped[datetime.datetime] = mapped_column(default=now)
-    last_login: Mapped[datetime.datetime] = mapped_column(default=now)
+    # NULL until the user first logs in.
+    last_login: Mapped[datetime.datetime | None] = mapped_column(default=None)
     scope: Mapped[Scope] = mapped_column(SQLEnum(Scope), default=Scope.USER)
     invite_token: Mapped[uuid.UUID | None] = mapped_column()
     registration_token: Mapped[str | None] = mapped_column(default=None)

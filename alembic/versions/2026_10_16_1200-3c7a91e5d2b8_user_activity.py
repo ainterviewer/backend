@@ -8,8 +8,15 @@ answer "who was active on the 3rd".
 The table is seeded with rows reconstructed from what users left
 behind with a timestamp: signing up, logging in, owning a project, coding,
 commenting, keeping a content version, starting an experiment or an
-assistance session. That is a lower bound -- a day spent only reading left
-nothing. Rows from here on are written live by authenticated requests.
+assistance session, and the day of `user.last_active`. That is a lower bound
+-- a day spent only reading left nothing. Rows from here on are written live
+by authenticated requests.
+
+`user.last_login` becomes nullable, NULL until a first login: it used to be
+stamped at sign-up, so an account that never logged in read as having logged
+in the moment it was created. Existing rows whose `last_login` is within a
+second of `created_at` are such stamps (a real login follows email
+verification, seconds later at the least) and are cleared.
 
 Revision ID: 3c7a91e5d2b8
 Revises: da738218b8a4
@@ -35,10 +42,13 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 # (table, user column, timestamp column): every place a user's action left a
-# timestamp. `user.created_at` / `last_login` are on the user row itself.
+# timestamp. `user.created_at` / `last_login` / `last_active` are on the user
+# row itself. `last_active` was bumped by token refreshes, so it can credit a
+# day on which a tab was merely left open -- one day per user, at most.
 _SOURCES = [
     ("user", "id", "created_at"),
     ("user", "id", "last_login"),
+    ("user", "id", "last_active"),
     ("project", "owner_id", "created_at"),
     ("coding", "user_id", "created_at"),
     ("coding", "user_id", "updated_at"),
@@ -50,6 +60,15 @@ _SOURCES = [
 
 
 def upgrade() -> None:
+    with op.batch_alter_table("user", schema=None) as batch_op:
+        batch_op.alter_column(
+            "last_login", existing_type=app.db.types.AppDateTime(), nullable=True
+        )
+    op.execute(
+        'UPDATE "user" SET last_login = NULL '
+        "WHERE abs(julianday(last_login) - julianday(created_at)) * 86400 < 1"
+    )
+
     op.create_table(
         "user_activity",
         sa.Column("user_id", sa.Uuid(), nullable=False),
@@ -99,3 +118,9 @@ def downgrade() -> None:
         batch_op.drop_index(batch_op.f("ix_user_activity_day"))
         batch_op.drop_index(batch_op.f("ix_user_activity_user_id"))
     op.drop_table("user_activity")
+
+    op.execute('UPDATE "user" SET last_login = created_at WHERE last_login IS NULL')
+    with op.batch_alter_table("user", schema=None) as batch_op:
+        batch_op.alter_column(
+            "last_login", existing_type=app.db.types.AppDateTime(), nullable=False
+        )

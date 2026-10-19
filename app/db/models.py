@@ -139,7 +139,7 @@ class UserBase(_BaseModel):
     last_name: str | None = None
     created_at: datetime
     last_active: datetime
-    last_login: datetime
+    last_login: datetime | None = None
     scope: Scope = Scope.USER
 
 
@@ -150,7 +150,7 @@ class UserCreateRequest(UserBase):
 
     created_at: datetime = Field(default_factory=now)
     last_active: datetime = Field(default_factory=now)
-    last_login: datetime = Field(default_factory=now)
+    last_login: datetime | None = None
     research_consent: bool = False
     password: str = Field(min_length=8)
 
