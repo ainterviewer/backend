@@ -1,27 +1,8 @@
 .env
 config.toml
 
-data/dumps/
-data/analysis/*
-data/images/*
-storage/qr_codes/*
-storage/users/*
-models/*/*
-models/*.gguf
 storage/*
-
-notes/
-
 *.sqlite
-
-scripts/*.txt
-scripts/*.csv
-scripts/*.json
-scripts/*.jsonl
-
-backend/tests/frontend/screenshots/*
-
-sdk/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
