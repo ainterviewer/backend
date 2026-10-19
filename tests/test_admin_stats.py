@@ -102,10 +102,22 @@ def test_a_scope_checked_request_records_the_day_once(setup):
 
 def test_activity_of_a_deleted_user_does_not_fail_the_request(setup):
     client, _, _, _ = setup
-    ghost = AuthToken(user_id=uuid4(), scope=Scope.ADMIN).encode()
+    ghost_id = uuid4()
+    ghost = AuthToken(user_id=ghost_id, scope=Scope.ADMIN).encode()
     # The foreign key refuses the row; the request still goes through.
     response = client.get("/api/admin/stats", cookies={"access_token": ghost})
     assert response.status_code == 200
+    # And the failed write gives its debounce slot back, so the next request
+    # tries again instead of waiting the window out.
+    assert ghost_id not in dependencies._activity_recorded
+
+
+def test_a_role_checked_request_records_the_day(setup):
+    client, cookies, admin_id, engine = setup
+    # Gated by `ProjectViewer` alone, with no scope token.
+    client.get(f"/api/projects/{uuid4()}/tests", cookies=cookies)
+    [row] = _activity(engine)
+    assert row.user_id == admin_id
 
 
 def test_stats_are_admin_only(setup):

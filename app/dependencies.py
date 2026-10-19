@@ -109,15 +109,21 @@ def _record_activity(
 ) -> AuthToken:
     """Note that the caller used the dashboard today; see `UserActivityTable`.
 
-    Every scope-checked endpoint passes through here, so this is what feeds
-    the admin overview's active-user counts and `user.last_active`. The
-    in-process cache keeps it off the database for all but the first request
-    of a day and one per `last_active_debounce` after that. `/refresh` does
-    not come through here, so a backgrounded tab refreshing its token does not
-    count as activity.
+    Every scope- or role-checked endpoint passes through here (`ScopeChecker`,
+    `ResourceRoleChecker`), so this is what feeds the admin overview's
+    active-user counts and `user.last_active`. The in-process cache keeps it
+    off the database for all but the first request of a day and one per
+    `last_active_debounce` after that. `/refresh` does not come through here,
+    so a backgrounded tab refreshing its token does not count as activity.
 
     A failed write is logged and swallowed: losing a sample of activity must
-    never cost the user their request.
+    never cost the user their request. The slot is given back on failure, so
+    the next request tries again rather than waiting out the debounce.
+
+    This commits the request's own session (`get_db` is cached per request),
+    while dependencies are still being resolved: nothing is pending yet, but
+    a dependency that runs before this one and leaves writes in the session
+    would have them committed here, and objects it loaded expired.
     """
     timestamp = now()
     debounce = app_settings.app.last_active_debounce.to_timedelta()
@@ -129,12 +135,19 @@ def _record_activity(
             and timestamp - last < debounce
         ):
             return auth_token
+        # Claimed before writing, so concurrent requests don't all write.
         _activity_recorded[auth_token.user_id] = timestamp
     try:
         db.users.record_activity(auth_token.user_id, timestamp)
     except SQLAlchemyError:
         db.session.rollback()
         logger.exception("Could not record activity for %s", auth_token.user_id)
+        with _activity_lock:
+            if _activity_recorded.get(auth_token.user_id) == timestamp:
+                if last is None:
+                    del _activity_recorded[auth_token.user_id]
+                else:
+                    _activity_recorded[auth_token.user_id] = last
     return auth_token
 
 
@@ -190,7 +203,9 @@ class ResourceRoleChecker:
         self,
         project_id: UUID4 | None = None,
         folder_id: UUID4 | None = None,
-        token: AuthToken = Depends(_decode_token),
+        # Several routes (analysis, synthesis, assistance) are gated by role
+        # alone, so activity is recorded here as well as in `ScopeChecker`.
+        token: AuthToken = Depends(_record_activity),
         db: InterviewDataBase = Depends(get_db),
     ) -> AuthToken:
         # Admin scope bypasses resource checks
