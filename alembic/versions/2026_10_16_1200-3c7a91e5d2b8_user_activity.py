@@ -19,7 +19,7 @@ second of `created_at` are such stamps (a real login follows email
 verification, seconds later at the least) and are cleared.
 
 Revision ID: 3c7a91e5d2b8
-Revises: da738218b8a4
+Revises: 5e1f0b7c2a94
 Create Date: 2026-10-16 12:00:00
 
 """
@@ -37,7 +37,7 @@ import app.db.types
 
 # revision identifiers, used by Alembic.
 revision: str = "3c7a91e5d2b8"
-down_revision: str | None = "da738218b8a4"
+down_revision: str | None = "5e1f0b7c2a94"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
