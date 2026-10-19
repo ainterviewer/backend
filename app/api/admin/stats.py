@@ -22,7 +22,7 @@ async def get_admin_stats(
             ge=1,
             le=3660,
             description="Days of daily series to return, ending today; "
-            "all history since the first signup when omitted.",
+            "all history from the week of the first signup when omitted.",
         ),
     ] = None,
 ) -> AdminStats:
@@ -31,7 +31,11 @@ async def get_admin_stats(
     if days is not None:
         start = today - datetime.timedelta(days=days - 1)
     elif users:
-        start = min(user.created_at.date() for user in users)
+        # From the Monday of the first signup's week, so a chart that buckets
+        # all of history by week starts on a whole one instead of a fragment
+        # that reads as a slow start.
+        first = min(user.created_at.date() for user in users)
+        start = first - datetime.timedelta(days=first.weekday())
     else:
         start = today
     return build_admin_stats(
