@@ -922,6 +922,9 @@ class MessageReportRowPublic(MessageReportPublic):
     question: str
     project_title: str
     language: LanguageCode = "EN"
+    #: Whether the flag came from a real respondent or from someone testing
+    #: the project -- the two call for very different reviews.
+    interview_type: InterviewType = InterviewType.DISTRIBUTED
     pid: str | None = None
     read_by_me: bool = False
 

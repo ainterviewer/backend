@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from typing import Literal, TypeVar
 
 from pydantic import UUID4
-from sqlalchemy import and_, func, insert, select, update
+from sqlalchemy import and_, func, insert, or_, select, update
 from sqlalchemy.orm import aliased
 
 from ainterviewer.utils import now
@@ -35,7 +35,7 @@ from ..tables import (
     ProjectParticipantTable,
     ProjectTable,
 )
-from ..types import ReportStatus
+from ..types import InterviewType, ReportSource, ReportStatus
 from .base import BaseRepository
 
 logger = logging.getLogger(__name__)
@@ -71,6 +71,31 @@ class ReportRepository(BaseRepository):
                 CollaboratorTable.folder_id == ProjectFolderTable.id,
             )
             .where(CollaboratorTable.user_id == user_id)
+        )
+
+    @staticmethod
+    def _on_admin_track():
+        """Whether a report belongs in the platform's queue.
+
+        Everything does except a safety flag raised outside a distributed
+        interview: that is a researcher trying their own safety setup, which
+        the project's queue shows them and the platform has no reason to
+        review. A respondent report from a test interview stays -- the
+        question it names is the one respondents will be asked. Correlated on
+        the interview rather than joined, so the listing and the unread count
+        share it.
+        """
+        return or_(
+            MessageReportTable.source != ReportSource.SAFETY_CHECK,
+            select(InterviewTable.id)
+            .where(
+                InterviewTable.id == MessageReportTable.interview_id,
+                InterviewTable.type == InterviewType.DISTRIBUTED,
+            )
+            # The listing joins `interview` itself; left to auto-correlate,
+            # the subquery would take that one too and select from nothing.
+            .correlate(MessageReportTable)
+            .exists(),
         )
 
     @staticmethod
@@ -133,6 +158,7 @@ class ReportRepository(BaseRepository):
                 MessageTable.content.label("question"),
                 ProjectTable.title.label("project_title"),
                 InterviewTable.language.label("language"),
+                InterviewTable.type.label("interview_type"),
                 ParticipantTable.pid.label("pid"),
                 read.id.is_not(None).label("read_by_me"),
             )
@@ -168,6 +194,9 @@ class ReportRepository(BaseRepository):
                 MessageReportTable.project_id.in_(self._collaborated_projects(user_id))
             )
 
+        if track == "admin":
+            statement = statement.where(self._on_admin_track())
+
         if statuses:
             statement = statement.where(self._status_column(track).in_(statuses))
 
@@ -183,6 +212,7 @@ class ReportRepository(BaseRepository):
                 question=question,
                 project_title=project_title,
                 language=language,
+                interview_type=interview_type,
                 pid=pid,
                 read_by_me=read_by_me,
             )
@@ -192,6 +222,7 @@ class ReportRepository(BaseRepository):
                 question,
                 project_title,
                 language,
+                interview_type,
                 pid,
                 read_by_me,
             ) in self.session.execute(statement).all()
@@ -229,7 +260,8 @@ class ReportRepository(BaseRepository):
         """The platform queue: every report there is, with the admin track.
 
         Takes no project and no collaboration scope: this is the whole
-        platform, which is the point of it.
+        platform, which is the point of it -- less the test-interview safety
+        flags `_on_admin_track` leaves to the project.
         """
         return self._list_reports(
             MessageReportAdminRowPublic,
@@ -362,7 +394,7 @@ class ReportRepository(BaseRepository):
         `ProjectRepository.get_user_role_on_project` does -- a project's owner
         holds a collaborator row on its folder, so owners are included. The
         `admin` track spans every project, which is what the platform queue
-        is.
+        is, less what `_on_admin_track` keeps out of it.
         """
         unread = ~(
             select(MessageReportReadTable.id)
@@ -379,6 +411,8 @@ class ReportRepository(BaseRepository):
             conditions.append(
                 MessageReportTable.project_id.in_(self._collaborated_projects(user_id))
             )
+        else:
+            conditions.append(self._on_admin_track())
 
         return self.session.execute(
             select(func.count(MessageReportTable.id)).where(*conditions)

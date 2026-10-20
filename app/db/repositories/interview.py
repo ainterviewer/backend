@@ -947,7 +947,8 @@ class InterviewRepository(BaseRepository):
         the one write that says the check acted -- a triggered assessment can
         still be cancelled before the respondent is shown anything.
 
-        Only distributed interviews are flagged; see `MessageReportTable`. The
+        Synthetic tests are never flagged, and manual tests reach the
+        project's queue but not the platform's; see `MessageReportTable`. The
         decision and its reasoning come off the `assess_security` task the
         check wrote just before (`SafetyFlag`), and the flag names the answer
         that task assessed, falling back to the intervention itself when it
@@ -960,7 +961,7 @@ class InterviewRepository(BaseRepository):
                     InterviewTable.id == message.interview_id
                 )
             )
-            if interview_type != InterviewType.DISTRIBUTED:
+            if interview_type == InterviewType.SYNTHETIC_TEST:
                 return
 
             task = self.session.scalars(

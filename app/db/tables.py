@@ -1470,9 +1470,13 @@ class MessageReportTable(Base):
     ``source`` says which. A safety flag is written by the backend when the
     intervention message is stored (``InterviewRepository.insert_message``),
     names the respondent's answer the check assessed, has no ``reason`` and
-    carries ``safety`` instead. It is only written for distributed interviews:
-    a synthetic test built to probe the safety check would otherwise bury the
-    queue, and test runs show their interventions in their own results.
+    carries ``safety`` instead. It is never written for synthetic tests: a run
+    built to probe the safety check would bury the queue, and test runs show
+    their interventions in their own results. A manual test's flag is written
+    but served on the project track only (``ReportRepository``): the owner
+    trying their own safety setup wants to see it fire, and the platform has
+    nothing to review in a researcher provoking their own check. Respondent
+    reports are served on both tracks whatever the interview type.
     Everything below -- the two tracks, read state, the badges -- is shared.
 
     This is the respondent's own channel, and the only one they have: they

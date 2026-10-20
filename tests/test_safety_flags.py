@@ -2,7 +2,8 @@
 
 The flag is written when the intervention message is stored, from the
 `assess_security` task the check wrote just before it. What would go wrong
-quietly: flagging test interviews (which would bury the queue), pointing the
+quietly: flagging synthetic tests (which would bury the queue), serving a
+manual test's flag to the platform admins, pointing the
 flag at the modal text instead of the answer that was assessed, losing the
 decision's reasoning, never recording the respondent's override -- and
 counting JSON ``null`` as an intervention, which is what every message the
@@ -20,6 +21,7 @@ from ainterviewer.interfaces import SecurityIntervention, SecurityOverride
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.interview_guides.types import ConditionAction
 from ainterviewer.types import MessageRole, MessageType
+from app.db.models import MessageReportCreate
 from app.db.repositories.interview import SECURITY_TASK, InterviewRepository
 from app.db.repositories.reports import ReportRepository
 from app.db.tables import (
@@ -29,13 +31,14 @@ from app.db.tables import (
     ProjectFolderTable,
     ProjectTable,
 )
-from app.db.types import InterviewType, ReportSource
+from app.db.types import InterviewType, ReportReason, ReportSource
 from app.db.utils import messages_to_dataframe
 
 FOLDER = uuid.uuid4()
 PROJECT = uuid.uuid4()
 DISTRIBUTED = uuid.uuid4()
 SYNTHETIC = uuid.uuid4()
+MANUAL = uuid.uuid4()
 
 ASSESSMENT = {
     "self_harm": {
@@ -156,10 +159,56 @@ def test_an_intervention_is_flagged_on_the_answer_it_assessed(interviews, sessio
     assert flag.safety.override is None
 
 
-def test_test_interviews_are_not_flagged(interviews, session):
+def test_synthetic_tests_are_not_flagged(interviews, session):
     intervene(interviews, interview_id=SYNTHETIC)
 
     assert flags(session) == []
+
+
+def test_a_manual_test_s_flag_reaches_the_project_but_not_the_platform(
+    interviews, session
+):
+    session.add(
+        InterviewTable(
+            id=MANUAL,
+            project_id=PROJECT,
+            interview_guide=InterviewGuide(),
+            type=InterviewType.MANUAL_TEST,
+        )
+    )
+    session.commit()
+    intervene(interviews, interview_id=MANUAL)
+    reports = ReportRepository(session)
+    reviewer = uuid.uuid4()
+
+    [row] = reports.list_reports(user_id=reviewer, project_id=PROJECT)
+    assert row.source == ReportSource.SAFETY_CHECK
+    assert row.interview_type == InterviewType.MANUAL_TEST
+
+    assert reports.list_admin_reports(user_id=reviewer) == []
+    assert reports.unread_count(reviewer, track="admin") == 0
+
+    # A respondent's report from the same test still goes to the platform: the
+    # question it names is one real respondents will be asked.
+    interviews.create_message_report(
+        interview_id=MANUAL,
+        project_id=PROJECT,
+        report=MessageReportCreate(message_id=1, reason=ReportReason.OFFENSIVE),
+    )
+    [row] = reports.list_admin_reports(user_id=reviewer)
+    assert row.source == ReportSource.RESPONDENT
+    assert row.interview_type == InterviewType.MANUAL_TEST
+    assert reports.unread_count(reviewer, track="admin") == 1
+
+
+def test_a_distributed_flag_reaches_the_platform(interviews, session):
+    intervene(interviews)
+    reports = ReportRepository(session)
+    reviewer = uuid.uuid4()
+
+    [row] = reports.list_admin_reports(user_id=reviewer)
+    assert row.interview_type == InterviewType.DISTRIBUTED
+    assert reports.unread_count(reviewer, track="admin") == 1
 
 
 @pytest.mark.parametrize("override", list(SecurityOverride))
