@@ -385,6 +385,9 @@ async def register(user: UserCreateRequest, db: DBSession) -> JSONResponse:
 
             # Snapshot invitation data
             snapshot["invitation_title"] = invitation.title
+            snapshot["demo_concurrent_limit"] = invitation.user_demo_concurrent_limit
+            snapshot["demo_daily_limit"] = invitation.user_demo_daily_limit
+            snapshot["demo_lifetime_limit"] = invitation.user_demo_lifetime_limit
             if invitation.user_expires is not None:
                 if isinstance(invitation.user_expires, datetime):
                     snapshot["expires_at"] = invitation.user_expires

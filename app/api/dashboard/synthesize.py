@@ -24,7 +24,6 @@ from ...db.models import (
     TestSetupPublic,
 )
 from ...dependencies import DBSession, IfMatch, ProjectEditor, ProjectViewer, set_etag
-from ...settings import app_settings
 from ...synthesize.core import (
     run_synthesis_job_fixed_ai,
     run_synthesis_job_fixed_answers,
@@ -37,7 +36,7 @@ from ..request_models import (
     UpdateFixedAnswersRequest,
     UpdateFixedPersonasRequest,
 )
-from ..response_models import SynthesizeResponse
+from ..response_models import DemoBudget, DemoBudgetItem, SynthesizeResponse
 from ..websockets.manager import session_manager
 
 router = APIRouter(tags=["synthesize"])
@@ -62,45 +61,63 @@ _test_in_project = [Depends(_require_test_in_project)]
 DEMO_DAILY_WINDOW = timedelta(days=1)
 
 
+def get_demo_budget(db: DBSession, user_id: UUID4) -> DemoBudget:
+    """The user's demo budgets, with their overrides applied, and their usage."""
+    limits = db.users.get_demo_limits(user_id)
+    return DemoBudget(
+        concurrent=DemoBudgetItem(
+            limit=limits.max_concurrent_synthetic_interviews,
+            used=db.tests.count_active_synthetic_interviews(
+                user_id, max_age=limits.active_run_max_age.to_timedelta()
+            ),
+        ),
+        daily=DemoBudgetItem(
+            limit=limits.daily_synthetic_interviews,
+            used=db.tests.count_started_synthetic_interviews(
+                user_id, since=now() - DEMO_DAILY_WINDOW
+            ),
+        ),
+        lifetime=DemoBudgetItem(
+            limit=limits.lifetime_synthetic_interviews,
+            used=db.tests.count_started_synthetic_interviews(user_id),
+        ),
+    )
+
+
 def check_demo_synthetic_limits(db: DBSession, user_id: UUID4, n_interviews: int):
     """Refuse a demo user's run with a 429 if it would exceed any of their budgets."""
-    limits = app_settings.app.demo_limits
+    budget = get_demo_budget(db, user_id)
 
-    lifetime = db.tests.count_started_synthetic_interviews(user_id)
-    if lifetime + n_interviews > limits.lifetime_synthetic_interviews:
+    lifetime = budget.lifetime
+    if lifetime.used + n_interviews > lifetime.limit:
         raise HTTPException(
             status_code=429,
             detail=(
-                "Demo accounts can run at most "
-                f"{limits.lifetime_synthetic_interviews} synthetic interviews in total, "
-                f"and {lifetime} have already been started."
+                f"Your demo account can run at most {lifetime.limit} synthetic "
+                f"interviews in total, and {lifetime.used} have already been "
+                "started."
             ),
         )
 
-    daily = db.tests.count_started_synthetic_interviews(
-        user_id, since=now() - DEMO_DAILY_WINDOW
-    )
-    if daily + n_interviews > limits.daily_synthetic_interviews:
+    daily = budget.daily
+    if daily.used + n_interviews > daily.limit:
         raise HTTPException(
             status_code=429,
             detail=(
-                "Demo accounts can run at most "
-                f"{limits.daily_synthetic_interviews} synthetic interviews per 24 "
-                f"hours, and {daily} have been started in the last 24 hours."
+                f"Your demo account can run at most {daily.limit} synthetic "
+                f"interviews per 24 hours, and {daily.used} have been started in "
+                "the last 24 hours."
             ),
         )
 
-    active = db.tests.count_active_synthetic_interviews(
-        user_id, max_age=limits.active_run_max_age.to_timedelta()
-    )
-    if active + n_interviews > limits.max_concurrent_synthetic_interviews:
+    concurrent = budget.concurrent
+    if concurrent.used + n_interviews > concurrent.limit:
         raise HTTPException(
             status_code=429,
             detail=(
-                "Demo accounts can run at most "
-                f"{limits.max_concurrent_synthetic_interviews} synthetic interviews "
-                f"at a time, and {active} are already running. Wait for them "
-                "to finish or run fewer interviews."
+                f"Your demo account can run at most {concurrent.limit} synthetic "
+                f"interviews at a time, and {concurrent.used} are already "
+                "running. Wait for them to finish or run fewer interviews."
             ),
         )
 

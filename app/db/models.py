@@ -14,6 +14,7 @@ from pydantic import (
     ConfigDict,
     EmailStr,
     Field,
+    NonNegativeInt,
     computed_field,
     field_validator,
 )
@@ -110,6 +111,11 @@ class InvitationBase(_BaseModel):
     user_expires: datetime | TimeDelta | None = None
     title: str | None = None
     access_request_id: UUID4 | None = None
+    # Demo budgets handed to the user who registers with this invitation;
+    # None leaves them on the configured default.
+    user_demo_concurrent_limit: NonNegativeInt | None = None
+    user_demo_daily_limit: NonNegativeInt | None = None
+    user_demo_lifetime_limit: NonNegativeInt | None = None
 
 
 class InvitationCreate(InvitationBase): ...
@@ -122,6 +128,9 @@ class InvitationUpdate(BaseModel):
     user_scope: Scope | _Unset = UNSET
     user_expires: datetime | TimeDelta | None | _Unset = UNSET
     title: str | None | _Unset = UNSET
+    user_demo_concurrent_limit: NonNegativeInt | None | _Unset = UNSET
+    user_demo_daily_limit: NonNegativeInt | None | _Unset = UNSET
+    user_demo_lifetime_limit: NonNegativeInt | None | _Unset = UNSET
 
 
 class InvitationPublic(InvitationBase):
@@ -172,6 +181,9 @@ class UserCreate(UserCreateRequest):
     expires_at: datetime | None = None
     access_request_message: str | None = None
     organization: str | None = None
+    demo_concurrent_limit: int | None = None
+    demo_daily_limit: int | None = None
+    demo_lifetime_limit: int | None = None
 
 
 class UserPrivate(UserBase):
@@ -196,6 +208,10 @@ class UserAdmin(UserPublic):
     admin_note: str | None = None
     admin_note_updated_at: datetime | None = None
     two_factor_enabled: bool = True
+    # Overrides of the demo budgets; None means the configured default.
+    demo_concurrent_limit: int | None = None
+    demo_daily_limit: int | None = None
+    demo_lifetime_limit: int | None = None
 
 
 class UserAdminUpdate(BaseModel):
@@ -204,6 +220,10 @@ class UserAdminUpdate(BaseModel):
     organization: str | None | _Unset = UNSET
     expires_at: datetime | None | _Unset = UNSET
     two_factor_enabled: bool | _Unset = UNSET
+    # None puts the user back on the configured default.
+    demo_concurrent_limit: NonNegativeInt | None | _Unset = UNSET
+    demo_daily_limit: NonNegativeInt | None | _Unset = UNSET
+    demo_lifetime_limit: NonNegativeInt | None | _Unset = UNSET
 
 
 class UserSelfUpdate(BaseModel):

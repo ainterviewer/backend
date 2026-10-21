@@ -163,6 +163,11 @@ class InvitationTable(Base):
         PydanticJSONB(datetime.datetime | TimeDelta | None), default=None
     )
     title: Mapped[str | None] = mapped_column(default=None)
+    # Copied onto the user at registration, like `user_scope`: NULL leaves the
+    # user on the configured default (`app.demo_limits`).
+    user_demo_concurrent_limit: Mapped[int | None] = mapped_column(default=None)
+    user_demo_daily_limit: Mapped[int | None] = mapped_column(default=None)
+    user_demo_lifetime_limit: Mapped[int | None] = mapped_column(default=None)
 
     # SET NULL, not CASCADE: an invitation outlives the access request it came
     # from. Pruning the request list must never revoke a pending invite.
@@ -279,6 +284,12 @@ class UserTable(Base):
     with_preview_features: Mapped[bool] = mapped_column(
         default=False, server_default=sa.false()
     )
+    # Per-user overrides of the `Scope.DEMO` synthetic-interview budgets, NULL
+    # meaning the configured default (`app.demo_limits`). Kept when the scope
+    # changes, so a user moved back to DEMO gets the same budget again.
+    demo_concurrent_limit: Mapped[int | None] = mapped_column(default=None)
+    demo_daily_limit: Mapped[int | None] = mapped_column(default=None)
+    demo_lifetime_limit: Mapped[int | None] = mapped_column(default=None)
 
     # Relationships
     processed_requests: Mapped[list["AccessRequestTable"]] = relationship(

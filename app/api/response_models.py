@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import UUID4, BaseModel
+from pydantic import UUID4, BaseModel, computed_field
 
 from ainterviewer.interview_guides import (
     LocalizedConsent,
@@ -98,6 +98,40 @@ class SynthesizeResponse(BaseModel):
     project_id: UUID4
     message: str
     status: str
+
+
+class DemoLimitDefaults(BaseModel):
+    """The configured demo budgets (`app.demo_limits`): what a user without an
+    override gets."""
+
+    concurrent: int
+    daily: int
+    lifetime: int
+
+
+class DemoBudgetItem(BaseModel):
+    limit: int
+    used: int
+
+    @computed_field
+    @property
+    def remaining(self) -> int:
+        return max(self.limit - self.used, 0)
+
+
+class DemoBudget(BaseModel):
+    """A demo user's synthetic-interview budgets and how much of each is spent.
+
+    `limit` is the user's own (an override, else the configured default), so
+    two demo users can see different numbers.
+    """
+
+    #: Interviews in flight at once.
+    concurrent: DemoBudgetItem
+    #: Interviews started in the last 24 hours.
+    daily: DemoBudgetItem
+    #: Interviews started ever.
+    lifetime: DemoBudgetItem
 
 
 class SendParticipantEmailResponse(BaseModel):

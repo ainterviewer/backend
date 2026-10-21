@@ -28,6 +28,8 @@ from ..db.models import MessageReportRowPublic
 from ..db.types import ReportStatus
 from ..dependencies import DBSession, DemoToken
 from ..types import Scope
+from .dashboard.synthesize import get_demo_budget
+from .response_models import DemoBudget
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -74,6 +76,17 @@ async def get_notifications(
             db.reports.unread_count(jwt.user_id, track="admin") if is_admin else 0
         ),
     )
+
+
+@router.get("/demo-budget")
+async def get_my_demo_budget(db: DBSession, jwt: DemoToken) -> DemoBudget | None:
+    """How much of their synthetic-interview budgets a demo user has left.
+
+    Null for any other scope: only `Scope.DEMO` accounts are limited.
+    """
+    if jwt.scope != Scope.DEMO:
+        return None
+    return get_demo_budget(db, jwt.user_id)
 
 
 @router.get("/reports")

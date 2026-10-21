@@ -30,6 +30,12 @@ class DemoLimits(BaseModel):
 
     Every synthetic interview is a full interview against the shared inference
     server, so a demo account gets a small budget of them.
+
+    These are the defaults. The three counts can be overridden per user (the
+    `user.demo_*_limit` columns, NULL meaning "use the default"), set by an
+    admin or snapshotted from the invitation the user registered with; see
+    `UserRepository.get_demo_limits`. `active_run_max_age` is an operational
+    safeguard rather than a budget, so it stays global.
     """
 
     # Interviews in flight at once, across all of the user's runs.

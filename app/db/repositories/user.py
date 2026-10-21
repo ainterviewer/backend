@@ -12,6 +12,7 @@ from ainterviewer.utils import now
 
 from ...auth import get_password_hash
 from ...services.email.mail import email_templates, send_email
+from ...settings import DemoLimits, app_settings
 from ...types import Scope
 from ..models import (
     UNSET,
@@ -135,6 +136,26 @@ class UserRepository(BaseRepository):
             .execution_options(synchronize_session=False)
         )
         self.session.commit()
+
+    def get_demo_limits(self, user_id: UUID4) -> DemoLimits:
+        """The configured demo budgets with this user's overrides applied.
+
+        A NULL override, or a user that does not exist, falls back to the
+        configured default (`app.demo_limits`).
+        """
+        defaults = app_settings.app.demo_limits
+        user = self.session.get(UserTable, user_id)
+        if user is None:
+            return defaults
+
+        overrides = {
+            "max_concurrent_synthetic_interviews": user.demo_concurrent_limit,
+            "daily_synthetic_interviews": user.demo_daily_limit,
+            "lifetime_synthetic_interviews": user.demo_lifetime_limit,
+        }
+        return defaults.model_copy(
+            update={k: v for k, v in overrides.items() if v is not None}
+        )
 
     def get_user_private(
         self,
@@ -295,6 +316,9 @@ class UserRepository(BaseRepository):
         user_scope: Scope = Scope.USER,
         user_expires: datetime.datetime | None = None,
         title: str | None = None,
+        user_demo_concurrent_limit: int | None = None,
+        user_demo_daily_limit: int | None = None,
+        user_demo_lifetime_limit: int | None = None,
     ) -> InvitationPublic:
         if expires_at is None:
             expires_at = now() + timedelta(days=1)
@@ -307,6 +331,9 @@ class UserRepository(BaseRepository):
             user_scope=user_scope,
             user_expires=user_expires,
             title=title,
+            user_demo_concurrent_limit=user_demo_concurrent_limit,
+            user_demo_daily_limit=user_demo_daily_limit,
+            user_demo_lifetime_limit=user_demo_lifetime_limit,
         )
 
         self.session.add(invitation)

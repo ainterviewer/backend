@@ -21,12 +21,14 @@ from sqlalchemy.orm import Session
 
 from ainterviewer.types import TestType
 from ainterviewer.utils import now
+from app.api.admin.users import get_demo_limit_defaults, get_user_demo_budget
 from app.api.dashboard.synthesize import DEMO_DAILY_WINDOW, run_synthetic_test
+from app.api.me import get_my_demo_budget
 from app.api.request_models import SynthesizeRequest
 from app.auth import AuthToken
 from app.db.crud import InterviewDataBase
 from app.db.repositories.test import TestRepository
-from app.db.tables import Base, TestRunTable, TestSetupTable
+from app.db.tables import Base, TestRunTable, TestSetupTable, UserTable
 from app.settings import app_settings
 from app.types import Scope, TestRunStatus
 
@@ -266,3 +268,129 @@ class TestTheDailyAndLifetimeLimits:
         fill(session, setup, user, LIMITS.lifetime_synthetic_interviews)
 
         start(session, setup, user, Scope.USER, 1)
+
+
+def demo_user(session, **overrides) -> uuid.UUID:
+    user = UserTable(
+        id=uuid.uuid4(),
+        email=f"{uuid.uuid4()}@example.com",
+        password="x",
+        first_name="Demo",
+        scope=Scope.DEMO,
+        **overrides,
+    )
+    session.add(user)
+    session.commit()
+    return user.id
+
+
+class TestPerUserOverrides:
+    def test_a_user_without_overrides_gets_the_defaults(self, session, setup):
+        user = demo_user(session)
+
+        assert InterviewDataBase(session).users.get_demo_limits(user) == LIMITS
+
+    def test_a_raised_lifetime_limit_lets_the_user_go_past_the_default(
+        self, session, setup
+    ):
+        user = demo_user(
+            session, demo_lifetime_limit=LIMITS.lifetime_synthetic_interviews + 5
+        )
+        fill(
+            session,
+            setup,
+            user,
+            LIMITS.lifetime_synthetic_interviews,
+            age=timedelta(days=30),
+        )
+
+        start(session, setup, user, Scope.DEMO, 1)
+
+    def test_a_lowered_concurrent_limit_is_enforced(self, session, setup):
+        user = demo_user(session, demo_concurrent_limit=2)
+
+        with pytest.raises(HTTPException) as error:
+            start(session, setup, user, Scope.DEMO, 3)
+
+        assert error.value.status_code == 429
+        assert "at most 2 synthetic interviews at a time" in error.value.detail
+
+    def test_overrides_are_independent(self, session, setup):
+        user = demo_user(session, demo_daily_limit=3)
+
+        limits = InterviewDataBase(session).users.get_demo_limits(user)
+
+        assert limits.daily_synthetic_interviews == 3
+        assert (
+            limits.max_concurrent_synthetic_interviews
+            == LIMITS.max_concurrent_synthetic_interviews
+        )
+        assert (
+            limits.lifetime_synthetic_interviews == LIMITS.lifetime_synthetic_interviews
+        )
+
+
+def budget(session, user, scope=Scope.DEMO):
+    endpoint = get_my_demo_budget(
+        db=InterviewDataBase(session), jwt=AuthToken(user_id=user, scope=scope)
+    )
+    return asyncio.run(endpoint)
+
+
+class TestTheRemainingBudget:
+    def test_it_reports_limits_usage_and_what_is_left(self, session, setup):
+        user = demo_user(session, demo_daily_limit=20)
+        run(session, setup, user, 3)
+        run(session, setup, user, 4, status=TestRunStatus.COMPLETED)
+        run(
+            session,
+            setup,
+            user,
+            5,
+            status=TestRunStatus.COMPLETED,
+            age=timedelta(days=2),
+        )
+
+        result = budget(session, user)
+
+        assert result is not None
+        assert result.concurrent.used == 3
+        assert result.daily.limit == 20
+        assert result.daily.used == 7
+        assert result.daily.remaining == 13
+        assert result.lifetime.used == 12
+
+    def test_remaining_never_goes_negative(self, session, setup):
+        user = demo_user(session, demo_lifetime_limit=1)
+        run(session, setup, user, 5, status=TestRunStatus.COMPLETED)
+
+        result = budget(session, user)
+
+        assert result is not None
+        assert result.lifetime.remaining == 0
+
+    def test_other_scopes_have_no_budget(self, session, setup):
+        assert budget(session, uuid.uuid4(), scope=Scope.USER) is None
+
+
+class TestTheAdminView:
+    def test_the_defaults_are_the_configured_limits(self):
+        admin = AuthToken(user_id=uuid.uuid4(), scope=Scope.ADMIN)
+
+        defaults = asyncio.run(get_demo_limit_defaults(jwt=admin))
+
+        assert defaults.concurrent == LIMITS.max_concurrent_synthetic_interviews
+        assert defaults.daily == LIMITS.daily_synthetic_interviews
+        assert defaults.lifetime == LIMITS.lifetime_synthetic_interviews
+
+    def test_an_admin_sees_a_user_s_budget_with_overrides(self, session, setup):
+        user = demo_user(session, demo_lifetime_limit=7)
+        run(session, setup, user, 2, status=TestRunStatus.COMPLETED)
+        admin = AuthToken(user_id=uuid.uuid4(), scope=Scope.ADMIN)
+
+        result = asyncio.run(
+            get_user_demo_budget(user_id=user, db=InterviewDataBase(session), jwt=admin)
+        )
+
+        assert result.lifetime.limit == 7
+        assert result.lifetime.used == 2
