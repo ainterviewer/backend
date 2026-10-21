@@ -176,6 +176,15 @@ class EmbeddingFilters:
     #: `coded_mine="none"` a coder-scoped `code:` term matches nothing by
     #: construction.
     coder_id: UUID | None = None
+    #: Keep only the answers to main questions, leaving out the probes.
+    #:
+    #: A narrowing of the MESSAGE unit and nothing else: it is what turns
+    #: "every turn" into "the main question and the answer it drew", over the
+    #: same vectors. A main answer is the turn before any probe, so its
+    #: `sub_question` -- the number of probes asked so far -- is 0. The grouped
+    #: units ignore it; leaving their probes out would make them a different
+    #: unit, not a narrower one.
+    main_answers_only: bool = False
 
 
 def _keyword_node(filters: EmbeddingFilters):
@@ -1186,6 +1195,10 @@ class EmbeddingRepository(BaseRepository):
         if keyword is not None:
             message_scope.append(keyword)
 
+        # The same narrowing `_candidate_statement` applies to the vectors.
+        if filters.main_answers_only and kind == EmbeddingKind.MESSAGE:
+            message_scope.append(source.c.sub_question == 0)
+
         if filters.questions:
             message_scope.append(
                 or_(
@@ -1593,6 +1606,9 @@ class EmbeddingRepository(BaseRepository):
 
         if filters.languages:
             statement = statement.where(EmbeddingTable.language.in_(filters.languages))
+
+        if filters.main_answers_only and kind == EmbeddingKind.MESSAGE:
+            statement = statement.where(EmbeddingTable.sub_question == 0)
 
         keyword = self._keyword_scope(project_id, filters, kind)
         if keyword is not None:

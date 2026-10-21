@@ -165,6 +165,10 @@ class SearchFilterParams:
     meant *true* under `or`, leaving one out would widen the corpus to
     everything rather than leave it alone.
 
+    `main_answers_only` keeps the answers to main questions and leaves out the
+    probes. It narrows the message unit into the "main question" one the
+    explorer offers, over the same vectors, and is ignored by the grouped units.
+
     None of them narrows a `code:` term, which counts anybody's codings. A
     coder-scoped code term is a question about the term rather than about
     coverage, and folding it in here would silently empty the review pass --
@@ -198,6 +202,7 @@ class SearchFilterParams:
         coded_others: Coded | None = None,
         coder_join: CoderJoin = "and",
         coder_id: UUID4 | None = None,
+        main_answers_only: bool = False,
     ):
         self.filters = EmbeddingFilters(
             interview_ids=interview_id,
@@ -215,6 +220,7 @@ class SearchFilterParams:
             coded_others=coded_others,
             coder_join=coder_join,
             coder_id=coder_id,
+            main_answers_only=main_answers_only,
         )
 
 

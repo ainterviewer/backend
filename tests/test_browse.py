@@ -2353,6 +2353,7 @@ def embed_messages(session):
                 message_id=message.id,
                 section=message.section,
                 main_question=message.main_question,
+                sub_question=message.sub_question,
                 model="test",
                 dim=2,
                 chunk_key=f"message-{message.id}",
@@ -2528,3 +2529,54 @@ class TestLikeCode:
 
         seeds, _ = self.like(session, (code.id,))
         assert seeds == 1
+
+
+class TestMainAnswersOnly:
+    """`main_answers_only` -- the MESSAGE unit narrowed to main questions.
+
+    The explorer's "main question" unit is this filter over the turn vectors, so
+    the browse list and the vector scan must leave out the same probes, and the
+    grouped units must not notice it at all.
+    """
+
+    @pytest.fixture
+    def corpus(self, session):
+        """One question answered, then probed twice; another left unprobed."""
+        builder = Builder(session)
+        builder.exchange("How is work?", "Busy.", question=0, sub_question=0)
+        builder.exchange("Busy how?", "Deadlines.", question=0, sub_question=1)
+        builder.exchange("Which ones?", "Reports.", question=0, sub_question=2)
+        builder.exchange("And home?", "Quiet.", question=1, sub_question=0)
+        session.flush()
+        embed_messages(session)
+        return session
+
+    def test_browsing_keeps_the_answers_to_main_questions(self, corpus):
+        page = browse(corpus, EmbeddingKind.MESSAGE, main_answers_only=True)
+        assert page.total == 2
+
+        everything = browse(corpus, EmbeddingKind.MESSAGE)
+        assert everything.total == 4
+
+    def test_the_vector_scan_leaves_out_the_same_probes(self, corpus):
+        page = EmbeddingRepository(corpus).search(
+            project_id=PROJECT,
+            query_vector=[1.0, 0.0],
+            kind=EmbeddingKind.MESSAGE,
+            filters=EmbeddingFilters(main_answers_only=True),
+        )
+        messages = {
+            message.id: message.content
+            for message in corpus.execute(select(MessageTable)).scalars()
+        }
+        assert sorted(messages[hit.embedding.message_id] for hit in page.hits) == [
+            "Busy.",
+            "Quiet.",
+        ]
+
+    def test_the_grouped_units_ignore_it(self, corpus):
+        for kind in (EmbeddingKind.QA_PAIR, EmbeddingKind.SECTION):
+            assert (
+                browse(corpus, kind, main_answers_only=True).total
+                == browse(corpus, kind).total
+            )
