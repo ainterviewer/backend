@@ -23,7 +23,7 @@ from ainterviewer.interview_guides.localized import (
 )
 from ainterviewer.interview_guides.translate import translate_missing
 from ainterviewer.types import LanguageCode
-from ainterviewer.utils import get_language_dict
+from ainterviewer.utils import get_language_dict, now
 
 from ...collab.guide_doc import merge_guide_data
 from ...types import (
@@ -231,6 +231,19 @@ class ProjectRepository(BaseRepository):
         self.session.commit()
 
         return ProjectFolderPublic.model_validate(folder)
+
+    def set_folder_archived(self, folder_id: UUID4, archived: bool) -> None:
+        """Archive or unarchive a folder. Archiving is not an edit, so the
+        folder keeps its `last_updated`."""
+        self.session.execute(
+            update(ProjectFolderTable)
+            .where(ProjectFolderTable.id == folder_id)
+            .values(
+                archived_at=now() if archived else None,
+                last_updated=ProjectFolderTable.last_updated,
+            )
+        )
+        self.session.commit()
 
     def get_folder_project_ids(self, folder_id: UUID4) -> list[uuid.UUID]:
         """The projects a folder delete takes with it."""
@@ -556,6 +569,20 @@ class ProjectRepository(BaseRepository):
             .values(status=status)
         )
         self.session.execute(statement)
+        self.session.commit()
+
+    def set_project_archived(self, project_id: UUID4, archived: bool) -> None:
+        """Archive or unarchive a project. Archiving is not an edit -- the
+        dashboard sorts by `last_updated`, and an archived project jumping to
+        the top would be the opposite of putting it away -- so it keeps it."""
+        self.session.execute(
+            update(ProjectTable)
+            .where(ProjectTable.id == project_id)
+            .values(
+                archived_at=now() if archived else None,
+                last_updated=ProjectTable.last_updated,
+            )
+        )
         self.session.commit()
 
     def update_project_title(

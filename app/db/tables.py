@@ -369,6 +369,9 @@ class ProjectFolderTable(Base):
     last_updated: Mapped[datetime.datetime | None] = mapped_column(
         default=now, onupdate=now
     )
+    #: When the folder was archived: hidden from the dashboard by default, for
+    #: every collaborator, and otherwise untouched. NULL while it is not.
+    archived_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
 
     # Relationsiphs
     projects: Mapped[list["ProjectTable"]] = relationship(
@@ -407,6 +410,9 @@ class ProjectTable(Base):
     status: Mapped[ProjectStatus] = mapped_column(
         SQLEnum(ProjectStatus), default=ProjectStatus.ACTIVE
     )
+    #: When the project was archived. Only hides it from the dashboard: its
+    #: status, links and interviews carry on as they were. NULL while it is not.
+    archived_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
     config: Mapped[InterviewConfig] = mapped_column(
         PydanticJSONB(InterviewConfig),
         default=InterviewConfig,

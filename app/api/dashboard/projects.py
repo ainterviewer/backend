@@ -84,6 +84,7 @@ from ...settings import app_settings
 from ...types import CollaboratorRole, Scope
 from ...utils import as_aware, ensure_filename, generate_qr_img
 from ..request_models import (
+    ArchiveRequest,
     DeleteInterviewRequest,
     ExportMessagesRequest,
     ExternalParamsRequest,
@@ -271,6 +272,20 @@ async def change_project_status(
     _: ProjectAdmin,
 ):
     db.projects.change_project_status(project_id, status_request.status)
+
+
+@router.patch(
+    "/projects/{project_id}/archive",
+    description="Archive or unarchive a project",
+)
+async def set_project_archived(
+    project_id: UUID4,
+    archive_request: ArchiveRequest,
+    db: DBSession,
+    jwt: DemoToken,
+    _: ProjectAdmin,
+):
+    db.projects.set_project_archived(project_id, archive_request.archived)
 
 
 @router.patch(

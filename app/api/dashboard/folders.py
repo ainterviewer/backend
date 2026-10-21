@@ -14,7 +14,7 @@ from ...db.models import (
 from ...dependencies import DBSession, DemoToken, FolderAdmin, FolderEditor
 from ...types import CollaboratorRole
 from ...utils import generate_qr_img
-from ..request_models import CreateProjectRequest
+from ..request_models import ArchiveRequest, CreateProjectRequest
 from ..websockets.manager import session_manager
 
 router = APIRouter(tags=["folders"])
@@ -63,6 +63,19 @@ async def edit_folder(
     _: FolderAdmin,
 ):
     db.projects.update_folder(folder_id, project_folder.title)
+
+
+@router.patch(
+    "/folders/{folder_id}/archive", description="Archive or unarchive a folder"
+)
+async def set_folder_archived(
+    folder_id: UUID4,
+    archive_request: ArchiveRequest,
+    db: DBSession,
+    jwt: DemoToken,
+    _: FolderAdmin,
+):
+    db.projects.set_folder_archived(folder_id, archive_request.archived)
 
 
 @router.get(

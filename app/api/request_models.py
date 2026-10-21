@@ -139,6 +139,10 @@ class ProjectTitleUpdateRequest(BaseModel):
     title: str
 
 
+class ArchiveRequest(BaseModel):
+    archived: bool
+
+
 class MoveProjectRequest(BaseModel):
     folder_id: UUID4
 

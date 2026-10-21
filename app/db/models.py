@@ -338,6 +338,7 @@ class ProjectFolderCreate(ProjectFolderBase):
 
 class ProjectFolderPublic(ProjectFolderBase):
     id: UUID4
+    archived_at: datetime | None = None
     collaborators: list[CollaboratorPublic] = Field(
         default=[], validation_alias="folder_collaborations"
     )
@@ -358,6 +359,7 @@ class ProjectBase(_BaseModel):
     created_at: datetime
     last_updated: datetime | None = None
     status: ProjectStatus = ProjectStatus.ACTIVE
+    archived_at: datetime | None = None
     config: InterviewConfig
     external_params: list[ExternalParam] | None = None
     owner_id: UUID4
