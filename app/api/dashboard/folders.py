@@ -152,6 +152,6 @@ async def create_project(
     )
     interview_url = str(request.base_url) + f"interview?id={project_id}"
 
-    background_tasks.add_task(generate_qr_img, str(interview_url), file_path)
+    background_tasks.add_task(generate_qr_img, str(interview_url), file_path=file_path)
 
     return {"project_id": project_id}

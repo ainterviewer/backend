@@ -53,7 +53,7 @@ async def generate_experiment_qr(
 
     if not file_path.exists():
         redirect_url = str(request.base_url) + f"interview/redirect?id={experiment_id}"
-        img_data = generate_qr_img(str(redirect_url), file_path)
+        img_data = generate_qr_img(str(redirect_url), file_path=file_path)
 
         return StreamingResponse(io.BytesIO(img_data), media_type="image/png")
 
