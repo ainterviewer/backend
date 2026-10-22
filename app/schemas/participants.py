@@ -64,7 +64,7 @@ class SendParticipantEmailResponse(Schema):
     skipped: list[UUID4]
 
 
-class UploadParticipantsResponse(Schema):
+class ParticipantUploadResponse(Schema):
     participants: list[ParticipantPublic]
     skipped_rows: int
 

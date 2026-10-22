@@ -36,9 +36,9 @@ from ...schemas.participants import (
     ParticipantEmailTemplateRequest,
     ParticipantPublic,
     ParticipantUpdate,
+    ParticipantUploadResponse,
     SendParticipantEmailRequest,
     SendParticipantEmailResponse,
-    UploadParticipantsResponse,
 )
 from ...services.email.mail import send_email
 from ...services.email.participant_template import (
@@ -292,12 +292,12 @@ async def upload_participants(
     db: DBSession,
     jwt: UserToken,
     _: ProjectEditor,
-) -> UploadParticipantsResponse:
+) -> ParticipantUploadResponse:
     content = await file.read()
     participants, skipped = db.participants.add_participants_from_csv(
         project_id, content
     )
-    return UploadParticipantsResponse(participants=participants, skipped_rows=skipped)
+    return ParticipantUploadResponse(participants=participants, skipped_rows=skipped)
 
 
 @router.patch("/projects/{project_id}/participants/{participant_id}")
