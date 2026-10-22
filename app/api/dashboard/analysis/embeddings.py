@@ -15,7 +15,7 @@ from ainterviewer.interview_guides.survey_items import CheckboxItem
 from ainterviewer.types import EmbeddingKind
 
 from ....db.code_lookup import CodeIndex, resolve_all
-from ....db.keyword_query import MARKUP_PATTERN, KeywordQueryError, Scope, parse
+from ....db.keyword_query import MARKUP_PATTERN, Scope, parse
 from ....db.repositories.embedding import (
     DEFAULT_BROWSE_GROUPING,
     DEFAULT_BROWSE_ORDER,
@@ -82,6 +82,7 @@ from ....schemas.embeddings import (
 )
 from ....settings import app_settings
 from ....types import GroupKind, Projection
+from ...errors import INVALID_KEYWORD_QUERY
 
 # The whole explore surface is a preview feature; see `require_preview_features`.
 router = APIRouter(dependencies=[Depends(require_preview_features)])
@@ -118,7 +119,7 @@ def embedding_filters(
 
 
 def _parse_questions(raw: list[str] | None) -> list[tuple[int, int]] | None:
-    """`["0,2", "1,0"]` to `[(0, 2), (1, 0)]`, or 422 saying which one was bad.
+    """`["0,2", "1,0"]` to `[(0, 2), (1, 0)]`, or 400 saying which one was bad.
 
     Guide coordinates are a pair and FastAPI has no query type for one, so they
     arrive as text and are checked here. Rejecting the malformed value by name
@@ -133,7 +134,7 @@ def _parse_questions(raw: list[str] | None) -> list[tuple[int, int]] | None:
         parts = value.split(",")
         if len(parts) != 2:
             raise HTTPException(
-                422,
+                400,
                 detail=(
                     f"question {value!r} is not a 'section,main_question' pair, "
                     "e.g. '0,2'"
@@ -143,7 +144,7 @@ def _parse_questions(raw: list[str] | None) -> list[tuple[int, int]] | None:
             section, main_question = (int(part) for part in parts)
         except ValueError:
             raise HTTPException(
-                422,
+                400,
                 detail=(
                     f"question {value!r} is not a 'section,main_question' pair "
                     "of whole numbers, e.g. '0,2'"
@@ -151,7 +152,7 @@ def _parse_questions(raw: list[str] | None) -> list[tuple[int, int]] | None:
             ) from None
         if section < 0 or main_question < 0:
             raise HTTPException(
-                422,
+                400,
                 detail=(
                     f"question {value!r} has a negative index; guide "
                     "coordinates are zero-based and count up"
@@ -167,7 +168,7 @@ def _parse_questions(raw: list[str] | None) -> list[tuple[int, int]] | None:
 
 
 def _survey_coordinate(param: str, value: str) -> tuple[Coordinate, str]:
-    """Split `"0,2=option:1"` into `((0, 2), "option:1")`, or 422 saying why not.
+    """Split `"0,2=option:1"` into `((0, 2), "option:1")`, or 400 saying why not.
 
     The coordinate is separated from the value by the first `=`, which no guide
     coordinate can contain -- so a value holding one, as a write-in easily
@@ -176,7 +177,7 @@ def _survey_coordinate(param: str, value: str) -> tuple[Coordinate, str]:
     coordinate, separator, rest = value.partition("=")
     if not separator:
         raise HTTPException(
-            422,
+            400,
             detail=(
                 f"{param} {value!r} is not a 'section,main_question=value' "
                 "selection, e.g. '0,2=option:1'"
@@ -184,7 +185,7 @@ def _survey_coordinate(param: str, value: str) -> tuple[Coordinate, str]:
         )
     pairs = _parse_questions([coordinate])
     if not pairs:
-        raise HTTPException(422, detail=f"{param} {value!r} names no question")
+        raise HTTPException(400, detail=f"{param} {value!r} names no question")
     return pairs[0], rest
 
 
@@ -196,7 +197,7 @@ def _parse_survey_values(raw: list[str] | None) -> dict[Coordinate, tuple[Value,
         kind, separator, body = rest.partition(":")
         if not separator or kind not in {"option", "text"}:
             raise HTTPException(
-                422,
+                400,
                 detail=(
                     f"survey value {rest!r} is neither 'option:<n>' nor 'text:<answer>'"
                 ),
@@ -207,11 +208,11 @@ def _parse_survey_values(raw: list[str] | None) -> dict[Coordinate, tuple[Value,
                 position = int(body)
             except ValueError:
                 raise HTTPException(
-                    422, detail=f"survey value {rest!r} has a non-numeric option"
+                    400, detail=f"survey value {rest!r} has a non-numeric option"
                 ) from None
             if position < 0:
                 raise HTTPException(
-                    422,
+                    400,
                     detail=(
                         f"survey value {rest!r} has a negative option; option "
                         "positions are zero-based and count up"
@@ -240,7 +241,7 @@ def _parse_survey_ranges(raw: list[str] | None) -> dict[Coordinate, Range]:
         low, separator, high = rest.partition("..")
         if not separator:
             raise HTTPException(
-                422,
+                400,
                 detail=(
                     f"survey_range {rest!r} is not a 'low..high' range; leave a "
                     "side empty for an open end, e.g. '25..' or '..34'"
@@ -266,7 +267,7 @@ def _parse_survey(
 
 
 def _checked_keyword(raw: str | None, db: DBSession, project_id: UUID4) -> str | None:
-    """The keyword query, parsed here so a bad one is a 422 and not a 500.
+    """The keyword query, parsed here so a bad one is a 400 and not a 500.
 
     Parsed and thrown away rather than passed on as a tree: the repository takes
     a string and parses it itself, so that a caller which never touches this
@@ -282,31 +283,23 @@ def _checked_keyword(raw: str | None, db: DBSession, project_id: UUID4) -> str |
     quietly matched nothing, which reads as "nobody was coded that way" rather
     than as "there is no such code".
 
-    The detail is an object rather than a sentence because the client points at
-    the offending character with it.
+    A `KeywordQueryError` from either answers 400 with the `position` of the
+    offending character, so the client can point at it.
     """
     if raw is None or not raw.strip():
         return raw
 
-    try:
-        node = parse(raw)
-        if node is not None:
-            # `db` is the repository facade; the lookup wants the session it
-            # wraps, which is the same one every repository on it shares.
-            resolve_all(db.session, project_id, node)
-    except KeywordQueryError as error:
-        raise HTTPException(
-            422,
-            detail={
-                "error": "invalid_keyword_query",
-                "message": error.message,
-                "position": error.position,
-            },
-        ) from None
+    node = parse(raw)
+    if node is not None:
+        # `db` is the repository facade; the lookup wants the session it
+        # wraps, which is the same one every repository on it shares.
+        resolve_all(db.session, project_id, node)
     return raw
 
 
-@router.get("/projects/{project_id}/analysis/embeddings/search")
+@router.get(
+    "/projects/{project_id}/analysis/embeddings/search", responses=INVALID_KEYWORD_QUERY
+)
 async def search_embeddings(
     project_id: UUID4,
     db: DBSession,
@@ -385,7 +378,9 @@ async def search_embeddings(
     )
 
 
-@router.get("/projects/{project_id}/analysis/embeddings/browse")
+@router.get(
+    "/projects/{project_id}/analysis/embeddings/browse", responses=INVALID_KEYWORD_QUERY
+)
 async def browse_embeddings(
     project_id: UUID4,
     db: DBSession,
@@ -707,7 +702,10 @@ def survey_facets(
     return SurveyFacets(items=items)
 
 
-@router.get("/projects/{project_id}/analysis/embeddings/survey-facets")
+@router.get(
+    "/projects/{project_id}/analysis/embeddings/survey-facets",
+    responses=INVALID_KEYWORD_QUERY,
+)
 async def read_survey_facets(
     project_id: UUID4,
     db: DBSession,
@@ -783,7 +781,10 @@ def code_facets(
     return CodeFacets(kind=kind, total=coverage.total, items=items)
 
 
-@router.get("/projects/{project_id}/analysis/embeddings/code-facets")
+@router.get(
+    "/projects/{project_id}/analysis/embeddings/code-facets",
+    responses=INVALID_KEYWORD_QUERY,
+)
 async def read_code_facets(
     project_id: UUID4,
     db: DBSession,
@@ -852,7 +853,7 @@ async def read_interview_transcript(
     to see where it hit. Annotating remains the page's, which this links to.
 
     `keyword` is optional and validated the same way the search endpoints
-    validate it, so a query that cannot be read is a 422 here too rather than a
+    validate it, so a query that cannot be read is a 400 here too rather than a
     transcript quietly rendered with nothing marked.
     """
     try:
@@ -868,7 +869,10 @@ async def read_interview_transcript(
     return InterviewTranscript(interview_id=interview_id, turns=turns)
 
 
-@router.get("/projects/{project_id}/analysis/embeddings/codes/{code_id}/similar")
+@router.get(
+    "/projects/{project_id}/analysis/embeddings/codes/{code_id}/similar",
+    responses=INVALID_KEYWORD_QUERY,
+)
 async def find_embeddings_like_code(
     project_id: UUID4,
     code_id: UUID4,
@@ -951,7 +955,10 @@ async def find_embeddings_like_code(
     )
 
 
-@router.get("/projects/{project_id}/analysis/embeddings/{embedding_id}/similar")
+@router.get(
+    "/projects/{project_id}/analysis/embeddings/{embedding_id}/similar",
+    responses=INVALID_KEYWORD_QUERY,
+)
 async def find_similar_embeddings(
     project_id: UUID4,
     embedding_id: UUID4,
@@ -1124,7 +1131,10 @@ def _point_groups(
     return groups
 
 
-@router.get("/projects/{project_id}/analysis/embeddings/clusters")
+@router.get(
+    "/projects/{project_id}/analysis/embeddings/clusters",
+    responses=INVALID_KEYWORD_QUERY,
+)
 async def cluster_embeddings(
     project_id: UUID4,
     db: DBSession,

@@ -12,7 +12,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import UUID4
 from sqlalchemy.exc import NoResultFound
 
-from ....db.repositories.errors import CommentThreadError
 from ....dependencies import DBSession, DemoToken, ProjectAnnotator, ProjectViewer
 from ....schemas.analysis import (
     MessageCommentCreate,
@@ -66,8 +65,6 @@ async def add_message_comment(
         )
     except NoResultFound:
         raise HTTPException(404, detail="Message not found")
-    except CommentThreadError as error:
-        raise HTTPException(400, detail=str(error))
 
 
 @router.put("/projects/{project_id}/analysis/comments/{comment_id}")

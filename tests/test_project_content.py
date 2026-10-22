@@ -211,7 +211,7 @@ async def test_saving_a_condition_on_a_later_question_is_rejected(db):
             Response(),
         )
 
-    assert error.value.status_code == 422
+    assert error.value.status_code == 400
 
 
 @pytest.mark.anyio

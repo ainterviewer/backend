@@ -429,3 +429,37 @@ class EmbeddingTask(StrEnum):
 
     DOCUMENT = "document"
     CLUSTERING = "clustering"
+
+
+class ErrorCode(StrEnum):
+    """What went wrong, for a client to branch on: the `code` of an
+    `ApiError` body. `detail` is the sentence to show; this is what to test.
+
+    Only errors a client handles differently carry one. Values are part of
+    the API -- the frontend matches on them -- so rename none without it.
+    """
+
+    INTERNAL = "internal"
+    # Content and publishing
+    NOT_PUBLISHED = "not_published"
+    CANNOT_PUBLISH = "cannot_publish"
+    STALE_REVISION = "stale_revision"
+    REVISION_REQUIRED = "revision_required"
+    PROJECT_LANGUAGE = "project_language"
+    # Interviews
+    INVALID_LINK_PARAMS = "invalid_link_params"
+    # Analysis
+    INVALID_CODEBOOK = "invalid_codebook"
+    INVALID_CODING = "invalid_coding"
+    INVALID_COMMENT_THREAD = "invalid_comment_thread"
+    INVALID_KEYWORD_QUERY = "invalid_keyword_query"
+    # Accounts and invitations
+    ALIAS_TAKEN = "alias_taken"
+    EMAIL_TAKEN = "email_taken"
+    EMAIL_NOT_VERIFIED = "email_not_verified"
+    EMAIL_SEND_FAILED = "email_send_failed"
+    INVITE_REQUIRED = "invite_required"
+    INVITE_INVALID = "invite_invalid"
+    INVITE_EXPIRED = "invite_expired"
+    ACCESS_REQUEST_EXISTS = "access_request_exists"
+    PREVIEW_FEATURES_REQUIRED = "preview_features_required"

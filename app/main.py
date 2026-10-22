@@ -8,9 +8,8 @@ import rich.console
 import rich.logging
 import rich.theme
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -18,14 +17,9 @@ from . import __version__
 from .api import main as api
 from .api.websockets import main as websockets
 from .db.crud import InterviewDataBase
-from .db.repositories.errors import (
-    ContentRevisionError,
-    InvitationAliasTakenError,
-    NotPublishedError,
-    PublishError,
-)
 from .dependencies import engine
 from .embed.worker import embedding_worker
+from .errors import add_error_handlers
 from .settings import app_settings
 
 # =========== #
@@ -108,43 +102,7 @@ app.add_middleware(
 )
 
 
-# Raised from many routes -- everything respondents read, every content
-# write -- so mapped once here rather than per endpoint. `code` lets the
-# frontend tell them apart without parsing the message.
-@app.exception_handler(NotPublishedError)
-async def _not_published(_request: Request, exc: NotPublishedError):
-    return JSONResponse(
-        status_code=409, content={"detail": str(exc), "code": "not_published"}
-    )
-
-
-@app.exception_handler(PublishError)
-async def _cannot_publish(_request: Request, exc: PublishError):
-    return JSONResponse(
-        status_code=409,
-        content={"detail": str(exc), "code": "cannot_publish", "missing": exc.missing},
-    )
-
-
-@app.exception_handler(InvitationAliasTakenError)
-async def _alias_taken(_request: Request, exc: InvitationAliasTakenError):
-    return JSONResponse(
-        status_code=409, content={"detail": str(exc), "code": "alias_taken"}
-    )
-
-
-@app.exception_handler(ContentRevisionError)
-async def _stale_revision(_request: Request, exc: ContentRevisionError):
-    return JSONResponse(
-        status_code=412,
-        content={
-            "detail": str(exc),
-            "code": "stale_revision",
-            "current_revision": exc.current,
-            "part": exc.part,
-        },
-        headers={"ETag": f'"{exc.current}"'},
-    )
+add_error_handlers(app)
 
 
 # Routers

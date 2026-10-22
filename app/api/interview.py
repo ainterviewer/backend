@@ -33,6 +33,7 @@ from ..dependencies import (
     ResourceRoleChecker,
     ScopeChecker,
 )
+from ..errors import AppError
 from ..schemas.common import MediaUploadResponse
 from ..schemas.interviews import (
     InterviewCreate,
@@ -48,6 +49,7 @@ from ..settings import app_settings
 from ..types import (
     CollaboratorRole,
     ContentVersionKind,
+    ErrorCode,
     ExternalParam,
     InterviewType,
     Scope,
@@ -71,7 +73,7 @@ def validate_external_params(
     validated against `{}` when the respondent supplied nothing, so missing
     required params are caught.
 
-    The 422 body is deliberately opaque. Pydantic's error list names the
+    The 400 body is deliberately opaque. Pydantic's error list names the
     parameters the link is expected to carry (and, for enums, their allowed
     values), which is exactly the hint a respondent would need to fabricate
     one. The detail is logged for the project owner instead; the interview page
@@ -87,7 +89,9 @@ def validate_external_params(
         logger.info(
             f"External param validation failed for project {project_id}: {e.errors()}"
         )
-        raise HTTPException(status_code=422, detail="Invalid interview link parameters")
+        raise AppError(
+            "Invalid interview link parameters", code=ErrorCode.INVALID_LINK_PARAMS
+        ) from None
 
 
 # NOTE: Unauthenticated like the consent/welcome endpoints: the interview page
@@ -506,7 +510,7 @@ async def synthesize_speech(
             status_code=403, detail="Only interviewer messages can be synthesized"
         )
     if not (text := message.content.strip()):
-        raise HTTPException(status_code=422, detail="Message has no text content")
+        raise HTTPException(status_code=400, detail="Message has no text content")
 
     try:
         stream = await synthesize(text, interview.language)

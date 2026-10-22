@@ -909,8 +909,8 @@ class EmbeddingRepository(BaseRepository):
 
         The string is a boolean query, not a literal -- `parse` reads the
         operators and `compile_condition` turns the tree into SQL. A query that
-        will not parse raises `KeywordQueryError`; the endpoint turns that into
-        a 422 naming the problem, because searching for something other than
+        will not parse raises `KeywordQueryError`, which the API answers with
+        a 400 naming the problem, because searching for something other than
         what was typed is worse than refusing.
 
         Only the question side is stripped of markup, because only guide text

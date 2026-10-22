@@ -22,6 +22,7 @@ from ainterviewer.lpm.types import CustomToken
 
 from .api.dashboard.assistance import ChatMessage
 from .auth import AuthToken, InterviewToken
+from .schemas.common import ApiError
 from .services.email.participant_template import TemplatePlaceholder
 from .utils import extend_openapi_schema
 
@@ -31,6 +32,7 @@ from .utils import extend_openapi_schema
 # returns it, but the dashboard's email editor needs the authoritative list of
 # template variables, and exporting it keeps that list in one place.
 EXTRA_MODELS = [
+    ApiError,
     AuthToken,
     ChatMessage,
     CustomToken,
@@ -54,6 +56,33 @@ def build_openapi_schema(app: FastAPI) -> dict[str, Any]:
         if path.startswith(("/api/", "/ws/"))
     }
 
+    _declare_errors(openapi)
+
     # TODO: Make sure that we should in fact extend the openapi schema, and not
     # just export them as separately
     return extend_openapi_schema(openapi, models=EXTRA_MODELS)
+
+
+#: Every error the handlers in app/main.py answer, but FastAPI's own 422.
+_API_ERROR = {
+    "content": {
+        "application/json": {"schema": {"$ref": "#/components/schemas/ApiError"}}
+    }
+}
+
+
+def _declare_errors(openapi: dict[str, Any]) -> None:
+    """Declare `ApiError` as every operation's 4XX and 5XX body, so the
+    generated client types each one's `error`.
+
+    Added here rather than as `responses` on the API router because FastAPI
+    stops declaring its own 422 on an operation that has a `4XX`, and that
+    body, a list of validation errors, is not an `ApiError`. A route whose
+    error carries more fields (`StaleRevisionError`) declares it for that
+    status itself, which a range does not override.
+    """
+    for operations in openapi["paths"].values():
+        for operation in operations.values():
+            responses = operation.setdefault("responses", {})
+            responses.setdefault("4XX", {"description": "Client error", **_API_ERROR})
+            responses.setdefault("5XX", {"description": "Server error", **_API_ERROR})

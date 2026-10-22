@@ -455,7 +455,7 @@ class TestFacets:
 
 
 class TestParsingTheWireFormat:
-    """The filter as it arrives on a URL. A malformed one is a 422 naming the
+    """The filter as it arrives on a URL. A malformed one is a 400 naming the
     problem rather than a filter for something other than what was asked."""
 
     def test_an_option_is_named_by_position(self):
@@ -509,7 +509,7 @@ class TestParsingTheWireFormat:
     def test_a_malformed_filter_is_rejected_by_name(self, values, ranges):
         with pytest.raises(HTTPException) as raised:
             _parse_survey(values, ranges)
-        assert raised.value.status_code == 422
+        assert raised.value.status_code == 400
 
 
 class TestFacetCohorts:

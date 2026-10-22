@@ -55,6 +55,9 @@ from typing import Literal
 
 from sqlalchemy import and_, not_, or_
 
+from ..errors import AppError
+from ..types import ErrorCode
+
 __all__ = [
     "And",
     "CodeTerm",
@@ -80,16 +83,19 @@ MAX_DEPTH = 16
 MAX_TERM_LENGTH = 200
 
 
-class KeywordQueryError(ValueError):
+class KeywordQueryError(AppError, ValueError):
     """A query that cannot be parsed, and where it went wrong.
 
     `position` is a zero-based offset into the original string, for a client
     that wants to point at the character. It is None where the problem is the
-    query as a whole rather than one place in it.
+    query as a whole rather than one place in it. The API answers 400 with
+    `position` alongside the message.
     """
 
+    code = ErrorCode.INVALID_KEYWORD_QUERY
+
     def __init__(self, message: str, position: int | None = None):
-        super().__init__(message)
+        super().__init__(message, position=position)
         self.message = message
         self.position = position
 
@@ -155,7 +161,7 @@ class CodeTerm:
 
     `position` is carried, unlike on `Term`, because a code term can still fail
     *after* parsing -- on a name that matches nothing or matches twice -- and
-    the 422 for that should point at the same character a syntax error would.
+    the 400 for that should point at the same character a syntax error would.
     """
 
     path: tuple[str, ...]

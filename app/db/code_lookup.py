@@ -6,7 +6,7 @@ that does: it loads a project's codes once and turns each reference into the
 ids a condition can be built from.
 
 Separate from both sides that need it. The endpoint resolves to find out
-whether a query can be answered at all, so that an unplaceable name is a 422
+whether a query can be answered at all, so that an unplaceable name is a 400
 naming the name rather than a 500 or, worse, a filter that quietly matches
 nothing. The repository resolves to build the SQL. Neither owns it, so neither
 imports the other.

@@ -9,6 +9,8 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 from ainterviewer.constants import LANGUAGES
 from ainterviewer.types import LanguageCode
 
+from ..types import ContentPart, ErrorCode
+
 
 class Schema(BaseModel):
     """The base of every API schema.
@@ -67,8 +69,41 @@ class PaginatedResponse[T](Schema):
     items: list[T]
 
 
-class ErrorResponse(Schema):
+class ApiError(Schema):
+    """The body of every error response but FastAPI's 422, whose `detail` is
+    a list of validation errors (`HTTPValidationError`).
+
+    `detail` is a sentence to show; `code` says what went wrong for a client
+    that handles it, and is null for errors no client tells apart. Raised as
+    `app.errors.AppError` and answered by the handlers in `app/main.py`.
+    """
+
     detail: str
+    code: ErrorCode | None
+
+
+class StaleRevisionError(ApiError):
+    """412 `stale_revision`: someone saved the content since it was loaded.
+
+    `current_revision` is what to send as `If-Match` to overwrite; `part` the
+    `ContentPart` whose revision was checked, null for the overall one.
+    """
+
+    current_revision: int
+    part: ContentPart | None
+
+
+class CannotPublishError(ApiError):
+    """409 `cannot_publish`: the paths each offered language still lacks."""
+
+    missing: dict[LanguageCode, list[str]]
+
+
+class InvalidKeywordQueryError(ApiError):
+    """400 `invalid_keyword_query`: where in the query it went wrong, as a
+    zero-based offset, or null when the problem is the query as a whole."""
+
+    position: int | None
 
 
 class MediaUploadResponse(Schema):

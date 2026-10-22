@@ -22,8 +22,9 @@ from .db.pragmas import register_pragmas
 from .db.regexp import register_regexp
 from .db.triggers import register_trigger_functions
 from .db.vectors import register_vector_extension
+from .errors import AppError
 from .settings import app_settings
-from .types import CollaboratorRole, Scope
+from .types import CollaboratorRole, ErrorCode, Scope
 
 # from .websockets import WebSocketConnectionManager
 
@@ -228,12 +229,6 @@ class ResourceRoleChecker:
         return token
 
 
-#: The 403 detail for a caller without preview features. Distinct so the frontend
-#: can tell a token minted before an admin enabled the flag -- which a refresh
-#: fixes -- from any other refusal, and refresh and retry once on it.
-PREVIEW_FEATURES_REQUIRED = "preview_features_required"
-
-
 def require_preview_features(
     token: AuthToken = Depends(_decode_token),
 ) -> AuthToken:
@@ -245,7 +240,14 @@ def require_preview_features(
     the flag is set on their own account.
     """
     if not token.preview_features:
-        raise AuthError(status_code=403, detail=PREVIEW_FEATURES_REQUIRED)
+        # Its own code so the frontend can tell a token minted before an admin
+        # enabled the flag -- which a refresh fixes -- from any other refusal,
+        # and refresh and retry once on it.
+        raise AppError(
+            "This feature is not enabled for your account.",
+            status=403,
+            code=ErrorCode.PREVIEW_FEATURES_REQUIRED,
+        )
     return token
 
 
@@ -370,10 +372,11 @@ def _if_match(if_match: Annotated[str | None, Header()] = None) -> int:
     anyone's work (428). The value is the `ETag` the GET returned, quoted.
     """
     if if_match is None:
-        raise HTTPException(
-            status_code=428,
-            detail="Send the content's ETag as If-Match, so a save cannot "
+        raise AppError(
+            "Send the content's ETag as If-Match, so a save cannot "
             "overwrite changes you have not seen.",
+            status=428,
+            code=ErrorCode.REVISION_REQUIRED,
         )
     try:
         return int(if_match.removeprefix("W/").strip().strip('"'))

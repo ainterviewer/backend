@@ -20,8 +20,9 @@ from ..auth import (
     hash_token,
     verify_password,
 )
-from ..db.repositories.errors import EmailTakenError, InvitationClaimedError
+from ..db.repositories.errors import EmailTakenError
 from ..dependencies import DBSession, DemoToken
+from ..errors import AppError
 from ..schemas.users import (
     AccessRequestCreate,
     DeleteAccountRequest,
@@ -42,7 +43,7 @@ from ..schemas.users import (
 )
 from ..services.email.mail import email_templates, send_email
 from ..settings import app_settings
-from ..types import VerificationPurpose
+from ..types import ErrorCode, VerificationPurpose
 from .websockets.manager import session_manager
 
 logger = logging.getLogger(__name__)
@@ -145,9 +146,15 @@ def _issue_session(
     return response
 
 
-_EMAIL_SEND_FAILED = HTTPException(
-    status_code=502, detail="Failed to send email. Please try again."
-)
+class EmailSendError(AppError):
+    """An email the request depends on could not be sent. 502, so the user
+    knows to try again rather than to fix what they typed."""
+
+    status = 502
+    code = ErrorCode.EMAIL_SEND_FAILED
+
+    def __init__(self):
+        super().__init__("Failed to send email. Please try again.")
 
 
 async def _send_verification_email(db, user: UserPublic | UserRecord) -> None:
@@ -179,7 +186,7 @@ async def _send_verification_email(db, user: UserPublic | UserRecord) -> None:
     except Exception:
         logger.exception("Failed to send verification email to %s", user.email)
         db.verification.delete(code.id)
-        raise _EMAIL_SEND_FAILED
+        raise EmailSendError from None
 
 
 async def _send_login_code(db, user: UserRecord) -> None:
@@ -207,7 +214,7 @@ async def _send_login_code(db, user: UserRecord) -> None:
     except Exception:
         logger.exception("Failed to send login code to %s", user.email)
         db.verification.delete(code.id)
-        raise _EMAIL_SEND_FAILED
+        raise EmailSendError from None
 
 
 @router.post("/login")
@@ -223,9 +230,10 @@ async def login(login_request: LoginRequest, db: DBSession):
         raise exception
 
     if not user.email_verified:
-        raise HTTPException(
-            status_code=403,
-            detail="Email not verified. Please check your inbox for the verification link.",
+        raise AppError(
+            "Email not verified. Please check your inbox for the verification link.",
+            status=403,
+            code=ErrorCode.EMAIL_NOT_VERIFIED,
         )
 
     if user.two_factor_enabled:
@@ -304,7 +312,7 @@ async def update_my_email(
     try:
         return db.users.update_user_email(jwt.user_id, body.new_email)
     except sqlalchemy.exc.IntegrityError:
-        raise HTTPException(status_code=409, detail="Email already in use")
+        raise EmailTakenError from None
 
 
 @router.post("/me/password")
@@ -347,13 +355,15 @@ async def register(user: RegisterRequest, db: DBSession) -> JSONResponse:
 
     if app_settings.app.registration_requires_token is True:
         if not user.invite_token:
-            return JSONResponse({"detail": "Invite token required"}, status_code=406)
+            raise AppError("Invite token required", code=ErrorCode.INVITE_REQUIRED)
         try:
             invitation = db.users.check_invite_token(user.invite_token)
         except sqlalchemy.exc.NoResultFound:
-            return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
+            raise AppError(
+                "Invalid invite token", code=ErrorCode.INVITE_INVALID
+            ) from None
         if invitation.expires_at and invitation.expires_at < now():
-            return JSONResponse({"detail": "Invite token expired"}, status_code=406)
+            raise AppError("Invite token expired", code=ErrorCode.INVITE_EXPIRED)
         if not invitation.reuseable:
             claim = invitation
         snapshot["scope"] = invitation.user_scope
@@ -382,23 +392,19 @@ async def register(user: RegisterRequest, db: DBSession) -> JSONResponse:
             snapshot["organization"] = access_request.organization
 
     # NOTE: Password hashing happens in the users.create_user method
-    try:
-        new_user = db.users.create_user(
-            UserCreate(**user.model_dump(), **snapshot),
-            claim_invitation=claim.id if claim else None,
-        )
-    except InvitationClaimedError:
-        # Another request redeemed this single-use token first
-        return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
-    except EmailTakenError:
-        raise HTTPException(status_code=409, detail="Email already in use") from None
+    # Raises InvitationClaimedError when another request redeemed a single-use
+    # token first, and EmailTakenError for an address with an account.
+    new_user = db.users.create_user(
+        UserCreate(**user.model_dump(), **snapshot),
+        claim_invitation=claim.id if claim else None,
+    )
 
     # Hard gate: no session is issued until the email address is verified.
     # If the email can't be sent, roll back the new account so the address is
     # free for a clean retry rather than being stuck unverified.
     try:
         await _send_verification_email(db, new_user)
-    except HTTPException:
+    except EmailSendError:
         db.users.delete_user(new_user.id)
         if claim:
             db.users.restore_invitation(claim)
@@ -493,7 +499,7 @@ async def _send_password_reset_email(db, user: UserRecord) -> None:
     except Exception:
         logger.exception("Failed to send password reset email to %s", user.email)
         db.verification.delete(code.id)
-        raise _EMAIL_SEND_FAILED
+        raise EmailSendError from None
 
 
 @router.post("/forgot-password")
@@ -554,10 +560,11 @@ async def request_access(access_request: AccessRequestCreate, db: DBSession):
     except sqlalchemy.exc.IntegrityError as e:
         # Check if the error is a UNIQUE constraint violation
         if "UNIQUE constraint failed" in str(e.orig):
-            return JSONResponse(
-                content={"details": "Access request already exists for this email."},
-                status_code=400,
-            )
+            raise AppError(
+                "Access request already exists for this email.",
+                status=409,
+                code=ErrorCode.ACCESS_REQUEST_EXISTS,
+            ) from None
         raise
 
 

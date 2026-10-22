@@ -111,6 +111,8 @@ frontend client:
   parts of another model (`FacetCount`, `EmbeddingTurn`) keep plain names;
   models that never reach the wire (`UserRecord`, `UserCreate`) carry no
   wire suffix beyond what describes them.
+- `ApiError` is every error body; one that carries more fields is named after
+  its `code` (`StaleRevisionError` for `stale_revision`).
 
 PATCH bodies default every field to pydantic's `MISSING`, so an omitted field
 is absent from `model_dump()` and an explicit `null` still clears a nullable
@@ -132,8 +134,8 @@ as a valid value.
   - `TestRepository`: Experiment management
   - `ParticipantRepository`, `AssistanceRepository`, `NewsletterRepository`
 - `errors.py` holds the domain exceptions repositories raise (e.g.
-  `ProjectLanguageError`); the API layer maps them to HTTP status codes rather
-  than repositories raising `HTTPException` themselves
+  `ProjectLanguageError`). They are `AppError`s, so routes let them through
+  rather than catching and re-raising them; see "Error responses" below
 
 **3. ORM Layer (`app/db/tables.py`)**
 
@@ -731,8 +733,8 @@ cover every part, so they check the overall revision (the versions status
 `ETag`). Missing is 428, stale is `ContentRevisionError` (412,
 `code: stale_revision`, `current_revision`, `part`, null for the overall
 one). New writes go through `ProjectRepository._content(project_id, revision,
-part)`, which does the check. The three errors are mapped once in
-`app/main.py`. Server-side writes that are whole replacements (guide
+part)`, which does the check. All three are `AppError`s, answered by the
+one handler (see "Error responses"). Server-side writes that are whole replacements (guide
 generation, translation, language changes) take no `If-Match` but still bump
 the revisions; translation, which touches three parts, returns each part's in
 `revisions`. Add a new content column to a part in `PART_FIELDS`, or to a new
@@ -806,6 +808,37 @@ HTTP with `If-Match`.
 - pycrdt objects must be freed on the thread that made them: never touch a
   doc from `asyncio.to_thread`, and a closing room collects its cycles on the
   loop (`gc.collect()` in `ContentRooms.serve`).
+
+### Error responses
+
+Every error the API answers has an `ApiError` body (`app/schemas/common.py`):
+`detail`, a sentence to show, and `code`, an `ErrorCode` (`app/types.py`) for
+a client to branch on, or null for errors no client tells apart. The one
+exception is FastAPI's own 422, whose `detail` is a list of validation
+errors -- so 422 means "the request did not match the schema" and nothing
+else; a check a route makes itself is a 400.
+
+- **Raise `AppError` (`app/errors.py`)** when a client has to tell the error
+  apart: `AppError("Invite token expired", code=ErrorCode.INVITE_EXPIRED)`,
+  with `status=` (400 by default), `headers=` and extra body fields as
+  keywords. Domain exceptions subclass it with `status` and `code` as class
+  attributes (`app/db/repositories/errors.py`), so a repository says what
+  went wrong and never imports `HTTPException`, and no route maps them.
+- A plain `HTTPException` still works and comes out as an `ApiError` with a
+  null `code`. Don't put a dict in its `detail`, and don't build an error
+  `JSONResponse` by hand -- both are how the API ended up with five shapes.
+- `add_error_handlers` (`app/errors.py`) installs the handlers, which also
+  turn an unhandled exception into a JSON 500; a test's throwaway app calls
+  it too.
+- **The schema.** `build_openapi_schema` (`app/openapi.py`) declares
+  `ApiError` as every operation's `4XX` and `5XX`, which is what types the
+  generated client's `error`. Not as `responses` on the router: a `4XX`
+  there stops FastAPI declaring its 422. An error with more fields declares
+  its model on the routes that raise it, from `app/api/errors.py`
+  (`responses=STALE_REVISION`), as a union with `ApiError` where other errors
+  share the status.
+- `code` values are API: the frontend matches on them. Add one when a client
+  needs it, rename none without the frontend.
 
 ### Repository Session Management
 

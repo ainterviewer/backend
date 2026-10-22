@@ -15,7 +15,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import UUID4
 from sqlalchemy.exc import NoResultFound
 
-from ....db.repositories.errors import CodebookError, CodingError
 from ....dependencies import (
     DBSession,
     DemoToken,
@@ -82,10 +81,7 @@ async def save_codebook(
     jwt: DemoToken,
     _: ProjectEditor,
 ) -> CodebookPublic:
-    try:
-        return db.analysis.save_codebook(project_id, codebook)
-    except CodebookError as error:
-        raise HTTPException(400, detail=str(error))
+    return db.analysis.save_codebook(project_id, codebook)
 
 
 @router.get("/projects/{project_id}/analysis/codebook/counts", dependencies=_preview)
@@ -147,8 +143,6 @@ async def add_message_coding(
         )
     except NoResultFound as error:
         raise HTTPException(404, detail=str(error))
-    except CodingError as error:
-        raise HTTPException(400, detail=str(error))
 
 
 @router.put("/projects/{project_id}/analysis/codings/{coding_id}")
@@ -165,8 +159,6 @@ async def update_message_coding(
         return db.analysis.update_message_coding(project_id, coding_id, coding)
     except NoResultFound as error:
         raise HTTPException(404, detail=str(error))
-    except CodingError as error:
-        raise HTTPException(400, detail=str(error))
 
 
 @router.delete("/projects/{project_id}/analysis/codings/{coding_id}")

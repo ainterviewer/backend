@@ -1,51 +1,74 @@
-class ProjectLanguageError(Exception):
+from ...errors import AppError
+from ...types import ErrorCode
+
+
+class ProjectLanguageError(AppError):
     """A localization operation would break a project's language invariants.
 
     Raised when a project would be left without a localization, or without a
-    default one. The API layer maps this to a 409 and shows the message to the
-    user, so keep messages user-facing.
+    default one. The API answers 409 and shows the message to the user, so
+    keep messages user-facing.
     """
 
+    status = 409
+    code = ErrorCode.PROJECT_LANGUAGE
 
-class ContentRevisionError(Exception):
+
+class ContentRevisionError(AppError):
     """A write to a project's content was based on a revision that is no
     longer current: someone else saved in between.
 
     `part` is the `ContentPart` whose revision was checked, or None for the
-    overall one (publish, restore). The API maps this to a 412 carrying
-    `current` and `part`, so the editor can offer to reload or to overwrite
-    with that revision.
+    overall one (publish, restore). The API answers 412 carrying
+    `current_revision` and `part`, and the revision as `ETag`, so the editor
+    can offer to reload or to overwrite with that revision.
     """
+
+    status = 412
+    code = ErrorCode.STALE_REVISION
 
     def __init__(self, expected: int, current: int, part: str | None = None):
         super().__init__(
             f"The {part or 'content'} changed since it was loaded "
-            f"(revision {expected}, now {current})."
+            f"(revision {expected}, now {current}).",
+            headers={"ETag": f'"{current}"'},
+            current_revision=current,
+            part=part,
         )
+        self.expected = expected
+        self.current = current
+        self.part = part
         self.expected = expected
         self.current = current
         self.part = part
 
 
-class NotPublishedError(Exception):
+class NotPublishedError(AppError):
     """Respondents asked for a project that has never been published.
 
     Distributed interviews, the public consent/welcome/language routes and
     participant emails read the published version only, and never fall back to
-    the draft. The API maps this to a 409, so keep messages user-facing.
+    the draft. The API answers 409, so keep messages user-facing.
     """
 
+    status = 409
+    code = ErrorCode.NOT_PUBLISHED
 
-class PublishError(Exception):
+
+class PublishError(AppError):
     """The draft cannot be published as it stands.
 
     Raised while an offered language has untranslated text; `missing` maps
-    each such language to the paths of what it lacks. The API maps this to a
-    409 and shows the message.
+    each such language to the paths of what it lacks. The API answers 409
+    with `missing` and shows the message.
     """
 
+    status = 409
+    code = ErrorCode.CANNOT_PUBLISH
+
     def __init__(self, message: str, missing: dict[str, list[str]]):
-        super().__init__(message)
+        super().__init__(message, missing=missing)
+        self.missing = missing
         self.missing = missing
 
 
@@ -65,35 +88,41 @@ class ResumeTokenError(Exception):
         self.reason = reason
 
 
-class CommentThreadError(Exception):
+class CommentThreadError(AppError):
     """A comment could not be placed in the thread it named.
 
     Raised when a reply names a parent that is itself a reply (threads are two
-    levels deep) or a parent on a different message. The API maps this to a
-    400: it means the caller built the wrong parent, and silently re-pointing
-    the reply at the root would hide that.
+    levels deep) or a parent on a different message. The API answers 400: it
+    means the caller built the wrong parent, and silently re-pointing the
+    reply at the root would hide that.
     """
 
+    code = ErrorCode.INVALID_COMMENT_THREAD
 
-class CodebookError(Exception):
+
+class CodebookError(AppError):
     """A codebook could not be saved as sent.
 
     Raised when the payload is not a tree over its own codes -- a parent that
     is not in it, a cycle, a duplicated id -- or when saving it would throw
     away coding already done, which is the one case where the user has to
-    decide rather than the server. The API maps this to a 400 and shows the
+    decide rather than the server. The API answers 400 and shows the
     message, so keep messages user-facing.
     """
 
+    code = ErrorCode.INVALID_CODEBOOK
 
-class CodingError(Exception):
+
+class CodingError(AppError):
     """A passage could not be coded the way the caller asked.
 
     Raised for a code that is a group (groups are never applied), a score
     without a value or with one outside its range, a span that does not fall
-    inside the message, and a coding that already exists. The API maps this to
-    a 400 and shows the message.
+    inside the message, and a coding that already exists. The API answers 400
+    and shows the message.
     """
+
+    code = ErrorCode.INVALID_CODING
 
 
 class OptOutTokenError(Exception):
@@ -128,21 +157,36 @@ class InterviewGoneError(Exception):
         self.interview_id = interview_id
 
 
-class InvitationAliasTakenError(Exception):
+class InvitationAliasTakenError(AppError):
     """Another invitation already has this alias. The API answers 409."""
+
+    status = 409
+    code = ErrorCode.ALIAS_TAKEN
 
     def __init__(self, alias: str):
         super().__init__(f"The alias {alias!r} is already in use")
         self.alias = alias
 
 
-class EmailTakenError(Exception):
+class EmailTakenError(AppError):
     """An account already uses this email address. The API answers 409."""
 
+    status = 409
+    code = ErrorCode.EMAIL_TAKEN
 
-class InvitationClaimedError(Exception):
+    def __init__(self):
+        super().__init__("Email already in use")
+
+
+class InvitationClaimedError(AppError):
     """A single-use invitation was redeemed by someone else first.
 
     Raised by `create_user` when the invitation it was asked to claim is no
-    longer there; the account is not created.
+    longer there; the account is not created. To the caller it is an invalid
+    token like any other.
     """
+
+    code = ErrorCode.INVITE_INVALID
+
+    def __init__(self):
+        super().__init__("Invalid invite token")

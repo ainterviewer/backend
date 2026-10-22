@@ -55,7 +55,6 @@ from ainterviewer.utils import get_language_dict, now
 
 from ...auth import generate_resume_token, hash_token
 from ...collab.rooms import content_rooms
-from ...db.repositories.errors import ProjectLanguageError
 from ...db.repositories.interview import SORTABLE_INTERVIEW_COLUMNS
 from ...db.repositories.project import ContentSource
 from ...db.tables import InterviewResumeTokenTable
@@ -104,6 +103,7 @@ from ...services.project_storage import copy_email_attachments, delete_project_s
 from ...settings import app_settings
 from ...types import CollaboratorRole, ContentPart, InterviewType, Scope
 from ...utils import as_aware, ensure_filename, generate_qr_img
+from ..errors import STALE_REVISION
 from ..websockets.manager import session_manager
 
 logger = logging.getLogger(__name__)
@@ -203,8 +203,6 @@ async def remove_project_language(
 ):
     try:
         available_languages = db.projects.remove_project_language(project_id, language)
-    except ProjectLanguageError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except NoResultFound as exc:
         raise HTTPException(
             status_code=404, detail="The project has no localization for that language."
@@ -231,8 +229,6 @@ async def set_language_in_progress(
     and its missing text does not block publishing. Not the default (409)."""
     try:
         return db.projects.set_language_in_progress(project_id, language, in_progress)
-    except ProjectLanguageError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except NoResultFound as exc:
         raise HTTPException(
             status_code=404, detail="The project has no localization for that language."
@@ -251,10 +247,7 @@ async def set_default_language(
     jwt: DemoToken,
     _: ProjectEditor,
 ):
-    try:
-        return db.projects.set_default_language(project_id, language)
-    except ProjectLanguageError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return db.projects.set_default_language(project_id, language)
 
 
 @router.patch(
@@ -387,7 +380,7 @@ async def get_localized_guide(
     return db.projects.get_guide(project_id)
 
 
-@router.put("/projects/{project_id}/guide")
+@router.put("/projects/{project_id}/guide", responses=STALE_REVISION)
 async def update_guide(
     project_id: UUID4,
     guide: LocalizedInterviewGuide,
@@ -408,7 +401,7 @@ async def update_guide(
     rendered = guide.render(db.projects.get_default_language(project_id))
     if order_errors := rendered.condition_order_errors():
         raise HTTPException(
-            status_code=422,
+            status_code=400,
             detail="Conditions must read questions asked before the one they gate: "
             + "; ".join(order_errors),
         )
@@ -608,7 +601,7 @@ async def get_interview_agents(
     return db.projects.get_agent_configs(project_id)
 
 
-@router.post("/projects/{project_id}/agents")
+@router.post("/projects/{project_id}/agents", responses=STALE_REVISION)
 async def create_interview_agents(
     project_id: UUID4,
     config: AgentConfigs,
@@ -797,7 +790,7 @@ async def get_localized_consent(
     return db.projects.get_consent(project_id)
 
 
-@router.put("/projects/{project_id}/consent")
+@router.put("/projects/{project_id}/consent", responses=STALE_REVISION)
 async def update_consent(
     project_id: UUID4,
     consent: LocalizedConsent,
@@ -841,7 +834,7 @@ async def get_localized_welcome(
     return db.projects.get_welcome(project_id)
 
 
-@router.put("/projects/{project_id}/welcome")
+@router.put("/projects/{project_id}/welcome", responses=STALE_REVISION)
 async def update_welcome(
     project_id: UUID4,
     welcome: LocalizedWelcome,
@@ -869,7 +862,7 @@ async def upload_welcome_video(
     """Store a welcome video, shared by every language. Returns the file name
     to save as the welcome's `video_file_name`."""
     if not video.filename:
-        raise HTTPException(status_code=422, detail="The video has no file name")
+        raise HTTPException(status_code=400, detail="The video has no file name")
 
     async with aiofiles.open(
         lib_settings.storage.project_storage.video_path(project_id) / video.filename,
@@ -944,7 +937,7 @@ async def get_interviews(
         # The repository raises ValueError, which would surface as a 500. A
         # column the client should never have offered is a bad request.
         raise HTTPException(
-            status_code=422,
+            status_code=400,
             detail=f"Cannot sort by {paginated_query.column!r}. Sortable columns: "
             f"{', '.join(sorted(SORTABLE_INTERVIEW_COLUMNS))}.",
         )

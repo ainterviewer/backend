@@ -35,6 +35,7 @@ from ...synthesize.core import (
     run_synthesis_job_shuffled_ai,
 )
 from ...types import Scope, TestRunStatus
+from ..errors import STALE_REVISION
 from ..websockets.manager import session_manager
 
 router = APIRouter(tags=["synthesize"])
@@ -138,6 +139,7 @@ async def get_background_info(
 @router.post(
     "/projects/{project_id}/tests/{test_id}/background_info",
     dependencies=_test_in_project,
+    responses=STALE_REVISION,
 )
 async def update_background_info(
     project_id: UUID4,
@@ -172,6 +174,7 @@ async def get_fixed_personas(
 @router.post(
     "/projects/{project_id}/tests/{test_id}/fixed_personas",
     dependencies=_test_in_project,
+    responses=STALE_REVISION,
 )
 async def update_fixed_personas(
     project_id: UUID4,
@@ -206,6 +209,7 @@ async def get_fixed_answers(
 @router.post(
     "/projects/{project_id}/tests/{test_id}/fixed_answers",
     dependencies=_test_in_project,
+    responses=STALE_REVISION,
 )
 async def update_fixed_answers(
     project_id: UUID4,

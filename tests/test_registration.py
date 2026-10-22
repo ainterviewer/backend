@@ -12,15 +12,16 @@ import asyncio
 import json
 
 import pytest
-from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.api import auth as auth_api
 from app.db.crud import InterviewDataBase
-from app.db.repositories.errors import InvitationClaimedError
+from app.db.repositories.errors import EmailTakenError, InvitationClaimedError
 from app.db.tables import Base, UserTable
+from app.errors import AppError
 from app.schemas.users import InvitationCreate, RegisterRequest, UserCreate
+from app.types import ErrorCode
 
 
 @pytest.fixture
@@ -75,10 +76,10 @@ def test_email_in_use_is_a_409_and_keeps_the_invite(db, sent):
     first, second = invite(db), invite(db, alias="second")
     assert register(db, first.id)[0] == 201
 
-    with pytest.raises(HTTPException) as error:
+    with pytest.raises(EmailTakenError) as error:
         register(db, second.id)
 
-    assert error.value.status_code == 409
+    assert error.value.status == 409
     assert db.users.check_invite_token(second.id).alias == "second"
     assert accounts(db) == 1
 
@@ -86,10 +87,10 @@ def test_email_in_use_is_a_409_and_keeps_the_invite(db, sent):
 def test_failed_verification_email_restores_the_invite(db, email_down):
     invitation = invite(db, alias="once", title="Workshop", user_demo_daily_limit=3)
 
-    with pytest.raises(HTTPException) as error:
+    with pytest.raises(auth_api.EmailSendError) as error:
         register(db, invitation.id)
 
-    assert error.value.status_code == 502
+    assert error.value.status == 502
     assert accounts(db) == 0
     restored = db.users.check_invite_token(invitation.id)
     assert restored.model_dump() == invitation.model_dump()
@@ -97,7 +98,7 @@ def test_failed_verification_email_restores_the_invite(db, email_down):
 
 def test_restored_invite_registers_on_retry(db, monkeypatch, email_down):
     invitation = invite(db)
-    with pytest.raises(HTTPException):
+    with pytest.raises(auth_api.EmailSendError):
         register(db, invitation.id)
 
     async def fake_send_email(recipient, subject, **kwargs):
@@ -132,8 +133,8 @@ def test_single_use_invite_is_spent_by_a_registration(db, sent):
     invitation = invite(db)
 
     assert register(db, invitation.id)[0] == 201
-    assert register(db, invitation.id, "b@example.com") == (
-        406,
-        {"detail": "Invalid invite token"},
-    )
+    with pytest.raises(AppError) as error:
+        register(db, invitation.id, "b@example.com")
+
+    assert error.value.code == ErrorCode.INVITE_INVALID
     assert sent == ["ada@example.com"]

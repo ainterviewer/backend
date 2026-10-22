@@ -51,6 +51,7 @@ from ...services.email.participant_template import (
 )
 from ...settings import app_settings
 from ...types import ContentPart
+from ..errors import STALE_REVISION
 
 SECTION_SEPARATOR = "\n<hr/>\n"
 SUBJECT_SEPARATOR = " / "
@@ -349,7 +350,7 @@ def _validate_template_request(request: ParticipantEmailTemplateRequest) -> None
             validate(source)
         except TemplateSyntaxError as exc:
             raise HTTPException(
-                status_code=422,
+                status_code=400,
                 detail=f"Invalid Jinja {label}: {exc.message}",
             ) from exc
 
@@ -369,7 +370,10 @@ async def get_participant_email_template(
     return ParticipantEmailTemplateRequest(subject=subject, template=template)
 
 
-@router.put("/projects/{project_id}/{language}/participant-email-template")
+@router.put(
+    "/projects/{project_id}/{language}/participant-email-template",
+    responses=STALE_REVISION,
+)
 async def set_participant_email_template(
     project_id: UUID4,
     language: LanguageCode,
@@ -401,7 +405,7 @@ def _checked_language(language: LanguageCode) -> LanguageCode:
     against the known codes first.
     """
     if language not in LANGUAGE_CODES:
-        raise HTTPException(status_code=422, detail=f"Unknown language '{language}'.")
+        raise HTTPException(status_code=400, detail=f"Unknown language '{language}'.")
     return language
 
 
@@ -431,18 +435,18 @@ def _content_disposition(filename: str) -> str:
 
 def _safe_filename(filename: str | None) -> str:
     if not filename:
-        raise HTTPException(status_code=422, detail="Filename is required.")
+        raise HTTPException(status_code=400, detail="Filename is required.")
     name = Path(filename).name
     if (
         not name
         or name in {".", ".."}
         or name != filename.replace("\\", "/").split("/")[-1]
     ):
-        raise HTTPException(status_code=422, detail="Invalid filename.")
+        raise HTTPException(status_code=400, detail="Invalid filename.")
     if len(name) > 255:
-        raise HTTPException(status_code=422, detail="Filename is too long.")
+        raise HTTPException(status_code=400, detail="Filename is too long.")
     if "\x00" in name:
-        raise HTTPException(status_code=422, detail="Invalid filename.")
+        raise HTTPException(status_code=400, detail="Invalid filename.")
     return name
 
 
@@ -456,7 +460,7 @@ def _safe_upload_filename(filename: str | None) -> str:
     if Path(name).suffix.lower() not in ALLOWED_ATTACHMENT_EXTENSIONS:
         allowed = ", ".join(sorted(ALLOWED_ATTACHMENT_EXTENSIONS))
         raise HTTPException(
-            status_code=422,
+            status_code=400,
             detail=f"Attachment '{name}' has an unsupported file type. Allowed: {allowed}.",
         )
     return name
@@ -501,7 +505,7 @@ async def upload_participant_email_attachments(
     _: ProjectEditor,
 ) -> list[ParticipantEmailAttachmentPublic]:
     if not files:
-        raise HTTPException(status_code=422, detail="No files provided.")
+        raise HTTPException(status_code=400, detail="No files provided.")
 
     directory = _attachments_dir(project_id, language)
 
@@ -664,7 +668,7 @@ async def _send_participant_emails(
             html_content = render_participant_email_template(template, context)
         except TemplateError as exc:
             raise HTTPException(
-                status_code=422,
+                status_code=400,
                 detail=f"Failed to render template: {exc}",
             ) from exc
 
@@ -719,7 +723,10 @@ async def get_participant_reminder_email_template(
     return ParticipantEmailTemplateRequest(subject=subject, template=template)
 
 
-@router.put("/projects/{project_id}/{language}/participant-reminder-email-template")
+@router.put(
+    "/projects/{project_id}/{language}/participant-reminder-email-template",
+    responses=STALE_REVISION,
+)
 async def set_participant_reminder_email_template(
     project_id: UUID4,
     language: LanguageCode,
@@ -764,7 +771,7 @@ async def upload_participant_reminder_email_attachments(
     _: ProjectEditor,
 ) -> list[ParticipantEmailAttachmentPublic]:
     if not files:
-        raise HTTPException(status_code=422, detail="No files provided.")
+        raise HTTPException(status_code=400, detail="No files provided.")
 
     directory = _reminder_attachments_dir(project_id, language)
 

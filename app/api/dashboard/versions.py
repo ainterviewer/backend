@@ -27,6 +27,7 @@ from ...schemas.content import (
     ContentVersionPublic,
     ContentVersionSummaryPublic,
 )
+from ..errors import CANNOT_PUBLISH, STALE_REVISION
 
 router = APIRouter(tags=["versions"])
 
@@ -78,7 +79,9 @@ async def get_content_version(
         raise HTTPException(status_code=404, detail="No such version") from exc
 
 
-@router.post("/projects/{project_id}/versions")
+@router.post(
+    "/projects/{project_id}/versions", responses=STALE_REVISION | CANNOT_PUBLISH
+)
 async def save_content_version(
     project_id: UUID4,
     request: ContentVersionCreate,
@@ -108,7 +111,9 @@ async def save_content_version(
     return db.versions.save_version(project_id, jwt.user_id, request.label)
 
 
-@router.post("/projects/{project_id}/versions/{version_id}/restore")
+@router.post(
+    "/projects/{project_id}/versions/{version_id}/restore", responses=STALE_REVISION
+)
 async def restore_content_version(
     project_id: UUID4,
     version_id: UUID4,

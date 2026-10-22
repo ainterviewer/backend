@@ -19,8 +19,9 @@ from app.api import auth as auth_api
 from app.db.crud import InterviewDataBase
 from app.db.repositories.errors import InvitationAliasTakenError
 from app.db.tables import Base, UserTable
+from app.errors import AppError
 from app.schemas.users import InvitationCreate, InvitationUpdate, RegisterRequest
-from app.types import Scope
+from app.types import ErrorCode, Scope
 
 
 @pytest.fixture
@@ -110,10 +111,9 @@ def test_single_use_alias_is_consumed(db):
     invite(db, alias="once")
 
     assert register(db, "once", "a@example.com")[0] == 201
-    assert register(db, "once", "b@example.com") == (
-        406,
-        {"detail": "Invalid invite token"},
-    )
+    with pytest.raises(AppError) as error:
+        register(db, "once", "b@example.com")
+    assert error.value.code == ErrorCode.INVITE_INVALID
 
 
 def test_register_with_id_records_no_alias(db):
@@ -124,13 +124,17 @@ def test_register_with_id_records_no_alias(db):
 
 
 def test_unknown_alias_is_rejected(db):
-    assert register(db, "nobody") == (406, {"detail": "Invalid invite token"})
+    with pytest.raises(AppError) as error:
+        register(db, "nobody")
+    assert error.value.code == ErrorCode.INVITE_INVALID
 
 
 def test_expired_alias_is_rejected_and_kept(db):
     invitation = invite(db, alias="late", expires_at=now() - timedelta(minutes=1))
 
-    assert register(db, "late") == (406, {"detail": "Invite token expired"})
+    with pytest.raises(AppError) as error:
+        register(db, "late")
+    assert error.value.code == ErrorCode.INVITE_EXPIRED
     # An expired single-use invitation is not consumed by the failed attempt.
     assert db.users.check_invite_token(invitation.id).alias == "late"
 

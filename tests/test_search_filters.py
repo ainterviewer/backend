@@ -1,7 +1,8 @@
 """Tests for the embedding search/cluster filter dependency.
 
-Parameter validation and the 422s FastAPI does on its behalf. The dependency is
-mounted on a throwaway app because that is the only way to exercise them.
+Parameter validation: the 422s FastAPI does on its behalf, and the 400s the
+dependency raises for what it parses itself. The dependency is mounted on a
+throwaway app because that is the only way to exercise them.
 
 It takes a project and a session as well as query parameters, and has since
 `code:` joined the keyword grammar: placing a code name in a codebook is the
@@ -26,6 +27,7 @@ from app.db.crud import InterviewDataBase
 from app.db.repositories.embedding import EmbeddingFilters
 from app.db.tables import Base, CodeTable, ProjectFolderTable, ProjectTable
 from app.dependencies import get_db
+from app.errors import add_error_handlers
 from app.types import CodeKind
 
 FOLDER = uuid.uuid4()
@@ -81,6 +83,7 @@ def client():
     session.commit()
 
     app = FastAPI()
+    add_error_handlers(app)
 
     @app.get("/t/{project_id}")
     def endpoint(filters: Annotated[EmbeddingFilters, Depends(embedding_filters)]):
@@ -159,26 +162,26 @@ class TestQuestionFilter:
             [1, 1]
         ]
 
-    def test_wrong_arity_is_a_422(self, client, path):
+    def test_wrong_arity_is_a_400(self, client, path):
         response = client.get(path + "?question=0")
 
-        assert response.status_code == 422
+        assert response.status_code == 400
         assert "0" in response.text
 
-    def test_non_numeric_is_a_422(self, client, path):
+    def test_non_numeric_is_a_400(self, client, path):
         """Not a filter that silently matches nothing: a reader cannot tell a
         typo from an empty corpus by looking at the map."""
         response = client.get(path + "?question=first,second")
 
-        assert response.status_code == 422
+        assert response.status_code == 400
         assert "first,second" in response.text
 
-    def test_negative_index_is_a_422(self, client, path):
+    def test_negative_index_is_a_400(self, client, path):
         """Guide coordinates are zero-based and count up; -1 is not "the last
         question", it is a mistake that would match nothing."""
         response = client.get(path + "?question=0,-1")
 
-        assert response.status_code == 422
+        assert response.status_code == 400
 
 
 class TestCodeReferences:
@@ -197,32 +200,33 @@ class TestCodeReferences:
     def test_it_composes_with_words(self, client, path):
         assert client.get(path + "?keyword=code:Often AND kids").status_code == 200
 
-    def test_a_name_nobody_can_place_is_a_422(self, client, path):
+    def test_a_name_nobody_can_place_is_a_400(self, client, path):
         """Not an empty result. A filter that quietly matched nothing would read
         as "nobody was coded that way" rather than as "there is no such code"."""
         response = client.get(path + "?keyword=code:Nonsense")
 
-        assert response.status_code == 422
+        assert response.status_code == 400
         assert "Nonsense" in response.text
 
-    def test_the_422_carries_a_position(self, client, path):
+    def test_the_400_carries_a_position(self, client, path):
         response = client.get(path + "?keyword=kids AND code:Nonsense")
 
-        assert response.status_code == 422
-        assert response.json()["detail"]["position"] == 9
+        assert response.status_code == 400
+        assert response.json()["code"] == "invalid_keyword_query"
+        assert response.json()["position"] == 9
 
-    def test_a_group_asked_for_exactly_is_a_422(self, client, path):
+    def test_a_group_asked_for_exactly_is_a_400(self, client, path):
         """Nothing is ever coded with a GROUP, so the query cannot match -- and
         the reader almost certainly meant the branch under it."""
         response = client.get(path + "?keyword=code:Themes")
 
-        assert response.status_code == 422
+        assert response.status_code == 400
         assert "/*" in response.text
 
     def test_the_same_group_with_a_star_is_fine(self, client, path):
         assert client.get(path + "?keyword=code:Themes/*").status_code == 200
 
-    def test_a_malformed_reference_is_still_a_422(self, client, path):
+    def test_a_malformed_reference_is_still_a_400(self, client, path):
         response = client.get(path + "?keyword=code:")
 
-        assert response.status_code == 422
+        assert response.status_code == 400
