@@ -4,6 +4,32 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.3] - 2026-10-22
+
+### Breaking Changes
+
+- (schemas) OpenAPI schema names change (operation ids do not), so the
+frontend SDK has to be regenerated and the types it names updated:
+CodeBase -> CodeInput, CodebookPut -> CodebookReplace, CodingsForMessages ->
+CodingLookupRequest, ContentVersionSummary -> ContentVersionSummaryPublic,
+CreateInterviewRequest -> InterviewCreate, CreateProjectRequest ->
+ProjectCreate, ExternalParamsRequest -> ExternalParamsReplace,
+InterviewFilters -> InterviewFilterParams, InterviewResumeLinkCreated ->
+InterviewResumeLinkResponse, InterviewResumeRedeemed ->
+InterviewResumeResponse, LoginData -> LoginRequest, ParticipantEmailAttachment
+-> ParticipantEmailAttachmentPublic, ProjectFolder{Create,Edit,Public,
+WithProjects} -> Folder{Create,Update,Public,WithProjectsPublic},
+SaveVersionRequest -> ContentVersionCreate, UserAdmin -> UserAdminPublic,
+UserCreateRequest -> RegisterRequest.
+
+### Internal
+
+- (models) Replace the UNSET sentinel with pydantic's MISSING, drop dead models
+- (schemas) Move the API's pydantic models into app/schemas by domain
+- (api) Take query parameters as FastAPI parameter models
+- (schemas) Name the API schemas by one convention [**breaking**]
+- Collapse short imports the schema move left wrapped
+
 ## [0.10.2] - 2026-10-22
 
 ### Bug Fixes
