@@ -12,9 +12,10 @@ router = APIRouter()
 
 
 @router.get("/models", description="available models")
-def get_models(jwt: DemoToken):
+def get_models(jwt: DemoToken) -> list[str]:
     if jwt.scope == Scope.DEMO:
-        return lib_settings.llm.demo_models
+        # Never None once settings validate; `finalize` fills it in.
+        return lib_settings.llm.demo_models or []
     else:
         return lib_settings.llm.available_models
 

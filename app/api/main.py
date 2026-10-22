@@ -50,7 +50,7 @@ def openapi_schema(request: Request):
 
 
 @router.get("/health")
-def health():
+def health() -> str:
     return "success"
 
 
@@ -63,7 +63,7 @@ def version(db: DBSession) -> PlatformManifest | None:
 
 
 @router.get("/version/{platform_version}")
-def platform_version(db: DBSession, platform_version: str):
+def platform_version(db: DBSession, platform_version: str) -> PlatformManifest:
     return db.get_platform_release(platform_version=platform_version)
 
 

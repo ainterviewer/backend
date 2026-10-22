@@ -7,7 +7,12 @@ from ...schemas.admin import (
     AccessRequestsProcessRequest,
     InvitationsDeleteRequest,
 )
-from ...schemas.users import InvitationCreate, InvitationPublic, InvitationUpdate
+from ...schemas.users import (
+    AccessRequestPublic,
+    InvitationCreate,
+    InvitationPublic,
+    InvitationUpdate,
+)
 
 router = APIRouter(
     prefix="/admin",
@@ -18,9 +23,8 @@ router = APIRouter(
 async def get_access_requests(
     db: DBSession,
     jwt: AdminToken,
-):
-    access_requests = db.users.get_access_requests()
-    return access_requests
+) -> list[AccessRequestPublic]:
+    return list(db.users.get_access_requests())
 
 
 @router.post("/access-requests/process")

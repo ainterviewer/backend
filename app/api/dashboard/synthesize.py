@@ -22,6 +22,7 @@ from ...schemas.testing import (
     SynthesizeRequest,
     SynthesizeResponse,
     TestRunCreate,
+    TestRunPublic,
     TestSetupCreate,
     TestSetupPublic,
     UpdateBackgroundInfoRequest,
@@ -294,8 +295,8 @@ async def get_test_status(
     test_id: UUID4,
     db: DBSession,
     jwt: ProjectViewer,
-):
-    return db.tests.get_test_status(test_id)
+) -> list[TestRunPublic]:
+    return list(db.tests.get_test_status(test_id))
 
 
 @router.post(
@@ -309,7 +310,7 @@ async def run_synthetic_test(
     background_tasks: BackgroundTasks,
     db: DBSession,
     jwt: ProjectEditor,
-):
+) -> SynthesizeResponse:
     # TODO:
     # Switch to Celery or similar framework for better control and management
     # of background tasks

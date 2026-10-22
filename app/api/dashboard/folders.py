@@ -13,6 +13,7 @@ from ...schemas.projects import (
     FolderUpdate,
     FolderWithProjectsPublic,
     ProjectCreate,
+    ProjectCreateResponse,
 )
 from ...types import CollaboratorRole
 from ...utils import generate_qr_img
@@ -140,7 +141,7 @@ async def create_project(
     db: DBSession,
     jwt: DemoToken,
     _: FolderEditor,
-):
+) -> ProjectCreateResponse:
     project_id = db.projects.create_project(
         folder_id=folder_id,
         title=project_request.title,
@@ -155,4 +156,4 @@ async def create_project(
 
     background_tasks.add_task(generate_qr_img, str(interview_url), file_path=file_path)
 
-    return {"project_id": project_id}
+    return ProjectCreateResponse(project_id=project_id)

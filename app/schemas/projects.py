@@ -150,6 +150,10 @@ class ProjectCreate(Schema):
     default_language: LanguageCode
 
 
+class ProjectCreateResponse(Schema):
+    project_id: UUID4
+
+
 class ValidateExternalParamsRequest(Schema):
     external_params: dict[str, Any] | None = Field(
         None,
