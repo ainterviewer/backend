@@ -4,6 +4,22 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.4] - 2026-10-22
+
+### Breaking Changes
+
+- (analysis) The query parameter skip is now offset.
+
+### Bug Fixes
+
+- (schemas) Drop ProjectBase's odd config, read the default model per setup
+- (analysis) Page the coding page's messages in a fixed order [**breaking**]
+
+### Internal
+
+- (api) Share the report and analysis query models, type from_hit
+- (types) Keep app/db/types.py to column types, enums in app/types.py
+
 ## [0.10.3] - 2026-10-22
 
 ### Breaking Changes
