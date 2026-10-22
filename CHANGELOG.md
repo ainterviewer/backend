@@ -4,6 +4,12 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.1] - 2026-10-22
+
+### Internal
+
+- Pin lib to released v0.7.0
+
 ## [0.10.0] - 2026-10-22
 
 ### Features
