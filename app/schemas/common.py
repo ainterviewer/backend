@@ -43,14 +43,17 @@ def _known_language(code: str) -> str:
 LanguageFilter = Annotated[LanguageCode, AfterValidator(_known_language)]
 
 
-class PageParams(Schema):
-    """`limit`/`offset` paging with a sort, as query parameters.
-
-    Taken as `Annotated[PageParams, Query()]`.
-    """
+class OffsetParams(Schema):
+    """`limit`/`offset` paging, as query parameters, for a list whose order
+    the server fixes. Taken as `Annotated[OffsetParams, Query()]`."""
 
     offset: int = Field(default=0, ge=0)
     limit: int = Field(default=20, ge=1, le=100)
+
+
+class PageParams(OffsetParams):
+    """`limit`/`offset` paging with a sort the caller chooses."""
+
     column: str = Field(default="created_at", description="Column to sort by")
     order: Literal["asc", "desc"] = Field(default="desc", description="Sorting order")
 

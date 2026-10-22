@@ -516,7 +516,7 @@ class AnalysisRepository(BaseRepository):
     def get_filtered_messages(
         self,
         project_id: UUID4,
-        skip: int,
+        offset: int,
         limit: int,
         context_before: bool = False,
         context_after: bool = False,
@@ -542,9 +542,14 @@ class AnalysisRepository(BaseRepository):
             statement, context_before, context_after, include_previous_on_user
         )
 
+        # A fixed order, or consecutive pages are free to overlap and skip:
+        # the client asks for the next page by how many rows it holds. This
+        # is the order the coding page lays messages out in, so a new page
+        # lands below what is already shown.
         statement = (
             statement.distinct()
-            .offset(skip)
+            .order_by(MessageTable.interview_id, MessageTable.message_id)
+            .offset(offset)
             .limit(limit)
             .options(
                 selectinload(MessageTable.codings).joinedload(CodingTable.user),

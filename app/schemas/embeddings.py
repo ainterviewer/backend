@@ -14,7 +14,7 @@ from ainterviewer.types import EmbeddingKind, InterviewStatus, LanguageCode
 
 from ..db.keyword_query import Scope
 from ..types import GroupKind, InterviewType, Projection, TurnRole
-from .common import LanguageFilter, Schema
+from .common import LanguageFilter, OffsetParams, Schema
 
 if TYPE_CHECKING:
     from ..db.tables import InterviewTable
@@ -757,16 +757,15 @@ class EmbeddingFilterParams(Schema):
 MAX_SEARCH_DEPTH = 1000
 
 
-class SearchPageParams(Schema):
-    """`limit`/`offset` for the two ranked endpoints.
+class SearchPageParams(OffsetParams):
+    """`limit`/`offset` for the ranked endpoints, which also cap how deep a
+    ranking can be paged.
 
-    Named as the dashboard's other lists name them, but deliberately not
-    `PageParams`: that carries `column` and `order`, and a ranked
-    scan has exactly one order -- by score -- which a caller cannot choose.
+    Not `PageParams`: that carries `column` and `order`, and a ranked scan has
+    exactly one order -- by score -- which a caller cannot choose.
     """
 
     limit: int = Field(default=10, ge=1, le=100)
-    offset: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def _within_search_depth(self) -> SearchPageParams:

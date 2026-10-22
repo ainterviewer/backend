@@ -32,6 +32,7 @@ from ....schemas.analysis import (
     CodingPublic,
     FilteredMessagesRequest,
 )
+from ....schemas.common import OffsetParams
 from ....schemas.interviews import MessagePublic
 
 router = APIRouter()
@@ -205,13 +206,12 @@ async def get_filtered_messages(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectViewer,
-    skip: Annotated[int, Query()] = 0,
-    limit: Annotated[int, Query()] = 20,
+    page: Annotated[OffsetParams, Query()],
 ) -> list[MessagePublic]:
     return db.analysis.get_filtered_messages(
         project_id,
-        skip,
-        limit,
+        offset=page.offset,
+        limit=page.limit,
         code_ids=filters.code_ids,
         search_text=filters.search_text,
         exact_match=filters.exact_match,
