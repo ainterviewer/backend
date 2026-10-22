@@ -18,7 +18,9 @@ class TestSetupBase(Schema):
     name: str | None = None
     type: TestType
     project_id: UUID4
-    answering_model: str = lib_settings.llm.default_model
+    # A factory, so the default is read when a setup is made rather than once
+    # at import.
+    answering_model: str = Field(default_factory=lambda: lib_settings.llm.default_model)
     last_updated: datetime | None = None
     language: LanguageCode = "EN"
     n_interviews: int = 5

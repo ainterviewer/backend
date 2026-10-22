@@ -56,8 +56,6 @@ class FolderWithProjectsPublic(FolderPublic):
 
 
 class ProjectBase(Schema):
-    model_config = {"extra": "forbid", "use_enum_values": True}
-
     id: UUID4
     title: str
     created_at: datetime

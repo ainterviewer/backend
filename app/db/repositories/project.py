@@ -504,38 +504,16 @@ class ProjectRepository(BaseRepository):
 
         return result
 
-    def get_project(
-        self,
-        project_id: UUID4,
-        *,
-        with_interviews: bool = False,
-        with_tests: bool = False,
-    ) -> ProjectPublic:
-        statement = select(ProjectTable).where(
-            ProjectTable.id == project_id,
-        )
-
-        project = self.session.execute(statement).scalar_one()
-
-        if with_interviews:
-            _ = project.interviews
-
-        if with_tests:
-            _ = project.tests
-            if project.tests is None:
-                project.tests = []
+    def get_project(self, project_id: UUID4) -> ProjectPublic:
+        project = self.session.execute(
+            select(ProjectTable).where(ProjectTable.id == project_id)
+        ).scalar_one()
 
         public_project = ProjectPublic.model_validate(project)
-
         public_project.available_languages = self.get_available_languages_optimized(
             project.id
         )
-
-        if with_tests is True:
-            if public_project.tests is None:
-                public_project.tests = []
-        else:
-            public_project.tests = None
+        public_project.tests = None
 
         return public_project
 
