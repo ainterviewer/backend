@@ -52,10 +52,12 @@ def build_openapi_schema(app: FastAPI) -> dict[str, Any]:
     """Build the SDK-facing OpenAPI schema for `app`."""
     openapi = app.openapi()
 
+    # FastAPI leaves websocket routes out of the schema altogether; their
+    # message types come in through EXTRA_MODELS.
     openapi["paths"] = {
         path: spec
         for path, spec in openapi["paths"].items()
-        if path.startswith(("/api/", "/ws/"))
+        if path.startswith("/api/")
     }
 
     _declare_errors(openapi)

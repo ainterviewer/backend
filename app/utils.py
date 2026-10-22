@@ -23,7 +23,7 @@ from qrcode.image.styles.colormasks import (
 )
 from qrcode.image.styles.moduledrawers.pil import RoundedModuleDrawer
 from typer import Context, Typer
-from typing_extensions import TypedDict, is_typeddict
+from typing_extensions import TypedDict
 
 from ainterviewer.interfaces import (
     OutgoingData,
@@ -188,51 +188,54 @@ def extend_openapi_schema(
     openapi = copy.deepcopy(openapi)
 
     for extra_model in models:
-        # Handle Enum types (including StrEnum)
-        if isinstance(extra_model, type) and issubclass(extra_model, enum.Enum):
-            enum_schema = {
-                "title": extra_model.__name__,
-                "type": "string",
-                "enum": [member.value for member in extra_model],
-            }
-            openapi["components"]["schemas"][extra_model.__name__] = enum_schema
-            continue
-
-        # Handle TypedDict types via Pydantic's TypeAdapter
-        if is_typeddict(extra_model):
-            extra_model_schema = TypeAdapter(extra_model).json_schema(
-                ref_template=fastapi.openapi.constants.REF_TEMPLATE
-            )
-            extra_model_schema.setdefault("title", extra_model.__name__)
-        # Generate the JSON schema with the correct reference template
-        # Use .model_json_schema() for Pydantic v2, or .schema() for v1
-        elif hasattr(extra_model, "model_json_schema"):
-            extra_model_schema = extra_model.model_json_schema(
-                ref_template=fastapi.openapi.constants.REF_TEMPLATE
-            )
-        else:
-            extra_model_schema = extra_model.schema(
-                ref_template=fastapi.openapi.constants.REF_TEMPLATE
-            )
-
-        # 1. Extract nested definitions ($defs in Pydantic v2, definitions in v1)
-        # We pop them out so they don't remain inside the specific model schema
-        definitions = extra_model_schema.pop("$defs", None) or extra_model_schema.pop(
-            "definitions", {}
+        # One path for all three: pydantic writes an enum's description and a
+        # TypedDict's fields the way FastAPI does for the same types on a route.
+        extra_model_schema = TypeAdapter(extra_model).json_schema(
+            ref_template=fastapi.openapi.constants.REF_TEMPLATE
         )
+        extra_model_schema.setdefault("title", extra_model.__name__)
 
-        # 2. Hoist the definitions to the global openapi components
-        # This makes the keys (e.g. "Feedback", "Image") available at #/components/schemas/
-        if definitions:
-            openapi["components"]["schemas"].update(definitions)
+        # Hoist nested definitions to the components, where the main model's
+        # `$ref`s point (e.g. "Feedback", "Image").
+        for name, definition in extra_model_schema.pop("$defs", {}).items():
+            _add_component(openapi, name, definition)
 
-        # 3. Add the main model to schemas
-        # Use the model's title as the key
-        model_title = extra_model_schema["title"]
-
-        openapi["components"]["schemas"][model_title] = extra_model_schema
+        _add_component(openapi, extra_model_schema["title"], extra_model_schema)
 
     return openapi
+
+
+def _add_component(openapi: dict[str, Any], name: str, schema: dict[str, Any]) -> None:
+    """Add `schema` to the components as `name`, refusing to replace a
+    different one already there.
+
+    FastAPI may already have the name -- a nested model a route also uses
+    (`Image`, the survey items) -- and it can build a model in a request and a
+    response variant where `model_json_schema()` builds only the request one.
+    Replacing it silently would change that type in the generated client. The
+    same model is kept as FastAPI wrote it, which differs only in leaving out
+    `"default": null`.
+    """
+    schemas = openapi["components"]["schemas"]
+    if name not in schemas:
+        schemas[name] = schema
+    elif _without_null_defaults(schemas[name]) != _without_null_defaults(schema):
+        raise ValueError(
+            f"Extra model schema {name!r} differs from the component FastAPI "
+            "generated under that name"
+        )
+
+
+def _without_null_defaults(schema: Any) -> Any:
+    if isinstance(schema, dict):
+        return {
+            key: _without_null_defaults(value)
+            for key, value in schema.items()
+            if not (key == "default" and value is None)
+        }
+    if isinstance(schema, list):
+        return [_without_null_defaults(item) for item in schema]
+    return schema
 
 
 def clean_schema(obj):
