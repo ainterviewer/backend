@@ -5,7 +5,7 @@ import logging
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Literal, Protocol
+from typing import Any, Literal
 from uuid import UUID, uuid5
 
 import numpy as np
@@ -34,6 +34,7 @@ from ainterviewer.types import EmbeddingKind, InterviewStatus, MessageRole, Mess
 
 from ...schemas.embeddings import (
     INTERVIEW_PREVIEW_TURNS,
+    ChunkLike,
     ChunkTurns,
     Coded,
     CoderJoin,
@@ -218,29 +219,6 @@ class EmbeddingSearchPage:
     # candidate rows for the same reason the totals are: they are already in
     # memory, so it cannot disagree with what was ranked.
     interviews: int = 0
-
-
-class ChunkLike(Protocol):
-    """The coordinates a chunk must carry to be rendered as turns.
-
-    `turns_for` reads coordinates, never rows: it is given both real
-    `EmbeddingTable` rows and the `BrowseUnit`s assembled for un-embedded
-    corpora, and demanding the table type would tie transcript rendering to
-    having been embedded -- exactly the tie browsing exists to cut.
-    """
-
-    @property
-    def id(self) -> UUID: ...
-    @property
-    def kind(self) -> EmbeddingKind: ...
-    @property
-    def interview_id(self) -> UUID: ...
-    @property
-    def message_id(self) -> UUID | None: ...
-    @property
-    def section(self) -> int | None: ...
-    @property
-    def main_question(self) -> int | None: ...
 
 
 @dataclass

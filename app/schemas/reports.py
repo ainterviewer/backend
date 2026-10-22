@@ -155,3 +155,11 @@ class ReportReviewResponse(Schema):
     """
 
     updated: int
+
+
+class ReportFilterParams(Schema):
+    """What a report queue is narrowed to: by status, and to what the caller
+    has not read yet."""
+
+    statuses: list[ReportStatus] | None = None
+    unread_only: bool = False

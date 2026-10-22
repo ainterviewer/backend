@@ -12,7 +12,6 @@ from ainterviewer.types import InterviewStatus
 
 from ....db.repositories.project import render_default_guide
 from ....db.tables import InterviewTable, MessageTable, ProjectParticipantTable
-from ....db.types import InterviewType
 from ....dependencies import DBSession, DemoToken, ProjectViewer
 from ....schemas.monitoring import (
     DailyInterviewCount,
@@ -24,6 +23,7 @@ from ....schemas.monitoring import (
     InterviewTimeOfDayCount,
     LanguageCount,
     MessageCountStats,
+    MonitoringParams,
     MonitoringStats,
 )
 from .cohort import interview_cohort
@@ -95,13 +95,7 @@ def get_project_monitoring_stats(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectViewer,
-    interview_types: Annotated[
-        list[InterviewType],
-        Query(default_factory=lambda: [InterviewType.DISTRIBUTED]),
-    ],
-    start_date: Annotated[datetime.datetime | None, Query()] = None,
-    end_date: Annotated[datetime.datetime | None, Query()] = None,
-    deduplicate_by_pid: Annotated[bool, Query()] = False,
+    params: Annotated[MonitoringParams, Query()],
 ) -> MonitoringStats:
     # NOTE: this endpoint is a plain `def` on purpose. The session is a
     # synchronous SQLAlchemy session, so running it as `async def` would block
@@ -112,17 +106,17 @@ def get_project_monitoring_stats(
     # Base conditions for filtering
     interview_conditions = [
         InterviewTable.project_id == project_id,
-        InterviewTable.type.in_(interview_types),
+        InterviewTable.type.in_(params.interview_types),
     ]
     message_conditions = [MessageTable.project_id == project_id]
 
-    if start_date:
-        interview_conditions.append(InterviewTable.created_at >= start_date)
-        message_conditions.append(MessageTable.created_at >= start_date)
+    if params.start_date:
+        interview_conditions.append(InterviewTable.created_at >= params.start_date)
+        message_conditions.append(MessageTable.created_at >= params.start_date)
 
-    if end_date:
-        interview_conditions.append(InterviewTable.created_at <= end_date)
-        message_conditions.append(MessageTable.created_at <= end_date)
+    if params.end_date:
+        interview_conditions.append(InterviewTable.created_at <= params.end_date)
+        message_conditions.append(MessageTable.created_at <= params.end_date)
 
     # Every statistic below is derived from this one filtered set of interviews.
     # Message queries join against it rather than re-filtering through
@@ -139,7 +133,7 @@ def get_project_monitoring_stats(
     interviews = interview_cohort(
         interview_columns,
         interview_conditions,
-        deduplicate_by_pid=deduplicate_by_pid,
+        deduplicate_by_pid=params.deduplicate_by_pid,
     )
 
     def interview_ids(status: InterviewStatus):

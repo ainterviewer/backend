@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal
+from typing import TYPE_CHECKING, Literal, Protocol
 from uuid import UUID
 
 from pydantic import UUID4, Field, model_validator
@@ -16,6 +16,9 @@ from ..db.keyword_query import Scope
 from ..db.types import InterviewType
 from ..types import GroupKind, Projection, TurnRole
 from .common import LanguageFilter, Schema
+
+if TYPE_CHECKING:
+    from ..db.tables import InterviewTable
 
 
 class EmbeddingTurn(Schema):
@@ -136,6 +139,48 @@ class InterviewTranscript(Schema):
 INTERVIEW_PREVIEW_TURNS = 6
 
 
+class ChunkLike(Protocol):
+    """The coordinates a chunk must carry to be rendered as turns.
+
+    `turns_for` reads coordinates, never rows: it is given both real
+    `EmbeddingTable` rows and the `BrowseUnit`s assembled for un-embedded
+    corpora, and demanding the table type would tie transcript rendering to
+    having been embedded -- exactly the tie browsing exists to cut.
+    """
+
+    @property
+    def id(self) -> UUID: ...
+    @property
+    def kind(self) -> EmbeddingKind: ...
+    @property
+    def interview_id(self) -> UUID: ...
+    @property
+    def message_id(self) -> UUID | None: ...
+    @property
+    def section(self) -> int | None: ...
+    @property
+    def main_question(self) -> int | None: ...
+
+
+class HitSource(ChunkLike, Protocol):
+    """What `EmbeddingSearchHit.from_hit` reads: a chunk's coordinates, its
+    text and the interview it came from.
+
+    Answered by an `EmbeddingTable` row and by a `BrowseUnit` alike. A unit
+    also says whether it was `embedded`; a row always was, so that one is read
+    with a default rather than demanded here.
+    """
+
+    @property
+    def sub_question(self) -> int | None: ...
+    @property
+    def language(self) -> str: ...
+    @property
+    def text(self) -> str | None: ...
+    @property
+    def interview(self) -> InterviewTable | None: ...
+
+
 @dataclass(frozen=True)
 class ChunkTurns:
     """The turns a card draws for one chunk, and how many the chunk holds.
@@ -229,7 +274,7 @@ class EmbeddingSearchHit(Schema):
     @classmethod
     def from_hit(
         cls,
-        embedding,
+        embedding: HitSource,
         score: float | None,
         turns: ChunkTurns | None = None,
         number: int | None = None,

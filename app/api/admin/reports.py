@@ -13,10 +13,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from ...db.types import ReportStatus
 from ...dependencies import AdminToken, DBSession
 from ...schemas.reports import (
     MessageReportAdminRowPublic,
+    ReportFilterParams,
     ReportReadRequest,
     ReportReviewRequest,
     ReportReviewResponse,
@@ -29,8 +29,7 @@ router = APIRouter(prefix="/reports")
 async def get_reports(
     db: DBSession,
     jwt: AdminToken,
-    statuses: Annotated[list[ReportStatus] | None, Query()] = None,
-    unread_only: Annotated[bool, Query()] = False,
+    filters: Annotated[ReportFilterParams, Query()],
 ) -> list[MessageReportAdminRowPublic]:
     """Every report there is, newest first, with the question it is about.
 
@@ -45,8 +44,8 @@ async def get_reports(
     """
     return db.reports.list_admin_reports(
         user_id=jwt.user_id,
-        statuses=statuses,
-        unread_only=unread_only,
+        statuses=filters.statuses,
+        unread_only=filters.unread_only,
     )
 
 

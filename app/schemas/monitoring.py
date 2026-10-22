@@ -11,7 +11,37 @@ from ainterviewer.interview_guides import SurveyItem
 from ainterviewer.interview_guides.conditions import Conditions
 from ainterviewer.types import InterviewStatus, LanguageCode
 
+from ..db.types import InterviewType
 from .common import Schema
+
+
+class CohortParams(Schema):
+    """Which of a project's interviews an analysis view counts."""
+
+    interview_types: list[InterviewType] = Field(
+        default_factory=lambda: [InterviewType.DISTRIBUTED]
+    )
+    deduplicate_by_pid: bool = Field(
+        default=False,
+        description=(
+            "Count one interview per participant ID, keeping the one that got furthest"
+        ),
+    )
+
+
+class MonitoringParams(CohortParams):
+    start_date: datetime.datetime | None = None
+    end_date: datetime.datetime | None = None
+
+
+class ItemDistributionParams(CohortParams):
+    languages: list[str] | None = Field(
+        default=None,
+        description="Restrict to interviews conducted in these languages",
+    )
+    completed_only: bool = Field(
+        default=False, description="Count only interviews that reached the end"
+    )
 
 
 class HistogramBucket(Schema):

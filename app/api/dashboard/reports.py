@@ -14,10 +14,10 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from pydantic import UUID4
 
-from ...db.types import ReportStatus
 from ...dependencies import DBSession, ProjectAnnotator, ProjectViewer, UserToken
 from ...schemas.reports import (
     MessageReportRowPublic,
+    ReportFilterParams,
     ReportReadRequest,
     ReportReviewRequest,
     ReportReviewResponse,
@@ -32,8 +32,7 @@ async def get_project_reports(
     db: DBSession,
     jwt: UserToken,
     _: ProjectViewer,
-    statuses: Annotated[list[ReportStatus] | None, Query()] = None,
-    unread_only: Annotated[bool, Query()] = False,
+    filters: Annotated[ReportFilterParams, Query()],
 ) -> list[MessageReportRowPublic]:
     """Every question reported in this project, newest first.
 
@@ -44,8 +43,8 @@ async def get_project_reports(
     return db.reports.list_reports(
         user_id=jwt.user_id,
         project_id=project_id,
-        statuses=statuses,
-        unread_only=unread_only,
+        statuses=filters.statuses,
+        unread_only=filters.unread_only,
     )
 
 

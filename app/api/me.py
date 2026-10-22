@@ -23,9 +23,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from ..db.types import ReportStatus
 from ..dependencies import DBSession, DemoToken
-from ..schemas.reports import MessageReportRowPublic
+from ..schemas.reports import MessageReportRowPublic, ReportFilterParams
 from ..schemas.users import DemoBudget, UserNotifications
 from ..types import Scope
 from .dashboard.synthesize import get_demo_budget
@@ -74,8 +73,7 @@ async def get_my_demo_budget(db: DBSession, jwt: DemoToken) -> DemoBudget | None
 async def get_my_reports(
     db: DBSession,
     jwt: DemoToken,
-    statuses: Annotated[list[ReportStatus] | None, Query()] = None,
-    unread_only: Annotated[bool, Query()] = False,
+    filters: Annotated[ReportFilterParams, Query()],
 ) -> list[MessageReportRowPublic]:
     """Every reported question waiting on this user, across their projects.
 
@@ -91,7 +89,7 @@ async def get_my_reports(
     """
     return db.reports.list_reports(
         user_id=jwt.user_id,
-        statuses=statuses,
-        unread_only=unread_only,
+        statuses=filters.statuses,
+        unread_only=filters.unread_only,
         collaborated_only=True,
     )

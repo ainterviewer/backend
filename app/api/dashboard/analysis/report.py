@@ -38,7 +38,6 @@ from ainterviewer.types import InterviewStatus, LanguageCode, MessageRole, Messa
 
 from ....db.repositories.project import render_default_guide
 from ....db.tables import InterviewTable, MessageTable, TaskTable
-from ....db.types import InterviewType
 from ....dependencies import (
     DBSession,
     DemoToken,
@@ -52,6 +51,7 @@ from ....schemas.monitoring import (
     DistributionKind,
     GuideSection,
     ItemDistribution,
+    ItemDistributionParams,
     ItemDistributions,
     NumericStats,
 )
@@ -634,26 +634,7 @@ def get_project_item_distributions(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectViewer,
-    interview_types: Annotated[
-        list[InterviewType],
-        Query(default_factory=lambda: [InterviewType.DISTRIBUTED]),
-    ],
-    languages: Annotated[
-        list[str] | None,
-        Query(description="Restrict to interviews conducted in these languages"),
-    ] = None,
-    completed_only: Annotated[
-        bool, Query(description="Count only interviews that reached the end")
-    ] = False,
-    deduplicate_by_pid: Annotated[
-        bool,
-        Query(
-            description=(
-                "Count one interview per participant ID, keeping the one that "
-                "got furthest"
-            )
-        ),
-    ] = False,
+    params: Annotated[ItemDistributionParams, Query()],
 ) -> ItemDistributions:
     # NOTE: a plain `def` on purpose -- see the note in `monitoring.py`. The
     # session is synchronous, so an `async def` would block the event loop for
@@ -662,7 +643,7 @@ def get_project_item_distributions(
 
     interview_conditions = [
         InterviewTable.project_id == project_id,
-        InterviewTable.type.in_(interview_types),
+        InterviewTable.type.in_(params.interview_types),
     ]
 
     # Offered by the filter UI, so it must not itself be narrowed by the
@@ -677,9 +658,9 @@ def get_project_item_distributions(
         if language
     ]
 
-    if languages:
-        interview_conditions.append(InterviewTable.language.in_(languages))
-    if completed_only:
+    if params.languages:
+        interview_conditions.append(InterviewTable.language.in_(params.languages))
+    if params.completed_only:
         interview_conditions.append(InterviewTable.status == InterviewStatus.COMPLETED)
 
     # Deduplication is applied here and nowhere else: every count below is
@@ -693,7 +674,7 @@ def get_project_item_distributions(
             InterviewTable.language.label("language"),
         ),
         interview_conditions,
-        deduplicate_by_pid=deduplicate_by_pid,
+        deduplicate_by_pid=params.deduplicate_by_pid,
     )
 
     total_interviews = (
