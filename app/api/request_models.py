@@ -24,6 +24,7 @@ from ainterviewer.types import (
     TestType,
 )
 
+from ..db.models import NewPassword
 from ..db.types import InterviewType
 from ..types import ExternalParam, ProjectStatus
 
@@ -178,16 +179,7 @@ class UpdateEmailRequest(BaseModel):
 
 
 class _NewPasswordRequest(BaseModel):
-    new_password: str = Field(min_length=8)
-
-    @field_validator("new_password")
-    @classmethod
-    def _password_within_bcrypt_limit(cls, value: str) -> str:
-        # bcrypt silently truncates input beyond 72 bytes (not chars), so
-        # reject anything longer to avoid surprising password equivalence.
-        if len(value.encode("utf-8")) > 72:
-            raise ValueError("Password must be at most 72 bytes")
-        return value
+    new_password: NewPassword
 
 
 class UpdatePasswordRequest(_NewPasswordRequest):

@@ -16,7 +16,6 @@ from ...services.email.mail import email_templates, send_email
 from ...settings import DemoLimits, app_settings
 from ...types import Scope
 from ..models import (
-    UNSET,
     AccessRequestCreate,
     AccessRequestPublic,
     InvitationPublic,
@@ -60,7 +59,7 @@ class UserRepository(BaseRepository):
         self.session.commit()
 
     def update_user(self, user_id: UUID4, data: UserSelfUpdate) -> UserPublic:
-        values = {k: v for k, v in data.model_dump().items() if v is not UNSET}
+        values = data.model_dump()
 
         if values:
             statement = (
@@ -190,7 +189,7 @@ class UserRepository(BaseRepository):
         return [UserAdmin.model_validate(user) for user in users]
 
     def update_user_admin(self, user_id: UUID4, data: UserAdminUpdate) -> UserAdmin:
-        values = {k: v for k, v in data.model_dump().items() if v is not UNSET}
+        values = data.model_dump()
 
         if values:
             statement = (
@@ -351,7 +350,7 @@ class UserRepository(BaseRepository):
         id: UUID4,
         data: InvitationUpdate,
     ) -> InvitationPublic:
-        values = {k: v for k, v in data.model_dump().items() if v is not UNSET}
+        values = data.model_dump()
 
         if not values:
             return self.check_invite_token(id)

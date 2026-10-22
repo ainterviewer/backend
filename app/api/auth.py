@@ -32,7 +32,6 @@ from ..db.types import VerificationPurpose
 from ..dependencies import DBSession, DemoToken
 from ..services.email.mail import email_templates, send_email
 from ..settings import app_settings
-from ..types import Scope
 from .request_models import (
     DeleteAccountRequest,
     ForgotPasswordRequest,
@@ -343,11 +342,6 @@ async def delete_me(body: DeleteAccountRequest, db: DBSession, jwt: DemoToken):
 
 @router.post("/register")
 async def register(user: UserCreateRequest, db: DBSession) -> JSONResponse:
-    # NOTE: Validate user scope to user when created through the API.
-    # - should this be done at the model level?
-    if not Scope.USER.includes(user.scope):
-        raise ValueError("Invalid scope for user creation")
-
     snapshot: dict = {}
 
     if app_settings.app.registration_requires_token is True:
@@ -362,7 +356,7 @@ async def register(user: UserCreateRequest, db: DBSession) -> JSONResponse:
         if not invitation.reuseable and not db.users.delete_invitation(invitation.id):
             # Another request already claimed this token
             return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
-        user.scope = invitation.user_scope
+        snapshot["scope"] = invitation.user_scope
 
         # A token that is not a UUID was the invitation's alias. Keep the id in
         # invite_token either way, and the alias it came through alongside.

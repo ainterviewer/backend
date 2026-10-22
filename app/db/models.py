@@ -3,12 +3,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
 from pathlib import Path
 from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import (
+    MISSING,
     UUID4,
     AfterValidator,
     AliasChoices,
@@ -74,14 +74,6 @@ from .types import (
     SafetyFlag,
 )
 from .versioning import BumpName
-
-
-# TODO: Implement across more endpoints
-class _Unset(Enum):
-    UNSET = "UNSET"
-
-
-UNSET = _Unset.UNSET
 
 
 class _BaseModel(BaseModel):
@@ -151,16 +143,16 @@ class InvitationCreate(InvitationBase): ...
 
 
 class InvitationUpdate(BaseModel):
-    email: str | None | _Unset = UNSET
-    expires_at: datetime | None | _Unset = UNSET
-    reuseable: bool | _Unset = UNSET
-    user_scope: Scope | _Unset = UNSET
-    user_expires: datetime | TimeDelta | None | _Unset = UNSET
-    title: str | None | _Unset = UNSET
-    alias: InvitationAlias | None | _Unset = UNSET
-    user_demo_concurrent_limit: NonNegativeInt | None | _Unset = UNSET
-    user_demo_daily_limit: NonNegativeInt | None | _Unset = UNSET
-    user_demo_lifetime_limit: NonNegativeInt | None | _Unset = UNSET
+    email: str | None | MISSING = MISSING
+    expires_at: datetime | None | MISSING = MISSING
+    reuseable: bool | MISSING = MISSING
+    user_scope: Scope | MISSING = MISSING
+    user_expires: datetime | TimeDelta | None | MISSING = MISSING
+    title: str | None | MISSING = MISSING
+    alias: InvitationAlias | None | MISSING = MISSING
+    user_demo_concurrent_limit: NonNegativeInt | None | MISSING = MISSING
+    user_demo_daily_limit: NonNegativeInt | None | MISSING = MISSING
+    user_demo_lifetime_limit: NonNegativeInt | None | MISSING = MISSING
 
 
 class InvitationPublic(InvitationBase):
@@ -183,29 +175,42 @@ class UserBase(_BaseModel):
     scope: Scope = Scope.USER
 
 
-class UserCreateRequest(UserBase):
-    """API request model for user registration."""
+def _within_bcrypt_limit(value: str) -> str:
+    # bcrypt silently truncates input beyond 72 bytes (not chars), so reject
+    # anything longer to avoid surprising password equivalence.
+    if len(value.encode("utf-8")) > 72:
+        raise ValueError("Password must be at most 72 bytes")
+    return value
+
+
+#: A password as a client sets one.
+NewPassword = Annotated[str, Field(min_length=8), AfterValidator(_within_bcrypt_limit)]
+
+
+class UserCreateRequest(_BaseModel):
+    """API request model for user registration.
+
+    Only what the person signing up chooses. The scope, the timestamps and the
+    invitation's snapshot are the server's, so there is no field for a client
+    to send them in.
+    """
+
+    email: EmailStr
+    first_name: str
+    last_name: str | None = None
+    invite_token: UUID4 | str | None = Field(union_mode="left_to_right")
+    research_consent: bool = False
+    password: NewPassword
+
+
+class UserCreate(UserBase):
+    """Internal model for creating a user, includes snapshot fields."""
 
     invite_token: UUID4 | str | None = Field(union_mode="left_to_right")
-
     created_at: datetime = Field(default_factory=now)
     last_active: datetime = Field(default_factory=now)
-    last_login: datetime | None = None
     research_consent: bool = False
-    password: str = Field(min_length=8)
-
-    @field_validator("password")
-    @classmethod
-    def _password_within_bcrypt_limit(cls, value: str) -> str:
-        # bcrypt silently truncates input beyond 72 bytes (not chars), so
-        # reject anything longer to avoid surprising password equivalence.
-        if len(value.encode("utf-8")) > 72:
-            raise ValueError("Password must be at most 72 bytes")
-        return value
-
-
-class UserCreate(UserCreateRequest):
-    """Internal model for creating a user, includes snapshot fields."""
+    password: str
 
     registration_token: str | None = None
     invitation_title: str | None = None
@@ -246,23 +251,23 @@ class UserAdmin(UserPublic):
 
 
 class UserAdminUpdate(BaseModel):
-    scope: Scope | _Unset = UNSET
-    with_preview_features: bool | _Unset = UNSET
-    organization: str | None | _Unset = UNSET
-    expires_at: datetime | None | _Unset = UNSET
-    two_factor_enabled: bool | _Unset = UNSET
+    scope: Scope | MISSING = MISSING
+    with_preview_features: bool | MISSING = MISSING
+    organization: str | None | MISSING = MISSING
+    expires_at: datetime | None | MISSING = MISSING
+    two_factor_enabled: bool | MISSING = MISSING
     # None puts the user back on the configured default.
-    demo_concurrent_limit: NonNegativeInt | None | _Unset = UNSET
-    demo_daily_limit: NonNegativeInt | None | _Unset = UNSET
-    demo_lifetime_limit: NonNegativeInt | None | _Unset = UNSET
+    demo_concurrent_limit: NonNegativeInt | None | MISSING = MISSING
+    demo_daily_limit: NonNegativeInt | None | MISSING = MISSING
+    demo_lifetime_limit: NonNegativeInt | None | MISSING = MISSING
 
 
 class UserSelfUpdate(BaseModel):
     """Profile fields a user may change on their own account."""
 
-    first_name: str | _Unset = UNSET
-    last_name: str | None | _Unset = UNSET
-    organization: str | None | _Unset = UNSET
+    first_name: str | MISSING = MISSING
+    last_name: str | None | MISSING = MISSING
+    organization: str | None | MISSING = MISSING
 
 
 class Collaborator(_BaseModel):
@@ -396,11 +401,6 @@ class ProjectBase(_BaseModel):
     owner_id: UUID4
 
 
-class ProjectCreate(_BaseModel):
-    title: str
-    config: InterviewConfig | None = None
-
-
 class ProjectLanguage(LanguageDict):
     """A language a project offers.
 
@@ -489,14 +489,6 @@ class InterviewBase(_BaseModel):
     content_version_id: UUID4 | None = None
 
 
-class InterviewCreate(_BaseModel):
-    interview_guide: InterviewGuide
-    language: LanguageCode = "EN"
-    interviewer: Interviewer = Interviewer.AI
-    project_id: UUID4
-    experiment_id: UUID4 | None = None
-
-
 class InterviewPublic(InterviewBase):
     # Both default, so an interview can be returned without its transcript.
     # `n_messages` comes from the SQL expression on InterviewTable rather than
@@ -558,30 +550,6 @@ class MessageBase(_BaseModel):
     security_intervention: SecurityIntervention | None = None
 
 
-class MessageCreate(_BaseModel):
-    message_id: int
-    content: str
-    role: MessageRole
-    interview_id: UUID4
-    project_id: UUID4
-    message_type: MessageType = MessageType.TEXT
-    section: int | None = None
-    main_question: int | None = None
-    sub_question: int | None = None
-    is_introduction: bool = False
-    outro: bool = False
-    timed: bool = False
-    can_answer: bool = True
-    include_in_history: bool = True
-    attachment: Path | None = None
-    audio_file: str | None = None
-    feedback: Feedback | None = None
-    image: Image | list[Image] | None = None
-    survey_item: SurveyItem | None = None
-    skipped_by_condition: bool = False
-    security_intervention: SecurityIntervention | None = None
-
-
 class MessagePublic(MessageBase):
     id: UUID4
     codings: list[CodingPublic] = []
@@ -600,36 +568,6 @@ class MessagePublic(MessageBase):
         return [comment for comment in comments if comment.parent_id is None]
 
     interview_type: InterviewType
-
-
-class TaskBase(_BaseModel):
-    id: UUID4
-    created_at: datetime
-    message_id: int
-    interview_id: UUID4
-    project_id: UUID4
-    task: str
-    reason: str | None = None
-    content: str | None = None
-    response: str | None = None
-    model: str | None = None
-    time_spend: int | None = None
-
-
-class TaskCreate(_BaseModel):
-    message_id: int
-    interview_id: UUID4
-    project_id: UUID4
-    task: str
-    reason: str | None = None
-    content: str | None = None
-    response: str | None = None
-    model: str | None = None
-    time_spend: int | None = None
-
-
-class TaskPublic(TaskBase):
-    pass
 
 
 class TestSetupBase(_BaseModel):
@@ -688,10 +626,10 @@ class ParticipantCreate(ParticipantBase):
 
 
 class ParticipantUpdate(BaseModel):
-    name: str | None | _Unset = UNSET
-    email: EmailStr | None | _Unset = UNSET
-    pid: str | _Unset = UNSET
-    participating: bool | _Unset = UNSET
+    name: str | None | MISSING = MISSING
+    email: EmailStr | None | MISSING = MISSING
+    pid: str | MISSING = MISSING
+    participating: bool | MISSING = MISSING
 
 
 class ParticipantPublic(ParticipantBase):

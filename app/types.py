@@ -70,12 +70,6 @@ class WebSocketConversation(TypedDict):
     users: WebSocketUsers
 
 
-class InterviewType(StrEnum):
-    CHAT = "chat"
-    INTERVIEW = "ai"
-    SYNTHETIC = "synthetic"
-
-
 class TurnRole(StrEnum):
     """Who is speaking in a rendered chunk of interview text.
 

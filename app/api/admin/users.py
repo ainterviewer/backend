@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import UUID4, BaseModel
 
-from ...db.models import UNSET, UserAdmin, UserAdminUpdate
+from ...db.models import UserAdmin, UserAdminUpdate
 from ...dependencies import AdminToken, DBSession
 from ...settings import app_settings
 from ..dashboard.synthesize import get_demo_budget
@@ -37,7 +37,11 @@ async def update_admin_note(
 async def update_user(
     user_id: UUID4, body: UserAdminUpdate, db: DBSession, jwt: AdminToken
 ) -> UserAdmin:
-    if user_id == jwt.user_id and jwt.scope != body.scope and body.scope is not UNSET:
+    if (
+        user_id == jwt.user_id
+        and "scope" in body.model_fields_set
+        and body.scope != jwt.scope
+    ):
         raise HTTPException(
             status_code=400, detail="Admins cannot change their own scope"
         )

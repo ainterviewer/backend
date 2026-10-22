@@ -6,7 +6,7 @@ from pydantic import UUID4
 from sqlalchemy import delete, exists, select, update
 from sqlalchemy.exc import NoResultFound
 
-from ..models import UNSET, ParticipantCreate, ParticipantPublic, ParticipantUpdate
+from ..models import ParticipantCreate, ParticipantPublic, ParticipantUpdate
 from ..tables import (
     InterviewTable,
     ParticipantTable,
@@ -247,11 +247,7 @@ class ParticipantRepository(BaseRepository):
     ) -> ParticipantPublic:
         """Update the shared Participant row backing this project link.
         Changes propagate to every project in the same folder by design."""
-        values = {
-            k: v
-            for k, v in update_data.model_dump(exclude_unset=True).items()
-            if v is not UNSET
-        }
+        values = update_data.model_dump()
 
         link = self._get_link(project_participant_id)
         if values:
