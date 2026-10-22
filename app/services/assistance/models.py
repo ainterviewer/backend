@@ -3,8 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, TypeAdapter, model_validator
 from pydantic_ai import ModelMessage
 
-from ainterviewer.interview_guides import InterviewGuide, Question
-from ainterviewer.interview_guides.interview_guide import QuestionSection
+from ainterviewer.interview_guides import InterviewGuide, Question, QuestionSection
 
 _messages_adapter = TypeAdapter(list[ModelMessage])
 

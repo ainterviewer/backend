@@ -1,27 +1,23 @@
-import json
 from datetime import UTC, datetime
+from typing import Literal
 
 from pydantic import UUID4, Field
 from pydantic_ai import (
     Agent,
     AgentRunError,
     ModelMessage,
-    ModelRequest,
     ModelResponse,
     RunContext,
     TextPart,
     ToolReturnPart,
     UserPromptPart,
 )
-from pydantic_ai._agent_graph import CallToolsNode, ModelRequestNode
 from pydantic_ai.messages import FunctionToolResultEvent
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
-from pydantic_graph import End
 
-from ainterviewer.interview_guides import InterviewGuide, Question
+from ainterviewer.interview_guides import InterviewGuide, Question, QuestionSection
 from ainterviewer.interview_guides.generate import generate_question, generate_section
-from ainterviewer.interview_guides.interview_guide import QuestionSection
 from ainterviewer.settings import settings as lib_settings
 
 from ...dependencies import DBSession
@@ -122,6 +118,36 @@ async def create_new_question(
     )
 
 
+# The tools whose results the chat shows as an insertable item, by frame type.
+_TOOL_FRAME_TYPES: dict[str, Literal["question", "section"]] = {
+    "create_new_question": "question",
+    "create_new_section": "section",
+}
+
+
+def _frame(
+    role: Literal["user", "model"],
+    timestamp: datetime,
+    content: str,
+    type: Literal["message", "question", "section"] = "message",
+) -> bytes:
+    return (
+        ChatMessage(
+            role=role, timestamp=timestamp.isoformat(), content=content, type=type
+        )
+        .model_dump_json()
+        .encode("utf-8")
+    )
+
+
+def _tool_frame(part: ToolReturnPart) -> bytes | None:
+    if (frame_type := _TOOL_FRAME_TYPES.get(part.tool_name)) is None:
+        return None
+    # Content is the tool's model on a live run and plain JSON data once read
+    # back from the database; model_response_str serialises either.
+    return _frame("model", part.timestamp, part.model_response_str(), frame_type)
+
+
 async def stream_messages(
     prompt: str,
     session_id: UUID4,
@@ -132,16 +158,7 @@ async def stream_messages(
     user_name: str,
 ):
     """Streams newline-delimited JSON ChatMessages to the client."""
-    yield (
-        ChatMessage(
-            role="user",
-            timestamp=datetime.now(tz=UTC).isoformat(),
-            content=prompt,
-        )
-        .model_dump_json()
-        .encode("utf-8")
-        + b"\n"
-    )
+    yield _frame("user", datetime.now(tz=UTC), prompt) + b"\n"
 
     messages = db.assistance.get_messages(
         session_id=session_id,
@@ -155,49 +172,22 @@ async def stream_messages(
         deps=AssistanceDependencies(guide=guide, user_name=user_name),
     ) as agent_run:
         node = agent_run.next_node
-        while not isinstance(node, End):
-            if isinstance(node, ModelRequestNode):
+        while not Agent.is_end_node(node):
+            if Agent.is_model_request_node(node):
                 async with node.stream(agent_run.ctx) as agent_stream:
+                    # Each chunk is the reply so far, not a delta: the client
+                    # replaces the message it is showing with it.
                     async for text in agent_stream.stream_text(debounce_by=0.01):
-                        m = ModelResponse(
-                            parts=[TextPart(text)], timestamp=agent_stream.timestamp
-                        )
-                        if message := to_chat_message(m):
-                            yield message + b"\n"
-            elif isinstance(node, CallToolsNode):
+                        yield _frame("model", agent_stream.timestamp, text) + b"\n"
+            elif Agent.is_call_tools_node(node):
                 async with node.stream(agent_run.ctx) as events:
                     async for event in events:
-                        if isinstance(event, FunctionToolResultEvent) and isinstance(
-                            event.part, ToolReturnPart
+                        if (
+                            isinstance(event, FunctionToolResultEvent)
+                            and isinstance(event.part, ToolReturnPart)
+                            and (frame := _tool_frame(event.part))
                         ):
-                            content = event.part.content
-                            timestamp = event.part.timestamp.isoformat()
-                            if event.part.tool_name == "create_new_section":
-                                assert isinstance(content, QuestionSection)
-                                yield (
-                                    ChatMessage(
-                                        role="model",
-                                        timestamp=timestamp,
-                                        content=content.model_dump_json(),
-                                        type="section",
-                                    )
-                                    .model_dump_json()
-                                    .encode("utf-8")
-                                    + b"\n"
-                                )
-                            elif event.part.tool_name == "create_new_question":
-                                assert isinstance(content, Question)
-                                yield (
-                                    ChatMessage(
-                                        role="model",
-                                        timestamp=timestamp,
-                                        content=content.model_dump_json(),
-                                        type="question",
-                                    )
-                                    .model_dump_json()
-                                    .encode("utf-8")
-                                    + b"\n"
-                                )
+                            yield frame + b"\n"
             node = await agent_run.next(node)
 
     if agent_run.result is None:
@@ -211,56 +201,20 @@ async def stream_messages(
     )
 
 
-def to_chat_message(m: ModelMessage) -> bytes | None:
+def to_chat_messages(m: ModelMessage) -> list[bytes]:
+    """The chat frames a stored message replays as: one per part shown.
+
+    A turn can hold several of them -- the agent may call both tools at once --
+    so every part is rendered, not just the first.
+    """
+    frames: list[bytes] = []
     for part in m.parts:
-        if isinstance(m, ModelRequest) and isinstance(part, UserPromptPart):
+        if isinstance(part, UserPromptPart):
             assert isinstance(part.content, str)
-            if part.content == _GREETING_TRIGGER:
-                return None
-            return (
-                ChatMessage(
-                    role="user",
-                    timestamp=part.timestamp.isoformat(),
-                    content=part.content,
-                )
-                .model_dump_json()
-                .encode("utf-8")
-            )
-
+            if part.content != _GREETING_TRIGGER:
+                frames.append(_frame("user", part.timestamp, part.content))
         elif isinstance(m, ModelResponse) and isinstance(part, TextPart):
-            return (
-                ChatMessage(
-                    role="model",
-                    timestamp=m.timestamp.isoformat(),
-                    content=part.content,
-                )
-                .model_dump_json()
-                .encode("utf-8")
-            )
-        elif isinstance(m, ModelRequest) and isinstance(part, ToolReturnPart):
-            if part.tool_name == "create_new_section":
-                return (
-                    ChatMessage(
-                        role="model",
-                        timestamp=m.timestamp.isoformat(),  # ty:ignore[unresolved-attribute]
-                        content=json.dumps(part.content),
-                        type="section",
-                    )
-                    .model_dump_json()
-                    .encode("utf-8")
-                )
-            elif part.tool_name == "create_new_question":
-                return (
-                    ChatMessage(
-                        role="model",
-                        timestamp=m.timestamp.isoformat(),  # ty:ignore[unresolved-attribute]
-                        content=json.dumps(part.content),
-                        type="question",
-                    )
-                    .model_dump_json()
-                    .encode("utf-8")
-                )
-
-
-if __name__ == "__main__":
-    print("openai:" + DEFAULT_MODEL.model_name)
+            frames.append(_frame("model", m.timestamp, part.content))
+        elif isinstance(part, ToolReturnPart) and (frame := _tool_frame(part)):
+            frames.append(frame)
+    return frames

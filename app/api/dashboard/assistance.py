@@ -13,7 +13,7 @@ from ...services.assistance.agent import (
     _GREETING_TRIGGER,
     GREETING_TEMPLATE,
     stream_messages,
-    to_chat_message,
+    to_chat_messages,
 )
 from ...services.assistance.models import ChatMessage, _messages_adapter
 from ..request_models import AssistanceChatRequest
@@ -99,7 +99,7 @@ async def get_chat(
         user_id=jwt.user_id,
     )
 
-    chat_messages = [message for m in messages if (message := to_chat_message(m))]
+    chat_messages = [frame for m in messages for frame in to_chat_messages(m)]
 
     return Response(
         b"\n".join(chat_messages),
