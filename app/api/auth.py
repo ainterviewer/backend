@@ -20,11 +20,13 @@ from ..auth import (
     hash_token,
     verify_password,
 )
+from ..db.repositories.errors import EmailTakenError, InvitationClaimedError
 from ..dependencies import DBSession, DemoToken
 from ..schemas.users import (
     AccessRequestCreate,
     DeleteAccountRequest,
     ForgotPasswordRequest,
+    InvitationPublic,
     LoginRequest,
     RegisterRequest,
     ResendVerificationRequest,
@@ -341,6 +343,7 @@ async def delete_me(body: DeleteAccountRequest, db: DBSession, jwt: DemoToken):
 @router.post("/register")
 async def register(user: RegisterRequest, db: DBSession) -> JSONResponse:
     snapshot: dict = {}
+    claim: InvitationPublic | None = None
 
     if app_settings.app.registration_requires_token is True:
         if not user.invite_token:
@@ -351,9 +354,8 @@ async def register(user: RegisterRequest, db: DBSession) -> JSONResponse:
             return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
         if invitation.expires_at and invitation.expires_at < now():
             return JSONResponse({"detail": "Invite token expired"}, status_code=406)
-        if not invitation.reuseable and not db.users.delete_invitation(invitation.id):
-            # Another request already claimed this token
-            return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
+        if not invitation.reuseable:
+            claim = invitation
         snapshot["scope"] = invitation.user_scope
 
         # A token that is not a UUID was the invitation's alias. Keep the id in
@@ -380,7 +382,16 @@ async def register(user: RegisterRequest, db: DBSession) -> JSONResponse:
             snapshot["organization"] = access_request.organization
 
     # NOTE: Password hashing happens in the users.create_user method
-    new_user = db.users.create_user(UserCreate(**user.model_dump(), **snapshot))
+    try:
+        new_user = db.users.create_user(
+            UserCreate(**user.model_dump(), **snapshot),
+            claim_invitation=claim.id if claim else None,
+        )
+    except InvitationClaimedError:
+        # Another request redeemed this single-use token first
+        return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
+    except EmailTakenError:
+        raise HTTPException(status_code=409, detail="Email already in use") from None
 
     # Hard gate: no session is issued until the email address is verified.
     # If the email can't be sent, roll back the new account so the address is
@@ -389,6 +400,8 @@ async def register(user: RegisterRequest, db: DBSession) -> JSONResponse:
         await _send_verification_email(db, new_user)
     except HTTPException:
         db.users.delete_user(new_user.id)
+        if claim:
+            db.users.restore_invitation(claim)
         raise
 
     # Give every new account a personal folder to start from. Created only

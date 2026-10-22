@@ -134,3 +134,15 @@ class InvitationAliasTakenError(Exception):
     def __init__(self, alias: str):
         super().__init__(f"The alias {alias!r} is already in use")
         self.alias = alias
+
+
+class EmailTakenError(Exception):
+    """An account already uses this email address. The API answers 409."""
+
+
+class InvitationClaimedError(Exception):
+    """A single-use invitation was redeemed by someone else first.
+
+    Raised by `create_user` when the invitation it was asked to claim is no
+    longer there; the account is not created.
+    """

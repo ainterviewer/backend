@@ -29,7 +29,7 @@ from ...settings import DemoLimits, app_settings
 from ...types import AccessRequestStatus, Scope
 from ..tables import AccessRequestTable, InvitationTable, UserActivityTable, UserTable
 from .base import BaseRepository
-from .errors import InvitationAliasTakenError
+from .errors import EmailTakenError, InvitationAliasTakenError, InvitationClaimedError
 
 
 class UserRepository(BaseRepository):
@@ -37,15 +37,50 @@ class UserRepository(BaseRepository):
 
     # ==================== User Methods ====================
 
-    def create_user(self, user: UserCreate) -> UserPublic:
+    def create_user(
+        self, user: UserCreate, claim_invitation: UUID4 | None = None
+    ) -> UserPublic:
+        """Insert a user, deleting the single-use invitation `claim_invitation`
+        in the same transaction.
+
+        Claiming and inserting commit together, so an insert that fails leaves
+        the invitation redeemable. Raises `InvitationClaimedError` when the
+        invitation is already gone and `EmailTakenError` when the address has
+        an account.
+        """
         user.password = get_password_hash(user.password)
+
+        if claim_invitation is not None:
+            claimed = self.session.execute(
+                delete(InvitationTable).where(InvitationTable.id == claim_invitation)
+            )
+            if claimed.rowcount == 0:  # ty:ignore[unresolved-attribute]
+                self.session.rollback()
+                raise InvitationClaimedError
 
         new_user = UserTable(**user.model_dump())
         self.session.add(new_user)
-        self.session.commit()
+        try:
+            self.session.commit()
+        except IntegrityError as error:
+            self.session.rollback()
+            raise EmailTakenError from error
         self.session.refresh(new_user)
 
         return UserPublic.model_validate(new_user)
+
+    def restore_invitation(self, invitation: InvitationPublic) -> None:
+        """Put back an invitation `create_user` claimed, for a registration
+        rolled back after it committed."""
+        self.session.add(
+            InvitationTable(
+                **{
+                    name: getattr(invitation, name)
+                    for name in InvitationPublic.model_fields
+                }
+            )
+        )
+        self.session.commit()
 
     def delete_user(self, id: UUID4):
         # ORM-level delete so relationship cascades fire (owned projects with
