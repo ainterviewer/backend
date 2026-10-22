@@ -30,7 +30,9 @@ from .utils import extend_openapi_schema
 # unreachable from any HTTP route and so absent from the generated schema.
 # `TemplatePlaceholder` is here for a different reason: no route takes or
 # returns it, but the dashboard's email editor needs the authoritative list of
-# template variables, and exporting it keeps that list in one place.
+# template variables, and exporting it keeps that list in one place. `ApiError`
+# is referenced only by the error ranges `_declare_errors` adds, after FastAPI
+# has built its components; its `ErrorCode` comes along as a nested definition.
 EXTRA_MODELS = [
     ApiError,
     AuthToken,
@@ -63,7 +65,7 @@ def build_openapi_schema(app: FastAPI) -> dict[str, Any]:
     return extend_openapi_schema(openapi, models=EXTRA_MODELS)
 
 
-#: Every error the handlers in app/main.py answer, but FastAPI's own 422.
+#: Every error `add_error_handlers` (app/errors.py) answers, but FastAPI's 422.
 _API_ERROR = {
     "content": {
         "application/json": {"schema": {"$ref": "#/components/schemas/ApiError"}}

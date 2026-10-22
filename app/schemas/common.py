@@ -82,7 +82,7 @@ class ApiError(Schema):
 
     `detail` is a sentence to show; `code` says what went wrong for a client
     that handles it, and is null for errors no client tells apart. Raised as
-    `app.errors.AppError` and answered by the handlers in `app/main.py`.
+    `app.errors.AppError` and answered by `app.errors.add_error_handlers`.
     """
 
     detail: str
