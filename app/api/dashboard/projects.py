@@ -572,6 +572,7 @@ async def upload_image(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
+    # NOTE:
     # Unused: the image's texts live in the guide. Kept so older clients that
     # send them are not refused.
     primer: Annotated[str, Form()] = "",
