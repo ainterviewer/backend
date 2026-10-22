@@ -71,7 +71,7 @@ from ...dependencies import (
     UserToken,
     set_etag,
 )
-from ...schemas.common import PaginatedQueryParams
+from ...schemas.common import PageParams
 from ...schemas.content import (
     InterviewGuideGenerationRequest,
     ProbingPromptPreview,
@@ -80,20 +80,19 @@ from ...schemas.content import (
     QuestionSectionGenerationRequest,
 )
 from ...schemas.interviews import (
-    DeleteInterviewRequest,
     ExportMessagesRequest,
     FacetCount,
     InterviewFacets,
-    InterviewFilters,
+    InterviewFilterParams,
     InterviewListResponse,
-    InterviewResumeLinkCreated,
     InterviewResumeLinkPublic,
-    InterviewSelectionRequest,
+    InterviewResumeLinkResponse,
+    InterviewSelection,
     MessagePublic,
 )
 from ...schemas.projects import (
     ArchiveRequest,
-    ExternalParamsRequest,
+    ExternalParamsReplace,
     MoveProjectRequest,
     ProjectLanguage,
     ProjectPermissionsPublic,
@@ -737,7 +736,7 @@ async def create_interview_config(
 @router.patch("/projects/{project_id}/external_params")
 async def update_external_params(
     project_id: UUID4,
-    request: ExternalParamsRequest,
+    request: ExternalParamsReplace,
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
@@ -882,7 +881,7 @@ async def upload_welcome_video(
     return video.filename
 
 
-def _filter_kwargs(filters: InterviewFilters) -> dict:
+def _filter_kwargs(filters: InterviewFilterParams) -> dict:
     """The list's filters as the interview repository takes them.
 
     Shared by the list and the bulk actions, so "all matching" in a bulk
@@ -907,7 +906,7 @@ def _filter_kwargs(filters: InterviewFilters) -> dict:
 
 
 def _selected_interview_ids(
-    db: DBSession, project_id: UUID4, selection: InterviewSelectionRequest
+    db: DBSession, project_id: UUID4, selection: InterviewSelection
 ) -> list[UUID4]:
     if selection.filters is None:
         return selection.interview_ids or []
@@ -922,8 +921,8 @@ async def get_interviews(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectViewer,
-    paginated_query: Annotated[PaginatedQueryParams, Query()],
-    interview_filters: Annotated[InterviewFilters, Query()],
+    paginated_query: Annotated[PageParams, Query()],
+    interview_filters: Annotated[InterviewFilterParams, Query()],
 ) -> InterviewListResponse:
     """One page of interviews, with the filter options that fit the query.
 
@@ -982,7 +981,7 @@ async def get_interviews(
 
 @router.delete("/projects/{project_id}/interviews")
 async def delete_interviews(
-    delete_request: DeleteInterviewRequest,
+    delete_request: InterviewSelection,
     project_id: UUID4,
     db: DBSession,
     jwt: DemoToken,
@@ -1055,7 +1054,7 @@ async def create_interview_resume_link(
     db: DBSession,
     jwt: UserToken,
     _: ProjectEditor,
-) -> InterviewResumeLinkCreated:
+) -> InterviewResumeLinkResponse:
     """Mint a one-time resume link, replacing any outstanding one.
 
     Editor, not viewer: every other route on this page is viewer-readable, but
@@ -1113,7 +1112,7 @@ async def create_interview_resume_link(
     )
 
     base_url = app_settings.sveltekit_platform_public_addr
-    return InterviewResumeLinkCreated(
+    return InterviewResumeLinkResponse(
         url=f"{base_url}/interview/resume/{raw_token}",
         expires_at=expires_at,
     )

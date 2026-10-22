@@ -10,9 +10,9 @@ import pytest
 from fastapi import FastAPI, Query
 from fastapi.testclient import TestClient
 
-from app.schemas.common import PaginatedQueryParams
+from app.schemas.common import PageParams
 from app.schemas.embeddings import MAX_SEARCH_DEPTH, SearchPageParams
-from app.schemas.interviews import InterviewFilters
+from app.schemas.interviews import InterviewFilterParams
 
 
 @pytest.fixture(scope="module")
@@ -21,8 +21,8 @@ def client():
 
     @app.get("/list")
     def listing(
-        page: Annotated[PaginatedQueryParams, Query()],
-        filters: Annotated[InterviewFilters, Query()],
+        page: Annotated[PageParams, Query()],
+        filters: Annotated[InterviewFilterParams, Query()],
     ):
         return {
             "page": page.model_dump(),

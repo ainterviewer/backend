@@ -28,11 +28,6 @@ from .testing import TestSetupPublic
 from .users import UserPublic
 
 
-class Collaborator(Schema):
-    email: EmailStr
-    role: CollaboratorRole
-
-
 class CollaboratorBase(Schema):
     role: CollaboratorRole
 
@@ -47,17 +42,17 @@ class CollaboratorPublic(CollaboratorBase):
     added_at: datetime
 
 
-class ProjectFolderBase(Schema):
+class FolderBase(Schema):
     title: str
 
 
-class ProjectFolderCreate(ProjectFolderBase):
-    collaborators: list[Collaborator] = Field(
+class FolderCreate(FolderBase):
+    collaborators: list[CollaboratorCreate] = Field(
         default=[], validation_alias="folder_collaborations"
     )
 
 
-class ProjectFolderPublic(ProjectFolderBase):
+class FolderPublic(FolderBase):
     id: UUID4
     archived_at: datetime | None = None
     collaborators: list[CollaboratorPublic] = Field(
@@ -65,10 +60,10 @@ class ProjectFolderPublic(ProjectFolderBase):
     )
 
 
-class ProjectFolderEdit(ProjectFolderBase): ...
+class FolderUpdate(FolderBase): ...
 
 
-class ProjectFolderWithProjects(ProjectFolderPublic):
+class FolderWithProjectsPublic(FolderPublic):
     projects: list[ProjectPublic]
 
 
@@ -120,10 +115,6 @@ class ProjectPermissionsPublic(Schema):
     can_moderate: bool
 
 
-class ProjectPublicWithTests(ProjectPublic):
-    tests: list[TestSetupPublic]  # ty:ignore[invalid-mutable-override]
-
-
 class ExperimentProjectCreate(Schema):
     """Input model for adding a project to an experiment."""
 
@@ -170,7 +161,7 @@ class MoveProjectRequest(Schema):
     folder_id: UUID4
 
 
-class CreateProjectRequest(Schema):
+class ProjectCreate(Schema):
     title: str
     default_language: LanguageCode
 
@@ -182,7 +173,7 @@ class ValidateExternalParamsRequest(Schema):
     )
 
 
-class ExternalParamsRequest(Schema):
+class ExternalParamsReplace(Schema):
     params: list[ExternalParam]
 
     @field_validator("params")

@@ -20,12 +20,12 @@ from ...dependencies import (
     ProjectViewer,
     set_etag,
 )
-from ...schemas.common import PaginatedQueryParams, PaginatedResponse
+from ...schemas.common import PageParams, PaginatedResponse
 from ...schemas.content import (
     ContentStatus,
+    ContentVersionCreate,
     ContentVersionPublic,
-    ContentVersionSummary,
-    SaveVersionRequest,
+    ContentVersionSummaryPublic,
 )
 
 router = APIRouter(tags=["versions"])
@@ -54,8 +54,8 @@ async def list_content_versions(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectViewer,
-    params: Annotated[PaginatedQueryParams, Query()],
-) -> PaginatedResponse[ContentVersionSummary]:
+    params: Annotated[PageParams, Query()],
+) -> PaginatedResponse[ContentVersionSummaryPublic]:
     """The history, newest first."""
     versions, total = db.versions.list_versions(
         project_id, limit=params.limit, offset=params.offset
@@ -81,12 +81,12 @@ async def get_content_version(
 @router.post("/projects/{project_id}/versions")
 async def save_content_version(
     project_id: UUID4,
-    request: SaveVersionRequest,
+    request: ContentVersionCreate,
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
     revision: IfMatch,
-) -> ContentVersionSummary:
+) -> ContentVersionSummaryPublic:
     """Save the draft as a version, and publish it if asked.
 
     `If-Match` is the revision the caller is looking at: publishing what

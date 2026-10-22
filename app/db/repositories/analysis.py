@@ -7,9 +7,9 @@ from ainterviewer.types import MessageRole
 from ainterviewer.utils import now
 
 from ...schemas.analysis import (
-    CodeBase,
     CodebookPublic,
-    CodebookPut,
+    CodebookReplace,
+    CodeInput,
     CodePublic,
     CodingCreate,
     CodingPublic,
@@ -148,7 +148,9 @@ class AnalysisRepository(BaseRepository):
             palette=list(palette) if palette else list(DEFAULT_PALETTE),
         )
 
-    def save_codebook(self, project_id: UUID4, codebook: CodebookPut) -> CodebookPublic:
+    def save_codebook(
+        self, project_id: UUID4, codebook: CodebookReplace
+    ) -> CodebookPublic:
         """Replace the project's codebook with the one sent.
 
         Wholesale rather than per-code because that is how it is edited: one
@@ -165,7 +167,7 @@ class AnalysisRepository(BaseRepository):
         a side effect of a kind change.
 
         A code left out *and* named in `merges` is merged: its codings move to
-        the code it was merged into before it is deleted. See `CodebookPut`.
+        the code it was merged into before it is deleted. See `CodebookReplace`.
         """
         sent = codebook.codes
         ids = [code.id for code in sent]
@@ -255,7 +257,7 @@ class AnalysisRepository(BaseRepository):
         self.session.commit()
         return self.get_codebook(project_id)
 
-    def _check_merge(self, source: CodeTable, target: CodeBase | None) -> None:
+    def _check_merge(self, source: CodeTable, target: CodeInput | None) -> None:
         """Whether every coding made with `source` still means something when
         made with `target`.
 
@@ -328,7 +330,7 @@ class AnalysisRepository(BaseRepository):
         )
 
     @staticmethod
-    def _code_values(code: CodeBase, sent: list[CodeBase]) -> dict:
+    def _code_values(code: CodeInput, sent: list[CodeInput]) -> dict:
         """One code's columns, with its seat among its siblings worked out.
 
         `rank` is not sent: the client's list order *is* the sibling order, so

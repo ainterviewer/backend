@@ -33,7 +33,7 @@ from ...schemas.participants import (
     DeleteParticipantsRequest,
     ExportParticipantsRequest,
     ParticipantCreate,
-    ParticipantEmailAttachment,
+    ParticipantEmailAttachmentPublic,
     ParticipantEmailTemplateRequest,
     ParticipantPublic,
     ParticipantUpdate,
@@ -462,16 +462,16 @@ def _safe_upload_filename(filename: str | None) -> str:
     return name
 
 
-def _list_attachments(directory: Path) -> list[ParticipantEmailAttachment]:
+def _list_attachments(directory: Path) -> list[ParticipantEmailAttachmentPublic]:
     if not directory.exists():
         return []
-    items: list[ParticipantEmailAttachment] = []
+    items: list[ParticipantEmailAttachmentPublic] = []
     for entry in sorted(directory.iterdir()):
         if not entry.is_file():
             continue
         mime, _ = mimetypes.guess_type(entry.name)
         items.append(
-            ParticipantEmailAttachment(
+            ParticipantEmailAttachmentPublic(
                 filename=entry.name,
                 size=entry.stat().st_size,
                 content_type=mime,
@@ -487,7 +487,7 @@ async def list_participant_email_attachments(
     db: DBSession,
     jwt: UserToken,
     _: ProjectViewer,
-) -> list[ParticipantEmailAttachment]:
+) -> list[ParticipantEmailAttachmentPublic]:
     return _list_attachments(_attachments_dir(project_id, language))
 
 
@@ -499,7 +499,7 @@ async def upload_participant_email_attachments(
     db: DBSession,
     jwt: UserToken,
     _: ProjectEditor,
-) -> list[ParticipantEmailAttachment]:
+) -> list[ParticipantEmailAttachmentPublic]:
     if not files:
         raise HTTPException(status_code=422, detail="No files provided.")
 
@@ -545,7 +545,7 @@ async def delete_participant_email_attachment(
     db: DBSession,
     jwt: UserToken,
     _: ProjectEditor,
-) -> list[ParticipantEmailAttachment]:
+) -> list[ParticipantEmailAttachmentPublic]:
     name = _safe_filename(filename)
     directory = _attachments_dir(project_id, language)
     target = directory / name
@@ -750,7 +750,7 @@ async def list_participant_reminder_email_attachments(
     db: DBSession,
     jwt: UserToken,
     _: ProjectViewer,
-) -> list[ParticipantEmailAttachment]:
+) -> list[ParticipantEmailAttachmentPublic]:
     return _list_attachments(_reminder_attachments_dir(project_id, language))
 
 
@@ -762,7 +762,7 @@ async def upload_participant_reminder_email_attachments(
     db: DBSession,
     jwt: UserToken,
     _: ProjectEditor,
-) -> list[ParticipantEmailAttachment]:
+) -> list[ParticipantEmailAttachmentPublic]:
     if not files:
         raise HTTPException(status_code=422, detail="No files provided.")
 
@@ -808,7 +808,7 @@ async def delete_participant_reminder_email_attachment(
     db: DBSession,
     jwt: UserToken,
     _: ProjectEditor,
-) -> list[ParticipantEmailAttachment]:
+) -> list[ParticipantEmailAttachmentPublic]:
     name = _safe_filename(filename)
     directory = _reminder_attachments_dir(project_id, language)
     target = directory / name

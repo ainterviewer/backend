@@ -154,7 +154,7 @@ class IntervieweePublic(IntervieweeBase):
     id: UUID4
 
 
-class InterviewFilters(Schema):
+class InterviewFilterParams(Schema):
     """The interview list's filters, as the list endpoint takes them.
 
     Lets a bulk action target "everything matching" rather than ids the client
@@ -176,20 +176,17 @@ class InterviewFilters(Schema):
     intervened: bool | None = None
 
 
-class InterviewSelectionRequest(Schema):
+class InterviewSelection(Schema):
     """Interviews picked either by id or by the list's filters, never both."""
 
     interview_ids: list[UUID4] | None = None
-    filters: InterviewFilters | None = None
+    filters: InterviewFilterParams | None = None
 
     @model_validator(mode="after")
     def _exactly_one_selection(self):
         if (self.interview_ids is None) == (self.filters is None):
             raise ValueError("Give exactly one of interview_ids or filters.")
         return self
-
-
-class DeleteInterviewRequest(InterviewSelectionRequest): ...
 
 
 def _known_timezone(name: str | None) -> str | None:
@@ -202,7 +199,7 @@ def _known_timezone(name: str | None) -> str | None:
     return name
 
 
-class ExportMessagesRequest(InterviewSelectionRequest):
+class ExportMessagesRequest(InterviewSelection):
     """`csv` and `xlsx` export the message table, `docx` and `pdf` readable
     transcripts. `archive` makes it a ZIP with one file per interview."""
 
@@ -213,7 +210,7 @@ class ExportMessagesRequest(InterviewSelectionRequest):
     timezone: Annotated[str | None, AfterValidator(_known_timezone)] = None
 
 
-class CreateInterviewRequest(Schema):
+class InterviewCreate(Schema):
     interviewer: Interviewer = Interviewer.AI
     interview_type: InterviewType = InterviewType.DISTRIBUTED
     test_run_id: UUID4 | None = None
@@ -298,14 +295,14 @@ class InterviewResumeLinkPublic(Schema):
     redeemable: bool
 
 
-class InterviewResumeLinkCreated(Schema):
+class InterviewResumeLinkResponse(Schema):
     """A freshly minted resume link. The only time the URL ever exists."""
 
     url: str
     expires_at: datetime
 
 
-class InterviewResumeRedeemed(Schema):
+class InterviewResumeResponse(Schema):
     """What the interview page needs to resume after redeeming a link.
 
     The credential itself rides back as the httponly ``interview_token``

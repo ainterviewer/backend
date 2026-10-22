@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.db.crud import InterviewDataBase
 from app.db.tables import Base, UserTable
 from app.main import app
-from app.schemas.users import UserCreate, UserCreateRequest, UserSelfUpdate
+from app.schemas.users import RegisterRequest, UserCreate, UserSelfUpdate
 
 
 @pytest.fixture
@@ -84,7 +84,7 @@ def test_no_sentinel_reaches_the_schema():
 
 def test_registration_carries_no_server_fields():
     """Scope and timestamps are the server's, so a client cannot send them."""
-    request = UserCreateRequest.model_validate(
+    request = RegisterRequest.model_validate(
         {
             "email": "ada@example.com",
             "first_name": "Ada",

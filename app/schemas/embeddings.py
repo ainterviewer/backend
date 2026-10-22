@@ -730,7 +730,7 @@ class SearchPageParams(Schema):
     """`limit`/`offset` for the two ranked endpoints.
 
     Named as the dashboard's other lists name them, but deliberately not
-    `PaginatedQueryParams`: that carries `column` and `order`, and a ranked
+    `PageParams`: that carries `column` and `order`, and a ranked
     scan has exactly one order -- by score -- which a caller cannot choose.
     """
 

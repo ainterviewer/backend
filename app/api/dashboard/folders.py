@@ -8,11 +8,11 @@ from ...schemas.projects import (
     ArchiveRequest,
     CollaboratorCreate,
     CollaboratorPublic,
-    CreateProjectRequest,
-    ProjectFolderCreate,
-    ProjectFolderEdit,
-    ProjectFolderPublic,
-    ProjectFolderWithProjects,
+    FolderCreate,
+    FolderPublic,
+    FolderUpdate,
+    FolderWithProjectsPublic,
+    ProjectCreate,
 )
 from ...types import CollaboratorRole
 from ...utils import generate_qr_img
@@ -24,7 +24,7 @@ router = APIRouter(tags=["folders"])
 @router.get(
     "/folders",
     description="Get project folders",
-    response_model=list[ProjectFolderWithProjects],
+    response_model=list[FolderWithProjectsPublic],
 )
 async def get_folders(
     db: DBSession,
@@ -35,10 +35,10 @@ async def get_folders(
 
 @router.post("/folders", description="Create new project folder")
 async def create_folder(
-    project_folder: ProjectFolderCreate,
+    project_folder: FolderCreate,
     db: DBSession,
     jwt: DemoToken,
-) -> ProjectFolderPublic:
+) -> FolderPublic:
     return db.projects.create_folder(
         project_folder.title, jwt.user_id, project_folder.collaborators
     )
@@ -58,7 +58,7 @@ async def delete_folder(
 @router.patch("/folders/{folder_id}", description="Delete folder")
 async def edit_folder(
     folder_id: UUID4,
-    project_folder: ProjectFolderEdit,
+    project_folder: FolderUpdate,
     db: DBSession,
     jwt: DemoToken,
     _: FolderAdmin,
@@ -135,7 +135,7 @@ async def update_collaborator_role(
 async def create_project(
     request: Request,
     folder_id: UUID4,
-    project_request: CreateProjectRequest,
+    project_request: ProjectCreate,
     background_tasks: BackgroundTasks,
     db: DBSession,
     jwt: DemoToken,

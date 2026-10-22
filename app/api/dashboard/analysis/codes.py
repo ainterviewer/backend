@@ -26,10 +26,10 @@ from ....dependencies import (
 )
 from ....schemas.analysis import (
     CodebookPublic,
-    CodebookPut,
+    CodebookReplace,
     CodingCreate,
+    CodingLookupRequest,
     CodingPublic,
-    CodingsForMessages,
     FilteredMessagesRequest,
 )
 from ....schemas.interviews import MessagePublic
@@ -76,7 +76,7 @@ async def get_codebook(
 @router.put("/projects/{project_id}/analysis/codebook", dependencies=_preview)
 async def save_codebook(
     project_id: UUID4,
-    codebook: CodebookPut,
+    codebook: CodebookReplace,
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
@@ -115,7 +115,7 @@ async def get_message_codings(
 @router.post("/projects/{project_id}/analysis/codings/by-message")
 async def get_codings_for_messages(
     project_id: UUID4,
-    lookup: CodingsForMessages,
+    lookup: CodingLookupRequest,
     db: DBSession,
     jwt: DemoToken,
     _: ProjectViewer,

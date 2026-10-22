@@ -140,7 +140,7 @@ def _within_bcrypt_limit(value: str) -> str:
 NewPassword = Annotated[str, Field(min_length=8), AfterValidator(_within_bcrypt_limit)]
 
 
-class UserCreateRequest(Schema):
+class RegisterRequest(Schema):
     """API request model for user registration.
 
     Only what the person signing up chooses. The scope, the timestamps and the
@@ -175,7 +175,7 @@ class UserCreate(UserBase):
     demo_lifetime_limit: int | None = None
 
 
-class UserPrivate(UserBase):
+class UserRecord(UserBase):
     id: UUID4
     password: str
     with_preview_features: bool
@@ -192,7 +192,7 @@ class UserPublic(UserBase):
     organization: str | None = None
 
 
-class UserAdmin(UserPublic):
+class UserAdminPublic(UserPublic):
     access_request_message: str | None = None
     admin_note: str | None = None
     admin_note_updated_at: datetime | None = None
@@ -237,7 +237,7 @@ class AuthorPublic(Schema):
     email: EmailStr
 
 
-class LoginData(Schema):
+class LoginRequest(Schema):
     email: str
     password: str
     extended: bool = False

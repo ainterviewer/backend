@@ -20,7 +20,7 @@ from ainterviewer.utils import get_language_dict
 from ...schemas.content import (
     ContentStatus,
     ContentVersionPublic,
-    ContentVersionSummary,
+    ContentVersionSummaryPublic,
 )
 from ..tables import (
     ContentColumns,
@@ -150,9 +150,9 @@ class VersionRepository(BaseRepository):
 
     def _summary(
         self, version: ProjectContentVersionTable, published_id: UUID4 | None
-    ) -> ContentVersionSummary:
+    ) -> ContentVersionSummaryPublic:
         author = version.created_by
-        return ContentVersionSummary(
+        return ContentVersionSummaryPublic(
             id=version.id,
             version_no=version.version_no,
             kind=version.kind,
@@ -173,7 +173,7 @@ class VersionRepository(BaseRepository):
 
     def list_versions(
         self, project_id: UUID4, limit: int, offset: int
-    ) -> tuple[list[ContentVersionSummary], int]:
+    ) -> tuple[list[ContentVersionSummaryPublic], int]:
         """The project's versions, newest first, and how many there are."""
         published_id = self._content(project_id).published_version_id
         versions = self.session.execute(
@@ -329,7 +329,7 @@ class VersionRepository(BaseRepository):
 
     def save_version(
         self, project_id: UUID4, user_id: UUID4, label: str | None
-    ) -> ContentVersionSummary:
+    ) -> ContentVersionSummaryPublic:
         """Save the draft as a named version, without publishing it."""
         version = self.snapshot(
             project_id, ContentVersionKind.MANUAL, label=label, user_id=user_id
@@ -343,7 +343,7 @@ class VersionRepository(BaseRepository):
         user_id: UUID4,
         label: str | None,
         bump: Bump | None = None,
-    ) -> ContentVersionSummary:
+    ) -> ContentVersionSummaryPublic:
         """Make the draft what respondents get, numbered by how far it is from
         the published version (app/db/versioning.py).
 

@@ -2,7 +2,7 @@ import asyncio
 import logging
 import uuid
 from collections.abc import Iterable, Sequence
-from typing import Any, Literal, overload
+from typing import Any, Literal
 
 from pydantic import UUID4, BaseModel, ValidationError
 from sqlalchemy import delete, func, select, update
@@ -28,13 +28,12 @@ from ainterviewer.utils import get_language_dict, now
 from ...collab.guide_doc import merge_guide_data
 from ...schemas.content import ProjectLocalizationPublic
 from ...schemas.projects import (
-    Collaborator,
+    CollaboratorCreate,
     CollaboratorPublic,
-    ProjectFolderPublic,
-    ProjectFolderWithProjects,
+    FolderPublic,
+    FolderWithProjectsPublic,
     ProjectLanguage,
     ProjectPublic,
-    ProjectPublicWithTests,
 )
 from ...types import (
     CollaboratorRole,
@@ -146,8 +145,8 @@ class ProjectRepository(BaseRepository):
         self,
         title: str,
         user_id: UUID4,
-        collaborators: list[Collaborator] | None = None,
-    ) -> ProjectFolderPublic:
+        collaborators: list[CollaboratorCreate] | None = None,
+    ) -> FolderPublic:
         folder = ProjectFolderTable(title=title)
         self.session.add(folder)
         self.session.flush()
@@ -181,11 +180,11 @@ class ProjectRepository(BaseRepository):
         self.session.commit()
         self.session.refresh(folder)
 
-        return ProjectFolderPublic.model_validate(folder)
+        return FolderPublic.model_validate(folder)
 
     def get_folders(
         self, user_id: UUID4, with_projects: bool = False
-    ) -> list[ProjectFolderPublic | ProjectFolderWithProjects]:
+    ) -> list[FolderPublic | FolderWithProjectsPublic]:
         statement = (
             select(ProjectFolderTable)
             .join(CollaboratorTable)
@@ -198,7 +197,7 @@ class ProjectRepository(BaseRepository):
             result = []
 
             for folder in folders:
-                folder_dict = ProjectFolderWithProjects.model_validate(folder)
+                folder_dict = FolderWithProjectsPublic.model_validate(folder)
                 folder_dict.projects = self._get_projects(
                     self.session,
                     folder.id,
@@ -210,17 +209,17 @@ class ProjectRepository(BaseRepository):
                 result.append(folder_dict)
 
             return [
-                ProjectFolderWithProjects.model_validate(folder) for folder in result
+                FolderWithProjectsPublic.model_validate(folder) for folder in result
             ]
 
-        return [ProjectFolderPublic.model_validate(folder) for folder in folders]
+        return [FolderPublic.model_validate(folder) for folder in folders]
 
-    def get_folder(self, folder_id: UUID4) -> ProjectFolderPublic:
+    def get_folder(self, folder_id: UUID4) -> FolderPublic:
         statement = select(ProjectFolderTable).where(ProjectFolderTable.id == folder_id)
         folder = self.session.execute(statement).scalar_one()
-        return ProjectFolderPublic.model_validate(folder)
+        return FolderPublic.model_validate(folder)
 
-    def update_folder(self, folder_id: UUID4, title: str) -> ProjectFolderPublic:
+    def update_folder(self, folder_id: UUID4, title: str) -> FolderPublic:
         statement = (
             update(ProjectFolderTable)
             .where(ProjectFolderTable.id == folder_id)
@@ -230,7 +229,7 @@ class ProjectRepository(BaseRepository):
         folder = self.session.execute(statement).scalar_one()
         self.session.commit()
 
-        return ProjectFolderPublic.model_validate(folder)
+        return FolderPublic.model_validate(folder)
 
     def set_folder_archived(self, folder_id: UUID4, archived: bool) -> None:
         """Archive or unarchive a folder. Archiving is not an edit, so the
@@ -505,31 +504,13 @@ class ProjectRepository(BaseRepository):
 
         return result
 
-    @overload
-    def get_project(
-        self,
-        project_id: UUID4,
-        *,
-        with_interviews: bool = False,
-        with_tests: Literal[True],
-    ) -> ProjectPublicWithTests: ...
-
-    @overload
-    def get_project(
-        self,
-        project_id: UUID4,
-        *,
-        with_interviews: bool = False,
-        with_tests: Literal[False] = False,
-    ) -> ProjectPublic: ...
-
     def get_project(
         self,
         project_id: UUID4,
         *,
         with_interviews: bool = False,
         with_tests: bool = False,
-    ) -> ProjectPublic | ProjectPublicWithTests:
+    ) -> ProjectPublic:
         statement = select(ProjectTable).where(
             ProjectTable.id == project_id,
         )

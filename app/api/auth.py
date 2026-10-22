@@ -26,15 +26,15 @@ from ..schemas.users import (
     AccessRequestCreate,
     DeleteAccountRequest,
     ForgotPasswordRequest,
-    LoginData,
+    LoginRequest,
+    RegisterRequest,
     ResendVerificationRequest,
     ResetPasswordRequest,
     UpdateEmailRequest,
     UpdatePasswordRequest,
     UserCreate,
-    UserCreateRequest,
-    UserPrivate,
     UserPublic,
+    UserRecord,
     UserSelfUpdate,
     VerifyEmailRequest,
     VerifyLoginCodeRequest,
@@ -121,7 +121,7 @@ def _create_and_store_refresh_token(
 
 def _issue_session(
     db: DBSession,
-    user: UserPrivate,
+    user: UserRecord,
     extended: bool,
     detail: str = "Successfully logged in",
 ) -> JSONResponse:
@@ -148,7 +148,7 @@ _EMAIL_SEND_FAILED = HTTPException(
 )
 
 
-async def _send_verification_email(db, user: UserPublic | UserPrivate) -> None:
+async def _send_verification_email(db, user: UserPublic | UserRecord) -> None:
     """Issue a fresh email-verification magic link and email it to the user.
 
     On send failure the just-created code row is deleted and a 502 is raised so
@@ -180,7 +180,7 @@ async def _send_verification_email(db, user: UserPublic | UserPrivate) -> None:
         raise _EMAIL_SEND_FAILED
 
 
-async def _send_login_code(db, user: UserPrivate) -> None:
+async def _send_login_code(db, user: UserRecord) -> None:
     """Issue a fresh one-time login code and email it to the user.
 
     On send failure the code row is deleted and a 502 is raised so the user can
@@ -209,7 +209,7 @@ async def _send_login_code(db, user: UserPrivate) -> None:
 
 
 @router.post("/login")
-async def login(login_request: LoginData, db: DBSession):
+async def login(login_request: LoginRequest, db: DBSession):
     exception = HTTPException(status_code=403, detail="Invalid email or password")
     try:
         user = db.users.get_user_private(login_request.email)
@@ -280,7 +280,7 @@ async def me(db: DBSession, jwt: DemoToken) -> UserPublic:
     return UserPublic.model_validate(current_user)
 
 
-def _verify_current_password(db: DBSession, user_id, password: str) -> UserPrivate:
+def _verify_current_password(db: DBSession, user_id, password: str) -> UserRecord:
     """Re-authenticate the user for sensitive account operations."""
     user = db.users.get_user_private(user_id=user_id)
     if not verify_password(password, user.password):
@@ -339,7 +339,7 @@ async def delete_me(body: DeleteAccountRequest, db: DBSession, jwt: DemoToken):
 
 
 @router.post("/register")
-async def register(user: UserCreateRequest, db: DBSession) -> JSONResponse:
+async def register(user: RegisterRequest, db: DBSession) -> JSONResponse:
     snapshot: dict = {}
 
     if app_settings.app.registration_requires_token is True:
@@ -451,7 +451,7 @@ async def resend_verification(body: ResendVerificationRequest, db: DBSession):
     return JSONResponse({"detail": detail})
 
 
-async def _send_password_reset_email(db, user: UserPrivate) -> None:
+async def _send_password_reset_email(db, user: UserRecord) -> None:
     """Issue a fresh password-reset magic link and email it to the user.
 
     On send failure the code row is deleted and a 502 is raised so the user can

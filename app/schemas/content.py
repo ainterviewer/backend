@@ -48,7 +48,7 @@ class ProjectLocalizationPublic(Schema):
     content_version_id: UUID4 | None = None
 
 
-class ContentVersionSummary(Schema):
+class ContentVersionSummaryPublic(Schema):
     """One version of a project's content, as the history lists it."""
 
     id: UUID4
@@ -69,7 +69,7 @@ class ContentVersionSummary(Schema):
     languages_in_progress: list[LanguageCode]
 
 
-class ContentVersionPublic(ContentVersionSummary):
+class ContentVersionPublic(ContentVersionSummaryPublic):
     """A version with its content, for previewing it read-only."""
 
     guide: LocalizedInterviewGuide
@@ -85,7 +85,7 @@ class ContentStatus(Schema):
 
     #: The draft's revision, what `If-Match` must carry.
     revision: int
-    published: ContentVersionSummary | None
+    published: ContentVersionSummaryPublic | None
     #: The draft differs from the published version (always true while the
     #: project has never been published).
     has_unpublished_changes: bool
@@ -143,7 +143,7 @@ class ProjectContentPublic(Schema):
     revisions: dict[ContentPart, int]
 
 
-class SaveVersionRequest(Schema):
+class ContentVersionCreate(Schema):
     label: str | None = Field(default=None, max_length=200)
     #: Publish it to respondents, or only keep it in the history.
     publish: bool = False

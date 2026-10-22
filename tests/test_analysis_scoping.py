@@ -30,8 +30,8 @@ from app.db.tables import (
 )
 from app.db.types import CodeKind
 from app.schemas.analysis import (
-    CodeBase,
-    CodebookPut,
+    CodebookReplace,
+    CodeInput,
     CodingCreate,
     MessageCommentCreate,
 )
@@ -117,12 +117,12 @@ def code(
     codes would be testing a codebook of one.
     """
     kept = [
-        CodeBase(**existing.model_dump(exclude={"created_at", "updated_at"}))
+        CodeInput(**existing.model_dump(exclude={"created_at", "updated_at"}))
         for existing in analysis.get_codebook(project_id).codes
     ]
-    new = CodeBase(id=uuid.uuid4(), name=name, kind=kind, color="#000000", **extra)
+    new = CodeInput(id=uuid.uuid4(), name=name, kind=kind, color="#000000", **extra)
     analysis.save_codebook(
-        project_id, CodebookPut(codes=[*kept, new], palette=["#000000"])
+        project_id, CodebookReplace(codes=[*kept, new], palette=["#000000"])
     )
     return new.id
 
@@ -261,13 +261,13 @@ class TestSavingACodebook:
     ):
         first, second = uuid.uuid4(), uuid.uuid4()
         sent = [
-            CodeBase(id=first, name="Trust"),
-            CodeBase(id=second, name="Barriers"),
+            CodeInput(id=first, name="Trust"),
+            CodeInput(id=second, name="Barriers"),
         ]
-        analysis.save_codebook(OURS, CodebookPut(codes=sent, palette=[]))
+        analysis.save_codebook(OURS, CodebookReplace(codes=sent, palette=[]))
 
         saved = analysis.save_codebook(
-            OURS, CodebookPut(codes=list(reversed(sent)), palette=[])
+            OURS, CodebookReplace(codes=list(reversed(sent)), palette=[])
         )
         assert [code.name for code in saved.codes] == ["Barriers", "Trust"]
 
@@ -275,12 +275,12 @@ class TestSavingACodebook:
         root, child, grandchild, second = (uuid.uuid4() for _ in range(4))
         saved = analysis.save_codebook(
             OURS,
-            CodebookPut(
+            CodebookReplace(
                 codes=[
-                    CodeBase(id=root, name="Trust"),
-                    CodeBase(id=child, parent_id=root, name="Institutional"),
-                    CodeBase(id=grandchild, parent_id=child, name="Doctors"),
-                    CodeBase(id=second, name="Barriers"),
+                    CodeInput(id=root, name="Trust"),
+                    CodeInput(id=child, parent_id=root, name="Institutional"),
+                    CodeInput(id=grandchild, parent_id=child, name="Doctors"),
+                    CodeInput(id=second, name="Barriers"),
                 ],
                 palette=[],
             ),
@@ -309,7 +309,7 @@ class TestSavingACodebook:
         ours = message(session, OURS)
         apply(analysis, OURS, ours, user(session), doomed)
 
-        analysis.save_codebook(OURS, CodebookPut(codes=[], palette=[]))
+        analysis.save_codebook(OURS, CodebookReplace(codes=[], palette=[]))
 
         assert analysis.get_codebook(OURS).codes == []
         assert analysis.get_message_codings(OURS, ours) == []
@@ -323,8 +323,8 @@ class TestSavingACodebook:
         with pytest.raises(CodebookError, match="cannot become a group"):
             analysis.save_codebook(
                 OURS,
-                CodebookPut(
-                    codes=[CodeBase(id=coded, name="Stress", kind=CodeKind.GROUP)],
+                CodebookReplace(
+                    codes=[CodeInput(id=coded, name="Stress", kind=CodeKind.GROUP)],
                     palette=[],
                 ),
             )
@@ -335,9 +335,9 @@ class TestSavingACodebook:
         scored = uuid.uuid4()
         analysis.save_codebook(
             OURS,
-            CodebookPut(
+            CodebookReplace(
                 codes=[
-                    CodeBase(
+                    CodeInput(
                         id=scored,
                         name="Elaboration",
                         kind=CodeKind.SCORE,
@@ -351,9 +351,9 @@ class TestSavingACodebook:
 
         saved = analysis.save_codebook(
             OURS,
-            CodebookPut(
+            CodebookReplace(
                 codes=[
-                    CodeBase(
+                    CodeInput(
                         id=scored,
                         name="Elaboration",
                         kind=CodeKind.TAG,
@@ -371,24 +371,24 @@ class TestSavingACodebook:
         [
             (
                 "a parent that is not in the codebook",
-                lambda ids: [CodeBase(id=ids[0], parent_id=ids[1], name="Orphan")],
+                lambda ids: [CodeInput(id=ids[0], parent_id=ids[1], name="Orphan")],
             ),
             (
                 "a code that is its own parent",
-                lambda ids: [CodeBase(id=ids[0], parent_id=ids[0], name="Trust")],
+                lambda ids: [CodeInput(id=ids[0], parent_id=ids[0], name="Trust")],
             ),
             (
                 "a cycle",
                 lambda ids: [
-                    CodeBase(id=ids[0], parent_id=ids[1], name="Trust"),
-                    CodeBase(id=ids[1], parent_id=ids[0], name="Institutional"),
+                    CodeInput(id=ids[0], parent_id=ids[1], name="Trust"),
+                    CodeInput(id=ids[1], parent_id=ids[0], name="Institutional"),
                 ],
             ),
             (
                 "the same code twice",
                 lambda ids: [
-                    CodeBase(id=ids[0], name="Trust"),
-                    CodeBase(id=ids[0], name="Trust again"),
+                    CodeInput(id=ids[0], name="Trust"),
+                    CodeInput(id=ids[0], name="Trust again"),
                 ],
             ),
         ],
@@ -399,12 +399,12 @@ class TestSavingACodebook:
         ids = [uuid.uuid4(), uuid.uuid4()]
 
         with pytest.raises(CodebookError):
-            analysis.save_codebook(OURS, CodebookPut(codes=codes(ids), palette=[]))
+            analysis.save_codebook(OURS, CodebookReplace(codes=codes(ids), palette=[]))
 
     def test_the_palette_round_trips_and_defaults_when_unsaved(self, session, analysis):
         assert analysis.get_codebook(OURS).palette  # never empty: the default
 
-        analysis.save_codebook(OURS, CodebookPut(codes=[], palette=["#123456"]))
+        analysis.save_codebook(OURS, CodebookReplace(codes=[], palette=["#123456"]))
         assert analysis.get_codebook(OURS).palette == ["#123456"]
 
     def test_one_project_s_codebook_is_not_another_s(self, session, analysis):
@@ -415,10 +415,10 @@ class TestSavingACodebook:
         assert [c.name for c in analysis.get_codebook(THEIRS).codes] == ["Theirs"]
 
 
-def kept_codes(analysis, project_id, without=frozenset()) -> list[CodeBase]:
+def kept_codes(analysis, project_id, without=frozenset()) -> list[CodeInput]:
     """The stored codebook as a client would send it back, less `without`."""
     return [
-        CodeBase(**existing.model_dump(exclude={"created_at", "updated_at"}))
+        CodeInput(**existing.model_dump(exclude={"created_at", "updated_at"}))
         for existing in analysis.get_codebook(project_id).codes
         if existing.id not in without
     ]
@@ -427,7 +427,7 @@ def kept_codes(analysis, project_id, without=frozenset()) -> list[CodeBase]:
 def merge(analysis, project_id, source, target):
     return analysis.save_codebook(
         project_id,
-        CodebookPut(
+        CodebookReplace(
             codes=kept_codes(analysis, project_id, without={source}),
             palette=[],
             merges={source: target},
@@ -488,8 +488,8 @@ class TestMergingCodes:
 
         analysis.save_codebook(
             OURS,
-            CodebookPut(
-                codes=[CodeBase(id=target, name="Stress")],
+            CodebookReplace(
+                codes=[CodeInput(id=target, name="Stress")],
                 palette=[],
                 merges={source: target},
             ),
@@ -515,7 +515,7 @@ class TestMergingCodes:
         with pytest.raises(CodebookError, match="merged away and kept"):
             analysis.save_codebook(
                 OURS,
-                CodebookPut(
+                CodebookReplace(
                     codes=kept_codes(analysis, OURS),
                     palette=[],
                     merges={source: target},
@@ -580,10 +580,10 @@ class TestCountingCodings:
         child = uuid.uuid4()
         analysis.save_codebook(
             OURS,
-            CodebookPut(
+            CodebookReplace(
                 codes=[
-                    CodeBase(id=parent, name="Barriers", kind=CodeKind.GROUP),
-                    CodeBase(id=child, parent_id=parent, name="Cost"),
+                    CodeInput(id=parent, name="Barriers", kind=CodeKind.GROUP),
+                    CodeInput(id=child, parent_id=parent, name="Cost"),
                 ],
                 palette=[],
             ),

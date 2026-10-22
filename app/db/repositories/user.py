@@ -17,11 +17,11 @@ from ...schemas.users import (
     AccessRequestPublic,
     InvitationPublic,
     InvitationUpdate,
-    UserAdmin,
+    UserAdminPublic,
     UserAdminUpdate,
     UserCreate,
-    UserPrivate,
     UserPublic,
+    UserRecord,
     UserSelfUpdate,
 )
 from ...services.email.mail import email_templates, send_email
@@ -162,13 +162,13 @@ class UserRepository(BaseRepository):
         self,
         email: str | None = None,
         user_id: UUID4 | None = None,
-    ) -> UserPrivate:
+    ) -> UserRecord:
         statement = select(UserTable).where(
             or_(UserTable.email == email, UserTable.id == user_id)
         )
         user = self.session.execute(statement).scalar_one()
 
-        return UserPrivate.model_validate(user)
+        return UserRecord.model_validate(user)
 
     def get_user_by_id(self, user_id: UUID4) -> UserPublic:
         statement = select(UserTable).where(UserTable.id == user_id)
@@ -183,12 +183,14 @@ class UserRepository(BaseRepository):
 
         return [UserPublic.model_validate(user) for user in users]
 
-    def get_users_admin(self) -> list[UserAdmin]:
+    def get_users_admin(self) -> list[UserAdminPublic]:
         statement = select(UserTable)
         users = self.session.execute(statement).scalars().all()
-        return [UserAdmin.model_validate(user) for user in users]
+        return [UserAdminPublic.model_validate(user) for user in users]
 
-    def update_user_admin(self, user_id: UUID4, data: UserAdminUpdate) -> UserAdmin:
+    def update_user_admin(
+        self, user_id: UUID4, data: UserAdminUpdate
+    ) -> UserAdminPublic:
         values = data.model_dump()
 
         if values:
@@ -201,9 +203,9 @@ class UserRepository(BaseRepository):
         user = self.session.execute(
             select(UserTable).where(UserTable.id == user_id)
         ).scalar_one()
-        return UserAdmin.model_validate(user)
+        return UserAdminPublic.model_validate(user)
 
-    def update_admin_note(self, user_id: UUID4, note: str | None) -> UserAdmin:
+    def update_admin_note(self, user_id: UUID4, note: str | None) -> UserAdminPublic:
         statement = (
             update(UserTable)
             .where(UserTable.id == user_id)
@@ -215,7 +217,7 @@ class UserRepository(BaseRepository):
         user = self.session.execute(
             select(UserTable).where(UserTable.id == user_id)
         ).scalar_one()
-        return UserAdmin.model_validate(user)
+        return UserAdminPublic.model_validate(user)
 
     # ==================== Access Request Methods ====================
 

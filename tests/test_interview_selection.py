@@ -20,9 +20,9 @@ from app.db.tables import (
 )
 from app.db.types import InterviewType
 from app.schemas.interviews import (
-    DeleteInterviewRequest,
     ExportMessagesRequest,
-    InterviewFilters,
+    InterviewFilterParams,
+    InterviewSelection,
 )
 
 
@@ -68,7 +68,7 @@ def db():
         {"interview_ids": [str(uuid.uuid4())], "filters": {}},
     ],
 )
-@pytest.mark.parametrize("model", [DeleteInterviewRequest, ExportMessagesRequest])
+@pytest.mark.parametrize("model", [InterviewSelection, ExportMessagesRequest])
 def test_selection_needs_exactly_one_of_ids_or_filters(model, body):
     with pytest.raises(ValidationError):
         model.model_validate(body)
@@ -77,7 +77,7 @@ def test_selection_needs_exactly_one_of_ids_or_filters(model, body):
 def test_empty_filters_select_the_distributed_interviews_of_the_project(db):
     database, project_id, ids = db
     selected = database.interviews.get_interview_ids(
-        project_id, **_filter_kwargs(InterviewFilters())
+        project_id, **_filter_kwargs(InterviewFilterParams())
     )
     # Not the test run (outside the list's default scope), and not another
     # project's interview.
@@ -88,7 +88,7 @@ def test_filters_narrow_the_selection(db):
     database, project_id, ids = db
     selected = database.interviews.get_interview_ids(
         project_id,
-        **_filter_kwargs(InterviewFilters(statuses=[InterviewStatus.INACTIVE])),
+        **_filter_kwargs(InterviewFilterParams(statuses=[InterviewStatus.INACTIVE])),
     )
     assert selected == [ids["inactive"]]
 
@@ -98,7 +98,7 @@ def test_scope_reaches_test_runs(db):
     selected = database.interviews.get_interview_ids(
         project_id,
         **_filter_kwargs(
-            InterviewFilters(interview_types=[InterviewType.SYNTHETIC_TEST])
+            InterviewFilterParams(interview_types=[InterviewType.SYNTHETIC_TEST])
         ),
     )
     assert selected == [ids["test"]]
@@ -106,20 +106,20 @@ def test_scope_reaches_test_runs(db):
 
 def test_ids_are_passed_through_untouched(db):
     database, project_id, ids = db
-    request = DeleteInterviewRequest(interview_ids=[ids["completed"]])
+    request = InterviewSelection(interview_ids=[ids["completed"]])
     assert _selected_interview_ids(database, project_id, request) == [ids["completed"]]
 
 
 def test_filter_selection_deletes_everything_matching(db):
     database, project_id, ids = db
-    request = DeleteInterviewRequest(filters=InterviewFilters())
+    request = InterviewSelection(filters=InterviewFilterParams())
     database.interviews.delete_interviews(
         project_id, _selected_interview_ids(database, project_id, request)
     )
     remaining = database.interviews.get_interview_ids(
         project_id,
         **_filter_kwargs(
-            InterviewFilters(
+            InterviewFilterParams(
                 interview_types=[
                     InterviewType.DISTRIBUTED,
                     InterviewType.SYNTHETIC_TEST,

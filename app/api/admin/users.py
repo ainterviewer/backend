@@ -3,7 +3,12 @@ from pydantic import UUID4
 
 from ...dependencies import AdminToken, DBSession
 from ...schemas.admin import AdminNoteUpdate
-from ...schemas.users import DemoBudget, DemoLimitDefaults, UserAdmin, UserAdminUpdate
+from ...schemas.users import (
+    DemoBudget,
+    DemoLimitDefaults,
+    UserAdminPublic,
+    UserAdminUpdate,
+)
 from ...settings import app_settings
 from ..dashboard.synthesize import get_demo_budget
 from ..websockets.manager import session_manager
@@ -12,7 +17,7 @@ router = APIRouter()
 
 
 @router.get("/users")
-async def get_users(db: DBSession, jwt: AdminToken) -> list[UserAdmin]:
+async def get_users(db: DBSession, jwt: AdminToken) -> list[UserAdminPublic]:
     return db.users.get_users_admin()
 
 
@@ -25,14 +30,14 @@ async def delete_user(user_id: UUID4, db: DBSession, jwt: AdminToken):
 @router.patch("/users/{user_id}/note")
 async def update_admin_note(
     user_id: UUID4, body: AdminNoteUpdate, db: DBSession, jwt: AdminToken
-) -> UserAdmin:
+) -> UserAdminPublic:
     return db.users.update_admin_note(user_id, body.note)
 
 
 @router.patch("/users/{user_id}")
 async def update_user(
     user_id: UUID4, body: UserAdminUpdate, db: DBSession, jwt: AdminToken
-) -> UserAdmin:
+) -> UserAdminPublic:
     if (
         user_id == jwt.user_id
         and "scope" in body.model_fields_set

@@ -36,8 +36,8 @@ from ..dependencies import (
 )
 from ..schemas.common import MediaUploadResponse
 from ..schemas.interviews import (
-    CreateInterviewRequest,
-    InterviewResumeRedeemed,
+    InterviewCreate,
+    InterviewResumeResponse,
     MessageFeedbackRequest,
     MessageFeedbackResponse,
     SpeechRequest,
@@ -144,7 +144,7 @@ def set_interview_cookie(response: Response, interview_token: str) -> None:
 @router.post("/projects/{project_id}/{lang}/interviews")
 async def create_interview(
     request: Request,
-    new_interview: CreateInterviewRequest,
+    new_interview: InterviewCreate,
     response: Response,
     db: DBSession,
     project_id: Annotated[UUID4, URLPath],
@@ -277,7 +277,7 @@ async def redeem_interview_resume_link(
     resume_token: str,
     response: Response,
     db: DBSession,
-) -> InterviewResumeRedeemed:
+) -> InterviewResumeResponse:
     """Spend a one-time resume link and hand back an interview session.
 
     Unauthenticated by design: the token *is* the credential, which is why it
@@ -309,7 +309,7 @@ async def redeem_interview_resume_link(
         interview.project_id,
     )
 
-    return InterviewResumeRedeemed(
+    return InterviewResumeResponse(
         project_id=interview.project_id,
         interview_id=interview.id,
     )

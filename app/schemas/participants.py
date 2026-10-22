@@ -76,7 +76,7 @@ class UploadParticipantsResponse(Schema):
     skipped_rows: int
 
 
-class ParticipantEmailAttachment(Schema):
+class ParticipantEmailAttachmentPublic(Schema):
     filename: str
     size: int
     content_type: str | None = None

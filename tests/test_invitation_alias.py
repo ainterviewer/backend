@@ -19,7 +19,7 @@ from app.api import auth as auth_api
 from app.db.crud import InterviewDataBase
 from app.db.repositories.errors import InvitationAliasTakenError
 from app.db.tables import Base, UserTable
-from app.schemas.users import InvitationCreate, InvitationUpdate, UserCreateRequest
+from app.schemas.users import InvitationCreate, InvitationUpdate, RegisterRequest
 from app.types import Scope
 
 
@@ -45,7 +45,7 @@ def invite(db, **fields):
 
 
 def register(db, token, email="ada@example.com"):
-    request = UserCreateRequest(
+    request = RegisterRequest(
         email=email, first_name="Ada", password="a-password", invite_token=token
     )
     response = asyncio.run(auth_api.register(request, db))

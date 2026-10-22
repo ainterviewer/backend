@@ -84,6 +84,40 @@ API Layer (app/api) → Services (app/services) → Repository Pattern (app/db) 
 - Custom operation ID generation for clean SDK client generation
 - Generic `PaginatedResponse[T]` pattern for list endpoints
 
+**API schemas (`app/schemas/`)**
+
+Every pydantic model the API speaks, one module per domain (`users`,
+`projects`, `content`, `interviews`, `testing`, `participants`, `analysis`,
+`monitoring`, `reports`, `embeddings`, `admin`, plus `common`). Requests,
+responses, query models and the models repositories return all live there, on
+one `Schema` base (`from_attributes=True`). Routes declare none of their own.
+`app.schemas` imports nothing from `app.api` or `app.db.repositories`, which is
+what lets both import it; keep it that way. It is also why `app/db/__init__.py`
+is empty -- import `InterviewDataBase` from `app.db.crud`.
+
+Names follow one convention, because they are the type names of the generated
+frontend client:
+
+- `XCreate` / `XUpdate` / `XReplace` -- a body that creates a resource, patches
+  it, or replaces a whole document with a PUT.
+- `XRequest` -- the body of an action that is not one of those
+  (`LoginRequest`, `ReportReviewRequest`).
+- `XPublic` -- a stored resource on the way out.
+- `XResponse` -- the result of an action, or a list envelope.
+- `XParams` -- a query model, taken as `Annotated[XParams, Query()]`. FastAPI
+  combines several on one route, so a filter set is one model shared by the
+  list route and the bulk-action body (`InterviewFilterParams`).
+- Computed read-only views (`ContentStatus`, `MonitoringStats`) and nested
+  parts of another model (`FacetCount`, `EmbeddingTurn`) keep plain names;
+  models that never reach the wire (`UserRecord`, `UserCreate`) carry no
+  wire suffix beyond what describes them.
+
+PATCH bodies default every field to pydantic's `MISSING`, so an omitted field
+is absent from `model_dump()` and an explicit `null` still clears a nullable
+column. Repositories write `data.model_dump()` as is. Do not reintroduce an
+`UNSET` enum: it reaches the OpenAPI schema and the generated client types it
+as a valid value.
+
 **2. Repository Pattern (`app/db/repositories/`)**
 
 - `InterviewDataBase` facade implements `PersistenceProtocol` from ainterviewer library
@@ -341,7 +375,7 @@ filter can answer whether the two languages talk about a thing the same way.
 Filter to analyse a language; centre to compare across them.
 
 `language` is repeatable (`?language=DA&language=EN`) and validated against the
-`LANGUAGES` constant via `LanguageFilter` (`app/api/request_models.py`). Both
+`LANGUAGES` constant via `LanguageFilter` (`app/schemas/common.py`). Both
 halves of that matter: a multilingual project is usually analysed over the
 languages with enough respondents to say anything, and a bare `LanguageCode`
 only checks the shape -- "DK" is Denmark's country code, passes, and matches
@@ -450,8 +484,8 @@ recomputed and no text can land beside a vector made from something else.
 
 1. **API Endpoint Changes**:
    - Update routes in `app/api/`
-   - Update request models in `app/api/request_models.py`
-   - Update response models in `app/api/response_models.py`
+   - Add or change their models in `app/schemas/<domain>.py`, named by the
+     convention above
    - Regenerate the frontend SDK from the **frontend** repo: `just generate-sdk`
      there, with this backend's dev server running. It reads the live
      `/api/openapi.json` (see `app/openapi.py`) using the generator version
@@ -548,20 +582,19 @@ async def user_endpoint(token: UserToken):  # USER and ADMIN allowed
 
 ### Pagination Pattern
 
-Use `PaginatedQueryParams` and `PaginatedResponse[T]`:
+Use `PageParams` and `PaginatedResponse[T]`:
 
 ```python
-from app.api.request_models import PaginatedQueryParams
-from app.api.response_models import PaginatedResponse
+from app.schemas.common import PageParams, PaginatedResponse
 
 
 @router.get("/items")
 async def list_items(
-    params: Annotated[PaginatedQueryParams, Depends()],
+    params: Annotated[PageParams, Query()],
 ) -> PaginatedResponse[ItemModel]:
     items = db.get_items(limit=params.limit, offset=params.offset)
     total = db.count_items()
-    return PaginatedResponse(results=items, total=total)
+    return PaginatedResponse(items=items, total=total)
 ```
 
 ### Project languages and content
@@ -620,7 +653,7 @@ dashboard's per-language routes went to a language with no data (revision
 `a1c4e9f30b57`). `projectcontent.default_language` avoids that by sitting on
 the same row as `languages` and the text, under a CHECK.
 
-The public language lists use `ProjectLanguage` (`app/db/models.py`), which is
+The public language lists use `ProjectLanguage` (`app/schemas/projects.py`), which is
 `LanguageDict` plus `is_default`. The library's `LanguageDict` deliberately
 stays free of the flag: it comes straight out of the shared `LANGUAGES`
 constant and knows nothing about projects.

@@ -32,7 +32,7 @@ from ainterviewer.types import LanguageCode, MessageRole
 
 from ..auth import InterviewToken
 from ..db.types import InterviewType
-from ..schemas.interviews import CreateInterviewRequest
+from ..schemas.interviews import InterviewCreate
 from ..settings import app_settings
 
 
@@ -50,7 +50,7 @@ async def fetch_token(
         "User-Agent": f"ainterviewer/{ainterviewer.__version__} ({platform.system()} {platform.release()}; Python/{platform.python_version()})"
     }
 
-    payload = CreateInterviewRequest(
+    payload = InterviewCreate(
         interview_type=InterviewType.SYNTHETIC_TEST,
         test_run_id=test_run_id,
     )

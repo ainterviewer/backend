@@ -17,7 +17,7 @@ from .common import Schema
 from .users import AuthorPublic
 
 
-class CodeBase(Schema):
+class CodeInput(Schema):
     """One code as the client sends it, id and all.
 
     The id is the client's because a code is dragged, renamed and coded with
@@ -37,12 +37,12 @@ class CodeBase(Schema):
     position_y: float | None = None
 
 
-class CodePublic(CodeBase):
+class CodePublic(CodeInput):
     created_at: datetime
     updated_at: datetime
 
 
-class CodebookPut(Schema):
+class CodebookReplace(Schema):
     """A whole codebook, replacing the stored one.
 
     The codebook is edited as one document -- a drag re-parents a branch and
@@ -61,7 +61,7 @@ class CodebookPut(Schema):
     ignored.
     """
 
-    codes: list[CodeBase]
+    codes: list[CodeInput]
     palette: list[str]
     merges: dict[UUID4, UUID4] = {}
 
@@ -105,7 +105,7 @@ class CodingCreate(CodingBase):
     pass
 
 
-class CodingsForMessages(Schema):
+class CodingLookupRequest(Schema):
     """Which messages to read the codings of.
 
     A POST for a read, like the filtered-message endpoints beside it: the

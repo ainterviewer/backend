@@ -45,10 +45,10 @@ def _known_language(code: str) -> str:
 LanguageFilter = Annotated[LanguageCode, AfterValidator(_known_language)]
 
 
-class PaginatedQueryParams(Schema):
+class PageParams(Schema):
     """`limit`/`offset` paging with a sort, as query parameters.
 
-    Taken as `Annotated[PaginatedQueryParams, Query()]`.
+    Taken as `Annotated[PageParams, Query()]`.
     """
 
     offset: int = Field(default=0, ge=0)
