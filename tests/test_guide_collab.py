@@ -31,7 +31,7 @@ from app.collab import rooms
 from app.collab.flat_doc import roots as flat_roots
 from app.collab.guide_doc import doc_id, roots
 from app.collab.parts import LIVE_PARTS
-from app.db import InterviewDataBase
+from app.db.crud import InterviewDataBase
 from app.db.tables import (
     Base,
     CollaboratorTable,

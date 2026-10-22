@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from ainterviewer.interfaces import OutgoingMessage
 from ainterviewer.lpm.types import CustomToken
 from ainterviewer.types import MessageRole, TestType
-from app.db import InterviewDataBase
+from app.db.crud import InterviewDataBase
 from app.db.repositories.errors import ContentRevisionError
 from app.db.tables import Base, TestSetupTable
 from app.synthesize import core

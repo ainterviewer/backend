@@ -22,7 +22,7 @@ from ainterviewer.interview_guides import (
     RadioItem,
 )
 from ainterviewer.interview_guides.localized import LocalizedQuestion
-from app.db import InterviewDataBase
+from app.db.crud import InterviewDataBase
 from app.db.repositories.errors import (
     ContentRevisionError,
     NotPublishedError,

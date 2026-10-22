@@ -159,8 +159,8 @@ class InterviewFilters(Schema):
 
     Lets a bulk action target "everything matching" rather than ids the client
     has seen: with server-side paging it only ever holds one page of them.
-    Same names and same defaults as the query parameters of `get_interviews`,
-    so "all 123 selected" means exactly the 123 the list counted.
+    `get_interviews` takes this same model as its query parameters, so "all
+    123 selected" means exactly the 123 the list counted.
     """
 
     interview_types: list[InterviewType] | None = None

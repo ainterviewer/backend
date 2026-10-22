@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from fastapi import Query
-from pydantic import AfterValidator, BaseModel, ConfigDict
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
 from ainterviewer.constants import LANGUAGES
 from ainterviewer.types import (
@@ -47,10 +46,15 @@ LanguageFilter = Annotated[LanguageCode, AfterValidator(_known_language)]
 
 
 class PaginatedQueryParams(Schema):
-    offset: int = Query(default=0, le=100)
-    limit: int = Query(default=20, le=100)
-    column: str = Query("created_at", description="Column to sort by")
-    order: Literal["asc", "desc"] = Query("desc", description="Sorting order")
+    """`limit`/`offset` paging with a sort, as query parameters.
+
+    Taken as `Annotated[PaginatedQueryParams, Query()]`.
+    """
+
+    offset: int = Field(default=0, ge=0)
+    limit: int = Field(default=20, ge=1, le=100)
+    column: str = Field(default="created_at", description="Column to sort by")
+    order: Literal["asc", "desc"] = Field(default="desc", description="Sorting order")
 
 
 class PromptRequest(Schema):

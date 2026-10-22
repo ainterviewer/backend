@@ -17,7 +17,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from . import __version__
 from .api import main as api
 from .api.websockets import main as websockets
-from .db import InterviewDataBase
+from .db.crud import InterviewDataBase
 from .db.repositories.errors import (
     ContentRevisionError,
     InvitationAliasTakenError,

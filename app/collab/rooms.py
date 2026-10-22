@@ -48,7 +48,7 @@ from pycrdt.websocket import YRoom
 from sqlalchemy import event, inspect
 from sqlalchemy.orm import Session, object_session
 
-from ..db import InterviewDataBase
+from ..db.crud import InterviewDataBase
 from ..db.tables import ProjectContentTable
 from ..db.types import ContentPart, ContentVersionKind
 from .guide_doc import doc_id, merge_guide_data

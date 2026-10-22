@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from ainterviewer.types import TestType
 from app.api.dashboard import synthesize
-from app.db import InterviewDataBase
+from app.db.crud import InterviewDataBase
 from app.db.tables import (
     Base,
     ProjectFolderTable,

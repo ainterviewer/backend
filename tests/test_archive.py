@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from app.auth import AuthToken
-from app.db import InterviewDataBase
+from app.db.crud import InterviewDataBase
 from app.db.tables import Base, CollaboratorTable, ProjectFolderTable, UserTable
 from app.db.triggers import register_trigger_functions
 from app.dependencies import get_db

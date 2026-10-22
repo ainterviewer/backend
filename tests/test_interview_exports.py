@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.interview_guides.survey_items import CheckboxItem
 from ainterviewer.types import InterviewStatus, MessageRole
-from app.db import InterviewDataBase
+from app.db.crud import InterviewDataBase
 from app.db.tables import (
     Base,
     InterviewTable,

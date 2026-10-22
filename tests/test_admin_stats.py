@@ -18,7 +18,7 @@ from sqlalchemy.pool import StaticPool
 from ainterviewer.settings import settings as lib_settings
 from app import dependencies
 from app.auth import AuthToken
-from app.db import InterviewDataBase
+from app.db.crud import InterviewDataBase
 from app.db.repositories.stats import (
     ActivityRow,
     InterviewDayRow,

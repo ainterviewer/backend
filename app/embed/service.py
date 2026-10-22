@@ -2,7 +2,7 @@
 
 from ainterviewer.interfaces import EmbeddingChunk
 
-from ..db import InterviewDataBase
+from ..db.crud import InterviewDataBase
 from ..db.repositories.embedding import PendingEmbedding
 from ..db.types import EmbeddingTask
 from .client import EmbeddingClient

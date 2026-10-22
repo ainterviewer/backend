@@ -1,29 +1,8 @@
-from .crud import InterviewDataBase
-from .repositories import (
-    AnalysisRepository,
-    AuthRepository,
-    BaseRepository,
-    EmbeddingRepository,
-    InterviewRepository,
-    NewsletterRepository,
-    ParticipantRepository,
-    ProjectRepository,
-    TestRepository,
-    UserRepository,
-    VerificationRepository,
-)
+"""Persistence: the ORM tables, the repositories and the facade over them.
 
-__all__ = [
-    "AnalysisRepository",
-    "AuthRepository",
-    "BaseRepository",
-    "EmbeddingRepository",
-    "InterviewDataBase",
-    "InterviewRepository",
-    "NewsletterRepository",
-    "ParticipantRepository",
-    "ProjectRepository",
-    "TestRepository",
-    "UserRepository",
-    "VerificationRepository",
-]
+Deliberately empty. `app.schemas` imports value types from here
+(`app.db.types`), and the repositories import `app.schemas`; a package that
+re-exported the repositories would make importing a schema import every
+repository first, and loop back into the schema half-built. Import
+`InterviewDataBase` from `app.db.crud`.
+"""

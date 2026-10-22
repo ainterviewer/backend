@@ -6,7 +6,7 @@ how a publish is numbered.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import UUID4
 from sqlalchemy.exc import NoResultFound
 
@@ -54,7 +54,7 @@ async def list_content_versions(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectViewer,
-    params: Annotated[PaginatedQueryParams, Depends()],
+    params: Annotated[PaginatedQueryParams, Query()],
 ) -> PaginatedResponse[ContentVersionSummary]:
     """The history, newest first."""
     versions, total = db.versions.list_versions(

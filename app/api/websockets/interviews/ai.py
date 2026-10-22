@@ -39,7 +39,7 @@ from ainterviewer.interfaces import OutgoingData
 from ainterviewer.interview import AInterviewer
 from ainterviewer.lpm.types import CustomToken
 
-from ....db import InterviewDataBase
+from ....db.crud import InterviewDataBase
 from ....db.repositories.errors import InterviewGoneError, NotPublishedError
 from ....db.repositories.project import ContentSource
 from ....dependencies import DBSession

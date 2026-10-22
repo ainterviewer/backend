@@ -19,7 +19,7 @@ from ainterviewer.interview_guides import (
     Question,
     QuestionSection,
 )
-from app.db import InterviewDataBase
+from app.db.crud import InterviewDataBase
 from app.db.repositories import project as project_repository
 from app.db.tables import Base, ProjectContentTable, ProjectFolderTable, UserTable
 from app.db.types import ContentPart

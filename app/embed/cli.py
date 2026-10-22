@@ -5,7 +5,7 @@ import typer
 from sqlalchemy.orm import Session
 from typer import Typer
 
-from ..db import InterviewDataBase
+from ..db.crud import InterviewDataBase
 from ..dependencies import engine
 from ..settings import app_settings
 from .backfill import backfill as run_backfill

@@ -1,4 +1,3 @@
-import datetime
 import io
 import logging
 from base64 import b64decode
@@ -11,7 +10,6 @@ import aiofiles
 from fastapi import (
     APIRouter,
     Body,
-    Depends,
     Form,
     HTTPException,
     Query,
@@ -924,18 +922,8 @@ async def get_interviews(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectViewer,
-    paginated_query: Annotated[PaginatedQueryParams, Depends(PaginatedQueryParams)],
-    interview_types: Annotated[list[InterviewType] | None, Query()] = None,
-    types: Annotated[list[InterviewType] | None, Query()] = None,
-    statuses: Annotated[list[InterviewStatus] | None, Query()] = None,
-    languages: Annotated[list[str] | None, Query()] = None,
-    created_from: Annotated[datetime.datetime | None, Query()] = None,
-    created_to: Annotated[datetime.datetime | None, Query()] = None,
-    completed: Annotated[bool | None, Query()] = None,
-    search: Annotated[str | None, Query(max_length=200)] = None,
-    pid: Annotated[str | None, Query(max_length=200)] = None,
-    reported: Annotated[bool | None, Query()] = None,
-    intervened: Annotated[bool | None, Query()] = None,
+    paginated_query: Annotated[PaginatedQueryParams, Query()],
+    interview_filters: Annotated[InterviewFilters, Query()],
 ) -> InterviewListResponse:
     """One page of interviews, with the filter options that fit the query.
 
@@ -965,21 +953,7 @@ async def get_interviews(
 
     # The page and the facet counts must be built from exactly the same
     # filters, or the dropdown would offer options the list contradicts.
-    filters = _filter_kwargs(
-        InterviewFilters(
-            interview_types=interview_types,
-            types=types,
-            statuses=statuses,
-            languages=languages,
-            created_from=created_from,
-            created_to=created_to,
-            completed=completed,
-            search=search,
-            pid=pid,
-            reported=reported,
-            intervened=intervened,
-        )
-    )
+    filters = _filter_kwargs(interview_filters)
 
     interviews, total = db.interviews.get_interviews(
         project_id,

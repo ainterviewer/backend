@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.types import InterviewStatus, MessageRole
-from app.db import InterviewDataBase
+from app.db.crud import InterviewDataBase
 from app.db.repositories.errors import InterviewGoneError
 from app.db.tables import (
     Base,

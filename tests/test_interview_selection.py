@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.types import InterviewStatus
 from app.api.dashboard.projects import _filter_kwargs, _selected_interview_ids
-from app.db import InterviewDataBase
+from app.db.crud import InterviewDataBase
 from app.db.tables import (
     Base,
     InterviewTable,

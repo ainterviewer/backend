@@ -15,8 +15,8 @@ from sqlalchemy.orm import Session
 from ainterviewer.agents.config import AgentConfigs
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import TestType
-from app.db import InterviewDataBase
 from app.db.cli import invalid_model_changes
+from app.db.crud import InterviewDataBase
 from app.db.tables import (
     Base,
     ProjectContentTable,

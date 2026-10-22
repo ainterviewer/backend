@@ -40,6 +40,8 @@ from ainterviewer.types import (
 from ...schemas.embeddings import (
     INTERVIEW_PREVIEW_TURNS,
     ChunkTurns,
+    Coded,
+    CoderJoin,
     EmbeddingTurn,
     TranscriptTurn,
 )
@@ -73,31 +75,6 @@ from .base import BaseRepository
 VECTOR_DTYPE = np.float32
 
 logger = logging.getLogger(__name__)
-
-
-#: Whether a chunk must carry a coding, carry none, or may be either.
-#:
-#: A coverage filter, not a code filter. "none" is the pass that closes a
-#: codebook -- what have I not read yet -- and it is why this is not simply a
-#: `code:` term with a NOT in front: a negated term is checked per message and
-#: then lifted, so a section holding one coded turn and one uncoded one
-#: satisfies it. This asks about the chunk.
-Coded = Literal["any", "none"]
-
-#: How the two coder axes are joined.
-#:
-#: They are a 2x2, and the operator is what makes it a complete one: `and`
-#: names the four quadrants -- coded by both, only me, to review, read by
-#: nobody -- and `or` names their four complements, of which two are questions
-#: worth asking. "Coded by anyone" is `any or any`, which is the one reading
-#: that is a disjunction and so has no place among the quadrants; "not coded by
-#: both" is `none or none`, the work left in a double-coding pass.
-#:
-#: An axis left unset does not participate, whichever the operator is. If
-#: "either" meant *true* under `or` then leaving a row alone would widen the
-#: corpus to everything, and the same control would mean opposite things
-#: depending on a setting next to it.
-CoderJoin = Literal["and", "or"]
 
 
 @dataclass(frozen=True)

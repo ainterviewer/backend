@@ -1,7 +1,6 @@
 import re
 from collections.abc import Iterable
 from dataclasses import replace
-from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -13,7 +12,7 @@ from starlette.concurrency import run_in_threadpool
 from ainterviewer.constants import LANGUAGES
 from ainterviewer.interview_guides import SurveyItem
 from ainterviewer.interview_guides.survey_items import CheckboxItem
-from ainterviewer.types import EmbeddingKind, InterviewStatus
+from ainterviewer.types import EmbeddingKind
 
 from ....db.code_lookup import CodeIndex, resolve_all
 from ....db.keyword_query import MARKUP_PATTERN, KeywordQueryError, Scope, parse
@@ -24,8 +23,6 @@ from ....db.repositories.embedding import (
     BrowseOrder,
     ChunkCoordinates,
     CodeCoverage,
-    Coded,
-    CoderJoin,
     EmbeddingFilters,
 )
 from ....db.repositories.project import render_default_guide
@@ -62,7 +59,6 @@ from ....embed.clustering import (
 )
 from ....embed.queue import chunk_queue
 from ....embed.templates import QueryTask
-from ....schemas.common import LanguageFilter
 from ....schemas.embeddings import (
     CodeFacet,
     CodeFacets,
@@ -72,12 +68,14 @@ from ....schemas.embeddings import (
     EmbeddingClusterPoint,
     EmbeddingClusterResponse,
     EmbeddingCodeSimilarResponse,
+    EmbeddingFilterParams,
     EmbeddingGroup,
     EmbeddingSearchHit,
     EmbeddingSearchResponse,
     EmbeddingSimilarResponse,
     EmbeddingStatus,
     InterviewTranscript,
+    SearchPageParams,
     SurveyFacet,
     SurveyFacets,
     SurveyFacetValue,
@@ -89,139 +87,34 @@ from ....types import GroupKind, Projection
 router = APIRouter(dependencies=[Depends(require_preview_features)])
 
 
-class SearchFilterParams:
-    """The non-vector half of a search, as a reusable dependency.
+def embedding_filters(
+    project_id: UUID4,
+    db: DBSession,
+    params: Annotated[EmbeddingFilterParams, Query()],
+) -> EmbeddingFilters:
+    """The filters a search asked for, parsed and checked against the project.
 
-    Filtering happens in SQL before anything is scored, so these narrow the
-    candidate set rather than the result list -- asking for 10 results from one
-    participant returns 10 of theirs, not whichever of the global top 10
-    happened to be theirs. For clustering the same is true of the reduction:
-    filtered-out chunks are never fitted, so scoping to one language removes
-    that dimension outright rather than subtracting its mean.
-
-    `language` is repeatable (`?language=DA&language=EN`), because a
-    multilingual project is usually analysed over the languages that have
-    enough respondents to say anything -- rarely all of them, rarely just one.
-
-    `question` is repeatable in the same way and written `?question=0,2` --
-    zero-based `section,main_question`, the spelling the annotate view already
-    uses so one filter means the same thing in both places. A whole section is
-    asked for by listing its questions.
-
-    It is read against whatever unit is being asked for, because the units do
-    not all carry a question. A message or a QA pair matches its coordinates
-    exactly; a section matches when the selection names a question inside it; an
-    interview matches when the transcript contains an answer to one. Demanding
-    the exact pair of every unit would empty the two spanning ones outright,
-    which is a filter that cannot be used rather than a filter that says no.
-
-    `keyword` is the literal half of searching, and it is a filter rather than a
-    query: it narrows the candidate set, and whatever semantic query there is
-    then ranks what survives. Matched against respondent messages, never against
-    chunk text -- a chunk restates the question it answers, and a word the
-    interviewer said is not a word the respondent said.
-
-    `keyword_scope` says which side of the exchange a bare term is matched
-    against -- `answer` (the default and the historical behaviour), `question`,
-    or `both` -- and `q:`/`a:` inside the query override it for a single term.
-    Matching the question at all is deliberate rather than free: a chunk restates
-    the question it answers, so counting the interviewer's words by default would
-    let the guide's own phrasing read as a finding.
-
-    `survey` filters by what the interview's respondent answered to a survey
-    item, and it is a *cohort* filter: every chunk of a matching interview
-    stays, whatever question it answers. Written `?survey=0,2=option:1` --
-    guide coordinate, then the value -- and repeatable, with the values of one
-    item OR-ed and different items AND-ed.
-
-    A value is named by its position in the option list (`option:1`) rather
-    than by its text, because the same item asked in two languages offers the
-    same choices translated: filtering by "Female" would silently drop everyone
-    interviewed in Danish. A write-in, which has no position, is named by its
-    text instead (`text:kayaking`).
-
-    `survey_range` is the same filter for the items whose answers are ordered
-    rather than chosen -- numbers, dates, times. Written
-    `?survey_range=0,3=25..34`, with either side allowed to be empty for an
-    open end, and the bounds spelled the way the answers are: a number, or an
-    ISO date, datetime or time.
-
-    `coded_mine` and `coded_others` are coverage rather than content: `any`
-    keeps the chunks that coder has marked, `none` the chunks they have not,
-    and `coder_id` says who "mine" is. Deliberately not `code:` with a NOT in
-    front -- a negated term is checked per message and then lifted, so a
-    section holding one coded turn and one uncoded one satisfies it, while this
-    asks about the chunk. `none` is the pass that closes a codebook.
-
-    `coder_join` joins the two, and is what makes them a complete 2x2. `and`
-    names the quadrants: the second-coder pass -- what have they coded that I
-    have not -- is `coded_mine=none&coded_others=any`, and there is no single
-    scope it is a filter on. `or` names their complements, of which two are
-    questions worth asking: `any` or `any` is "somebody has coded this", the
-    one reading that is a disjunction, and `none` or `none` is "not coded by
-    both" -- the work left in a double-coding pass.
-
-    An axis left out does not participate under either operator. If "unset"
-    meant *true* under `or`, leaving one out would widen the corpus to
-    everything rather than leave it alone.
-
-    `main_answers_only` keeps the answers to main questions and leaves out the
-    probes. It narrows the message unit into the "main question" one the
-    explorer offers, over the same vectors, and is ignored by the grouped units.
-
-    None of them narrows a `code:` term, which counts anybody's codings. A
-    coder-scoped code term is a question about the term rather than about
-    coverage, and folding it in here would silently empty the review pass --
-    under `coded_mine=none` it could not match by construction.
-
-    It is a boolean expression rather than a string to look for: `dog OR cat`,
-    `kids -school`, `(dog OR cat) AND "my neighbour"`. `app.db.keyword_query`
-    has the grammar. Matching is case-insensitive and by word, with `*` to open
-    an edge (`kat*`) and quotes for a phrase. A query that will not parse is a
-    422 saying what is wrong and where, rather than a search for something other
-    than what was asked for.
+    A dependency rather than a validator on the model because checking the
+    `code:` terms of a keyword query takes the project's codebook.
     """
-
-    def __init__(
-        self,
-        project_id: UUID4,
-        db: DBSession,
-        language: Annotated[list[LanguageFilter] | None, Query()] = None,
-        status: InterviewStatus | None = None,
-        participant_id: UUID4 | None = None,
-        created_after: datetime | None = None,
-        created_before: datetime | None = None,
-        interview_id: Annotated[list[UUID4] | None, Query()] = None,
-        include_synthetic: bool = False,
-        question: Annotated[list[str] | None, Query()] = None,
-        keyword: Annotated[str | None, Query(max_length=2000)] = None,
-        keyword_scope: Scope = "answer",
-        survey: Annotated[list[str] | None, Query()] = None,
-        survey_range: Annotated[list[str] | None, Query()] = None,
-        coded_mine: Coded | None = None,
-        coded_others: Coded | None = None,
-        coder_join: CoderJoin = "and",
-        coder_id: UUID4 | None = None,
-        main_answers_only: bool = False,
-    ):
-        self.filters = EmbeddingFilters(
-            interview_ids=interview_id,
-            languages=language,
-            status=status,
-            participant_id=participant_id,
-            created_after=created_after,
-            created_before=created_before,
-            include_synthetic=include_synthetic,
-            questions=_parse_questions(question),
-            keyword=_checked_keyword(keyword, db, project_id),
-            keyword_scope=keyword_scope,
-            survey=_parse_survey(survey, survey_range),
-            coded_mine=coded_mine,
-            coded_others=coded_others,
-            coder_join=coder_join,
-            coder_id=coder_id,
-            main_answers_only=main_answers_only,
-        )
+    return EmbeddingFilters(
+        interview_ids=params.interview_id,
+        languages=params.language,
+        status=params.status,
+        participant_id=params.participant_id,
+        created_after=params.created_after,
+        created_before=params.created_before,
+        include_synthetic=params.include_synthetic,
+        questions=_parse_questions(params.question),
+        keyword=_checked_keyword(params.keyword, db, project_id),
+        keyword_scope=params.keyword_scope,
+        survey=_parse_survey(params.survey, params.survey_range),
+        coded_mine=params.coded_mine,
+        coded_others=params.coded_others,
+        coder_join=params.coder_join,
+        coder_id=params.coder_id,
+        main_answers_only=params.main_answers_only,
+    )
 
 
 def _parse_questions(raw: list[str] | None) -> list[tuple[int, int]] | None:
@@ -413,46 +306,13 @@ def _checked_keyword(raw: str | None, db: DBSession, project_id: UUID4) -> str |
     return raw
 
 
-# How far into a ranking `offset` may reach. A ranked scan has no natural end
-# -- every chunk in scope gets a score -- so without a bound a client can page
-# a whole project out through an endpoint meant for retrieval. A thousand rows
-# in is already well past where scores stop meaning anything; a corpus is read
-# with the export or the cluster map, not with the search endpoint.
-MAX_SEARCH_DEPTH = 1000
-
-
-class SearchPageParams:
-    """`limit`/`offset` for the two ranked endpoints.
-
-    Named as the dashboard's other lists name them, but deliberately not
-    `PaginatedQueryParams`: that carries `column` and `order`, and a ranked
-    scan has exactly one order -- by score -- which a caller cannot choose.
-    """
-
-    def __init__(
-        self,
-        limit: Annotated[int, Query(ge=1, le=100)] = 10,
-        offset: Annotated[int, Query(ge=0)] = 0,
-    ):
-        if offset + limit > MAX_SEARCH_DEPTH:
-            raise HTTPException(
-                422,
-                detail=(
-                    f"offset + limit may not exceed {MAX_SEARCH_DEPTH}; results "
-                    "that far down a ranked list are noise, not further matches"
-                ),
-            )
-        self.limit = limit
-        self.offset = offset
-
-
 @router.get("/projects/{project_id}/analysis/embeddings/search")
 async def search_embeddings(
     project_id: UUID4,
     db: DBSession,
     jwt: ProjectViewer,
-    filter_params: Annotated[SearchFilterParams, Depends()],
-    page: Annotated[SearchPageParams, Depends()],
+    filters: Annotated[EmbeddingFilters, Depends(embedding_filters)],
+    page: Annotated[SearchPageParams, Query()],
     query: Annotated[str, Query(min_length=1, max_length=2000)],
     kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
     task: QueryTask = QueryTask.RETRIEVAL,
@@ -491,7 +351,7 @@ async def search_embeddings(
             kind=kind,
             limit=page.limit,
             offset=page.offset,
-            filters=filter_params.filters,
+            filters=filters,
         )
     except ValueError as error:
         # Raised when the query's dimension does not match what is stored,
@@ -500,7 +360,7 @@ async def search_embeddings(
 
     turns = db.embeddings.turns_for(
         [hit.embedding for hit in result.hits],
-        filter_params.filters,
+        filters,
         whole_interviews=whole_interviews,
     )
     numbers = db.embeddings.interview_numbers(project_id)
@@ -530,8 +390,8 @@ async def browse_embeddings(
     project_id: UUID4,
     db: DBSession,
     jwt: ProjectViewer,
-    filter_params: Annotated[SearchFilterParams, Depends()],
-    page: Annotated[SearchPageParams, Depends()],
+    filters: Annotated[EmbeddingFilters, Depends(embedding_filters)],
+    page: Annotated[SearchPageParams, Query()],
     kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
     order: BrowseOrder = DEFAULT_BROWSE_ORDER,
     group_by: BrowseGrouping = DEFAULT_BROWSE_GROUPING,
@@ -578,7 +438,7 @@ async def browse_embeddings(
     result = db.embeddings.browse(
         project_id=project_id,
         kind=kind,
-        filters=filter_params.filters,
+        filters=filters,
         limit=page.limit,
         offset=page.offset,
         order=order,
@@ -587,7 +447,7 @@ async def browse_embeddings(
     )
 
     turns = db.embeddings.turns_for(
-        result.units, filter_params.filters, whole_interviews=whole_interviews
+        result.units, filters, whole_interviews=whole_interviews
     )
     numbers = db.embeddings.interview_numbers(project_id)
 
@@ -852,7 +712,7 @@ async def read_survey_facets(
     project_id: UUID4,
     db: DBSession,
     jwt: ProjectViewer,
-    filter_params: Annotated[SearchFilterParams, Depends()],
+    filters: Annotated[EmbeddingFilters, Depends(embedding_filters)],
 ) -> SurveyFacets:
     """What the cohort filter in the explore view is built from.
 
@@ -872,7 +732,7 @@ async def read_survey_facets(
     chunks, not people, and "interviews holding a matching chunk" is a
     different unit than the one every other number here is counted in.
     """
-    filters = replace(filter_params.filters, keyword=None, questions=None)
+    filters = replace(filters, keyword=None, questions=None)
     # The scope is built *without* the survey filter, and the survey filter is
     # handed over separately: an item is exempt from its own selection, and a
     # scope that had already applied every selection would leave nothing for
@@ -928,7 +788,7 @@ async def read_code_facets(
     project_id: UUID4,
     db: DBSession,
     jwt: ProjectViewer,
-    filter_params: Annotated[SearchFilterParams, Depends()],
+    filters: Annotated[EmbeddingFilters, Depends(embedding_filters)],
     kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
 ) -> CodeFacets:
     """How much of what is on screen each code accounts for.
@@ -961,7 +821,7 @@ async def read_code_facets(
         db.embeddings.code_coverage,
         project_id=project_id,
         kind=kind,
-        filters=filter_params.filters,
+        filters=filters,
     )
     index = CodeIndex.for_project(db.session, project_id)
     return code_facets(index, coverage, kind)
@@ -1014,8 +874,8 @@ async def find_embeddings_like_code(
     code_id: UUID4,
     db: DBSession,
     jwt: ProjectViewer,
-    filter_params: Annotated[SearchFilterParams, Depends()],
-    page: Annotated[SearchPageParams, Depends()],
+    filters: Annotated[EmbeddingFilters, Depends(embedding_filters)],
+    page: Annotated[SearchPageParams, Query()],
     kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
     subtree: bool = False,
     whole_interviews: bool = False,
@@ -1060,14 +920,14 @@ async def find_embeddings_like_code(
             kind=kind,
             limit=page.limit,
             offset=page.offset,
-            filters=filter_params.filters,
+            filters=filters,
         )
     except ValueError as error:
         raise HTTPException(409, detail=str(error))
 
     turns = db.embeddings.turns_for(
         [hit.embedding for hit in result.hits],
-        filter_params.filters,
+        filters,
         whole_interviews=whole_interviews,
     )
     numbers = db.embeddings.interview_numbers(project_id)
@@ -1097,8 +957,8 @@ async def find_similar_embeddings(
     embedding_id: UUID4,
     db: DBSession,
     jwt: ProjectViewer,
-    filter_params: Annotated[SearchFilterParams, Depends()],
-    page: Annotated[SearchPageParams, Depends()],
+    filters: Annotated[EmbeddingFilters, Depends(embedding_filters)],
+    page: Annotated[SearchPageParams, Query()],
     whole_interviews: bool = False,
 ) -> EmbeddingSimilarResponse:
     """Chunks most like an existing one -- "more like this".
@@ -1115,7 +975,7 @@ async def find_similar_embeddings(
             embedding_id=embedding_id,
             limit=page.limit,
             offset=page.offset,
-            filters=filter_params.filters,
+            filters=filters,
         )
     except NoResultFound:
         raise HTTPException(404, detail="Embedding not found")
@@ -1129,7 +989,7 @@ async def find_similar_embeddings(
 
     turns = db.embeddings.turns_for(
         [source, *(hit.embedding for hit in result.hits)],
-        filter_params.filters,
+        filters,
         whole_interviews=whole_interviews,
     )
     numbers = db.embeddings.interview_numbers(project_id)
@@ -1269,7 +1129,7 @@ async def cluster_embeddings(
     project_id: UUID4,
     db: DBSession,
     jwt: ProjectViewer,
-    filter_params: Annotated[SearchFilterParams, Depends()],
+    filters: Annotated[EmbeddingFilters, Depends(embedding_filters)],
     kind: EmbeddingKind = EmbeddingKind.QA_PAIR,
     projection: Projection = Projection.UMAP,
     min_cluster_size: Annotated[int, Query(ge=2, le=500)] = DEFAULT_MIN_CLUSTER_SIZE,
@@ -1333,7 +1193,7 @@ async def cluster_embeddings(
     interactive control rather than a migration.
     """
     ids, matrix, coordinates = db.embeddings.vectors_for(
-        project_id=project_id, kind=kind, filters=filter_params.filters
+        project_id=project_id, kind=kind, filters=filters
     )
 
     axes = [
@@ -1375,9 +1235,7 @@ async def cluster_embeddings(
     }
     representatives = db.embeddings.hydrate(list(wanted))
     previews = db.embeddings.previews(ids, PREVIEW_CHARS)
-    turns = db.embeddings.turns_for(
-        list(representatives.values()), filter_params.filters
-    )
+    turns = db.embeddings.turns_for(list(representatives.values()), filters)
     numbers = db.embeddings.interview_numbers(project_id)
 
     # What every plotted point is, beyond where clustering put it -- so the

@@ -17,7 +17,7 @@ from ainterviewer.types import LanguageCode
 from ainterviewer.utils import now
 
 from .auth import AssistanceSessionToken, AuthToken, InterviewToken
-from .db import InterviewDataBase
+from .db.crud import InterviewDataBase
 from .db.pragmas import register_pragmas
 from .db.regexp import register_regexp
 from .db.triggers import register_trigger_functions

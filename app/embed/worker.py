@@ -5,7 +5,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from ..db import InterviewDataBase
+from ..db.crud import InterviewDataBase
 from ..dependencies import engine
 from ..settings import app_settings
 from .client import EmbeddingClient, EmbeddingUnavailable, embedding_client

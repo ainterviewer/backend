@@ -7,10 +7,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import (
-    UUID4,
-    Field,
-)
+from pydantic import UUID4, Field, model_validator
 
 from ainterviewer.interview_guides import (
     Image,
@@ -22,6 +19,7 @@ from ainterviewer.types import (
     LanguageCode,
 )
 
+from ..db.keyword_query import Scope
 from ..db.types import (
     InterviewType,
 )
@@ -30,7 +28,7 @@ from ..types import (
     Projection,
     TurnRole,
 )
-from .common import Schema
+from .common import LanguageFilter, Schema
 
 
 class EmbeddingTurn(Schema):
@@ -581,3 +579,169 @@ class EmbeddingClusterResponse(Schema):
     # one guide read, and lets a client switch grouping without a round trip.
     groups: list[EmbeddingGroup] = []
     points: list[EmbeddingClusterPoint] = []
+
+
+#: Whether a chunk must carry a coding, carry none, or may be either.
+#:
+#: A coverage filter, not a code filter. "none" is the pass that closes a
+#: codebook -- what have I not read yet -- and it is why this is not simply a
+#: `code:` term with a NOT in front: a negated term is checked per message and
+#: then lifted, so a section holding one coded turn and one uncoded one
+#: satisfies it. This asks about the chunk.
+Coded = Literal["any", "none"]
+
+#: How the two coder axes are joined.
+#:
+#: They are a 2x2, and the operator is what makes it a complete one: `and`
+#: names the four quadrants -- coded by both, only me, to review, read by
+#: nobody -- and `or` names their four complements, of which two are questions
+#: worth asking. "Coded by anyone" is `any or any`, which is the one reading
+#: that is a disjunction and so has no place among the quadrants; "not coded by
+#: both" is `none or none`, the work left in a double-coding pass.
+#:
+#: An axis left unset does not participate, whichever the operator is. If
+#: "either" meant *true* under `or` then leaving a row alone would widen the
+#: corpus to everything, and the same control would mean opposite things
+#: depending on a setting next to it.
+CoderJoin = Literal["and", "or"]
+
+
+class EmbeddingFilterParams(Schema):
+    """The non-vector half of a search, as a reusable dependency.
+
+    Filtering happens in SQL before anything is scored, so these narrow the
+    candidate set rather than the result list -- asking for 10 results from one
+    participant returns 10 of theirs, not whichever of the global top 10
+    happened to be theirs. For clustering the same is true of the reduction:
+    filtered-out chunks are never fitted, so scoping to one language removes
+    that dimension outright rather than subtracting its mean.
+
+    `language` is repeatable (`?language=DA&language=EN`), because a
+    multilingual project is usually analysed over the languages that have
+    enough respondents to say anything -- rarely all of them, rarely just one.
+
+    `question` is repeatable in the same way and written `?question=0,2` --
+    zero-based `section,main_question`, the spelling the annotate view already
+    uses so one filter means the same thing in both places. A whole section is
+    asked for by listing its questions.
+
+    It is read against whatever unit is being asked for, because the units do
+    not all carry a question. A message or a QA pair matches its coordinates
+    exactly; a section matches when the selection names a question inside it; an
+    interview matches when the transcript contains an answer to one. Demanding
+    the exact pair of every unit would empty the two spanning ones outright,
+    which is a filter that cannot be used rather than a filter that says no.
+
+    `keyword` is the literal half of searching, and it is a filter rather than a
+    query: it narrows the candidate set, and whatever semantic query there is
+    then ranks what survives. Matched against respondent messages, never against
+    chunk text -- a chunk restates the question it answers, and a word the
+    interviewer said is not a word the respondent said.
+
+    `keyword_scope` says which side of the exchange a bare term is matched
+    against -- `answer` (the default and the historical behaviour), `question`,
+    or `both` -- and `q:`/`a:` inside the query override it for a single term.
+    Matching the question at all is deliberate rather than free: a chunk restates
+    the question it answers, so counting the interviewer's words by default would
+    let the guide's own phrasing read as a finding.
+
+    `survey` filters by what the interview's respondent answered to a survey
+    item, and it is a *cohort* filter: every chunk of a matching interview
+    stays, whatever question it answers. Written `?survey=0,2=option:1` --
+    guide coordinate, then the value -- and repeatable, with the values of one
+    item OR-ed and different items AND-ed.
+
+    A value is named by its position in the option list (`option:1`) rather
+    than by its text, because the same item asked in two languages offers the
+    same choices translated: filtering by "Female" would silently drop everyone
+    interviewed in Danish. A write-in, which has no position, is named by its
+    text instead (`text:kayaking`).
+
+    `survey_range` is the same filter for the items whose answers are ordered
+    rather than chosen -- numbers, dates, times. Written
+    `?survey_range=0,3=25..34`, with either side allowed to be empty for an
+    open end, and the bounds spelled the way the answers are: a number, or an
+    ISO date, datetime or time.
+
+    `coded_mine` and `coded_others` are coverage rather than content: `any`
+    keeps the chunks that coder has marked, `none` the chunks they have not,
+    and `coder_id` says who "mine" is. Deliberately not `code:` with a NOT in
+    front -- a negated term is checked per message and then lifted, so a
+    section holding one coded turn and one uncoded one satisfies it, while this
+    asks about the chunk. `none` is the pass that closes a codebook.
+
+    `coder_join` joins the two, and is what makes them a complete 2x2. `and`
+    names the quadrants: the second-coder pass -- what have they coded that I
+    have not -- is `coded_mine=none&coded_others=any`, and there is no single
+    scope it is a filter on. `or` names their complements, of which two are
+    questions worth asking: `any` or `any` is "somebody has coded this", the
+    one reading that is a disjunction, and `none` or `none` is "not coded by
+    both" -- the work left in a double-coding pass.
+
+    An axis left out does not participate under either operator. If "unset"
+    meant *true* under `or`, leaving one out would widen the corpus to
+    everything rather than leave it alone.
+
+    `main_answers_only` keeps the answers to main questions and leaves out the
+    probes. It narrows the message unit into the "main question" one the
+    explorer offers, over the same vectors, and is ignored by the grouped units.
+
+    None of them narrows a `code:` term, which counts anybody's codings. A
+    coder-scoped code term is a question about the term rather than about
+    coverage, and folding it in here would silently empty the review pass --
+    under `coded_mine=none` it could not match by construction.
+
+    It is a boolean expression rather than a string to look for: `dog OR cat`,
+    `kids -school`, `(dog OR cat) AND "my neighbour"`. `app.db.keyword_query`
+    has the grammar. Matching is case-insensitive and by word, with `*` to open
+    an edge (`kat*`) and quotes for a phrase. A query that will not parse is a
+    422 saying what is wrong and where, rather than a search for something other
+    than what was asked for.
+    """
+
+    language: list[LanguageFilter] | None = None
+    status: InterviewStatus | None = None
+    participant_id: UUID4 | None = None
+    created_after: datetime | None = None
+    created_before: datetime | None = None
+    interview_id: list[UUID4] | None = None
+    include_synthetic: bool = False
+    question: list[str] | None = None
+    keyword: str | None = Field(default=None, max_length=2000)
+    keyword_scope: Scope = "answer"
+    survey: list[str] | None = None
+    survey_range: list[str] | None = None
+    coded_mine: Coded | None = None
+    coded_others: Coded | None = None
+    coder_join: CoderJoin = "and"
+    coder_id: UUID4 | None = None
+    main_answers_only: bool = False
+
+
+# How far into a ranking `offset` may reach. A ranked scan has no natural end
+# -- every chunk in scope gets a score -- so without a bound a client can page
+# a whole project out through an endpoint meant for retrieval. A thousand rows
+# in is already well past where scores stop meaning anything; a corpus is read
+# with the export or the cluster map, not with the search endpoint.
+MAX_SEARCH_DEPTH = 1000
+
+
+class SearchPageParams(Schema):
+    """`limit`/`offset` for the two ranked endpoints.
+
+    Named as the dashboard's other lists name them, but deliberately not
+    `PaginatedQueryParams`: that carries `column` and `order`, and a ranked
+    scan has exactly one order -- by score -- which a caller cannot choose.
+    """
+
+    limit: int = Field(default=10, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def _within_search_depth(self) -> SearchPageParams:
+        if self.offset + self.limit > MAX_SEARCH_DEPTH:
+            raise ValueError(
+                f"offset + limit may not exceed {MAX_SEARCH_DEPTH}; results "
+                "that far down a ranked list are noise, not further matches"
+            )
+        return self

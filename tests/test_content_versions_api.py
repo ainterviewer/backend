@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from app.auth import AuthToken
-from app.db import InterviewDataBase
+from app.db.crud import InterviewDataBase
 from app.db.tables import (
     Base,
     CollaboratorTable,

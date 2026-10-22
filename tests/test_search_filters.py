@@ -21,8 +21,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from app.api.dashboard.analysis.embeddings import SearchFilterParams
+from app.api.dashboard.analysis.embeddings import embedding_filters
 from app.db.crud import InterviewDataBase
+from app.db.repositories.embedding import EmbeddingFilters
 from app.db.tables import (
     Base,
     CodeTable,
@@ -87,11 +88,11 @@ def client():
     app = FastAPI()
 
     @app.get("/t/{project_id}")
-    def endpoint(params: Annotated[SearchFilterParams, Depends()]):
+    def endpoint(filters: Annotated[EmbeddingFilters, Depends(embedding_filters)]):
         return {
-            "languages": params.filters.languages,
-            "questions": params.filters.questions,
-            "keyword": params.filters.keyword,
+            "languages": filters.languages,
+            "questions": filters.questions,
+            "keyword": filters.keyword,
         }
 
     app.dependency_overrides[get_db] = lambda: InterviewDataBase(session)

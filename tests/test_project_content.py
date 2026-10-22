@@ -29,7 +29,7 @@ from ainterviewer.interview_guides.conditions import (
 )
 from ainterviewer.interview_guides.types import ConditionAction
 from app.api.dashboard import projects as projects_api
-from app.db import InterviewDataBase
+from app.db.crud import InterviewDataBase
 from app.db.repositories import project as project_repository
 from app.db.repositories.errors import NotPublishedError, ProjectLanguageError
 from app.db.repositories.project import render_default_guide

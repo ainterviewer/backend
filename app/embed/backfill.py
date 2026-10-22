@@ -27,7 +27,7 @@ from ainterviewer.embedding import (
 from ainterviewer.interfaces import EmbeddingChunk
 from ainterviewer.interview_guides.history import InterviewHistory
 
-from ..db import InterviewDataBase
+from ..db.crud import InterviewDataBase
 from ..db.tables import InterviewTable, MessageTable
 from ..db.types import EmbeddingTask, InterviewType
 from .client import EmbeddingClient, EmbeddingUnavailable
