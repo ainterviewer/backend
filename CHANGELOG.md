@@ -4,6 +4,37 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.0] - 2026-10-22
+
+### Features
+
+- Add safety-agent handling
+- Add message reporting functionality
+- Add reported messages notifications
+- Add user facing report queues
+- Flag safety-check interventions for review
+- Record daily user activity and serve admin overview stats
+- Flag safety interventions in manual tests for the project only
+- Per-user demo limits
+- Archive folders and projects
+- (explore) Filter the turn unit to main-question answers
+- (projects) Encode the link's query params in the project QR code
+- (invitations) Readable aliases that replace special registration tokens
+
+### Bug Fixes
+
+- Record activity on role-gated routes and retry failed writes
+- Leave last_login empty until a first login, seed activity from last_active
+- Start the all-time admin stats on a Monday
+- Pass QR output path by keyword, not as the embedded icon
+
+### Internal
+
+- Chain the report migration after the safety-agent ones
+- Clean up gitignore
+- Chain the user activity migration after the safety-flag ones
+- Pin ainterviewer to the security check retry fix
+
 ## [0.9.1] - 2026-10-16
 
 ### Bug Fixes
