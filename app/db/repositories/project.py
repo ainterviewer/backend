@@ -514,7 +514,6 @@ class ProjectRepository(BaseRepository):
         public_project.available_languages = self.get_available_languages_optimized(
             project.id
         )
-        public_project.tests = None
 
         return public_project
 

@@ -12,7 +12,6 @@ from ainterviewer.types import LanguageCode, LanguageDict
 
 from ..types import CollaboratorRole, ExternalParam, ProjectStatus
 from .common import Schema
-from .testing import TestSetupPublic
 from .users import UserPublic
 
 
@@ -84,7 +83,6 @@ class ProjectLanguage(LanguageDict):
 class ProjectPublic(ProjectBase):
     n_interviews: int | None = None
     available_languages: list[ProjectLanguage] | None = None
-    tests: list[TestSetupPublic] | None = None
     owner: UserPublic
 
 
