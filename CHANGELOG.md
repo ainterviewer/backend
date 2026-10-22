@@ -4,6 +4,42 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.5] - 2026-10-22
+
+### Breaking Changes
+
+- (projects) ProjectPublic no longer has a tests field.
+- (api) Checks a route makes itself are 400, not 422, which is
+left to FastAPI's validation errors. Registration's invite errors are 400
+with invite_required/invite_invalid/invite_expired rather than 406, a
+duplicate access request is 409 with `detail` rather than `details`, a
+keyword query error is a flat body with `position`, and the preview-feature
+403 carries code preview_features_required instead of it as the detail.
+- (auth) The sentence is `message`, not `detail`, which is
+now only ever an error's.
+- (api) The schema, and so the client type, is renamed.
+
+### Features
+
+- (api) Answer every error with an ApiError body [**breaking**]
+- (auth) Type the auth routes' success bodies [**breaking**]
+- (api) Declare response types on routes that returned untyped bodies
+
+### Bug Fixes
+
+- (auth) Keep a single-use invite when registration fails
+- (tests) Refuse a shuffled-AI run without a model before starting it
+- (api) Stop extra models overwriting the components FastAPI generated
+
+### Performance
+
+- (projects) Stop sending every test setup with each project [**breaking**]
+
+### Internal
+
+- (api) Rename UploadParticipantsResponse to ParticipantUploadResponse [**breaking**]
+- (api) Point the error comments at add_error_handlers
+
 ## [0.10.4] - 2026-10-22
 
 ### Breaking Changes
