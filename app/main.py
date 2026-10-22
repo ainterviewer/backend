@@ -20,6 +20,7 @@ from .api.websockets import main as websockets
 from .db import InterviewDataBase
 from .db.repositories.errors import (
     ContentRevisionError,
+    InvitationAliasTakenError,
     NotPublishedError,
     PublishError,
 )
@@ -122,6 +123,13 @@ async def _cannot_publish(_request: Request, exc: PublishError):
     return JSONResponse(
         status_code=409,
         content={"detail": str(exc), "code": "cannot_publish", "missing": exc.missing},
+    )
+
+
+@app.exception_handler(InvitationAliasTakenError)
+async def _alias_taken(_request: Request, exc: InvitationAliasTakenError):
+    return JSONResponse(
+        status_code=409, content={"detail": str(exc), "code": "alias_taken"}
     )
 
 

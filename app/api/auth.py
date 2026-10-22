@@ -353,56 +353,39 @@ async def register(user: UserCreateRequest, db: DBSession) -> JSONResponse:
     if app_settings.app.registration_requires_token is True:
         if not user.invite_token:
             return JSONResponse({"detail": "Invite token required"}, status_code=406)
-        elif isinstance(user.invite_token, str):
-            for (
-                special_registration_token
-            ) in app_settings.app.special_registration_tokens:
-                if user.invite_token == special_registration_token.token:
-                    # Special tokens are validated against settings, not stored as
-                    # invitations. Record which one was used in registration_token and
-                    # keep the arbitrary string out of the UUID invite_token column.
-                    snapshot["registration_token"] = user.invite_token
-                    user.invite_token = None
-                    user.scope = special_registration_token.scope
-                    break
+        try:
+            invitation = db.users.check_invite_token(user.invite_token)
+        except sqlalchemy.exc.NoResultFound:
+            return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
+        if invitation.expires_at and invitation.expires_at < now():
+            return JSONResponse({"detail": "Invite token expired"}, status_code=406)
+        if not invitation.reuseable and not db.users.delete_invitation(invitation.id):
+            # Another request already claimed this token
+            return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
+        user.scope = invitation.user_scope
+
+        # A token that is not a UUID was the invitation's alias. Keep the id in
+        # invite_token either way, and the alias it came through alongside.
+        if isinstance(user.invite_token, str):
+            snapshot["registration_token"] = invitation.alias
+        user.invite_token = invitation.id
+
+        # Snapshot invitation data
+        snapshot["invitation_title"] = invitation.title
+        snapshot["demo_concurrent_limit"] = invitation.user_demo_concurrent_limit
+        snapshot["demo_daily_limit"] = invitation.user_demo_daily_limit
+        snapshot["demo_lifetime_limit"] = invitation.user_demo_lifetime_limit
+        if invitation.user_expires is not None:
+            if isinstance(invitation.user_expires, datetime):
+                snapshot["expires_at"] = invitation.user_expires
             else:
-                return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
-        else:
-            try:
-                invitation = db.users.check_invite_token(user.invite_token)
-                if not invitation.reuseable and not db.users.delete_invitation(
-                    invitation.id
-                ):
-                    # Another request already claimed this token
-                    return JSONResponse(
-                        {"detail": "Invalid invite token"}, status_code=406
-                    )
-                user.scope = invitation.user_scope
-            except sqlalchemy.exc.NoResultFound:
-                return JSONResponse({"detail": "Invalid invite token"}, status_code=406)
-            if invitation.expires_at and invitation.expires_at < now():
-                return JSONResponse({"detail": "Invite token expired"}, status_code=406)
+                snapshot["expires_at"] = now() + invitation.user_expires.to_timedelta()
 
-            # Snapshot invitation data
-            snapshot["invitation_title"] = invitation.title
-            snapshot["demo_concurrent_limit"] = invitation.user_demo_concurrent_limit
-            snapshot["demo_daily_limit"] = invitation.user_demo_daily_limit
-            snapshot["demo_lifetime_limit"] = invitation.user_demo_lifetime_limit
-            if invitation.user_expires is not None:
-                if isinstance(invitation.user_expires, datetime):
-                    snapshot["expires_at"] = invitation.user_expires
-                else:
-                    snapshot["expires_at"] = (
-                        now() + invitation.user_expires.to_timedelta()
-                    )
-
-            # Snapshot access request data
-            if invitation.access_request_id:
-                access_request = db.users.get_access_request(
-                    invitation.access_request_id
-                )
-                snapshot["access_request_message"] = access_request.message
-                snapshot["organization"] = access_request.organization
+        # Snapshot access request data
+        if invitation.access_request_id:
+            access_request = db.users.get_access_request(invitation.access_request_id)
+            snapshot["access_request_message"] = access_request.message
+            snapshot["organization"] = access_request.organization
 
     # NOTE: Password hashing happens in the users.create_user method
     new_user = db.users.create_user(UserCreate(**user.model_dump(), **snapshot))

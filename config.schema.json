@@ -103,13 +103,6 @@
           "title": "Registration Requires Token",
           "type": "boolean"
         },
-        "special_registration_tokens": {
-          "items": {
-            "$ref": "#/$defs/SpecialRegistrationTokens"
-          },
-          "title": "Special Registration Tokens",
-          "type": "array"
-        },
         "email_verification_token_expiration": {
           "$ref": "#/$defs/TimeDelta"
         },
@@ -183,7 +176,7 @@
       "type": "string"
     },
     "DemoLimits": {
-      "description": "Synthetic-interview budgets for `Scope.DEMO` accounts, counted per user.\n\nEvery synthetic interview is a full interview against the shared inference\nserver, so a demo account gets a small budget of them.",
+      "description": "Synthetic-interview budgets for `Scope.DEMO` accounts, counted per user.\n\nEvery synthetic interview is a full interview against the shared inference\nserver, so a demo account gets a small budget of them.\n\nThese are the defaults. The three counts can be overridden per user (the\n`user.demo_*_limit` columns, NULL meaning \"use the default\"), set by an\nadmin or snapshotted from the invitation the user registered with; see\n`UserRepository.get_demo_limits`. `active_run_max_age` is an operational\nsafeguard rather than a budget, so it stays global.",
       "properties": {
         "max_concurrent_synthetic_interviews": {
           "default": 10,
@@ -266,6 +259,11 @@
           "title": "Enabled",
           "type": "boolean"
         },
+        "live": {
+          "default": true,
+          "title": "Live",
+          "type": "boolean"
+        },
         "endpoint": {
           "anyOf": [
             {
@@ -337,15 +335,6 @@
       "title": "EmbeddingSettings",
       "type": "object"
     },
-    "Scope": {
-      "enum": [
-        "admin",
-        "user",
-        "demo"
-      ],
-      "title": "Scope",
-      "type": "string"
-    },
     "ServiceSettings": {
       "description": "Different extra services required to run the app",
       "properties": {
@@ -375,6 +364,7 @@
           "$ref": "#/$defs/EmbeddingSettings",
           "default": {
             "enabled": false,
+            "live": true,
             "endpoint": null,
             "model": "microsoft/harrier-oss-v1-0.6b",
             "dimension": 1024,
@@ -391,23 +381,6 @@
         }
       },
       "title": "ServiceSettings",
-      "type": "object"
-    },
-    "SpecialRegistrationTokens": {
-      "properties": {
-        "token": {
-          "title": "Token",
-          "type": "string"
-        },
-        "scope": {
-          "$ref": "#/$defs/Scope"
-        }
-      },
-      "required": [
-        "token",
-        "scope"
-      ],
-      "title": "SpecialRegistrationTokens",
       "type": "object"
     },
     "SpeechSettings": {
@@ -727,7 +700,6 @@
           "weeks": 0
         },
         "registration_requires_token": true,
-        "special_registration_tokens": [],
         "email_verification_token_expiration": {
           "days": 1,
           "hours": 0,

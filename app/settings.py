@@ -15,14 +15,7 @@ from ainterviewer.settings import BaseSettingsConfigDict
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import DatabaseType, TimeDelta
 
-from .types import Scope
-
 os.environ.setdefault("ANY_LLM_UNIFIED_EXCEPTIONS", "1")
-
-
-class SpecialRegistrationTokens(BaseModel):
-    token: str
-    scope: Scope
 
 
 class DemoLimits(BaseModel):
@@ -85,9 +78,6 @@ class AppSettings(BaseModel):
         default_factory=lambda: TimeDelta(days=3)
     )
     registration_requires_token: bool = True
-    special_registration_tokens: list[SpecialRegistrationTokens] = Field(
-        default_factory=list
-    )
 
     email_verification_token_expiration: TimeDelta = Field(
         default_factory=lambda: TimeDelta(days=1)
@@ -376,4 +366,4 @@ if __name__ == "__main__":
     # print(app_settings.secrets)
     # print(lib_settings)
     # print(app_settings.services)
-    print(app_settings.app.special_registration_tokens)
+    print(app_settings.app)

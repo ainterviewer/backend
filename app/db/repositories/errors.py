@@ -126,3 +126,11 @@ class InterviewGoneError(Exception):
     def __init__(self, interview_id):
         super().__init__(f"interview {interview_id} no longer exists")
         self.interview_id = interview_id
+
+
+class InvitationAliasTakenError(Exception):
+    """Another invitation already has this alias. The API answers 409."""
+
+    def __init__(self, alias: str):
+        super().__init__(f"The alias {alias!r} is already in use")
+        self.alias = alias

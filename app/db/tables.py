@@ -163,6 +163,9 @@ class InvitationTable(Base):
         PydanticJSONB(datetime.datetime | TimeDelta | None), default=None
     )
     title: Mapped[str | None] = mapped_column(default=None)
+    # A readable token the sign-up link carries instead of the id; stored
+    # normalised (`normalize_invitation_alias`, app/db/models.py).
+    alias: Mapped[str | None] = mapped_column(unique=True, default=None)
     # Copied onto the user at registration, like `user_scope`: NULL leaves the
     # user on the configured default (`app.demo_limits`).
     user_demo_concurrent_limit: Mapped[int | None] = mapped_column(default=None)

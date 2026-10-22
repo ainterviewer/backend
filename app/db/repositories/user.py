@@ -4,8 +4,9 @@ from datetime import timedelta
 from typing import Literal
 
 from pydantic import UUID4
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import Update, delete, or_, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError
 
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.utils import now
@@ -30,6 +31,7 @@ from ..models import (
 from ..tables import AccessRequestTable, InvitationTable, UserActivityTable, UserTable
 from ..types import AccessRequestStatus
 from .base import BaseRepository
+from .errors import InvitationAliasTakenError
 
 
 class UserRepository(BaseRepository):
@@ -316,6 +318,7 @@ class UserRepository(BaseRepository):
         user_scope: Scope = Scope.USER,
         user_expires: datetime.datetime | None = None,
         title: str | None = None,
+        alias: str | None = None,
         user_demo_concurrent_limit: int | None = None,
         user_demo_daily_limit: int | None = None,
         user_demo_lifetime_limit: int | None = None,
@@ -331,13 +334,14 @@ class UserRepository(BaseRepository):
             user_scope=user_scope,
             user_expires=user_expires,
             title=title,
+            alias=alias,
             user_demo_concurrent_limit=user_demo_concurrent_limit,
             user_demo_daily_limit=user_demo_daily_limit,
             user_demo_lifetime_limit=user_demo_lifetime_limit,
         )
 
         self.session.add(invitation)
-        self.session.commit()
+        self._commit_invitation(alias, None)
         self.session.refresh(invitation)
 
         return InvitationPublic.model_validate(invitation)
@@ -356,13 +360,44 @@ class UserRepository(BaseRepository):
             update(InvitationTable).where(InvitationTable.id == id).values(**values)
         )
 
-        self.session.execute(statement)
-        self.session.commit()
+        self._commit_invitation(values.get("alias"), id, statement)
 
         return self.check_invite_token(id)
 
-    def check_invite_token(self, token: UUID4) -> InvitationPublic:
-        statement = select(InvitationTable).where(InvitationTable.id == token)
+    def _commit_invitation(
+        self, alias: str | None, id: UUID4 | None, statement: Update | None = None
+    ) -> None:
+        """Run `statement`, if any, and commit, turning a clash on `alias`
+        into `InvitationAliasTakenError`. Any other integrity failure (the
+        email, say) is re-raised as is.
+
+        `id` is the invitation being updated, None for one being created.
+        """
+        try:
+            if statement is not None:
+                self.session.execute(statement)
+            self.session.commit()
+        except IntegrityError:
+            self.session.rollback()
+            if alias is None:
+                raise
+            holder = select(InvitationTable.id).where(InvitationTable.alias == alias)
+            if id is not None:
+                holder = holder.where(InvitationTable.id != id)
+            if self.session.scalar(holder):
+                raise InvitationAliasTakenError(alias) from None
+            raise
+
+    def check_invite_token(self, token: UUID4 | str) -> InvitationPublic:
+        """The invitation `token` names: its id, or its alias as a string.
+
+        Raises NoResultFound when there is none.
+        """
+        if isinstance(token, str):
+            condition = InvitationTable.alias == token.strip().lower()
+        else:
+            condition = InvitationTable.id == token
+        statement = select(InvitationTable).where(condition)
         invitation = self.session.execute(statement).scalar_one()
 
         if invitation.expires_at:

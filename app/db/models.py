@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import (
     UUID4,
+    AfterValidator,
     AliasChoices,
     BaseModel,
     ConfigDict,
@@ -104,12 +106,39 @@ class AccessRequestPublic(AccessRequestBase):
     processed_by_id: UUID4 | None
 
 
+_INVITATION_ALIAS = re.compile(r"[a-z0-9][a-z0-9_-]{1,63}")
+
+
+def normalize_invitation_alias(value: str) -> str:
+    """Lowercase an invitation alias and check it can stand in for the id.
+
+    Registration parses `invite_token` as a UUID first, so an alias that reads
+    as one -- dashed or as 32 bare hex digits -- would never be looked up as an
+    alias.
+    """
+    alias = value.strip().lower()
+    if not _INVITATION_ALIAS.fullmatch(alias):
+        raise ValueError(
+            "An alias is 2-64 letters, digits, '-' or '_', starting with a "
+            "letter or digit"
+        )
+    try:
+        UUID(alias)
+    except ValueError:
+        return alias
+    raise ValueError("An alias cannot be a UUID")
+
+
+InvitationAlias = Annotated[str, AfterValidator(normalize_invitation_alias)]
+
+
 class InvitationBase(_BaseModel):
     expires_at: datetime | None = None
     reuseable: bool = False
     user_scope: Scope = Scope.USER
     user_expires: datetime | TimeDelta | None = None
     title: str | None = None
+    alias: InvitationAlias | None = None
     access_request_id: UUID4 | None = None
     # Demo budgets handed to the user who registers with this invitation;
     # None leaves them on the configured default.
@@ -128,6 +157,7 @@ class InvitationUpdate(BaseModel):
     user_scope: Scope | _Unset = UNSET
     user_expires: datetime | TimeDelta | None | _Unset = UNSET
     title: str | None | _Unset = UNSET
+    alias: InvitationAlias | None | _Unset = UNSET
     user_demo_concurrent_limit: NonNegativeInt | None | _Unset = UNSET
     user_demo_daily_limit: NonNegativeInt | None | _Unset = UNSET
     user_demo_lifetime_limit: NonNegativeInt | None | _Unset = UNSET
@@ -139,7 +169,8 @@ class InvitationPublic(InvitationBase):
 
     @computed_field()
     def invitation_link(self) -> str:
-        return f"{app_settings.sveltekit_platform_public_addr}/sign-up?token={self.id}"
+        token = self.alias or self.id
+        return f"{app_settings.sveltekit_platform_public_addr}/sign-up?token={token}"
 
 
 class UserBase(_BaseModel):
