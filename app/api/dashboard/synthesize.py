@@ -346,6 +346,14 @@ async def run_synthetic_test(
 
     test_setup = db.tests.update_test_setup_settings(test_id, request_data)
 
+    # Checked before the run is created: a refusal after it would leave a run
+    # that never starts.
+    if test_setup.type == TestType.SHUFFLED_AI and not request_data.answering_model:
+        raise HTTPException(
+            status_code=400,
+            detail="Answering model is required for SHUFFLED_AI test type",
+        )
+
     test_run_id = db.tests.create_test_run(
         TestRunCreate(
             test_setup_id=test_id,
@@ -353,8 +361,6 @@ async def run_synthetic_test(
             **request_data.model_dump(),
         )
     )
-
-    exception = None
 
     match test_setup.type:
         case TestType.FIXED_ANSWERS:
@@ -383,12 +389,6 @@ async def run_synthetic_test(
             )
 
         case TestType.SHUFFLED_AI:
-            if not request_data.answering_model:
-                exception = HTTPException(
-                    status_code=400,
-                    detail="Answering model is required for SHUFFLED_AI test type",
-                )
-
             # Start the synthesis job in the background
             background_tasks.add_task(
                 handle_exceptions(run_synthesis_job_shuffled_ai),
@@ -401,9 +401,6 @@ async def run_synthetic_test(
                 language=request_data.language,
                 delay_before_answer=request_data.delay_before_answers,
             )
-
-    if exception:
-        return exception
 
     db.tests.update_test_run_status(
         test_setup_id=test_id,
