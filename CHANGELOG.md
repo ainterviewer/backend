@@ -4,6 +4,14 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.7] - 2026-10-22
+
+### Internal
+
+- (api) Add note to comment
+- (auth) Don't run the lifespan for the exit route test
+- Point the app's database at a temp dir for the whole suite
+
 ## [0.10.6] - 2026-10-22
 
 ### Features
