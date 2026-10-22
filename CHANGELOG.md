@@ -4,6 +4,18 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.2] - 2026-10-22
+
+### Bug Fixes
+
+- (assistance) Replay every part of a turn, and test the stream offline
+
+### Internal
+
+- (deps) Bump fastapi, sqlalchemy 2.1, polars 2, pydantic-ai 2
+- (deps) Bump the ruff pre-commit hook to v0.17.1
+- Bump lib dep
+
 ## [0.10.1] - 2026-10-22
 
 ### Internal
