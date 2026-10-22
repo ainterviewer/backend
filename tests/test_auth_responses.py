@@ -12,8 +12,7 @@ from app.main import app
 
 
 def test_exit_clears_the_interview_cookies_and_says_so():
-    with TestClient(app) as client:
-        response = client.post("/api/exit")
+    response = TestClient(app).post("/api/exit")
 
     assert response.status_code == 200
     assert response.json() == {"message": "Successfully exited"}
