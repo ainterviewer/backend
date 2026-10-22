@@ -12,35 +12,18 @@ other status. Neither track can clear the other's; see `MessageReportTable`.
 from typing import Annotated
 
 from fastapi import APIRouter, Query
-from pydantic import UUID4, BaseModel
+from pydantic import UUID4
 
-from ...db.models import MessageReportRowPublic
 from ...db.types import ReportStatus
 from ...dependencies import DBSession, ProjectAnnotator, ProjectViewer, UserToken
+from ...schemas.reports import (
+    MessageReportRowPublic,
+    ReportReadRequest,
+    ReportReviewRequest,
+    ReportReviewResponse,
+)
 
 router = APIRouter(tags=["reports"])
-
-
-class ReportReviewRequest(BaseModel):
-    """Set one track's status on a batch of reports."""
-
-    ids: list[UUID4]
-    status: ReportStatus
-
-
-class ReportReadRequest(BaseModel):
-    ids: list[UUID4]
-
-
-class ReportReviewResponse(BaseModel):
-    """How many rows the call actually changed.
-
-    Not an error when it is fewer than were asked for: an id belonging to
-    another project is dropped rather than refused, so a stale client cannot
-    learn from the response whether a report it should not see exists.
-    """
-
-    updated: int
 
 
 @router.get("/projects/{project_id}/reports")

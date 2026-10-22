@@ -6,8 +6,8 @@ from pydantic import UUID4
 
 from ainterviewer.settings import settings as lib_settings
 
-from ...db.models import ExperimentCreate, ExperimentPublic
 from ...dependencies import DBSession, UserToken
+from ...schemas.projects import ExperimentCreate, ExperimentPublic
 from ...utils import generate_qr_img
 
 router = APIRouter(tags=["experiments"])

@@ -17,7 +17,11 @@ from sqlalchemy import delete, exists, func, select
 
 from ainterviewer.utils import get_language_dict
 
-from ..models import ContentStatus, ContentVersionPublic, ContentVersionSummary
+from ...schemas.content import (
+    ContentStatus,
+    ContentVersionPublic,
+    ContentVersionSummary,
+)
 from ..tables import (
     ContentColumns,
     InterviewTable,

@@ -1,18 +1,14 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import UUID4, BaseModel
+from pydantic import UUID4
 
-from ...db.models import UserAdmin, UserAdminUpdate
 from ...dependencies import AdminToken, DBSession
+from ...schemas.admin import AdminNoteUpdate
+from ...schemas.users import DemoBudget, DemoLimitDefaults, UserAdmin, UserAdminUpdate
 from ...settings import app_settings
 from ..dashboard.synthesize import get_demo_budget
-from ..response_models import DemoBudget, DemoLimitDefaults
 from ..websockets.manager import session_manager
 
 router = APIRouter()
-
-
-class AdminNoteUpdate(BaseModel):
-    note: str | None = None
 
 
 @router.get("/users")

@@ -12,10 +12,7 @@ from ainterviewer.settings import settings as lib_settings
 from ainterviewer.utils import now
 
 from ...auth import get_password_hash
-from ...services.email.mail import email_templates, send_email
-from ...settings import DemoLimits, app_settings
-from ...types import Scope
-from ..models import (
+from ...schemas.users import (
     AccessRequestCreate,
     AccessRequestPublic,
     InvitationPublic,
@@ -27,6 +24,9 @@ from ..models import (
     UserPublic,
     UserSelfUpdate,
 )
+from ...services.email.mail import email_templates, send_email
+from ...settings import DemoLimits, app_settings
+from ...types import Scope
 from ..tables import AccessRequestTable, InvitationTable, UserActivityTable, UserTable
 from ..types import AccessRequestStatus
 from .base import BaseRepository

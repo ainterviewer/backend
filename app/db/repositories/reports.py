@@ -19,7 +19,7 @@ from sqlalchemy.orm import aliased
 
 from ainterviewer.utils import now
 
-from ..models import (
+from ...schemas.reports import (
     MessageReportAdminPublic,
     MessageReportAdminRowPublic,
     MessageReportRowPublic,

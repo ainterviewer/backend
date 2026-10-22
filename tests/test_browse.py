@@ -21,7 +21,6 @@ from ainterviewer.interview_guides.survey_items import NumberItem
 from ainterviewer.lpm.types import CustomToken
 from ainterviewer.types import EmbeddingKind, MessageRole, MessageType
 from app.db.keyword_query import KeywordQueryError
-from app.db.models import INTERVIEW_PREVIEW_TURNS, EmbeddingSearchHit
 from app.db.regexp import register_regexp
 from app.db.repositories.embedding import (
     EmbeddingFilters,
@@ -37,6 +36,7 @@ from app.db.tables import (
     MessageTable,
 )
 from app.db.types import CodeKind, InterviewType
+from app.schemas.embeddings import INTERVIEW_PREVIEW_TURNS, EmbeddingSearchHit
 
 PROJECT = uuid.uuid4()
 

@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, EmailStr
 
 from ainterviewer.constants import LANGUAGES
 from ainterviewer.settings import settings as lib_settings
@@ -7,6 +6,7 @@ from ainterviewer.types import LanguageDict
 
 from ..auth import Scope
 from ..dependencies import DBSession, DemoToken
+from ..schemas.users import NewsletterRequest
 
 router = APIRouter()
 
@@ -22,10 +22,6 @@ def get_models(jwt: DemoToken):
 @router.get("/languages", description="Get supported languages")
 async def get_languages(jwt: DemoToken) -> list[LanguageDict]:
     return LANGUAGES
-
-
-class NewsletterRequest(BaseModel):
-    email: EmailStr
 
 
 @router.post("/newsletter", description="Subscribe to our newsletter")

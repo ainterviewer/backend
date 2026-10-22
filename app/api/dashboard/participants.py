@@ -17,11 +17,6 @@ from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode
 from ainterviewer.utils import now
 
-from ...db.models import (
-    ParticipantCreate,
-    ParticipantPublic,
-    ParticipantUpdate,
-)
 from ...db.repositories.errors import OptOutTokenError
 from ...db.types import ContentPart
 from ...dependencies import (
@@ -34,6 +29,18 @@ from ...dependencies import (
     require_preview_features,
     set_etag,
 )
+from ...schemas.participants import (
+    DeleteParticipantsRequest,
+    ExportParticipantsRequest,
+    ParticipantCreate,
+    ParticipantEmailAttachment,
+    ParticipantEmailTemplateRequest,
+    ParticipantPublic,
+    ParticipantUpdate,
+    SendParticipantEmailRequest,
+    SendParticipantEmailResponse,
+    UploadParticipantsResponse,
+)
 from ...services.email.mail import send_email
 from ...services.email.participant_template import (
     TemplateSyntaxError,
@@ -44,17 +51,6 @@ from ...services.email.participant_template import (
     validate_participant_email_template,
 )
 from ...settings import app_settings
-from ..request_models import (
-    DeleteParticipantsRequest,
-    ExportParticipantsRequest,
-    ParticipantEmailTemplateRequest,
-    SendParticipantEmailRequest,
-)
-from ..response_models import (
-    ParticipantEmailAttachment,
-    SendParticipantEmailResponse,
-    UploadParticipantsResponse,
-)
 
 SECTION_SEPARATOR = "\n<hr/>\n"
 SUBJECT_SEPARATOR = " / "

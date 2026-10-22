@@ -20,7 +20,6 @@ from sqlalchemy.orm import Session
 
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.types import MessageRole
-from app.db.models import MessageReportCreate
 from app.db.repositories.interview import InterviewRepository
 from app.db.repositories.reports import ReportRepository
 from app.db.tables import (
@@ -35,6 +34,7 @@ from app.db.tables import (
     UserTable,
 )
 from app.db.types import InterviewType, ReportReason, ReportStatus
+from app.schemas.reports import MessageReportCreate
 from app.types import CollaboratorRole
 
 FOLDER = uuid.uuid4()

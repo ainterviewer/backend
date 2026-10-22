@@ -37,6 +37,12 @@ from ainterviewer.types import (
     MessageType,
 )
 
+from ...schemas.embeddings import (
+    INTERVIEW_PREVIEW_TURNS,
+    ChunkTurns,
+    EmbeddingTurn,
+    TranscriptTurn,
+)
 from ...types import TurnRole
 from ..code_lookup import CodeIndex
 from ..keyword_query import (
@@ -50,7 +56,6 @@ from ..keyword_query import (
     resolve_scope,
     without_code_terms,
 )
-from ..models import INTERVIEW_PREVIEW_TURNS, ChunkTurns, EmbeddingTurn, TranscriptTurn
 from ..survey_answers import SurveyFilter, matching_interviews
 from ..tables import (
     CodingTable,

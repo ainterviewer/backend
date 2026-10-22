@@ -30,9 +30,9 @@ from ainterviewer.synthesize.interviewees import (
 )
 from ainterviewer.types import LanguageCode, MessageRole
 
-from ..api.request_models import CreateInterviewRequest
 from ..auth import InterviewToken
 from ..db.types import InterviewType
+from ..schemas.interviews import CreateInterviewRequest
 from ..settings import app_settings
 
 

@@ -20,19 +20,10 @@ from ..auth import (
     hash_token,
     verify_password,
 )
-from ..db.models import (
-    AccessRequestCreate,
-    UserCreate,
-    UserCreateRequest,
-    UserPrivate,
-    UserPublic,
-    UserSelfUpdate,
-)
 from ..db.types import VerificationPurpose
 from ..dependencies import DBSession, DemoToken
-from ..services.email.mail import email_templates, send_email
-from ..settings import app_settings
-from .request_models import (
+from ..schemas.users import (
+    AccessRequestCreate,
     DeleteAccountRequest,
     ForgotPasswordRequest,
     LoginData,
@@ -40,9 +31,16 @@ from .request_models import (
     ResetPasswordRequest,
     UpdateEmailRequest,
     UpdatePasswordRequest,
+    UserCreate,
+    UserCreateRequest,
+    UserPrivate,
+    UserPublic,
+    UserSelfUpdate,
     VerifyEmailRequest,
     VerifyLoginCodeRequest,
 )
+from ..services.email.mail import email_templates, send_email
+from ..settings import app_settings
 from .websockets.manager import session_manager
 
 logger = logging.getLogger(__name__)

@@ -21,7 +21,6 @@ from ainterviewer.interfaces import SecurityIntervention, SecurityOverride
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.interview_guides.types import ConditionAction
 from ainterviewer.types import MessageRole, MessageType
-from app.db.models import MessageReportCreate
 from app.db.repositories.interview import SECURITY_TASK, InterviewRepository
 from app.db.repositories.reports import ReportRepository
 from app.db.tables import (
@@ -33,6 +32,7 @@ from app.db.tables import (
 )
 from app.db.types import InterviewType, ReportReason, ReportSource
 from app.db.utils import messages_to_dataframe
+from app.schemas.reports import MessageReportCreate
 
 FOLDER = uuid.uuid4()
 PROJECT = uuid.uuid4()

@@ -12,17 +12,17 @@ from fastapi import APIRouter, HTTPException
 from pydantic import UUID4
 from sqlalchemy.exc import NoResultFound
 
-from ....db.models import (
-    MessageCommentCreate,
-    MessageCommentPublic,
-    MessageCommentUpdate,
-)
 from ....db.repositories.errors import CommentThreadError
 from ....dependencies import (
     DBSession,
     DemoToken,
     ProjectAnnotator,
     ProjectViewer,
+)
+from ....schemas.analysis import (
+    MessageCommentCreate,
+    MessageCommentPublic,
+    MessageCommentUpdate,
 )
 
 router = APIRouter()

@@ -15,15 +15,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import UUID4
 from sqlalchemy.exc import NoResultFound
 
-from ....db.models import (
-    CodebookPublic,
-    CodebookPut,
-    CodingCreate,
-    CodingPublic,
-    CodingsForMessages,
-    FilteredMessagesRequest,
-    MessagePublic,
-)
 from ....db.repositories.errors import CodebookError, CodingError
 from ....dependencies import (
     DBSession,
@@ -33,6 +24,15 @@ from ....dependencies import (
     ProjectViewer,
     require_preview_features,
 )
+from ....schemas.analysis import (
+    CodebookPublic,
+    CodebookPut,
+    CodingCreate,
+    CodingPublic,
+    CodingsForMessages,
+    FilteredMessagesRequest,
+)
+from ....schemas.interviews import MessagePublic
 
 router = APIRouter()
 

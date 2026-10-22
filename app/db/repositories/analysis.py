@@ -6,8 +6,7 @@ from sqlalchemy.orm import aliased, joinedload, selectinload
 from ainterviewer.types import MessageRole
 from ainterviewer.utils import now
 
-from ...types import Scope
-from ..models import (
+from ...schemas.analysis import (
     CodeBase,
     CodebookPublic,
     CodebookPut,
@@ -16,8 +15,9 @@ from ..models import (
     CodingPublic,
     MessageCommentCreate,
     MessageCommentPublic,
-    MessagePublic,
 )
+from ...schemas.interviews import MessagePublic
+from ...types import Scope
 from ..tables import (
     CodeTable,
     CodingTable,

@@ -15,7 +15,6 @@ from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.interview_guides.survey_items import CheckboxItem
 from ainterviewer.types import InterviewStatus, MessageRole
 from app.db import InterviewDataBase
-from app.db.models import InterviewSummaryPublic, MessagePublic
 from app.db.tables import (
     Base,
     InterviewTable,
@@ -24,6 +23,7 @@ from app.db.tables import (
     UserTable,
 )
 from app.db.types import InterviewType
+from app.schemas.interviews import InterviewSummaryPublic, MessagePublic
 from app.services.exports import markup
 from app.services.exports.transcripts import (
     InterviewExport,

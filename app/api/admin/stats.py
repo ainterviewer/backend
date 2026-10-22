@@ -6,8 +6,8 @@ from fastapi import APIRouter, Query
 from ainterviewer.utils import now
 
 from ...dependencies import AdminToken, DBSession
+from ...schemas.admin import AdminStats
 from ...services.admin_stats import build_admin_stats
-from ..response_models import AdminStats
 
 router = APIRouter()
 

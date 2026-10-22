@@ -3,18 +3,19 @@ from pydantic import UUID4
 
 from ainterviewer.settings import settings as lib_settings
 
-from ...db.models import (
+from ...dependencies import DBSession, DemoToken, FolderAdmin, FolderEditor
+from ...schemas.projects import (
+    ArchiveRequest,
     CollaboratorCreate,
     CollaboratorPublic,
+    CreateProjectRequest,
     ProjectFolderCreate,
     ProjectFolderEdit,
     ProjectFolderPublic,
     ProjectFolderWithProjects,
 )
-from ...dependencies import DBSession, DemoToken, FolderAdmin, FolderEditor
 from ...types import CollaboratorRole
 from ...utils import generate_qr_img
-from ..request_models import ArchiveRequest, CreateProjectRequest
 from ..websockets.manager import session_manager
 
 router = APIRouter(tags=["folders"])

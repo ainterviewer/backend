@@ -8,17 +8,19 @@ from sqlalchemy import Column, delete, exists, func, select, update
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
 from ainterviewer.utils import now
 
-from ...api.request_models import SynthesizeRequest
-from ...types import TestRunStatus
-from ..models import (
+from ...schemas.projects import (
     ExperimentCreate,
     ExperimentProjectPublic,
     ExperimentPublic,
+)
+from ...schemas.testing import (
+    SynthesizeRequest,
     TestRunCreate,
     TestRunPublic,
     TestSetupCreate,
     TestSetupPublic,
 )
+from ...types import TestRunStatus
 from ..tables import (
     ExperimentProjectTable,
     ExperimentTable,

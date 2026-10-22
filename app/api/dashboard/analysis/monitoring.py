@@ -1,15 +1,14 @@
 import datetime
 from collections.abc import Sequence
-from enum import StrEnum
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Query
-from pydantic import UUID4, BaseModel
+from pydantic import UUID4
 from sqlalchemy import Integer, case, cast, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
 
-from ainterviewer.types import InterviewStatus, LanguageCode
+from ainterviewer.types import InterviewStatus
 
 from ....db.repositories.project import render_default_guide
 from ....db.tables import (
@@ -19,9 +18,20 @@ from ....db.tables import (
 )
 from ....db.types import InterviewType
 from ....dependencies import DBSession, DemoToken, ProjectViewer
+from ....schemas.monitoring import (
+    DailyInterviewCount,
+    DropoutPoint,
+    DropoutSection,
+    DropoutStage,
+    InterviewDurationStats,
+    InterviewStatusCount,
+    InterviewTimeOfDayCount,
+    LanguageCount,
+    MessageCountStats,
+    MonitoringStats,
+)
 from .cohort import interview_cohort
 from .histogram import (
-    HistogramBucket,
     ValueCount,
     compute_histogram_buckets,
     compute_log_histogram_buckets,
@@ -48,55 +58,6 @@ def _gap_seconds(session: Session, later: Any, earlier: Any) -> ColumnElement:
     return func.extract("epoch", later - earlier)
 
 
-class InterviewStatusCount(BaseModel):
-    """Count of interviews by status."""
-
-    status: InterviewStatus
-    count: int
-
-
-class LanguageCount(BaseModel):
-    """Count of interviews conducted in a given language."""
-
-    language: LanguageCode
-    count: int
-
-
-class DailyInterviewCount(BaseModel):
-    """Count of interviews created per day."""
-
-    date: datetime.date
-    count: int
-    completed_count: int
-
-
-class InterviewTimeOfDayCount(BaseModel):
-    time: str
-    count: int
-
-
-class InterviewDurationStats(BaseModel):
-    """Statistics about interview duration (active time spent).
-
-    Over the same gap-capped durations the duration histogram is binned from,
-    so the summary and the chart describe the same quantity.
-    """
-
-    min_seconds: int
-    max_seconds: int
-    avg_seconds: float
-    sum_seconds: float
-
-
-class MessageCountStats(BaseModel):
-    """Statistics about message counts per interview."""
-
-    min_messages: int
-    max_messages: int
-    avg_messages: float
-    sum_messages: int
-
-
 def _summarize(data_rows: Sequence) -> tuple[int, int, float, int] | None:
     """Derive min/max/avg/sum from value-count rows sorted by value.
 
@@ -119,36 +80,6 @@ def _summarize(data_rows: Sequence) -> tuple[int, int, float, int] | None:
     )
 
 
-class DropoutStage(StrEnum):
-    """Where in the interview an inactive respondent stopped.
-
-    Dropouts do not all land on a question: an interview can be abandoned
-    before a single message exists, during the introduction, or on the outro.
-    Those three stages have no `(section, main_question)` to group by, so they
-    are carried as explicit stages instead of being dropped.
-    """
-
-    NEVER_STARTED = "never_started"
-    INTRODUCTION = "introduction"
-    QUESTION = "question"
-    OUTRO = "outro"
-
-
-class DropoutPoint(BaseModel):
-    """Count of dropouts at a specific point in the interview.
-
-    `section`, `main_question` and `sub_question` are the zero-based indices
-    recorded on the last message, and are only populated for
-    `DropoutStage.QUESTION`.
-    """
-
-    stage: DropoutStage
-    section: int | None
-    main_question: int | None
-    sub_question: int | None
-    count: int
-
-
 # Chronological order of the stages, for laying the dropout points out along an
 # axis that reads start-to-finish.
 _DROPOUT_STAGE_ORDER = {
@@ -157,70 +88,6 @@ _DROPOUT_STAGE_ORDER = {
     DropoutStage.QUESTION: 2,
     DropoutStage.OUTRO: 3,
 }
-
-
-class DropoutSection(BaseModel):
-    """A section of the interview guide, for grouping dropout points.
-
-    Sourced from the project's default localization, so `description` and
-    `questions` may be in a different language than the dashboard page
-    requesting these stats.
-    """
-
-    section: int
-    description: str
-    # The section's main questions, in the guide's authored order, so a dropout
-    # point can be labelled with the text of the question it stopped on.
-    # Positional: `questions[main_question]`. Probes have no entry here — they
-    # are generated during the interview, not authored in the guide.
-    questions: list[str]
-
-
-class MonitoringStats(BaseModel):
-    """Aggregated monitoring statistics for a project."""
-
-    # Basic counts
-    total_interviews: int
-    completion_rate: float
-
-    # Breakdowns
-    interviews_by_status: list[InterviewStatusCount]
-    interviews_by_language: list[LanguageCount]
-
-    # Time series data
-    interviews_over_time: list[DailyInterviewCount]
-    interviews_by_time_of_day: list[InterviewTimeOfDayCount]
-
-    # Duration/engagement stats
-    duration_stats: InterviewDurationStats | None
-    message_count_stats: MessageCountStats | None
-
-    # Histogram distributions
-    duration_histogram: list[HistogramBucket]
-    # How many pauses between consecutive messages ran past the cap and were
-    # counted as the cap, and what that cap is. Reported so the chart can say
-    # that the durations it shows are active time rather than elapsed time.
-    duration_gaps_capped: int
-    duration_gap_cap_seconds: int
-    message_count_histogram: list[HistogramBucket]
-    message_length_histogram: list[HistogramBucket]
-
-    # Dropout analysis
-    dropout_stats: list[DropoutPoint]
-    dropout_sections: list[DropoutSection]
-
-    # Participation. `total_participants` is the project's full participant
-    # roster, which carries no interview dates, so a `start_date`/`end_date`
-    # filter narrows `participants_completed` only. A project with no linked
-    # participants (anonymous-link distribution) reports 0/0 and a null rate;
-    # the dashboard hides the card in that case rather than showing 0%.
-    total_participants: int
-    participants_completed: int
-    participation_rate: float | None
-
-    # Denominator for `dropout_stats`: every dropout point is one inactive
-    # interview, so these two must agree.
-    total_inactive: int
 
 
 @router.get(

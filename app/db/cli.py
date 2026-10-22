@@ -14,8 +14,8 @@ from ainterviewer.types import DatabaseType
 
 from ..dependencies import engine, get_db
 from ..platform_release import Highlight, PlatformManifest
+from ..schemas.users import UserCreate
 from ..settings import app_settings
-from .models import UserCreate
 
 cli = Typer()
 

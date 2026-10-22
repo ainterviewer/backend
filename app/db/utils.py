@@ -9,8 +9,8 @@ from pydantic import UUID4
 from sqlalchemy.exc import IntegrityError
 from xlsxwriter import Workbook
 
+from ..schemas.interviews import MessagePublic
 from ..types import ExternalParam
-from .models import MessagePublic
 
 
 def _json_serialize(x):

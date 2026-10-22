@@ -22,34 +22,15 @@ a stored `notification` table; none exists yet.
 from typing import Annotated
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel
 
-from ..db.models import MessageReportRowPublic
 from ..db.types import ReportStatus
 from ..dependencies import DBSession, DemoToken
+from ..schemas.reports import MessageReportRowPublic
+from ..schemas.users import DemoBudget, UserNotifications
 from ..types import Scope
 from .dashboard.synthesize import get_demo_budget
-from .response_models import DemoBudget
 
 router = APIRouter(prefix="/me", tags=["me"])
-
-
-class UserNotifications(BaseModel):
-    """Counts for the badges in the account menu.
-
-    One field per queue rather than one number and a label. A platform admin
-    who also collaborates on projects has work waiting in *both*, and the two
-    are different jobs -- rewording a question in your own guide is not
-    reviewing somebody else's for safety. Counting only one of them hid the
-    other completely.
-    """
-
-    #: Still-open reports on the project track, in projects this user
-    #: collaborates on, that they have not read.
-    unread_reports: int = 0
-    #: The same on the platform track, across every project. Always 0 for a
-    #: caller without admin scope -- there is no queue for them to clear.
-    unread_platform_reports: int = 0
 
 
 @router.get("/notifications")

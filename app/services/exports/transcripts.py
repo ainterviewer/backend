@@ -29,9 +29,9 @@ from pydantic import UUID4
 
 from ainterviewer.types import InterviewStatus, MessageRole
 
-from ...db.models import InterviewSummaryPublic, MessagePublic
 from ...db.types import InterviewType
 from ...db.utils import fix_nested_columns, messages_to_dataframe, write_messages_xlsx
+from ...schemas.interviews import InterviewSummaryPublic, MessagePublic
 from ...types import ExternalParam
 from ...utils import as_aware
 from . import markup

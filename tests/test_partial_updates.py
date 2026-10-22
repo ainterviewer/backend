@@ -14,9 +14,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.db.crud import InterviewDataBase
-from app.db.models import UserCreate, UserCreateRequest, UserSelfUpdate
 from app.db.tables import Base, UserTable
 from app.main import app
+from app.schemas.users import UserCreate, UserCreateRequest, UserSelfUpdate
 
 
 @pytest.fixture

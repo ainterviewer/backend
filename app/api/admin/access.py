@@ -1,35 +1,17 @@
-from typing import Literal
-
 from fastapi import APIRouter
-from pydantic import UUID4, BaseModel, model_validator
+from pydantic import UUID4
 
-from ...db.models import InvitationCreate, InvitationPublic, InvitationUpdate
 from ...dependencies import AdminToken, DBSession
-from ...types import Scope
+from ...schemas.admin import (
+    AccessRequestsDeleteRequest,
+    AccessRequestsProcessRequest,
+    InvitationsDeleteRequest,
+)
+from ...schemas.users import InvitationCreate, InvitationPublic, InvitationUpdate
 
 router = APIRouter(
     prefix="/admin",
 )
-
-
-class AccessRequestsProcessRequest(BaseModel):
-    ids: list[UUID4]
-    scopes: list[Scope]
-    action: Literal["approve", "deny"]
-
-    @model_validator(mode="after")
-    def validate_data(self):
-        assert len(self.ids) == len(self.scopes)
-
-        return self
-
-
-class AccessRequestsDeleteRequest(BaseModel):
-    ids: list[UUID4]
-
-
-class InvitationsDeleteRequest(BaseModel):
-    ids: list[UUID4]
 
 
 @router.get("/access-requests")

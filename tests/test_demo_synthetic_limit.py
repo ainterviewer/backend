@@ -24,11 +24,11 @@ from ainterviewer.utils import now
 from app.api.admin.users import get_demo_limit_defaults, get_user_demo_budget
 from app.api.dashboard.synthesize import DEMO_DAILY_WINDOW, run_synthetic_test
 from app.api.me import get_my_demo_budget
-from app.api.request_models import SynthesizeRequest
 from app.auth import AuthToken
 from app.db.crud import InterviewDataBase
 from app.db.repositories.test import TestRepository
 from app.db.tables import Base, TestRunTable, TestSetupTable, UserTable
+from app.schemas.testing import SynthesizeRequest
 from app.settings import app_settings
 from app.types import Scope, TestRunStatus
 

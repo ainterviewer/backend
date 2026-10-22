@@ -6,7 +6,11 @@ from pydantic import UUID4
 from sqlalchemy import delete, exists, select, update
 from sqlalchemy.exc import NoResultFound
 
-from ..models import ParticipantCreate, ParticipantPublic, ParticipantUpdate
+from ...schemas.participants import (
+    ParticipantCreate,
+    ParticipantPublic,
+    ParticipantUpdate,
+)
 from ..tables import (
     InterviewTable,
     ParticipantTable,

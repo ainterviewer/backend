@@ -15,11 +15,10 @@ which inserts the answer at `current_message_id + 1`.
 import datetime
 import statistics
 from collections import Counter, defaultdict
-from enum import StrEnum
 from typing import Annotated, NamedTuple
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import UUID4, BaseModel, Field
+from pydantic import UUID4
 from sqlalchemy import and_, distinct, func, or_, select
 
 from ainterviewer.interview_guides import SurveyItem
@@ -55,8 +54,18 @@ from ....dependencies import (
     ProjectViewer,
     require_preview_features,
 )
+from ....schemas.monitoring import (
+    AnswerSample,
+    CategoryCount,
+    DistributionBucket,
+    DistributionKind,
+    GuideSection,
+    ItemDistribution,
+    ItemDistributions,
+    NumericStats,
+)
 from .cohort import interview_cohort
-from .histogram import HistogramBucket, compute_histogram_buckets
+from .histogram import compute_histogram_buckets
 
 # The report page is a preview feature; see `require_preview_features`.
 router = APIRouter(
@@ -95,156 +104,6 @@ MAX_SAMPLE_ANSWERS = 30
 # What `SurveyItem.validate_answer` would call a skip. The interview stores
 # these verbatim as the answer's content.
 _SKIP_TOKENS = {token.value for token in CustomToken}
-
-
-class DistributionKind(StrEnum):
-    """Which of the distribution fields carries this item's data.
-
-    The chart to draw follows from this, not from the survey item type: two
-    item types that bin the same way (`slider` and `number`) are drawn the same
-    way, and a question with no survey item still has a distribution -- the
-    length of its free-text answers.
-    """
-
-    # `counts`, one bar per option/value.
-    CATEGORICAL = "categorical"
-    # `buckets` + `stats`, a histogram over the answered numbers.
-    NUMERIC = "numeric"
-    # `counts`, one bar per day (date/datetime) or per hour (time).
-    TEMPORAL = "temporal"
-    # `buckets` + `stats` over the word count of free-text answers.
-    TEXT = "text"
-    # Nothing: a statement the respondent could not answer (`can_answer` is
-    # false). Carried so the guide's shape survives on the page -- every count
-    # is zero and every collection empty.
-    STATEMENT = "statement"
-
-
-class CategoryCount(BaseModel):
-    """One bar of a categorical distribution."""
-
-    label: str
-    count: int
-    # An answer that is not one of the item's authored options: typed into an
-    # "Other" field, or left over from an older version of the guide. Rendered
-    # apart from the authored options, which are always shown even at zero.
-    is_other: bool = False
-    # How `count` splits across the languages the interviews ran in, keyed by
-    # language code. What the bar is stacked by when the cohort spans more
-    # than one language.
-    by_language: dict[LanguageCode, int] = Field(default_factory=dict)
-
-
-class DistributionBucket(HistogramBucket):
-    """A histogram bucket carrying the same per-language split as a bar."""
-
-    by_language: dict[LanguageCode, int] = Field(default_factory=dict)
-
-
-class AnswerSample(BaseModel):
-    """One answer's numeric value, kept verbatim rather than binned.
-
-    A histogram needs enough answers to have a shape. Under
-    `MAX_SAMPLE_ANSWERS` the individual values are returned instead, so the
-    page can plot the answers themselves and not a row of one-tall bars.
-    """
-
-    value: float
-    language: LanguageCode
-
-
-class NumericStats(BaseModel):
-    """Summary of the answered numbers behind a numeric/text distribution.
-
-    Computed on the raw answers, so it keeps the precision the buckets round
-    away.
-    """
-
-    min: float
-    max: float
-    mean: float
-    median: float
-
-
-class ItemDistribution(BaseModel):
-    """The distribution of answers to one authored question."""
-
-    section: int
-    main_question: int
-    # The question as authored in the project's default localization. Falls
-    # back to the wording an interview actually asked when the question is no
-    # longer in the guide.
-    question: str
-    kind: DistributionKind
-    # The survey item the question was asked with, `None` for a free-text
-    # question. Taken from the guide, so it carries the authored options even
-    # when nobody picked some of them.
-    item: SurveyItem | None
-    # What had to hold for this question to be asked at all, straight from the
-    # guide. Each condition names the question it reads by index, so the page
-    # can both state the rule on this card and, reading the whole set, mark the
-    # cards that gate others. `None` for an unconditional question.
-    conditions: Conditions | None = None
-
-    # Answer rate. `n_asked - n_answered - n_skipped` is the number of
-    # respondents who saw the question and dropped out on it.
-    n_asked: int
-    n_answered: int
-    n_skipped: int
-    # Respondents who never saw the question because a condition on it did not
-    # hold. Counted apart from `n_asked`, which is the denominator of the
-    # answer rate: not being asked is not the same as being asked and not
-    # answering, and folding the two together makes a gated question look like
-    # one everybody abandons.
-    n_not_asked_by_condition: int = 0
-
-    # How often this question's own rule was evaluated, and how often it was
-    # met and the action fired. Both zero for a question with no conditions --
-    # and also where the firings cannot be attributed to a question with
-    # certainty, which is the case for interviews that ran before the
-    # evaluation recorded which question carried the rule. Absent rather than
-    # approximate: this sits next to the rule on the card, and a number that
-    # may belong to a neighbouring question is worse than none.
-    n_condition_evaluated: int = 0
-    n_condition_fired: int = 0
-
-    counts: list[CategoryCount]
-    buckets: list[DistributionBucket]
-    stats: NumericStats | None
-    # The individual values behind a numeric or text distribution, populated
-    # only while there are few enough of them to draw one by one. When this is
-    # non-empty it is what the page plots, and `buckets` is its fallback.
-    samples: list[AnswerSample] = Field(default_factory=list)
-
-    # The write-in tail `counts` leaves out: how many distinct values, and how
-    # many answers they account for between them. Both zero unless the item is
-    # categorical and had more write-ins than fit.
-    n_other_hidden: int = 0
-    n_other_hidden_count: int = 0
-
-
-class GuideSection(BaseModel):
-    """A section of the interview guide, for grouping the items under.
-
-    Sourced from the project's default localization, so `description` may be in
-    a different language than the dashboard page requesting it.
-    """
-
-    section: int
-    description: str
-
-
-class ItemDistributions(BaseModel):
-    """Answer distributions for every question of a project's guide."""
-
-    sections: list[GuideSection]
-    items: list[ItemDistribution]
-    # Every language the project has interviews in, regardless of the language
-    # filter applied to this response, so the filter can offer all of them.
-    languages: list[str]
-    # Interviews in the filtered cohort. The denominator the answer rates are
-    # read against.
-    total_interviews: int
 
 
 class _ValueCount(NamedTuple):

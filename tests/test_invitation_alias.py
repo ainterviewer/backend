@@ -17,9 +17,9 @@ from sqlalchemy.orm import Session
 from ainterviewer.utils import now
 from app.api import auth as auth_api
 from app.db.crud import InterviewDataBase
-from app.db.models import InvitationCreate, InvitationUpdate, UserCreateRequest
 from app.db.repositories.errors import InvitationAliasTakenError
 from app.db.tables import Base, UserTable
+from app.schemas.users import InvitationCreate, InvitationUpdate, UserCreateRequest
 from app.types import Scope
 
 

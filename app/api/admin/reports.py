@@ -12,26 +12,17 @@ are, and an admin resolving here leaves theirs; see `MessageReportTable`.
 from typing import Annotated
 
 from fastapi import APIRouter, Query
-from pydantic import UUID4, BaseModel
 
-from ...db.models import MessageReportAdminRowPublic
 from ...db.types import ReportStatus
 from ...dependencies import AdminToken, DBSession
+from ...schemas.reports import (
+    MessageReportAdminRowPublic,
+    ReportReadRequest,
+    ReportReviewRequest,
+    ReportReviewResponse,
+)
 
 router = APIRouter(prefix="/reports")
-
-
-class AdminReportReviewRequest(BaseModel):
-    ids: list[UUID4]
-    status: ReportStatus
-
-
-class AdminReportReadRequest(BaseModel):
-    ids: list[UUID4]
-
-
-class AdminReportReviewResponse(BaseModel):
-    updated: int
 
 
 @router.get("")
@@ -61,12 +52,12 @@ async def get_reports(
 
 @router.post("/resolve")
 async def resolve_reports(
-    review: AdminReportReviewRequest,
+    review: ReportReviewRequest,
     db: DBSession,
     jwt: AdminToken,
-) -> AdminReportReviewResponse:
+) -> ReportReviewResponse:
     """Resolve, dismiss or reopen reports on the platform track."""
-    return AdminReportReviewResponse(
+    return ReportReviewResponse(
         updated=db.reports.resolve(
             user_id=jwt.user_id,
             report_ids=review.ids,
@@ -78,11 +69,11 @@ async def resolve_reports(
 
 @router.post("/read")
 async def mark_reports_read(
-    read: AdminReportReadRequest,
+    read: ReportReadRequest,
     db: DBSession,
     jwt: AdminToken,
-) -> AdminReportReviewResponse:
+) -> ReportReviewResponse:
     """Record that this admin has seen these reports."""
-    return AdminReportReviewResponse(
+    return ReportReviewResponse(
         updated=db.reports.mark_read(user_id=jwt.user_id, report_ids=read.ids)
     )

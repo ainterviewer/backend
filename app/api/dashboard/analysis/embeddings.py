@@ -17,25 +17,6 @@ from ainterviewer.types import EmbeddingKind, InterviewStatus
 
 from ....db.code_lookup import CodeIndex, resolve_all
 from ....db.keyword_query import MARKUP_PATTERN, KeywordQueryError, Scope, parse
-from ....db.models import (
-    CodeFacet,
-    CodeFacets,
-    EmbeddingBackfillResponse,
-    EmbeddingBrowseResponse,
-    EmbeddingCluster,
-    EmbeddingClusterPoint,
-    EmbeddingClusterResponse,
-    EmbeddingCodeSimilarResponse,
-    EmbeddingGroup,
-    EmbeddingSearchHit,
-    EmbeddingSearchResponse,
-    EmbeddingSimilarResponse,
-    EmbeddingStatus,
-    InterviewTranscript,
-    SurveyFacet,
-    SurveyFacets,
-    SurveyFacetValue,
-)
 from ....db.repositories.embedding import (
     DEFAULT_BROWSE_GROUPING,
     DEFAULT_BROWSE_ORDER,
@@ -81,9 +62,28 @@ from ....embed.clustering import (
 )
 from ....embed.queue import chunk_queue
 from ....embed.templates import QueryTask
+from ....schemas.common import LanguageFilter
+from ....schemas.embeddings import (
+    CodeFacet,
+    CodeFacets,
+    EmbeddingBackfillResponse,
+    EmbeddingBrowseResponse,
+    EmbeddingCluster,
+    EmbeddingClusterPoint,
+    EmbeddingClusterResponse,
+    EmbeddingCodeSimilarResponse,
+    EmbeddingGroup,
+    EmbeddingSearchHit,
+    EmbeddingSearchResponse,
+    EmbeddingSimilarResponse,
+    EmbeddingStatus,
+    InterviewTranscript,
+    SurveyFacet,
+    SurveyFacets,
+    SurveyFacetValue,
+)
 from ....settings import app_settings
 from ....types import GroupKind, Projection
-from ...request_models import LanguageFilter
 
 # The whole explore surface is a preview feature; see `require_preview_features`.
 router = APIRouter(dependencies=[Depends(require_preview_features)])

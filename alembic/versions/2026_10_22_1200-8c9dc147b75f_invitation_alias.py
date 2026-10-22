@@ -31,7 +31,7 @@ from alembic import op
 
 import app.db.types
 from ainterviewer.utils import now
-from app.db.models import normalize_invitation_alias
+from app.schemas.users import normalize_invitation_alias
 from app.types import Scope
 
 # revision identifiers, used by Alembic.

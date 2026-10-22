@@ -57,12 +57,6 @@ from ainterviewer.utils import get_language_dict, now
 
 from ...auth import generate_resume_token, hash_token
 from ...collab.rooms import content_rooms
-from ...db.models import (
-    MessagePublic,
-    ProjectLanguage,
-    ProjectPermissionsPublic,
-    ProjectPublic,
-)
 from ...db.repositories.errors import ProjectLanguageError
 from ...db.repositories.interview import SORTABLE_INTERVIEW_COLUMNS
 from ...db.repositories.project import ContentSource
@@ -79,35 +73,41 @@ from ...dependencies import (
     UserToken,
     set_etag,
 )
+from ...schemas.common import PaginatedQueryParams
+from ...schemas.content import (
+    InterviewGuideGenerationRequest,
+    ProbingPromptPreview,
+    ProjectContentPublic,
+    QuestionGenerationRequest,
+    QuestionSectionGenerationRequest,
+)
+from ...schemas.interviews import (
+    DeleteInterviewRequest,
+    ExportMessagesRequest,
+    FacetCount,
+    InterviewFacets,
+    InterviewFilters,
+    InterviewListResponse,
+    InterviewResumeLinkCreated,
+    InterviewResumeLinkPublic,
+    InterviewSelectionRequest,
+    MessagePublic,
+)
+from ...schemas.projects import (
+    ArchiveRequest,
+    ExternalParamsRequest,
+    MoveProjectRequest,
+    ProjectLanguage,
+    ProjectPermissionsPublic,
+    ProjectPublic,
+    ProjectStatusChangeRequest,
+    ProjectTitleUpdateRequest,
+)
 from ...services.exports.transcripts import InterviewExport, export_interviews
 from ...services.project_storage import copy_email_attachments, delete_project_storage
 from ...settings import app_settings
 from ...types import CollaboratorRole, Scope
 from ...utils import as_aware, ensure_filename, generate_qr_img
-from ..request_models import (
-    ArchiveRequest,
-    DeleteInterviewRequest,
-    ExportMessagesRequest,
-    ExternalParamsRequest,
-    InterviewFilters,
-    InterviewGuideGenerationRequest,
-    InterviewSelectionRequest,
-    MoveProjectRequest,
-    PaginatedQueryParams,
-    ProjectStatusChangeRequest,
-    ProjectTitleUpdateRequest,
-    QuestionGenerationRequest,
-    QuestionSectionGenerationRequest,
-)
-from ..response_models import (
-    FacetCount,
-    InterviewFacets,
-    InterviewListResponse,
-    InterviewResumeLinkCreated,
-    InterviewResumeLinkPublic,
-    ProbingPromptPreview,
-    ProjectContentPublic,
-)
 from ..websockets.manager import session_manager
 
 logger = logging.getLogger(__name__)

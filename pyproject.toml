@@ -96,6 +96,11 @@ ignore = [
   "BLE001",
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# Pydantic copies a mutable default per instance. Ruff can only tell a model
+# by a `BaseModel` base it sees in the same file, and these inherit `Schema`.
+"app/schemas/*" = ["RUF012"]
+
 [tool.ruff.lint.flake8-bugbear]
 # FastAPI, Typer and pydantic all express defaults as calls in the signature.
 extend-immutable-calls = [

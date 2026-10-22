@@ -16,27 +16,25 @@ from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
 from ainterviewer.types import TestType
 from ainterviewer.utils import now
 
-from ...db.models import (
-    IntervieweeCreate,
-    IntervieweePublic,
+from ...dependencies import DBSession, IfMatch, ProjectEditor, ProjectViewer, set_etag
+from ...schemas.interviews import IntervieweeCreate, IntervieweePublic
+from ...schemas.testing import (
+    SynthesizeRequest,
+    SynthesizeResponse,
     TestRunCreate,
     TestSetupCreate,
     TestSetupPublic,
+    UpdateBackgroundInfoRequest,
+    UpdateFixedAnswersRequest,
+    UpdateFixedPersonasRequest,
 )
-from ...dependencies import DBSession, IfMatch, ProjectEditor, ProjectViewer, set_etag
+from ...schemas.users import DemoBudget, DemoBudgetItem
 from ...synthesize.core import (
     run_synthesis_job_fixed_ai,
     run_synthesis_job_fixed_answers,
     run_synthesis_job_shuffled_ai,
 )
 from ...types import Scope, TestRunStatus
-from ..request_models import (
-    SynthesizeRequest,
-    UpdateBackgroundInfoRequest,
-    UpdateFixedAnswersRequest,
-    UpdateFixedPersonasRequest,
-)
-from ..response_models import DemoBudget, DemoBudgetItem, SynthesizeResponse
 from ..websockets.manager import session_manager
 
 router = APIRouter(tags=["synthesize"])

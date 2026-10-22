@@ -34,8 +34,8 @@ from ainterviewer.lpm.types import CustomToken
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import MessageType
 
-from .db.models import MessagePublic
 from .paths import APP_DIR
+from .schemas.interviews import MessagePublic
 
 cli = Typer(no_args_is_help=True)
 

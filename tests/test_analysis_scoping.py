@@ -18,7 +18,6 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 
 from ainterviewer.types import MessageRole
-from app.db.models import CodeBase, CodebookPut, CodingCreate, MessageCommentCreate
 from app.db.repositories.analysis import AnalysisRepository
 from app.db.repositories.errors import CodebookError, CodingError
 from app.db.tables import (
@@ -30,6 +29,12 @@ from app.db.tables import (
     UserTable,
 )
 from app.db.types import CodeKind
+from app.schemas.analysis import (
+    CodeBase,
+    CodebookPut,
+    CodingCreate,
+    MessageCommentCreate,
+)
 from app.types import CollaboratorRole, Scope
 
 FOLDER = uuid.uuid4()

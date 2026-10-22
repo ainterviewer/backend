@@ -7,12 +7,11 @@ how a publish is numbered.
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import UUID4, BaseModel, Field
+from pydantic import UUID4
 from sqlalchemy.exc import NoResultFound
 
 from ...collab.rooms import content_rooms
-from ...db.models import ContentStatus, ContentVersionPublic, ContentVersionSummary
-from ...db.versioning import Bump, BumpName
+from ...db.versioning import Bump
 from ...dependencies import (
     DBSession,
     DemoToken,
@@ -21,18 +20,15 @@ from ...dependencies import (
     ProjectViewer,
     set_etag,
 )
-from ..request_models import PaginatedQueryParams
-from ..response_models import PaginatedResponse
+from ...schemas.common import PaginatedQueryParams, PaginatedResponse
+from ...schemas.content import (
+    ContentStatus,
+    ContentVersionPublic,
+    ContentVersionSummary,
+    SaveVersionRequest,
+)
 
 router = APIRouter(tags=["versions"])
-
-
-class SaveVersionRequest(BaseModel):
-    label: str | None = Field(default=None, max_length=200)
-    #: Publish it to respondents, or only keep it in the history.
-    publish: bool = False
-    #: Raise the computed bump when publishing; lowering it is refused.
-    bump: BumpName | None = None
 
 
 @router.get("/projects/{project_id}/versions/status")

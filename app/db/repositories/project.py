@@ -26,6 +26,16 @@ from ainterviewer.types import LanguageCode
 from ainterviewer.utils import get_language_dict, now
 
 from ...collab.guide_doc import merge_guide_data
+from ...schemas.content import ProjectLocalizationPublic
+from ...schemas.projects import (
+    Collaborator,
+    CollaboratorPublic,
+    ProjectFolderPublic,
+    ProjectFolderWithProjects,
+    ProjectLanguage,
+    ProjectPublic,
+    ProjectPublicWithTests,
+)
 from ...types import (
     CollaboratorRole,
     ExternalParam,
@@ -33,16 +43,6 @@ from ...types import (
     ParticipantEmails,
     ProjectStatus,
     Scope,
-)
-from ..models import (
-    Collaborator,
-    CollaboratorPublic,
-    ProjectFolderPublic,
-    ProjectFolderWithProjects,
-    ProjectLanguage,
-    ProjectLocalizationPublic,
-    ProjectPublic,
-    ProjectPublicWithTests,
 )
 from ..tables import (
     CollaboratorTable,

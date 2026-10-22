@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from ...response_models import ErrorResponse
+from ....schemas.common import ErrorResponse
 from . import codes, comments, embeddings, monitoring, report
 
 router = APIRouter(

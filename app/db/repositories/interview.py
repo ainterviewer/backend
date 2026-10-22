@@ -40,16 +40,15 @@ from ainterviewer.types import (
 )
 from ainterviewer.utils import now
 
-from ...utils import as_aware
-from ..models import (
+from ...schemas.interviews import (
     IntervieweeCreate,
     IntervieweePublic,
     InterviewPublic,
     InterviewSummaryPublic,
     MessagePublic,
-    MessageReportCreate,
-    MessageReportPublic,
 )
+from ...schemas.reports import MessageReportCreate, MessageReportPublic
+from ...utils import as_aware
 from ..tables import (
     CodingTable,
     EmbeddingTable,

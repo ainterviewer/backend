@@ -11,7 +11,13 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable
 from uuid import UUID
 
-from ..api.response_models import (
+from ..db.repositories.stats import (
+    ActivityRow,
+    InterviewDayRow,
+    ProjectDayRow,
+    UserRow,
+)
+from ..schemas.admin import (
     AdminStats,
     AdminStatsSummary,
     DailyStats,
@@ -19,12 +25,6 @@ from ..api.response_models import (
     RetentionCohort,
     RetentionWeek,
     ScopeCounts,
-)
-from ..db.repositories.stats import (
-    ActivityRow,
-    InterviewDayRow,
-    ProjectDayRow,
-    UserRow,
 )
 from ..types import Scope
 

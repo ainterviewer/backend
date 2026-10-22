@@ -26,7 +26,6 @@ from sqlalchemy.orm import Session
 
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.types import MessageRole
-from app.db.models import MessagePublic, MessageReportCreate, MessageReportPublic
 from app.db.repositories.interview import InterviewRepository
 from app.db.tables import (
     Base,
@@ -44,6 +43,8 @@ from app.db.utils import (
     messages_to_dataframe,
     write_messages_xlsx,
 )
+from app.schemas.interviews import MessagePublic
+from app.schemas.reports import MessageReportCreate, MessageReportPublic
 
 FOLDER = uuid.uuid4()
 PROJECT = uuid.uuid4()

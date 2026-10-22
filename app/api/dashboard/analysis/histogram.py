@@ -11,7 +11,7 @@ import math
 from collections.abc import Sequence
 from typing import NamedTuple
 
-from pydantic import BaseModel
+from ....schemas.monitoring import HistogramBucket
 
 
 class ValueCount(NamedTuple):
@@ -23,14 +23,6 @@ class ValueCount(NamedTuple):
 
     value: float
     count: int
-
-
-class HistogramBucket(BaseModel):
-    """A value-count pair for histogram use."""
-
-    value: int
-    count: int
-    label: str
 
 
 # Mantissas that read as "round" on an axis. Only whole-number steps are used,

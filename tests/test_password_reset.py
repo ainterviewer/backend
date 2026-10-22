@@ -16,11 +16,10 @@ from sqlalchemy.orm import Session
 
 from ainterviewer.utils import now
 from app.api import auth as auth_api
-from app.api.request_models import ForgotPasswordRequest, ResetPasswordRequest
 from app.auth import hash_token, verify_password
 from app.db.crud import InterviewDataBase
-from app.db.models import UserCreate
 from app.db.tables import Base
+from app.schemas.users import ForgotPasswordRequest, ResetPasswordRequest, UserCreate
 
 EMAIL = "researcher@example.com"
 OLD_PASSWORD = "old-password"

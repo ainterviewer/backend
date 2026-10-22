@@ -81,7 +81,7 @@ async def test_probes_and_questions_without_an_answer_are_skipped(monkeypatch):
 
 def test_blank_answers_are_left_out():
     # Imported here: importing it before `app.db` trips an import cycle.
-    from app.api.request_models import UpdateFixedAnswersRequest
+    from app.schemas.testing import UpdateFixedAnswersRequest
 
     request = UpdateFixedAnswersRequest(answers={FIRST: "  kept  ", SECOND: "   "})
     assert request.answers == {FIRST: "kept"}

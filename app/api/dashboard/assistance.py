@@ -9,6 +9,7 @@ from ainterviewer.types import LanguageCode
 
 from ...auth import AssistanceSessionToken
 from ...dependencies import AssistanceSessionCookie, DBSession, ProjectEditor
+from ...schemas.content import AssistanceChatRequest
 from ...services.assistance.agent import (
     _GREETING_TRIGGER,
     GREETING_TEMPLATE,
@@ -16,7 +17,6 @@ from ...services.assistance.agent import (
     to_chat_messages,
 )
 from ...services.assistance.models import ChatMessage, _messages_adapter
-from ..request_models import AssistanceChatRequest
 
 router = APIRouter(tags=["assistance"])
 
