@@ -24,7 +24,13 @@ from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.sql.elements import ColumnElement
 
 from ainterviewer.interfaces import SecurityIntervention, SecurityOverride
-from ainterviewer.interview_guides import Image, InterviewGuide, SurveyItem
+from ainterviewer.interview_guides import (
+    Audio,
+    Image,
+    InterviewGuide,
+    SurveyItem,
+    Video,
+)
 from ainterviewer.types import (
     Feedback,
     Interviewer,
@@ -1044,7 +1050,7 @@ class InterviewRepository(BaseRepository):
                 "Could not record the safety override on interview %s", interview_id
             )
 
-    def save_image(self, image: Image): ...
+    async def save_media(self, image: Image | Audio | Video): ...
 
     def update_feedback(
         self,

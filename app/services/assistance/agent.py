@@ -160,7 +160,7 @@ async def stream_messages(
                 async with node.stream(agent_run.ctx) as agent_stream:
                     async for text in agent_stream.stream_text(debounce_by=0.01):
                         m = ModelResponse(
-                            parts=[TextPart(text)], timestamp=agent_stream.timestamp()
+                            parts=[TextPart(text)], timestamp=agent_stream.timestamp
                         )
                         if message := to_chat_message(m):
                             yield message + b"\n"

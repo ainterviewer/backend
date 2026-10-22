@@ -7,6 +7,7 @@ import sqlalchemy as sa
 from sqlalchemy import (
     JSON,
     CheckConstraint,
+    Float,
     ForeignKey,
     Index,
     LargeBinary,
@@ -92,8 +93,13 @@ metadata_obj = MetaData(naming_convention=naming_convention)
 
 class Base(DeclarativeBase):
     metadata = metadata_obj
-    # Every datetime column reads back aware; see AppDateTime.
-    type_annotation_map: ClassVar = {datetime.datetime: AppDateTime}
+    # Every datetime column reads back aware; see AppDateTime. `float` is
+    # pinned to Float because SQLAlchemy 2.1 maps it to Double, which
+    # autogenerate would report as a type change on every float column.
+    type_annotation_map: ClassVar = {
+        datetime.datetime: AppDateTime,
+        float: Float,
+    }
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid4, unique=True

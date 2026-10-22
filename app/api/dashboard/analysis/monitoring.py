@@ -368,7 +368,7 @@ def get_project_monitoring_stats(
     interviews_over_time = [
         DailyInterviewCount(
             date=row.date,
-            count=row.count,  # ty:ignore[invalid-argument-type]
+            count=row.count,
             completed_count=row.completed_count or 0,
         )
         for row in daily_results
@@ -389,7 +389,7 @@ def get_project_monitoring_stats(
     interviews_by_time_of_day = [
         InterviewTimeOfDayCount(
             time=datetime.time(hour=h).strftime("%H"),
-            count=hour_counts.get(h, 0),  # ty:ignore[invalid-argument-type]
+            count=hour_counts.get(h, 0),
         )
         for h in range(24)
     ]

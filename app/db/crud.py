@@ -211,8 +211,8 @@ class InterviewDataBase(PersistenceProtocol):
     def insert_message(self, *args, **kwargs):
         return self.interviews.insert_message(*args, **kwargs)
 
-    def save_image(self, *args, **kwargs):
-        return self.interviews.save_image(*args, **kwargs)
+    async def save_media(self, *args, **kwargs):
+        return await self.interviews.save_media(*args, **kwargs)
 
     def insert_task(self, *args, **kwargs):
         return self.interviews.insert_task(*args, **kwargs)

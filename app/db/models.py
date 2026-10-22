@@ -436,7 +436,7 @@ class ProjectPermissionsPublic(_BaseModel):
 
 
 class ProjectPublicWithTests(ProjectPublic):
-    tests: list[TestSetupPublic]
+    tests: list[TestSetupPublic]  # ty:ignore[invalid-mutable-override]
 
 
 class ExperimentProjectCreate(_BaseModel):
@@ -700,7 +700,7 @@ class ParticipantPublic(ParticipantBase):
     participant_id: UUID4
     folder_id: UUID4
     created_at: datetime
-    pid: str
+    pid: str  # ty:ignore[invalid-mutable-override]
     latest_interview_at: datetime | None = None
     latest_interview_status: InterviewStatus | None = None
 
