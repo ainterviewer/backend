@@ -22,7 +22,7 @@ from ainterviewer.types import (
     TestType,
 )
 
-from ..db.types import InterviewType
+from ..types import InterviewType
 from .analysis import CodingPublic, MessageCommentPublic
 from .common import PaginatedResponse, Schema
 from .reports import MessageReportPublic

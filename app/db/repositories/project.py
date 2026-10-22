@@ -37,7 +37,9 @@ from ...schemas.projects import (
 )
 from ...types import (
     CollaboratorRole,
+    ContentPart,
     ExternalParam,
+    InterviewType,
     ParticipantEmail,
     ParticipantEmails,
     ProjectStatus,
@@ -53,7 +55,6 @@ from ..tables import (
     TestSetupTable,
     UserTable,
 )
-from ..types import ContentPart, InterviewType
 from .base import BaseRepository
 from .errors import ContentRevisionError, NotPublishedError, ProjectLanguageError
 from .permissions import can_moderate_project

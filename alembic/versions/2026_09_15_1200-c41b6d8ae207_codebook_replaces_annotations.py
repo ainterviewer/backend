@@ -63,7 +63,7 @@ def upgrade() -> None:
         sa.Column("memo", sa.Text(), nullable=False),
         sa.Column("color", sa.String(), nullable=False),
         # `SQLEnum` stores the member's *name*, so these are the strings in the
-        # column -- see `app.db.types.CodeKind`.
+        # column -- see `app.types.CodeKind`.
         sa.Column(
             "kind",
             sa.Enum("GROUP", "TAG", "SCORE", name="codekind"),

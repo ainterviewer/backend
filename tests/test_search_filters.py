@@ -25,8 +25,8 @@ from app.api.dashboard.analysis.embeddings import embedding_filters
 from app.db.crud import InterviewDataBase
 from app.db.repositories.embedding import EmbeddingFilters
 from app.db.tables import Base, CodeTable, ProjectFolderTable, ProjectTable
-from app.db.types import CodeKind
 from app.dependencies import get_db
+from app.types import CodeKind
 
 FOLDER = uuid.uuid4()
 PROJECT = uuid.uuid4()

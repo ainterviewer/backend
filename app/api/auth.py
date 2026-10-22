@@ -20,7 +20,6 @@ from ..auth import (
     hash_token,
     verify_password,
 )
-from ..db.types import VerificationPurpose
 from ..dependencies import DBSession, DemoToken
 from ..schemas.users import (
     AccessRequestCreate,
@@ -41,6 +40,7 @@ from ..schemas.users import (
 )
 from ..services.email.mail import email_templates, send_email
 from ..settings import app_settings
+from ..types import VerificationPurpose
 from .websockets.manager import session_manager
 
 logger = logging.getLogger(__name__)

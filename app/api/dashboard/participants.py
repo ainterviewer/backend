@@ -18,7 +18,6 @@ from ainterviewer.types import LanguageCode
 from ainterviewer.utils import now
 
 from ...db.repositories.errors import OptOutTokenError
-from ...db.types import ContentPart
 from ...dependencies import (
     DBSession,
     IfMatch,
@@ -51,6 +50,7 @@ from ...services.email.participant_template import (
     validate_participant_email_template,
 )
 from ...settings import app_settings
+from ...types import ContentPart
 
 SECTION_SEPARATOR = "\n<hr/>\n"
 SUBJECT_SEPARATOR = " / "

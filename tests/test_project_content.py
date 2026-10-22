@@ -34,7 +34,7 @@ from app.db.repositories import project as project_repository
 from app.db.repositories.errors import NotPublishedError, ProjectLanguageError
 from app.db.repositories.project import render_default_guide
 from app.db.tables import Base, ProjectContentTable, ProjectFolderTable, UserTable
-from app.db.types import ContentPart
+from app.types import ContentPart
 
 
 @pytest.fixture

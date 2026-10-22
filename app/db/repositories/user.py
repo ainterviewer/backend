@@ -26,9 +26,8 @@ from ...schemas.users import (
 )
 from ...services.email.mail import email_templates, send_email
 from ...settings import DemoLimits, app_settings
-from ...types import Scope
+from ...types import AccessRequestStatus, Scope
 from ..tables import AccessRequestTable, InvitationTable, UserActivityTable, UserTable
-from ..types import AccessRequestStatus
 from .base import BaseRepository
 from .errors import InvitationAliasTakenError
 

@@ -16,9 +16,8 @@ from ainterviewer.interview_guides import (
 from ainterviewer.interview_guides.extra import Consent, Welcome
 from ainterviewer.types import LanguageCode
 
-from ..db.types import ContentPart, ContentVersionKind
 from ..db.versioning import BumpName
-from ..types import ParticipantEmails
+from ..types import ContentPart, ContentVersionKind, ParticipantEmails
 from .common import PromptRequest, Schema
 
 

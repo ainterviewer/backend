@@ -18,12 +18,12 @@ from app.db.tables import (
     ProjectTable,
     UserTable,
 )
-from app.db.types import InterviewType
 from app.schemas.interviews import (
     ExportMessagesRequest,
     InterviewFilterParams,
     InterviewSelection,
 )
+from app.types import InterviewType
 
 
 @pytest.fixture

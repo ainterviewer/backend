@@ -4,9 +4,8 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 
-from ...types import Scope
+from ...types import InterviewType, Scope
 from ..tables import InterviewTable, ProjectTable, UserActivityTable, UserTable
-from ..types import InterviewType
 from .base import BaseRepository
 
 

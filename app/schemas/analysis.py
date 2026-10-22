@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pydantic import UUID4, AliasChoices, Field
 
-from ..db.types import CodeKind
+from ..types import CodeKind
 from .common import Schema
 from .users import AuthorPublic
 

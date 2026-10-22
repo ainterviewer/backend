@@ -13,8 +13,7 @@ from ainterviewer.interview_guides import Image, SurveyItem
 from ainterviewer.types import EmbeddingKind, InterviewStatus, LanguageCode
 
 from ..db.keyword_query import Scope
-from ..db.types import InterviewType
-from ..types import GroupKind, Projection, TurnRole
+from ..types import GroupKind, InterviewType, Projection, TurnRole
 from .common import LanguageFilter, Schema
 
 if TYPE_CHECKING:

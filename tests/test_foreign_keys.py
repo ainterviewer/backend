@@ -20,8 +20,8 @@ from app.db.tables import (
     ProjectTable,
     UserTable,
 )
-from app.db.types import InterviewType
 from app.db.utils import is_foreign_key_violation
+from app.types import InterviewType
 
 
 @pytest.fixture

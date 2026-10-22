@@ -26,9 +26,9 @@ from pydantic import UUID4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..types import CodeKind
 from .keyword_query import CodeTerm, KeywordQueryError, Node, leaves_of
 from .tables import CodeTable
-from .types import CodeKind
 
 #: How many candidate paths an ambiguity message lists before it gives up and
 #: says how many there are. Long enough to be a menu, short enough to read.

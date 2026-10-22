@@ -33,9 +33,8 @@ from app.db.tables import (
     ProjectTable,
     UserTable,
 )
-from app.db.types import InterviewType, ReportReason, ReportStatus
 from app.schemas.reports import MessageReportCreate
-from app.types import CollaboratorRole
+from app.types import CollaboratorRole, InterviewType, ReportReason, ReportStatus
 
 FOLDER = uuid.uuid4()
 OURS = uuid.uuid4()

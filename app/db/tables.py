@@ -56,29 +56,26 @@ from ainterviewer.utils import now
 from app.platform_release import PlatformManifest
 
 from ..types import (
-    CollaboratorRole,
-    ExternalParam,
-    ParticipantEmails,
-    ProjectStatus,
-    Scope,
-    TestRunStatus,
-)
-from ._extra import PydanticJSONB
-from .types import (
     AccessRequestStatus,
-    AppDateTime,
     CodeKind,
+    CollaboratorRole,
     ContentPart,
     ContentVersionKind,
     EmbeddingTask,
+    ExternalParam,
     InterviewType,
-    LanguageType,
+    ParticipantEmails,
+    ProjectStatus,
     ReportReason,
     ReportSource,
     ReportStatus,
     SafetyFlag,
+    Scope,
+    TestRunStatus,
     VerificationPurpose,
 )
+from ._extra import PydanticJSONB
+from .types import AppDateTime, LanguageType
 
 naming_convention = {
     "ix": "ix_%(column_0_label)s",

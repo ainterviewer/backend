@@ -25,7 +25,6 @@ from ..auth import AuthToken, InterviewToken, create_interview_token, hash_token
 from ..collab.rooms import content_rooms
 from ..db.repositories.errors import ResumeTokenError
 from ..db.repositories.project import ContentSource
-from ..db.types import ContentVersionKind, InterviewType
 from ..dependencies import (
     AdminToken,
     AuthError,
@@ -46,7 +45,14 @@ from ..schemas.projects import ValidateExternalParamsRequest
 from ..schemas.reports import MessageReportCreate, MessageReportPublic
 from ..services.audio import SpeechNotConfigured, SpeechUnavailable, synthesize
 from ..settings import app_settings
-from ..types import CollaboratorRole, ExternalParam, Scope, build_external_params_model
+from ..types import (
+    CollaboratorRole,
+    ContentVersionKind,
+    ExternalParam,
+    InterviewType,
+    Scope,
+    build_external_params_model,
+)
 from ..utils import generate_random_filename
 
 CHUNK_SIZE = 1024 * 1024

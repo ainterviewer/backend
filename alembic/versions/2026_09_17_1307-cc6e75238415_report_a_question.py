@@ -50,7 +50,7 @@ def upgrade() -> None:
         sa.Column("interview_id", sa.Uuid(), nullable=False),
         sa.Column("project_id", sa.Uuid(), nullable=False),
         # `SQLEnum` stores the member's *name*, so these are the strings in
-        # the column -- see `app.db.types.ReportReason`.
+        # the column -- see `app.types.ReportReason`.
         sa.Column(
             "reason",
             sa.Enum(

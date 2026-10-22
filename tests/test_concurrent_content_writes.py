@@ -22,7 +22,7 @@ from ainterviewer.interview_guides import (
 from app.db.crud import InterviewDataBase
 from app.db.repositories import project as project_repository
 from app.db.tables import Base, ProjectContentTable, ProjectFolderTable, UserTable
-from app.db.types import ContentPart
+from app.types import ContentPart
 
 
 @pytest.fixture

@@ -26,11 +26,10 @@ from app.db.repositories.stats import (
     UserRow,
 )
 from app.db.tables import Base, UserActivityTable, UserTable
-from app.db.types import InterviewType
 from app.dependencies import get_db
 from app.main import app
 from app.services.admin_stats import build_admin_stats
-from app.types import Scope
+from app.types import InterviewType, Scope
 
 TZ = lib_settings.tzinfo
 

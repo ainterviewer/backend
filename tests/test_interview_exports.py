@@ -22,7 +22,6 @@ from app.db.tables import (
     ProjectTable,
     UserTable,
 )
-from app.db.types import InterviewType
 from app.schemas.interviews import InterviewSummaryPublic, MessagePublic
 from app.services.exports import markup
 from app.services.exports.transcripts import (
@@ -31,6 +30,7 @@ from app.services.exports.transcripts import (
     build_view,
     export_interviews,
 )
+from app.types import InterviewType
 
 PROJECT_ID = uuid.uuid4()
 UTC = ZoneInfo("UTC")

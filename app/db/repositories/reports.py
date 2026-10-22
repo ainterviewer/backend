@@ -24,6 +24,7 @@ from ...schemas.reports import (
     MessageReportAdminRowPublic,
     MessageReportRowPublic,
 )
+from ...types import InterviewType, ReportSource, ReportStatus
 from ..tables import (
     CollaboratorTable,
     InterviewTable,
@@ -35,7 +36,6 @@ from ..tables import (
     ProjectParticipantTable,
     ProjectTable,
 )
-from ..types import InterviewType, ReportSource, ReportStatus
 from .base import BaseRepository
 
 logger = logging.getLogger(__name__)

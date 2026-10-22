@@ -28,14 +28,13 @@ from app.db.tables import (
     ProjectTable,
     UserTable,
 )
-from app.db.types import CodeKind
 from app.schemas.analysis import (
     CodebookReplace,
     CodeInput,
     CodingCreate,
     MessageCommentCreate,
 )
-from app.types import CollaboratorRole, Scope
+from app.types import CodeKind, CollaboratorRole, Scope
 
 FOLDER = uuid.uuid4()
 OURS = uuid.uuid4()

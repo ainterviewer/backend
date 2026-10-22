@@ -48,6 +48,7 @@ from ...schemas.interviews import (
     MessagePublic,
 )
 from ...schemas.reports import MessageReportCreate, MessageReportPublic
+from ...types import InterviewType, ReportSource, SafetyFlag
 from ...utils import as_aware
 from ..tables import (
     CodingTable,
@@ -66,7 +67,6 @@ from ..tables import (
     TestRunTable,
     TestSetupTable,
 )
-from ..types import InterviewType, ReportSource, SafetyFlag
 from ..utils import is_foreign_key_violation
 from .base import BaseRepository
 from .errors import InterviewGoneError, ResumeTokenError

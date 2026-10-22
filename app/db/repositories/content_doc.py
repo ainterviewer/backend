@@ -9,8 +9,8 @@ from typing import Any, NamedTuple
 from pydantic import UUID4, BaseModel
 from sqlalchemy import select
 
+from ...types import ContentPart
 from ..tables import ContentDocTable, ProjectContentTable
-from ..types import ContentPart
 from .base import BaseRepository
 
 

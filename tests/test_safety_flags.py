@@ -30,9 +30,9 @@ from app.db.tables import (
     ProjectFolderTable,
     ProjectTable,
 )
-from app.db.types import InterviewType, ReportReason, ReportSource
 from app.db.utils import messages_to_dataframe
 from app.schemas.reports import MessageReportCreate
+from app.types import InterviewType, ReportReason, ReportSource
 
 FOLDER = uuid.uuid4()
 PROJECT = uuid.uuid4()

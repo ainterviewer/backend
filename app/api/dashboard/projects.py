@@ -59,7 +59,6 @@ from ...db.repositories.errors import ProjectLanguageError
 from ...db.repositories.interview import SORTABLE_INTERVIEW_COLUMNS
 from ...db.repositories.project import ContentSource
 from ...db.tables import InterviewResumeTokenTable
-from ...db.types import ContentPart, InterviewType
 from ...dependencies import (
     DBSession,
     DemoToken,
@@ -103,7 +102,7 @@ from ...schemas.projects import (
 from ...services.exports.transcripts import InterviewExport, export_interviews
 from ...services.project_storage import copy_email_attachments, delete_project_storage
 from ...settings import app_settings
-from ...types import CollaboratorRole, Scope
+from ...types import CollaboratorRole, ContentPart, InterviewType, Scope
 from ...utils import as_aware, ensure_filename, generate_qr_img
 from ..websockets.manager import session_manager
 

@@ -14,9 +14,8 @@ from pydantic import UUID4, ValidationError
 from ...auth import AuthToken
 from ...collab.parts import LIVE_PARTS
 from ...collab.rooms import DocMismatchError, ReadOnlyChannel, content_rooms
-from ...db.types import ContentPart
 from ...dependencies import DBSession
-from ...types import CollaboratorRole, Scope
+from ...types import CollaboratorRole, ContentPart, Scope
 from .auth import WS_UNAUTHORIZED
 
 logger = logging.getLogger(__name__)

@@ -8,13 +8,7 @@ from pydantic import UUID4, Field, field_validator
 
 from ainterviewer.types import LanguageCode
 
-from ..db.types import (
-    InterviewType,
-    ReportReason,
-    ReportSource,
-    ReportStatus,
-    SafetyFlag,
-)
+from ..types import InterviewType, ReportReason, ReportSource, ReportStatus, SafetyFlag
 from .common import Schema
 
 

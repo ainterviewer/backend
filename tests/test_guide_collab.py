@@ -41,10 +41,9 @@ from app.db.tables import (
     UserTable,
 )
 from app.db.triggers import register_trigger_functions
-from app.db.types import ContentPart
 from app.dependencies import get_db
 from app.main import app
-from app.types import CollaboratorRole, Scope
+from app.types import CollaboratorRole, ContentPart, Scope
 
 pytestmark = pytest.mark.anyio
 

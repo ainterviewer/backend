@@ -37,8 +37,8 @@ from app.db.tables import (
     ProjectFolderTable,
     UserTable,
 )
-from app.db.types import ContentPart, ContentVersionKind, InterviewType
 from app.db.versioning import Bump, classify
+from app.types import ContentPart, ContentVersionKind, InterviewType
 
 
 @pytest.fixture

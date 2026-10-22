@@ -35,8 +35,8 @@ from app.db.tables import (
     InterviewTable,
     MessageTable,
 )
-from app.db.types import CodeKind, InterviewType
 from app.schemas.embeddings import INTERVIEW_PREVIEW_TURNS, EmbeddingSearchHit
+from app.types import CodeKind, InterviewType
 
 PROJECT = uuid.uuid4()
 

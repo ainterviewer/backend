@@ -50,7 +50,7 @@ from sqlalchemy.orm import Session, object_session
 
 from ..db.crud import InterviewDataBase
 from ..db.tables import ProjectContentTable
-from ..db.types import ContentPart, ContentVersionKind
+from ..types import ContentPart, ContentVersionKind
 from .guide_doc import doc_id, merge_guide_data
 from .parts import LIVE_PARTS, DocPart
 

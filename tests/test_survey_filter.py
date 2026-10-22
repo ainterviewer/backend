@@ -49,7 +49,7 @@ from app.db.tables import (
     MessageTable,
     ProjectContentTable,
 )
-from app.db.types import InterviewType
+from app.types import InterviewType
 
 PROJECT = uuid.uuid4()
 

@@ -31,9 +31,9 @@ from ainterviewer.synthesize.interviewees import (
 from ainterviewer.types import LanguageCode, MessageRole
 
 from ..auth import InterviewToken
-from ..db.types import InterviewType
 from ..schemas.interviews import InterviewCreate
 from ..settings import app_settings
+from ..types import InterviewType
 
 
 async def fetch_token(

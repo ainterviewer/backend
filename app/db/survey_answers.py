@@ -45,8 +45,8 @@ from ainterviewer.interview_guides.survey_items import (
 from ainterviewer.lpm.types import CustomToken
 from ainterviewer.types import MessageRole, MessageType
 
+from ..types import InterviewType
 from .tables import InterviewTable, MessageTable
-from .types import InterviewType
 
 #: A place in the interview guide: zero-based ``(section, main_question)``, the
 #: same pair the question filter and the annotate view use.

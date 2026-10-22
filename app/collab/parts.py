@@ -22,7 +22,7 @@ from ainterviewer.interview_guides.localized import (
     LocalizedWelcome,
 )
 
-from ..db.types import ContentPart
+from ..types import ContentPart
 from .flat_doc import apply_flat_data, read_flat_data
 from .guide_doc import Json, apply_guide_data, read_guide_data
 

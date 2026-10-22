@@ -20,7 +20,7 @@ from app.db.tables import (
     ProjectTable,
     UserTable,
 )
-from app.db.types import InterviewType
+from app.types import InterviewType
 
 APP_TZ = lib_settings.tzinfo
 UTC = ZoneInfo("UTC")

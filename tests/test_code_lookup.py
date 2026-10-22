@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.db.code_lookup import CodeIndex, resolve_all
 from app.db.keyword_query import And, CodeTerm, KeywordQueryError, Node, parse
 from app.db.tables import Base, CodeTable, ProjectFolderTable, ProjectTable
-from app.db.types import CodeKind
+from app.types import CodeKind
 
 
 def tree(query: str) -> Node:

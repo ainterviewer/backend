@@ -17,7 +17,7 @@ from ...schemas.analysis import (
     MessageCommentPublic,
 )
 from ...schemas.interviews import MessagePublic
-from ...types import Scope
+from ...types import DEFAULT_PALETTE, CodeKind, Scope
 from ..tables import (
     CodeTable,
     CodingTable,
@@ -25,7 +25,6 @@ from ..tables import (
     MessageTable,
     ProjectTable,
 )
-from ..types import DEFAULT_PALETTE, CodeKind
 from .base import BaseRepository
 from .errors import CodebookError, CodingError, CommentThreadError
 from .permissions import can_moderate_project

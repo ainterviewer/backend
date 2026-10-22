@@ -6,8 +6,8 @@ from sqlalchemy import delete, select, update
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.utils import now
 
+from ...types import VerificationPurpose
 from ..tables import VerificationCodeTable
-from ..types import VerificationPurpose
 from .base import BaseRepository
 
 

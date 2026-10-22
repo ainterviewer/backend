@@ -20,7 +20,7 @@ from ainterviewer.interview_guides.types import ConditionAction
 from ainterviewer.types import MessageRole, MessageType
 from app.db.repositories.interview import InterviewRepository
 from app.db.tables import Base, InterviewTable
-from app.db.types import InterviewType
+from app.types import InterviewType
 from app.utils import replay_history
 
 PROJECT = uuid.uuid4()

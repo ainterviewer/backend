@@ -41,7 +41,7 @@ from ...schemas.embeddings import (
     EmbeddingTurn,
     TranscriptTurn,
 )
-from ...types import TurnRole
+from ...types import EmbeddingTask, InterviewType, TurnRole
 from ..code_lookup import CodeIndex
 from ..keyword_query import (
     MARKUP_PATTERN,
@@ -62,7 +62,6 @@ from ..tables import (
     MessageTable,
     ProjectParticipantTable,
 )
-from ..types import EmbeddingTask, InterviewType
 from .base import BaseRepository
 
 # Stored vectors are raw little-endian float32, `dim` of them. They are L2

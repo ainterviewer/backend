@@ -16,7 +16,7 @@ from app.api.dashboard.analysis.embeddings import code_facets
 from app.db.code_lookup import CodeIndex
 from app.db.repositories.embedding import CodeCoverage
 from app.db.tables import Base, CodeTable
-from app.db.types import CodeKind
+from app.types import CodeKind
 
 PROJECT = uuid.uuid4()
 WELLBEING = uuid.uuid4()

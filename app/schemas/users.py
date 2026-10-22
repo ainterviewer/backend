@@ -21,9 +21,8 @@ from ainterviewer.types import TimeDelta
 from ainterviewer.utils import now
 
 from ..db._extra import CustomEmailStr
-from ..db.types import AccessRequestStatus
 from ..settings import app_settings
-from ..types import Scope
+from ..types import AccessRequestStatus, Scope
 from .common import Schema
 
 

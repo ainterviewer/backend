@@ -22,13 +22,13 @@ from ...schemas.content import (
     ContentVersionPublic,
     ContentVersionSummaryPublic,
 )
+from ...types import ContentPart, ContentVersionKind
 from ..tables import (
     ContentColumns,
     InterviewTable,
     ProjectContentTable,
     ProjectContentVersionTable,
 )
-from ..types import ContentPart, ContentVersionKind
 from ..versioning import FIRST_VERSION, Bump, SemVer, bumped, classify, format_semver
 from .base import BaseRepository
 from .content_doc import ContentDocRepository

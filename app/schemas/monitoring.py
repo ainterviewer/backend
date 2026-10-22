@@ -11,7 +11,7 @@ from ainterviewer.interview_guides import SurveyItem
 from ainterviewer.interview_guides.conditions import Conditions
 from ainterviewer.types import InterviewStatus, LanguageCode
 
-from ..db.types import InterviewType
+from ..types import InterviewType
 from .common import Schema
 
 
