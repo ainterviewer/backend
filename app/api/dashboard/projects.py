@@ -69,6 +69,7 @@ from ...dependencies import (
     UserToken,
     set_etag,
 )
+from ...errors import AppError
 from ...schemas.common import PageParams
 from ...schemas.content import (
     InterviewGuideGenerationRequest,
@@ -101,7 +102,7 @@ from ...schemas.projects import (
 from ...services.exports.transcripts import InterviewExport, export_interviews
 from ...services.project_storage import copy_email_attachments, delete_project_storage
 from ...settings import app_settings
-from ...types import CollaboratorRole, ContentPart, InterviewType, Scope
+from ...types import CollaboratorRole, ContentPart, ErrorCode, InterviewType, Scope
 from ...utils import as_aware, ensure_filename, generate_qr_img
 from ..errors import STALE_REVISION
 from ..websockets.manager import session_manager
@@ -541,7 +542,11 @@ async def generate_section_question(
         (s for s in guide.question_sections if s.id == data.section_id), None
     )
     if section is None:
-        raise HTTPException(status_code=404, detail="No such section in the guide")
+        raise AppError(
+            "No such section in the guide",
+            status=404,
+            code=ErrorCode.SECTION_NOT_FOUND,
+        )
 
     question = await generate_question(
         data.prompt,

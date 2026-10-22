@@ -7,6 +7,8 @@ public route reads -- more than the repository behind it
 (test_content_versions.py).
 """
 
+from uuid import uuid4
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, select
@@ -215,3 +217,16 @@ def test_publishing_reports_what_blocks_it(setup):
     assert refused.status_code == 409
     assert refused.json()["code"] == "cannot_publish"
     assert "guide.introduction" in refused.json()["missing"]["DA"]
+
+
+def test_a_question_for_an_unsaved_section_is_told_apart(setup):
+    # The editor asks for a question in a section added since the last save,
+    # which the server does not have yet, and says so rather than "failed".
+    client, project_id, cookies, _ = setup
+    response = client.post(
+        f"/api/projects/{project_id}/EN/guide/section/question/generate",
+        json={"prompt": "ask about bikes", "section_id": str(uuid4())},
+        cookies=cookies,
+    )
+    assert response.status_code == 404
+    assert response.json()["code"] == "section_not_found"

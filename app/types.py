@@ -446,6 +446,9 @@ class ErrorCode(StrEnum):
     STALE_REVISION = "stale_revision"
     REVISION_REQUIRED = "revision_required"
     PROJECT_LANGUAGE = "project_language"
+    # The guide editor: a section added since the last save, which the server
+    # does not have yet.
+    SECTION_NOT_FOUND = "section_not_found"
     # Interviews
     INVALID_LINK_PARAMS = "invalid_link_params"
     # Analysis
