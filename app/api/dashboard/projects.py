@@ -4,6 +4,7 @@ import logging
 from base64 import b64decode
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 import aiofiles
@@ -1278,6 +1279,15 @@ async def generate_project_qr(
     jwt: DemoToken,
     _: ProjectViewer,
 ):
+    # The page's own query string is the link's: a language, or values for the
+    # project's external params. Such a QR is generated on demand rather than
+    # cached, since every combination would otherwise leave a file behind.
+    extra = [(k, v) for k, v in request.query_params.multi_items() if k != "id"]
+    if extra:
+        query = urlencode([("id", str(project_id)), *extra])
+        img_data = generate_qr_img(f"{request.base_url}interview?{query}")
+        return StreamingResponse(io.BytesIO(img_data), media_type="image/png")
+
     file_path = (
         lib_settings.storage.project_storage.qr_code_path(project_id) / "interview.png"
     )
