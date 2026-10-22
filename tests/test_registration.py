@@ -9,7 +9,6 @@ Runs against an in-memory SQLite database with email sending stubbed out.
 """
 
 import asyncio
-import json
 
 import pytest
 from sqlalchemy import create_engine
@@ -64,8 +63,7 @@ def register(db, token, email="ada@example.com"):
     request = RegisterRequest(
         email=email, first_name="Ada", password="a-password", invite_token=token
     )
-    response = asyncio.run(auth_api.register(request, db))
-    return response.status_code, json.loads(bytes(response.body))
+    return asyncio.run(auth_api.register(request, db))
 
 
 def accounts(db, email="ada@example.com") -> int:
@@ -74,7 +72,7 @@ def accounts(db, email="ada@example.com") -> int:
 
 def test_email_in_use_is_a_409_and_keeps_the_invite(db, sent):
     first, second = invite(db), invite(db, alias="second")
-    assert register(db, first.id)[0] == 201
+    register(db, first.id)
 
     with pytest.raises(EmailTakenError) as error:
         register(db, second.id)
@@ -106,7 +104,7 @@ def test_restored_invite_registers_on_retry(db, monkeypatch, email_down):
 
     monkeypatch.setattr(auth_api, "send_email", fake_send_email)
 
-    assert register(db, invitation.id)[0] == 201
+    register(db, invitation.id)
     assert accounts(db) == 1
 
 
@@ -132,7 +130,7 @@ def test_claiming_a_spent_invite_creates_no_account(db):
 def test_single_use_invite_is_spent_by_a_registration(db, sent):
     invitation = invite(db)
 
-    assert register(db, invitation.id)[0] == 201
+    register(db, invitation.id)
     with pytest.raises(AppError) as error:
         register(db, invitation.id, "b@example.com")
 

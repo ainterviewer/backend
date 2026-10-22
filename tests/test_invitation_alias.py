@@ -5,7 +5,6 @@ Runs against an in-memory SQLite database with email sending stubbed out.
 """
 
 import asyncio
-import json
 import uuid
 from datetime import timedelta
 
@@ -49,8 +48,7 @@ def register(db, token, email="ada@example.com"):
     request = RegisterRequest(
         email=email, first_name="Ada", password="a-password", invite_token=token
     )
-    response = asyncio.run(auth_api.register(request, db))
-    return response.status_code, json.loads(bytes(response.body))
+    return asyncio.run(auth_api.register(request, db))
 
 
 def registered(db, email="ada@example.com") -> UserTable:
@@ -89,9 +87,8 @@ def test_register_with_alias(db):
         user_demo_daily_limit=3,
     )
 
-    status, _ = register(db, "WORKSHOP")
+    register(db, "WORKSHOP")
 
-    assert status == 201
     user = registered(db)
     assert user.scope == Scope.DEMO
     assert user.invite_token == invitation.id
@@ -103,14 +100,14 @@ def test_register_with_alias(db):
 def test_reusable_alias_redeems_more_than_once(db):
     invite(db, alias="workshop", reuseable=True)
 
-    assert register(db, "workshop", "a@example.com")[0] == 201
-    assert register(db, "workshop", "b@example.com")[0] == 201
+    register(db, "workshop", "a@example.com")
+    register(db, "workshop", "b@example.com")
 
 
 def test_single_use_alias_is_consumed(db):
     invite(db, alias="once")
 
-    assert register(db, "once", "a@example.com")[0] == 201
+    register(db, "once", "a@example.com")
     with pytest.raises(AppError) as error:
         register(db, "once", "b@example.com")
     assert error.value.code == ErrorCode.INVITE_INVALID
@@ -119,7 +116,7 @@ def test_single_use_alias_is_consumed(db):
 def test_register_with_id_records_no_alias(db):
     invitation = invite(db, alias="workshop", reuseable=True)
 
-    assert register(db, str(invitation.id))[0] == 201
+    register(db, str(invitation.id))
     assert registered(db).registration_token is None
 
 

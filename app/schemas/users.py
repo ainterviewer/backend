@@ -236,6 +236,14 @@ class LoginRequest(Schema):
     extended: bool = False
 
 
+class AuthResponse(Schema):
+    """`two_factor_required` comes with a 202: no session yet, a code was
+    emailed for `/login/verify-code`."""
+
+    message: str
+    two_factor_required: bool = False
+
+
 class VerifyEmailRequest(Schema):
     token: str
 

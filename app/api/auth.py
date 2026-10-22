@@ -4,8 +4,7 @@ from datetime import datetime
 from uuid import uuid4
 
 import sqlalchemy.exc
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.security import APIKeyCookie
 
 from ainterviewer.settings import settings as lib_settings
@@ -23,8 +22,10 @@ from ..auth import (
 from ..db.repositories.errors import EmailTakenError
 from ..dependencies import DBSession, DemoToken
 from ..errors import AppError
+from ..schemas.common import ActionResponse
 from ..schemas.users import (
     AccessRequestCreate,
+    AuthResponse,
     DeleteAccountRequest,
     ForgotPasswordRequest,
     InvitationPublic,
@@ -57,7 +58,7 @@ _DUMMY_HASH = get_password_hash("timing-attack-dummy-password")
 
 
 def _set_auth_cookies(
-    response: JSONResponse,
+    response: Response,
     access_token: str,
     refresh_token: str,
 ) -> None:
@@ -79,7 +80,7 @@ def _set_auth_cookies(
     )
 
 
-def _delete_auth_cookies(response: JSONResponse) -> None:
+def _delete_auth_cookies(response: Response) -> None:
     response.delete_cookie(
         key="access_token",
         secure=True,
@@ -123,12 +124,9 @@ def _create_and_store_refresh_token(
 
 
 def _issue_session(
-    db: DBSession,
-    user: UserRecord,
-    extended: bool,
-    detail: str = "Successfully logged in",
-) -> JSONResponse:
-    """Mark the user logged in and return a response with fresh auth cookies."""
+    db: DBSession, response: Response, user: UserRecord, extended: bool
+) -> AuthResponse:
+    """Mark the user logged in and set fresh auth cookies on `response`."""
     db.users.update_user_status(user.id, last_login=True)
 
     access_token = create_auth_token(
@@ -141,9 +139,8 @@ def _issue_session(
     # Opportunistically clean up expired refresh tokens
     db.auth.cleanup_expired()
 
-    response = JSONResponse({"detail": detail})
     _set_auth_cookies(response, access_token, raw_refresh)
-    return response
+    return AuthResponse(message="Successfully logged in")
 
 
 class EmailSendError(AppError):
@@ -217,8 +214,12 @@ async def _send_login_code(db, user: UserRecord) -> None:
         raise EmailSendError from None
 
 
-@router.post("/login")
-async def login(login_request: LoginRequest, db: DBSession):
+@router.post("/login", responses={202: {"model": AuthResponse}})
+async def login(
+    login_request: LoginRequest, db: DBSession, response: Response
+) -> AuthResponse:
+    """Start a session, or with two-factor on, email a code and answer 202
+    with `two_factor_required`; `/login/verify-code` then starts it."""
     exception = HTTPException(status_code=403, detail="Invalid email or password")
     try:
         user = db.users.get_user_private(login_request.email)
@@ -247,16 +248,16 @@ async def login(login_request: LoginRequest, db: DBSession):
                 detail="A code was just sent. Please wait before requesting another.",
             )
         await _send_login_code(db, user)
-        return JSONResponse(
-            {"detail": "Verification code sent", "two_factor_required": True},
-            status_code=202,
-        )
+        response.status_code = 202
+        return AuthResponse(message="Verification code sent", two_factor_required=True)
 
-    return _issue_session(db, user, login_request.extended)
+    return _issue_session(db, response, user, login_request.extended)
 
 
 @router.post("/login/verify-code")
-async def verify_login_code(body: VerifyLoginCodeRequest, db: DBSession):
+async def verify_login_code(
+    body: VerifyLoginCodeRequest, db: DBSession, response: Response
+) -> AuthResponse:
     """Second factor: validate the emailed one-time code and start a session."""
     exception = HTTPException(status_code=403, detail="Invalid or expired code")
     try:
@@ -280,7 +281,7 @@ async def verify_login_code(body: VerifyLoginCodeRequest, db: DBSession):
         raise exception
 
     db.verification.consume(code.id)
-    return _issue_session(db, user, body.extended)
+    return _issue_session(db, response, user, body.extended)
 
 
 @router.get("/me")
@@ -317,8 +318,8 @@ async def update_my_email(
 
 @router.post("/me/password")
 async def update_my_password(
-    body: UpdatePasswordRequest, db: DBSession, jwt: DemoToken
-):
+    body: UpdatePasswordRequest, db: DBSession, jwt: DemoToken, response: Response
+) -> ActionResponse:
     user = _verify_current_password(db, jwt.user_id, body.current_password)
 
     db.users.update_user_password(jwt.user_id, body.new_password)
@@ -331,25 +332,25 @@ async def update_my_password(
     )
     raw_refresh = _create_and_store_refresh_token(db, user_id=user.id)
 
-    response = JSONResponse({"detail": "Password updated"})
     _set_auth_cookies(response, access_token, raw_refresh)
-    return response
+    return ActionResponse(message="Password updated")
 
 
 @router.delete("/me")
-async def delete_me(body: DeleteAccountRequest, db: DBSession, jwt: DemoToken):
+async def delete_me(
+    body: DeleteAccountRequest, db: DBSession, jwt: DemoToken, response: Response
+) -> ActionResponse:
     _verify_current_password(db, jwt.user_id, body.password)
 
     await session_manager.end(db.projects.get_owned_project_ids(jwt.user_id))
     db.users.delete_user(jwt.user_id)
 
-    response = JSONResponse({"detail": "Account deleted"})
     _delete_auth_cookies(response)
-    return response
+    return ActionResponse(message="Account deleted")
 
 
-@router.post("/register")
-async def register(user: RegisterRequest, db: DBSession) -> JSONResponse:
+@router.post("/register", status_code=201)
+async def register(user: RegisterRequest, db: DBSession) -> ActionResponse:
     snapshot: dict = {}
     claim: InvitationPublic | None = None
 
@@ -421,14 +422,13 @@ async def register(user: RegisterRequest, db: DBSession) -> JSONResponse:
         user_id=new_user.id,
     )
 
-    return JSONResponse(
-        {"detail": "Registration successful. Please verify your email to continue."},
-        status_code=201,
+    return ActionResponse(
+        message="Registration successful. Please verify your email to continue."
     )
 
 
 @router.post("/verify-email")
-async def verify_email(body: VerifyEmailRequest, db: DBSession):
+async def verify_email(body: VerifyEmailRequest, db: DBSession) -> ActionResponse:
     """Confirm a sign-up email-verification magic link."""
     code = db.verification.get_active_by_hash(
         hash_token(body.token), VerificationPurpose.EMAIL_VERIFICATION
@@ -441,11 +441,13 @@ async def verify_email(body: VerifyEmailRequest, db: DBSession):
     db.users.set_email_verified(code.user_id)
     db.verification.consume(code.id)
 
-    return JSONResponse({"detail": "Email verified successfully"})
+    return ActionResponse(message="Email verified successfully")
 
 
 @router.post("/resend-verification")
-async def resend_verification(body: ResendVerificationRequest, db: DBSession):
+async def resend_verification(
+    body: ResendVerificationRequest, db: DBSession
+) -> ActionResponse:
     """Re-send the verification email. Always returns 200 to avoid leaking
     which addresses are registered."""
     detail = (
@@ -454,7 +456,7 @@ async def resend_verification(body: ResendVerificationRequest, db: DBSession):
     try:
         user = db.users.get_user_private(body.email)
     except sqlalchemy.exc.NoResultFound:
-        return JSONResponse({"detail": detail})
+        return ActionResponse(message=detail)
 
     # Skip silently when already verified or still within the resend cooldown,
     # so a 200 can't be used to distinguish those states from a missing account.
@@ -467,7 +469,7 @@ async def resend_verification(body: ResendVerificationRequest, db: DBSession):
     ):
         await _send_verification_email(db, user)
 
-    return JSONResponse({"detail": detail})
+    return ActionResponse(message=detail)
 
 
 async def _send_password_reset_email(db, user: UserRecord) -> None:
@@ -503,7 +505,7 @@ async def _send_password_reset_email(db, user: UserRecord) -> None:
 
 
 @router.post("/forgot-password")
-async def forgot_password(body: ForgotPasswordRequest, db: DBSession):
+async def forgot_password(body: ForgotPasswordRequest, db: DBSession) -> ActionResponse:
     """Email a password-reset link. Always returns 200 to avoid leaking which
     addresses are registered."""
     detail = (
@@ -512,7 +514,7 @@ async def forgot_password(body: ForgotPasswordRequest, db: DBSession):
     try:
         user = db.users.get_user_private(body.email)
     except sqlalchemy.exc.NoResultFound:
-        return JSONResponse({"detail": detail})
+        return ActionResponse(message=detail)
 
     # Skip silently within the cooldown so a 200 can't distinguish it from a
     # missing account. As with resend-verification, a genuine SMTP failure
@@ -524,11 +526,11 @@ async def forgot_password(body: ForgotPasswordRequest, db: DBSession):
     ):
         await _send_password_reset_email(db, user)
 
-    return JSONResponse({"detail": detail})
+    return ActionResponse(message=detail)
 
 
 @router.post("/reset-password")
-async def reset_password(body: ResetPasswordRequest, db: DBSession):
+async def reset_password(body: ResetPasswordRequest, db: DBSession) -> ActionResponse:
     """Set a new password from a password-reset magic link."""
     code = db.verification.get_active_by_hash(
         hash_token(body.token), VerificationPurpose.PASSWORD_RESET
@@ -545,7 +547,7 @@ async def reset_password(body: ResetPasswordRequest, db: DBSession):
     # new session is issued: login still goes through two-factor if enabled.
     db.auth.revoke_all_for_user(code.user_id)
 
-    return JSONResponse({"detail": "Password has been reset"})
+    return ActionResponse(message="Password has been reset")
 
 
 @router.post("/request-access")
@@ -571,32 +573,32 @@ async def request_access(access_request: AccessRequestCreate, db: DBSession):
 @router.post("/logout")
 async def logout(
     db: DBSession,
+    response: Response,
     raw_refresh: str | None = Depends(refresh_cookie_scheme),
-):
+) -> ActionResponse:
     if raw_refresh:
         stored = db.auth.get_by_token_hash(hash_token(raw_refresh))
         if stored:
             db.auth.revoke_token(stored.id)
 
-    response = JSONResponse({"detail": "Successfully logged out"})
     _delete_auth_cookies(response)
-    return response
+    return ActionResponse(message="Successfully logged out")
 
 
 @router.post("/logout-everywhere")
-async def logout_everywhere(db: DBSession, jwt: DemoToken):
+async def logout_everywhere(
+    db: DBSession, jwt: DemoToken, response: Response
+) -> ActionResponse:
     """Revoke ALL refresh tokens for the authenticated user."""
     db.auth.revoke_all_for_user(jwt.user_id)
 
-    response = JSONResponse({"detail": "All sessions revoked"})
     _delete_auth_cookies(response)
-    return response
+    return ActionResponse(message="All sessions revoked")
 
 
 @router.post("/exit")
-async def exit():
+async def exit(response: Response) -> ActionResponse:
     """Route to exit the interview and deletes the cookies."""
-    response = JSONResponse({"detail": "Successfully exited"})
     cookies_to_delete = {"interview_token", "config"}
     for key in cookies_to_delete:
         response.delete_cookie(
@@ -605,14 +607,15 @@ async def exit():
             httponly=True,
             samesite="lax",
         )
-    return response
+    return ActionResponse(message="Successfully exited")
 
 
 @router.post("/refresh")
 async def refresh(
     db: DBSession,
+    response: Response,
     raw_refresh: str | None = Depends(refresh_cookie_scheme),
-):
+) -> ActionResponse:
     """Rotate the refresh token and issue a new access token."""
     if not raw_refresh:
         raise HTTPException(status_code=401, detail="No refresh token")
@@ -661,6 +664,5 @@ async def refresh(
         family_id=stored.family_id,
     )
 
-    response = JSONResponse({"detail": "Token refreshed successfully"})
     _set_auth_cookies(response, new_access, new_raw_refresh)
-    return response
+    return ActionResponse(message="Token refreshed successfully")

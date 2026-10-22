@@ -69,6 +69,13 @@ class PaginatedResponse[T](Schema):
     items: list[T]
 
 
+class ActionResponse(Schema):
+    """The result of an action that returns nothing but a sentence to show
+    (logged out, password reset). Errors are `ApiError`s instead."""
+
+    message: str
+
+
 class ApiError(Schema):
     """The body of every error response but FastAPI's 422, whose `detail` is
     a list of validation errors (`HTTPValidationError`).

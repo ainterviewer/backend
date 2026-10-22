@@ -81,8 +81,7 @@ def test_unknown_email_gets_the_same_answer_and_no_mail(db, user, sent):
     known = forgot(db)
     unknown = forgot(db, "nobody@example.com")
 
-    assert known.status_code == unknown.status_code == 200
-    assert known.body == unknown.body
+    assert known == unknown
     assert [m["recipient"] for m in sent] == [EMAIL]
 
 
@@ -95,9 +94,8 @@ def test_reset_sets_password_verifies_email_and_revokes_sessions(db, user, sent)
     )
     forgot(db)
 
-    response = reset(db, token_from(sent[0]))
+    reset(db, token_from(sent[0]))
 
-    assert response.status_code == 200
     stored = db.users.get_user_private(EMAIL)
     assert verify_password(NEW_PASSWORD, stored.password)
     assert stored.email_verified
