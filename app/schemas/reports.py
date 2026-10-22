@@ -4,15 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import (
-    UUID4,
-    Field,
-    field_validator,
-)
+from pydantic import UUID4, Field, field_validator
 
-from ainterviewer.types import (
-    LanguageCode,
-)
+from ainterviewer.types import LanguageCode
 
 from ..db.types import (
     InterviewType,

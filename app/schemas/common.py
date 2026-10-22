@@ -7,9 +7,7 @@ from typing import Annotated, Literal
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
 from ainterviewer.constants import LANGUAGES
-from ainterviewer.types import (
-    LanguageCode,
-)
+from ainterviewer.types import LanguageCode
 
 
 class Schema(BaseModel):

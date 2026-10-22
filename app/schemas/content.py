@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import (
-    UUID4,
-    Field,
-)
+from pydantic import UUID4, Field
 
 from ainterviewer.agents.config import AgentConfigs
 from ainterviewer.interview_guides import (
@@ -17,18 +14,11 @@ from ainterviewer.interview_guides import (
     LocalizedWelcome,
 )
 from ainterviewer.interview_guides.extra import Consent, Welcome
-from ainterviewer.types import (
-    LanguageCode,
-)
+from ainterviewer.types import LanguageCode
 
-from ..db.types import (
-    ContentPart,
-    ContentVersionKind,
-)
+from ..db.types import ContentPart, ContentVersionKind
 from ..db.versioning import BumpName
-from ..types import (
-    ParticipantEmails,
-)
+from ..types import ParticipantEmails
 from .common import PromptRequest, Schema
 
 

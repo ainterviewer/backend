@@ -5,24 +5,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import (
-    UUID4,
-    EmailStr,
-    Field,
-    field_validator,
-)
+from pydantic import UUID4, EmailStr, Field, field_validator
 
 from ainterviewer.config import InterviewConfig
-from ainterviewer.types import (
-    LanguageCode,
-    LanguageDict,
-)
+from ainterviewer.types import LanguageCode, LanguageDict
 
-from ..types import (
-    CollaboratorRole,
-    ExternalParam,
-    ProjectStatus,
-)
+from ..types import CollaboratorRole, ExternalParam, ProjectStatus
 from .common import Schema
 from .testing import TestSetupPublic
 from .users import UserPublic

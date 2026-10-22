@@ -9,25 +9,12 @@ from uuid import UUID
 
 from pydantic import UUID4, Field, model_validator
 
-from ainterviewer.interview_guides import (
-    Image,
-    SurveyItem,
-)
-from ainterviewer.types import (
-    EmbeddingKind,
-    InterviewStatus,
-    LanguageCode,
-)
+from ainterviewer.interview_guides import Image, SurveyItem
+from ainterviewer.types import EmbeddingKind, InterviewStatus, LanguageCode
 
 from ..db.keyword_query import Scope
-from ..db.types import (
-    InterviewType,
-)
-from ..types import (
-    GroupKind,
-    Projection,
-    TurnRole,
-)
+from ..db.types import InterviewType
+from ..types import GroupKind, Projection, TurnRole
 from .common import LanguageFilter, Schema
 
 

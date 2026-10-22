@@ -25,12 +25,7 @@ from any_llm.exceptions import (
     UnsupportedProviderError,
     UpstreamProviderError,
 )
-from fastapi import (
-    APIRouter,
-    Query,
-    WebSocket,
-    WebSocketDisconnect,
-)
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from jinja2 import ChoiceLoader, DictLoader, PackageLoader
 from sqlalchemy.exc import NoResultFound
 from uvicorn.config import logger

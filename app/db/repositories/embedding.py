@@ -30,12 +30,7 @@ from sqlalchemy.orm import Session, aliased, joinedload
 from ainterviewer.interfaces import EmbeddingChunk
 from ainterviewer.interview_guides import Image
 from ainterviewer.lpm.types import CustomToken
-from ainterviewer.types import (
-    EmbeddingKind,
-    InterviewStatus,
-    MessageRole,
-    MessageType,
-)
+from ainterviewer.types import EmbeddingKind, InterviewStatus, MessageRole, MessageType
 
 from ...schemas.embeddings import (
     INTERVIEW_PREVIEW_TURNS,

@@ -4,15 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import (
-    UUID4,
-    AliasChoices,
-    Field,
-)
+from pydantic import UUID4, AliasChoices, Field
 
-from ..db.types import (
-    CodeKind,
-)
+from ..db.types import CodeKind
 from .common import Schema
 from .users import AuthorPublic
 

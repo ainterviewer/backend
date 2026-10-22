@@ -17,19 +17,13 @@ from pydantic import (
     computed_field,
 )
 
-from ainterviewer.types import (
-    TimeDelta,
-)
+from ainterviewer.types import TimeDelta
 from ainterviewer.utils import now
 
 from ..db._extra import CustomEmailStr
-from ..db.types import (
-    AccessRequestStatus,
-)
+from ..db.types import AccessRequestStatus
 from ..settings import app_settings
-from ..types import (
-    Scope,
-)
+from ..types import Scope
 from .common import Schema
 
 

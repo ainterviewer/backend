@@ -34,19 +34,10 @@ from ainterviewer.interview_guides.survey_items import (
     TimeItem,
 )
 from ainterviewer.lpm.types import CustomToken
-from ainterviewer.types import (
-    InterviewStatus,
-    LanguageCode,
-    MessageRole,
-    MessageType,
-)
+from ainterviewer.types import InterviewStatus, LanguageCode, MessageRole, MessageType
 
 from ....db.repositories.project import render_default_guide
-from ....db.tables import (
-    InterviewTable,
-    MessageTable,
-    TaskTable,
-)
+from ....db.tables import InterviewTable, MessageTable, TaskTable
 from ....db.types import InterviewType
 from ....dependencies import (
     DBSession,

@@ -4,22 +4,13 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import (
-    UUID4,
-    Field,
-    field_validator,
-)
+from pydantic import UUID4, Field, field_validator
 
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
-from ainterviewer.types import (
-    LanguageCode,
-    TestType,
-)
+from ainterviewer.types import LanguageCode, TestType
 
-from ..types import (
-    TestRunStatus,
-)
+from ..types import TestRunStatus
 from .common import Schema
 
 

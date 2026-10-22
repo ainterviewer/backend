@@ -46,12 +46,7 @@ from ..schemas.projects import ValidateExternalParamsRequest
 from ..schemas.reports import MessageReportCreate, MessageReportPublic
 from ..services.audio import SpeechNotConfigured, SpeechUnavailable, synthesize
 from ..settings import app_settings
-from ..types import (
-    CollaboratorRole,
-    ExternalParam,
-    Scope,
-    build_external_params_model,
-)
+from ..types import CollaboratorRole, ExternalParam, Scope, build_external_params_model
 from ..utils import generate_random_filename
 
 CHUNK_SIZE = 1024 * 1024

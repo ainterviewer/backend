@@ -11,12 +11,7 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable
 from uuid import UUID
 
-from ..db.repositories.stats import (
-    ActivityRow,
-    InterviewDayRow,
-    ProjectDayRow,
-    UserRow,
-)
+from ..db.repositories.stats import ActivityRow, InterviewDayRow, ProjectDayRow, UserRow
 from ..schemas.admin import (
     AdminStats,
     AdminStatsSummary,

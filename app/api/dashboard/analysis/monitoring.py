@@ -11,11 +11,7 @@ from sqlalchemy.sql import ColumnElement
 from ainterviewer.types import InterviewStatus
 
 from ....db.repositories.project import render_default_guide
-from ....db.tables import (
-    InterviewTable,
-    MessageTable,
-    ProjectParticipantTable,
-)
+from ....db.tables import InterviewTable, MessageTable, ProjectParticipantTable
 from ....db.types import InterviewType
 from ....dependencies import DBSession, DemoToken, ProjectViewer
 from ....schemas.monitoring import (

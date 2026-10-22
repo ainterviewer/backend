@@ -4,16 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import (
-    MISSING,
-    UUID4,
-    EmailStr,
-)
+from pydantic import MISSING, UUID4, EmailStr
 
-from ainterviewer.types import (
-    InterviewStatus,
-    LanguageCode,
-)
+from ainterviewer.types import InterviewStatus, LanguageCode
 
 from .common import Schema
 

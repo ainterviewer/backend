@@ -13,12 +13,7 @@ from pydantic import UUID4
 from sqlalchemy.exc import NoResultFound
 
 from ....db.repositories.errors import CommentThreadError
-from ....dependencies import (
-    DBSession,
-    DemoToken,
-    ProjectAnnotator,
-    ProjectViewer,
-)
+from ....dependencies import DBSession, DemoToken, ProjectAnnotator, ProjectViewer
 from ....schemas.analysis import (
     MessageCommentCreate,
     MessageCommentPublic,

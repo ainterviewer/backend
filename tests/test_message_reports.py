@@ -38,11 +38,7 @@ from app.db.tables import (
     UserTable,
 )
 from app.db.types import InterviewType, ReportReason, ReportStatus
-from app.db.utils import (
-    fix_nested_columns,
-    messages_to_dataframe,
-    write_messages_xlsx,
-)
+from app.db.utils import fix_nested_columns, messages_to_dataframe, write_messages_xlsx
 from app.schemas.interviews import MessagePublic
 from app.schemas.reports import MessageReportCreate, MessageReportPublic
 
