@@ -56,6 +56,7 @@ from ..types import (
     build_external_params_model,
 )
 from ..utils import generate_random_filename
+from .files import file_response
 
 CHUNK_SIZE = 1024 * 1024
 
@@ -472,7 +473,7 @@ async def upload_audio(
 @router.post(
     "/speech",
     response_class=StreamingResponse,
-    responses={200: {"content": {"audio/mpeg": {}}}},
+    responses=file_response("audio/mpeg"),
 )
 async def synthesize_speech(
     request: Request, speech_request: SpeechRequest, db: DBSession

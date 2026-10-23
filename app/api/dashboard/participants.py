@@ -52,6 +52,7 @@ from ...services.email.participant_template import (
 from ...settings import app_settings
 from ...types import ContentPart
 from ..errors import STALE_REVISION
+from ..files import file_response
 
 SECTION_SEPARATOR = "\n<hr/>\n"
 SUBJECT_SEPARATOR = " / "
@@ -101,7 +102,7 @@ async def get_participant(
 @router.post(
     "/projects/{project_id}/participants/export",
     response_class=Response,
-    responses={200: {"content": {"text/csv": {}}}},
+    responses=file_response("text/csv"),
 )
 async def export_participants(
     project_id: UUID4,
@@ -137,7 +138,7 @@ async def export_participants(
 @router.get(
     "/projects/{project_id}/email-bundle",
     response_class=Response,
-    responses={200: {"content": {"application/zip": {}}}},
+    responses=file_response("application/zip"),
 )
 async def export_email_bundle(
     project_id: UUID4,

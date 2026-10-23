@@ -1,7 +1,7 @@
 import io
 
 from fastapi import APIRouter, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import UUID4
 
 from ainterviewer.settings import settings as lib_settings
@@ -9,6 +9,7 @@ from ainterviewer.settings import settings as lib_settings
 from ...dependencies import DBSession, UserToken
 from ...schemas.projects import ExperimentCreate, ExperimentPublic
 from ...utils import generate_qr_img
+from ..files import file_response
 
 router = APIRouter(tags=["experiments"])
 
@@ -39,7 +40,11 @@ async def delete_experiment(
     return db.tests.delete_experiment(experiment_id, user_id=jwt.user_id)
 
 
-@router.get("/experiments/{experiment_id}/qr.png")
+@router.get(
+    "/experiments/{experiment_id}/qr.png",
+    response_class=Response,
+    responses=file_response("image/png"),
+)
 async def generate_experiment_qr(
     request: Request,
     experiment_id: UUID4,

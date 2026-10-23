@@ -99,12 +99,17 @@ from ...schemas.projects import (
     ProjectStatusChangeRequest,
     ProjectTitleUpdateRequest,
 )
-from ...services.exports.transcripts import InterviewExport, export_interviews
+from ...services.exports.transcripts import (
+    MEDIA_TYPES,
+    InterviewExport,
+    export_interviews,
+)
 from ...services.project_storage import copy_email_attachments, delete_project_storage
 from ...settings import app_settings
 from ...types import CollaboratorRole, ContentPart, ErrorCode, InterviewType, Scope
 from ...utils import as_aware, ensure_filename, generate_qr_img
 from ..errors import STALE_REVISION
+from ..files import file_response
 from ..websockets.manager import session_manager
 
 logger = logging.getLogger(__name__)
@@ -1169,7 +1174,11 @@ async def get_interview_messages(
     return db.interviews.get_messages(interview_id, project_id)
 
 
-@router.get("/projects/{project_id}/interviews/{interview_id}/audio/{filename}")
+@router.get(
+    "/projects/{project_id}/interviews/{interview_id}/audio/{filename}",
+    response_class=Response,
+    responses=file_response("audio/wav"),
+)
 async def get_interview_audio(
     project_id: UUID4,
     interview_id: UUID4,
@@ -1196,7 +1205,11 @@ async def get_interview_audio(
     return FileResponse(audio_path, media_type="audio/wav")
 
 
-@router.post("/projects/{project_id}/interviews/messages/export")
+@router.post(
+    "/projects/{project_id}/interviews/messages/export",
+    response_class=Response,
+    responses=file_response(*MEDIA_TYPES.values()),
+)
 async def export_messages(
     export_request: ExportMessagesRequest,
     project_id: UUID4,
@@ -1243,7 +1256,11 @@ async def export_messages(
     )
 
 
-@router.get("/projects/{project_id}/qr.png")
+@router.get(
+    "/projects/{project_id}/qr.png",
+    response_class=Response,
+    responses=file_response("image/png"),
+)
 async def generate_project_qr(
     request: Request,
     project_id: UUID4,
