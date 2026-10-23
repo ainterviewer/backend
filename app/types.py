@@ -461,6 +461,8 @@ class ErrorCode(StrEnum):
     EMAIL_TAKEN = "email_taken"
     EMAIL_NOT_VERIFIED = "email_not_verified"
     EMAIL_SEND_FAILED = "email_send_failed"
+    # A verification or password-reset link that is unknown, used or expired.
+    EMAIL_LINK_INVALID = "email_link_invalid"
     INVITE_REQUIRED = "invite_required"
     INVITE_INVALID = "invite_invalid"
     INVITE_EXPIRED = "invite_expired"

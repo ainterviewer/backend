@@ -1,5 +1,7 @@
 """Forgot-password emails a one-time magic link; redeeming it sets a new
-password, verifies the address and ends every existing session.
+password, verifies the address and ends every existing session. A link that
+is spent or unknown -- this one or an email-verification link -- answers
+`email_link_invalid`.
 
 Runs against an in-memory SQLite database with email sending stubbed out.
 """
@@ -10,7 +12,6 @@ from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 
 import pytest
-from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -19,7 +20,14 @@ from app.api import auth as auth_api
 from app.auth import hash_token, verify_password
 from app.db.crud import InterviewDataBase
 from app.db.tables import Base
-from app.schemas.users import ForgotPasswordRequest, ResetPasswordRequest, UserCreate
+from app.errors import AppError
+from app.schemas.users import (
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    UserCreate,
+    VerifyEmailRequest,
+)
+from app.types import ErrorCode
 
 EMAIL = "researcher@example.com"
 OLD_PASSWORD = "old-password"
@@ -107,9 +115,9 @@ def test_link_is_single_use(db, user, sent):
     token = token_from(sent[0])
     reset(db, token)
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(AppError) as exc:
         reset(db, token, "another-password")
-    assert exc.value.status_code == 400
+    assert exc.value.code == ErrorCode.EMAIL_LINK_INVALID
 
 
 def test_new_request_invalidates_the_previous_link(db, user, sent, monkeypatch):
@@ -118,7 +126,7 @@ def test_new_request_invalidates_the_previous_link(db, user, sent, monkeypatch):
     forgot(db)
     first, second = token_from(sent[0]), token_from(sent[1])
 
-    with pytest.raises(HTTPException):
+    with pytest.raises(AppError):
         reset(db, first)
     reset(db, second)
 
@@ -137,7 +145,15 @@ def test_expired_link_is_rejected(db, user, sent, monkeypatch):
         "app.db.repositories.verification.now", lambda: now() + timedelta(days=1)
     )
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(AppError) as exc:
         reset(db, token)
-    assert exc.value.status_code == 400
+    assert exc.value.code == ErrorCode.EMAIL_LINK_INVALID
     assert verify_password(OLD_PASSWORD, db.users.get_user_private(EMAIL).password)
+
+
+def test_an_unknown_verification_link_is_told_apart(db):
+    # The other emailed link: verifying an address answers the same code, so
+    # the page can say the link is spent rather than that something failed.
+    with pytest.raises(AppError) as exc:
+        asyncio.run(auth_api.verify_email(VerifyEmailRequest(token="nope"), db))
+    assert exc.value.code == ErrorCode.EMAIL_LINK_INVALID

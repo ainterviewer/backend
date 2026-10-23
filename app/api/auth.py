@@ -434,8 +434,9 @@ async def verify_email(body: VerifyEmailRequest, db: DBSession) -> ActionRespons
         hash_token(body.token), VerificationPurpose.EMAIL_VERIFICATION
     )
     if code is None:
-        raise HTTPException(
-            status_code=400, detail="Invalid or expired verification link"
+        raise AppError(
+            "Invalid or expired verification link",
+            code=ErrorCode.EMAIL_LINK_INVALID,
         )
 
     db.users.set_email_verified(code.user_id)
@@ -536,7 +537,9 @@ async def reset_password(body: ResetPasswordRequest, db: DBSession) -> ActionRes
         hash_token(body.token), VerificationPurpose.PASSWORD_RESET
     )
     if code is None:
-        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+        raise AppError(
+            "Invalid or expired reset link", code=ErrorCode.EMAIL_LINK_INVALID
+        )
 
     db.verification.consume(code.id)
     db.users.update_user_password(code.user_id, body.new_password)
