@@ -4,6 +4,16 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.9] - 2026-10-23
+
+### Bug Fixes
+
+- (auth) Tolerate concurrent refreshes, remember sessions past the browser, enforce account expiry
+
+### Internal
+
+- Update any-llm-sdk
+
 ## [0.10.8] - 2026-10-23
 
 ### Features
