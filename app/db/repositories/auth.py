@@ -47,10 +47,22 @@ class AuthRepository(BaseRepository):
                 RefreshTokenTable.id == token_id,
                 RefreshTokenTable.is_used == False,
             )
-            .values(is_used=True)
+            .values(is_used=True, used_at=now())
         )
         self.session.commit()
         return result.rowcount == 1  # ty:ignore[unresolved-attribute]
+
+    def used_since(self, token_id: UUID4, since: datetime.datetime) -> bool:
+        """Whether the token was spent at or after `since`."""
+        return (
+            self.session.query(RefreshTokenTable.id)
+            .filter(
+                RefreshTokenTable.id == token_id,
+                RefreshTokenTable.used_at >= since,
+            )
+            .first()
+            is not None
+        )
 
     def revoke_family(self, family_id: UUID4) -> None:
         self.session.execute(
@@ -64,14 +76,6 @@ class AuthRepository(BaseRepository):
         self.session.execute(
             update(RefreshTokenTable)
             .where(RefreshTokenTable.user_id == user_id)
-            .values(is_revoked=True)
-        )
-        self.session.commit()
-
-    def revoke_token(self, token_id: UUID4) -> None:
-        self.session.execute(
-            update(RefreshTokenTable)
-            .where(RefreshTokenTable.id == token_id)
             .values(is_revoked=True)
         )
         self.session.commit()

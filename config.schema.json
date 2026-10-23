@@ -98,6 +98,9 @@
         "jwt_refresh_token_extended_expiration": {
           "$ref": "#/$defs/TimeDelta"
         },
+        "refresh_token_reuse_grace": {
+          "$ref": "#/$defs/TimeDelta"
+        },
         "registration_requires_token": {
           "default": true,
           "title": "Registration Requires Token",
@@ -697,6 +700,15 @@
           "milliseconds": 0,
           "minutes": 0,
           "seconds": 0,
+          "weeks": 0
+        },
+        "refresh_token_reuse_grace": {
+          "days": 0,
+          "hours": 0,
+          "microseconds": 0,
+          "milliseconds": 0,
+          "minutes": 0,
+          "seconds": 30,
           "weeks": 0
         },
         "registration_requires_token": true,

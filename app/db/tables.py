@@ -219,6 +219,9 @@ class RefreshTokenTable(Base):
     family_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), index=True)
     is_revoked: Mapped[bool] = mapped_column(default=False)
     is_used: Mapped[bool] = mapped_column(default=False)
+    # When it was spent; NULL while unused, and for tokens spent before the
+    # column existed.
+    used_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
     extended: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     expires_at: Mapped[datetime.datetime] = mapped_column()

@@ -45,6 +45,7 @@ from ..schemas.users import (
 from ..services.email.mail import email_templates, send_email
 from ..settings import app_settings
 from ..types import ErrorCode, VerificationPurpose
+from ..utils import as_aware
 from .websockets.manager import session_manager
 
 logger = logging.getLogger(__name__)
@@ -61,7 +62,15 @@ def _set_auth_cookies(
     response: Response,
     access_token: str,
     refresh_token: str,
+    extended: bool = False,
 ) -> None:
+    """Set the session's cookies.
+
+    The refresh cookie of an `extended` ("remember me") session outlives the
+    browser, for as long as the token itself. Any other session's cookies
+    are session cookies, gone when the browser closes. The access cookie is
+    always one: after a restart the refresh cookie alone gets a new one.
+    """
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -73,6 +82,11 @@ def _set_auth_cookies(
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
+        max_age=int(
+            app_settings.app.jwt_refresh_token_extended_expiration.to_timedelta().total_seconds()
+        )
+        if extended
+        else None,
         secure=True,
         httponly=True,
         samesite="lax",
@@ -123,10 +137,28 @@ def _create_and_store_refresh_token(
     return raw_refresh
 
 
+class AccountExpiredError(AppError):
+    """The account's `expires_at` has passed. Raised once the caller has
+    proven who they are, so it tells nobody else whether an address has an
+    account."""
+
+    status = 403
+    code = ErrorCode.ACCOUNT_EXPIRED
+
+    def __init__(self, status: int = 403):
+        super().__init__("This account has expired.", status=status)
+
+
+def _is_expired(expires_at: datetime | None) -> bool:
+    return expires_at is not None and as_aware(expires_at) <= now()
+
+
 def _issue_session(
     db: DBSession, response: Response, user: UserRecord, extended: bool
 ) -> AuthResponse:
     """Mark the user logged in and set fresh auth cookies on `response`."""
+    if _is_expired(user.expires_at):
+        raise AccountExpiredError
     db.users.update_user_status(user.id, last_login=True)
 
     access_token = create_auth_token(
@@ -139,7 +171,7 @@ def _issue_session(
     # Opportunistically clean up expired refresh tokens
     db.auth.cleanup_expired()
 
-    _set_auth_cookies(response, access_token, raw_refresh)
+    _set_auth_cookies(response, access_token, raw_refresh, extended)
     return AuthResponse(message="Successfully logged in")
 
 
@@ -236,6 +268,11 @@ async def login(
             status=403,
             code=ErrorCode.EMAIL_NOT_VERIFIED,
         )
+
+    # Before a code is emailed, not only when a session is issued: a code
+    # that can never be redeemed is not worth sending.
+    if _is_expired(user.expires_at):
+        raise AccountExpiredError
 
     if user.two_factor_enabled:
         if db.verification.in_cooldown(
@@ -582,7 +619,9 @@ async def logout(
     if raw_refresh:
         stored = db.auth.get_by_token_hash(hash_token(raw_refresh))
         if stored:
-            db.auth.revoke_token(stored.id)
+            # The whole family, not only this token: its predecessor is still
+            # within the reuse grace for a few seconds after every refresh.
+            db.auth.revoke_family(stored.family_id)
 
     _delete_auth_cookies(response)
     return ActionResponse(message="Successfully logged out")
@@ -628,35 +667,47 @@ async def refresh(
     if stored is None:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
-    # Reuse detection: token was already consumed — possible theft
-    if stored.is_used:
-        db.auth.revoke_family(stored.family_id)
-        raise HTTPException(
-            status_code=401,
-            detail="Refresh token reuse detected, all sessions in this family have been revoked",
-        )
-
     if stored.is_revoked:
         raise HTTPException(status_code=401, detail="Refresh token revoked")
 
     if stored.expires_at.replace(tzinfo=lib_settings.tzinfo) < now():
         raise HTTPException(status_code=401, detail="Refresh token expired")
 
+    # Reuse detection: a token spent before may have been stolen, so spending
+    # it again ends the whole family -- unless it was spent moments ago. One
+    # browser often refreshes several times at once with the same token
+    # (parallel server renders, a client call, a second tab); the first wins
+    # the rotation and the rest arrive just after. They get a pair of their
+    # own in the same family rather than a logout.
     if not db.auth.mark_as_used(stored.id):
-        db.auth.revoke_family(stored.family_id)
-        raise HTTPException(
-            status_code=401,
-            detail="Refresh token reuse detected, all sessions in this family have been revoked",
-        )
+        grace = app_settings.app.refresh_token_reuse_grace.to_timedelta()
+        if not db.auth.used_since(stored.id, now() - grace):
+            db.auth.revoke_family(stored.family_id)
+            raise HTTPException(
+                status_code=401,
+                detail="Refresh token reuse detected, all sessions in this family have been revoked",
+            )
 
     # Look up user for fresh scope (in case it changed since last login)
     user = db.users.get_user_by_id(stored.user_id)
+
+    # An account that expired mid-session ends there: 401, like any other
+    # refresh the client cannot recover from, so it is sent to the login page,
+    # where signing in again says why.
+    if _is_expired(user.expires_at):
+        db.auth.revoke_family(stored.family_id)
+        raise AccountExpiredError(status=401)
 
     # No last_active touch here: a backgrounded tab refreshes on its own, so a
     # refresh is not activity. Scope-checked requests record it instead
     # (`_record_activity`, app/dependencies.py).
 
-    # Issue new token pair, same family
+    # Issue new token pair, same family.
+    #
+    # TODO(session-lifetime): every rotation starts the new token's lifetime
+    # afresh (`now() + expiry`), so a session that keeps refreshing never
+    # ends -- there is no absolute cap on a family. See
+    # plans/session-lifetime.md before changing how expiry is computed here.
     new_access = create_auth_token(
         user_id=user.id, scope=user.scope, preview_features=user.with_preview_features
     )
@@ -667,5 +718,5 @@ async def refresh(
         family_id=stored.family_id,
     )
 
-    _set_auth_cookies(response, new_access, new_raw_refresh)
+    _set_auth_cookies(response, new_access, new_raw_refresh, stored.extended)
     return ActionResponse(message="Token refreshed successfully")

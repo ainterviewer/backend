@@ -77,6 +77,13 @@ class AppSettings(BaseModel):
     jwt_refresh_token_extended_expiration: TimeDelta = Field(
         default_factory=lambda: TimeDelta(days=3)
     )
+    # How long after a refresh token is spent it may be spent again without
+    # counting as reuse. One browser routinely refreshes several times at
+    # once -- parallel server renders, a client call, a second tab -- all
+    # holding the same token, and only the first can win the rotation.
+    refresh_token_reuse_grace: TimeDelta = Field(
+        default_factory=lambda: TimeDelta(seconds=30)
+    )
     registration_requires_token: bool = True
 
     email_verification_token_expiration: TimeDelta = Field(

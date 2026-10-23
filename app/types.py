@@ -460,6 +460,8 @@ class ErrorCode(StrEnum):
     ALIAS_TAKEN = "alias_taken"
     EMAIL_TAKEN = "email_taken"
     EMAIL_NOT_VERIFIED = "email_not_verified"
+    # The account's `expires_at` has passed; it can no longer sign in.
+    ACCOUNT_EXPIRED = "account_expired"
     EMAIL_SEND_FAILED = "email_send_failed"
     # A verification or password-reset link that is unknown, used or expired.
     EMAIL_LINK_INVALID = "email_link_invalid"

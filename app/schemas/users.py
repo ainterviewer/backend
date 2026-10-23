@@ -175,6 +175,7 @@ class UserRecord(UserBase):
     organization: str | None = None
     email_verified: bool = False
     two_factor_enabled: bool = True
+    expires_at: datetime | None = None
 
 
 class UserPublic(UserBase):
