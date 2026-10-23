@@ -4,6 +4,13 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.8] - 2026-10-23
+
+### Features
+
+- (api) Tell a spent email link apart with email_link_invalid
+- (api) Declare file downloads as binary
+
 ## [0.10.7] - 2026-10-22
 
 ### Internal
