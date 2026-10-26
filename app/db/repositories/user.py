@@ -4,7 +4,7 @@ from datetime import timedelta
 from typing import Literal
 
 from pydantic import UUID4
-from sqlalchemy import Update, delete, or_, select, update
+from sqlalchemy import Update, delete, func, or_, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 
@@ -77,6 +77,7 @@ class UserRepository(BaseRepository):
                 **{
                     name: getattr(invitation, name)
                     for name in InvitationPublic.model_fields
+                    if name != "uses"
                 }
             )
         )
@@ -455,13 +456,22 @@ class UserRepository(BaseRepository):
         self.session.commit()
 
     def get_invitations(self, reuseable=False) -> list[InvitationPublic]:
-        statement = select(InvitationTable)
+        # Registration stores the invitation's id in `invite_token`, so this
+        # counts the accounts that still exist: deleting a user lowers it.
+        uses = (
+            select(func.count(UserTable.id))
+            .where(UserTable.invite_token == InvitationTable.id)
+            .scalar_subquery()
+            .label("uses")
+        )
+        statement = select(InvitationTable, uses)
 
         if reuseable:
             statement = statement.where(InvitationTable.reuseable)
 
-        invitations = self.session.execute(statement).scalars().all()
-
         return [
-            InvitationPublic.model_validate(invitation) for invitation in invitations
+            InvitationPublic.model_validate(invitation).model_copy(
+                update={"uses": n_uses}
+            )
+            for invitation, n_uses in self.session.execute(statement).all()
         ]

@@ -136,3 +136,19 @@ def test_single_use_invite_is_spent_by_a_registration(db, sent):
 
     assert error.value.code == ErrorCode.INVITE_INVALID
     assert sent == ["ada@example.com"]
+
+
+def test_reusable_invite_counts_its_registrations(db, sent):
+    reusable = invite(db, reuseable=True, alias="workshop")
+    unused = invite(db, reuseable=True)
+
+    register(db, reusable.id)
+    register(db, "workshop", "b@example.com")
+
+    uses = {i.id: i.uses for i in db.users.get_invitations()}
+    assert uses == {reusable.id: 2, unused.id: 0}
+
+    db.users.delete_user(
+        db.session.query(UserTable).filter_by(email="b@example.com").one().id
+    )
+    assert {i.id: i.uses for i in db.users.get_invitations()}[reusable.id] == 1

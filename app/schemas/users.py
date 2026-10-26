@@ -104,6 +104,9 @@ class InvitationUpdate(Schema):
 class InvitationPublic(InvitationBase):
     id: UUID4
     email: str | None
+    # Accounts registered through this invitation that still exist. Only
+    # `get_invitations` counts them; everywhere else it is 0.
+    uses: int = 0
 
     @computed_field()
     def invitation_link(self) -> str:
