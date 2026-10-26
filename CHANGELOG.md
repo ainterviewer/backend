@@ -4,6 +4,12 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.10] - 2026-10-26
+
+### Features
+
+- (invitations) Count the accounts registered through each invitation
+
 ## [0.10.9] - 2026-10-23
 
 ### Bug Fixes
