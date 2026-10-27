@@ -4,6 +4,25 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.11] - 2026-10-27
+
+### Features
+
+- (participants) Page, sort and filter the participant list on the server
+- (experiments) Assign respondents on the backend, with balancing and quotas
+- (experiments) Edit an experiment's settings
+- (interview) Replay a waiting question with its can_skip
+
+### Bug Fixes
+
+- (participants) Scope single-participant routes to their project
+- (experiments) Require editor role on linked projects and own the QR
+- (report) Count condition evaluations under their correct name
+
+### Internal
+
+- Update lib
+
 ## [0.10.10] - 2026-10-26
 
 ### Features
