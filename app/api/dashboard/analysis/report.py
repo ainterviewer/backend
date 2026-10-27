@@ -65,9 +65,8 @@ router = APIRouter(
     dependencies=[Depends(require_preview_features)],
 )
 
-# The task row the interview writes for every condition it evaluates. Spelled
-# as the library spells it, typo and all -- it is the value in the column.
-CONDITION_TASK = "evaulate_condition"
+# The task row the interview writes for every condition it evaluates.
+CONDITION_TASK = "evaluate_condition"
 
 # What `response` holds when the conditions were met and the action fired.
 CONDITION_FIRED = "True"
