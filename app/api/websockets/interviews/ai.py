@@ -246,6 +246,7 @@ async def _run_interview(
                 interview_history=interview_history,
                 project_id=project_id,
                 interview_id=interview_id,
+                interview_guide=interview.interview_guide,
             )
 
             for message in messages:

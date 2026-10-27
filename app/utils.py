@@ -30,6 +30,7 @@ from ainterviewer.interfaces import (
     OutgoingHistoryMessage,
     OutgoingMessage,
 )
+from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.lpm.types import CustomToken
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import MessageType
@@ -99,14 +100,38 @@ def parse_url_query_params(url: str) -> dict[str, list[str]]:
     return parse_qs(parsed_url.query)
 
 
+def _can_skip(message: MessagePublic, interview_guide: InterviewGuide | None) -> bool:
+    """Whether the guide lets the respondent skip the question `message` asks.
+
+    Not stored on the message, so read off the interview's own guide, whose
+    positions are the ones the message was asked at. Anything that is not a
+    guide question (or a guide it cannot be found in) keeps the default.
+    """
+    if (
+        interview_guide is None
+        or message.section is None
+        or message.main_question is None
+    ):
+        return True
+    try:
+        section = interview_guide.question_sections[message.section]
+        return section.questions[message.main_question].can_skip
+    except IndexError:
+        return True
+
+
 def replay_history(
     interview_history: list[MessagePublic],
     project_id: UUID4,
     interview_id: UUID4,
+    interview_guide: InterviewGuide | None = None,
 ) -> tuple[list[OutgoingHistoryMessage | OutgoingData | OutgoingMessage], bool]:
     """Replays the messages from the history through the websocket. Returns
     True if the interview should continue or False if it has reached the end
-    already."""
+    already.
+
+    The last message, the one the interview is waiting on, goes out live, so it
+    carries the question's `can_skip` from `interview_guide`."""
     # TODO: Send images from history as well
     # - Should this be moved to the AInterviewer instance?
     #   - Currently this function is used both by AI and Human chat.
@@ -170,6 +195,7 @@ def replay_history(
                 role=last_message.role,
                 message_id=last_message.message_id,
                 can_answer=last_message.can_answer,
+                can_skip=_can_skip(last_message, interview_guide),
                 feedback=last_message.feedback,
                 image=last_message.image,
                 survey_item=last_message.survey_item,
