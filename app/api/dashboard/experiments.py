@@ -1,13 +1,16 @@
 import io
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import UUID4
+from sqlalchemy.exc import NoResultFound
 
 from ainterviewer.settings import settings as lib_settings
 
+from ...auth import AuthToken
 from ...dependencies import DBSession, UserToken
 from ...schemas.projects import ExperimentCreate, ExperimentPublic
+from ...types import CollaboratorRole, Scope
 from ...utils import generate_qr_img
 from ..files import file_response
 
@@ -22,12 +25,36 @@ async def get_experiments(
     return db.tests.get_experiments(user_id=jwt.user_id)
 
 
+def _require_editor_on_projects(
+    db: DBSession, jwt: AuthToken, project_ids: list[UUID4]
+) -> None:
+    """An experiment sends respondents into each of its projects, so linking
+    one takes the same editor role as distributing it.
+
+    The projects are in the body rather than the path, so no role dependency
+    covers them. Admins skip the role check but not the existence check: a
+    missing project would otherwise surface as a foreign-key 500.
+    """
+    is_admin = Scope.ADMIN in {Scope(s) for s in jwt.scope.split()}
+    for project_id in set(project_ids):
+        if is_admin:
+            if not db.projects.project_exists(project_id):
+                raise HTTPException(404, "Resource not found")
+            continue
+        role = db.projects.get_user_role_on_project(jwt.user_id, project_id)
+        if role is None:
+            raise HTTPException(404, "Resource not found")
+        if not role.includes(CollaboratorRole.EDITOR):
+            raise HTTPException(403, "Requires editor role")
+
+
 @router.post("/experiments")
 async def create_experiment(
     experiment: ExperimentCreate,
     db: DBSession,
     jwt: UserToken,
 ) -> ExperimentPublic:
+    _require_editor_on_projects(db, jwt, [p.project_id for p in experiment.projects])
     return db.tests.create_experiment(experiment, user_id=jwt.user_id)
 
 
@@ -51,6 +78,13 @@ async def generate_experiment_qr(
     jwt: UserToken,
     db: DBSession,
 ):
+    # Experiments are their creator's alone, as the list and delete are. This
+    # also stops a QR file being written for every id anyone cares to send.
+    try:
+        db.tests.get_experiment(experiment_id, user_id=jwt.user_id)
+    except NoResultFound:
+        raise HTTPException(404, "Experiment not found")
+
     file_path = (
         lib_settings.storage.experiment_storage.qr_code_path(experiment_id)
         / "distribute.png"

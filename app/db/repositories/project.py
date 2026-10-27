@@ -5,7 +5,7 @@ from collections.abc import Iterable, Sequence
 from typing import Any, Literal
 
 from pydantic import UUID4, BaseModel, ValidationError
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, exists, func, select, update
 from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlalchemy.orm import Session
 
@@ -504,6 +504,11 @@ class ProjectRepository(BaseRepository):
             result.append(ProjectPublic.model_validate(project_dict))
 
         return result
+
+    def project_exists(self, project_id: UUID4) -> bool:
+        return bool(
+            self.session.scalar(select(exists().where(ProjectTable.id == project_id)))
+        )
 
     def get_project(self, project_id: UUID4) -> ProjectPublic:
         project = self.session.execute(
