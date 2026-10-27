@@ -1,11 +1,14 @@
+import random
 import uuid
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 
 from pydantic import UUID4
-from sqlalchemy import Column, delete, exists, func, select, update
+from sqlalchemy import Column, delete, exists, func, or_, select, update
+from sqlalchemy.exc import NoResultFound
 
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
+from ainterviewer.types import InterviewStatus
 from ainterviewer.utils import now
 
 from ...schemas.projects import (
@@ -20,13 +23,16 @@ from ...schemas.testing import (
     TestSetupCreate,
     TestSetupPublic,
 )
-from ...types import TestRunStatus
+from ...types import ExperimentAllocation, ProjectStatus, TestRunStatus
 from ..tables import (
+    ExperimentAssignmentTable,
     ExperimentProjectTable,
     ExperimentTable,
     IntervieweeTable,
     InterviewTable,
     MessageTable,
+    ProjectContentTable,
+    ProjectTable,
     TaskTable,
     TestRunTable,
     TestSetupTable,
@@ -284,17 +290,29 @@ class TestRepository(BaseRepository):
     def create_experiment(
         self, experiment: ExperimentCreate, user_id: UUID4
     ) -> ExperimentPublic:
-        new_experiment = ExperimentTable(title=experiment.title, user_id=user_id)
+        new_experiment = ExperimentTable(
+            title=experiment.title,
+            user_id=user_id,
+            allocation=experiment.allocation,
+        )
         self.session.add(new_experiment)
         self.session.flush()
 
         for project in experiment.projects:
-            experiment_project = ExperimentProjectTable(
-                experiment_id=new_experiment.id,
-                project_id=project.project_id,
-                weight=project.weight,
+            self.session.add(
+                ExperimentProjectTable(
+                    experiment_id=new_experiment.id,
+                    project_id=project.project_id,
+                    weight=project.weight,
+                    target=project.target,
+                )
             )
-            self.session.add(experiment_project)
+            if project.experiment_only is not None:
+                self.session.execute(
+                    update(ProjectTable)
+                    .where(ProjectTable.id == project.project_id)
+                    .values(experiment_only=project.experiment_only)
+                )
 
         self.session.commit()
         self.session.refresh(new_experiment)
@@ -320,20 +338,47 @@ class TestRepository(BaseRepository):
 
         return self._to_experiment_public(experiment)
 
-    def delete_experiment(self, experiment_id: UUID4, user_id: UUID4) -> None:
+    def delete_experiment(
+        self, experiment_id: UUID4, user_id: UUID4, clear_experiment_only: bool = False
+    ) -> None:
         """Delete an experiment owned by `user_id`, unlinking its projects and
         interviews.
 
         Interviews are kept and their reference cleared, matching the SET NULL
-        that `interview.experiment_id` declares; the project links are deleted.
-        Both are done explicitly so they hold with foreign-key enforcement
-        switched off too -- see `delete_test_setup`.
+        that `interview.experiment_id` declares; the project links and
+        assignments are deleted. Both are done explicitly so they hold with
+        foreign-key enforcement switched off too -- see `delete_test_setup`.
+
+        `clear_experiment_only` lets the experiment's projects take respondents
+        from their own links again, unless another experiment still uses them:
+        left set, a project nothing can assign to refuses everyone.
         """
         owned = select(ExperimentTable.id).where(
             ExperimentTable.id == experiment_id,
             ExperimentTable.user_id == user_id,
         )
 
+        if clear_experiment_only:
+            others = select(ExperimentProjectTable.project_id).where(
+                ExperimentProjectTable.experiment_id != experiment_id
+            )
+            self.session.execute(
+                update(ProjectTable)
+                .where(
+                    ProjectTable.id.in_(
+                        select(ExperimentProjectTable.project_id).where(
+                            ExperimentProjectTable.experiment_id.in_(owned)
+                        )
+                    ),
+                    ProjectTable.id.not_in(others),
+                )
+                .values(experiment_only=False)
+            )
+        self.session.execute(
+            delete(ExperimentAssignmentTable).where(
+                ExperimentAssignmentTable.experiment_id.in_(owned)
+            )
+        )
         self.session.execute(
             delete(ExperimentProjectTable).where(
                 ExperimentProjectTable.experiment_id.in_(owned)
@@ -352,14 +397,42 @@ class TestRepository(BaseRepository):
         )
         self.session.commit()
 
+    def _arm_counts(self, experiment_id: UUID4) -> dict[uuid.UUID, tuple[int, int]]:
+        """Per project: (assignments, completed interviews) in the experiment."""
+        assigned = dict(
+            self.session.execute(
+                select(ExperimentAssignmentTable.project_id, func.count())
+                .where(ExperimentAssignmentTable.experiment_id == experiment_id)
+                .group_by(ExperimentAssignmentTable.project_id)
+            ).all()
+        )
+        completed = dict(
+            self.session.execute(
+                select(InterviewTable.project_id, func.count())
+                .where(
+                    InterviewTable.experiment_id == experiment_id,
+                    InterviewTable.status == InterviewStatus.COMPLETED,
+                )
+                .group_by(InterviewTable.project_id)
+            ).all()
+        )
+        return {
+            project_id: (assigned.get(project_id, 0), completed.get(project_id, 0))
+            for project_id in assigned.keys() | completed.keys()
+        }
+
     def _to_experiment_public(self, experiment: ExperimentTable) -> ExperimentPublic:
         """Convert an ExperimentTable to ExperimentPublic with projects."""
+        counts = self._arm_counts(experiment.id)
         projects = [
             ExperimentProjectPublic(
                 id=ep.id,
                 project_id=ep.project_id,
                 weight=ep.weight,
+                target=ep.target,
                 added_at=ep.added_at,
+                assigned=counts.get(ep.project_id, (0, 0))[0],
+                completed=counts.get(ep.project_id, (0, 0))[1],
             )
             for ep in experiment.experiment_projects
         ]
@@ -370,5 +443,164 @@ class TestRepository(BaseRepository):
             user_id=experiment.user_id,
             created_at=experiment.created_at,
             status=experiment.status,
+            allocation=experiment.allocation,
             projects=projects,
         )
+
+    # ==================== Experiment assignment ====================
+
+    def _open_projects(self, experiment_id: UUID4) -> set[uuid.UUID]:
+        """The experiment's projects a respondent can actually be sent to:
+        active and published. An unpublished one would only show "not
+        published yet"."""
+        return set(
+            self.session.execute(
+                select(ExperimentProjectTable.project_id)
+                .join(
+                    ProjectTable, ProjectTable.id == ExperimentProjectTable.project_id
+                )
+                .join(
+                    ProjectContentTable,
+                    ProjectContentTable.project_id == ProjectTable.id,
+                )
+                .where(
+                    ExperimentProjectTable.experiment_id == experiment_id,
+                    ProjectTable.status == ProjectStatus.ACTIVE,
+                    ProjectContentTable.published_version_id.is_not(None),
+                )
+            ).scalars()
+        )
+
+    def _draw(
+        self, experiment: ExperimentTable, rng: random.Random
+    ) -> uuid.UUID | None:
+        """A project for a new respondent, or None when none can take one.
+
+        A project takes new respondents while it is open, has a weight above
+        zero (unset counts as 1) and has not reached its target of completed
+        interviews.
+        """
+        open_projects = self._open_projects(experiment.id)
+        counts = self._arm_counts(experiment.id)
+        arms: dict[uuid.UUID, float] = {}
+        for arm in experiment.experiment_projects:
+            weight = 1.0 if arm.weight is None else arm.weight
+            completed = counts.get(arm.project_id, (0, 0))[1]
+            if (
+                arm.project_id in open_projects
+                and weight > 0
+                and (arm.target is None or completed < arm.target)
+            ):
+                arms[arm.project_id] = weight
+        if not arms:
+            return None
+
+        projects = list(arms)
+        if experiment.allocation == ExperimentAllocation.RANDOM:
+            candidates = projects
+        else:
+            # Furthest below its weighted share of the next respondent's
+            # total; ties are drawn by weight like the random mode.
+            index = 0 if experiment.allocation == ExperimentAllocation.BALANCED else 1
+            done = {p: counts.get(p, (0, 0))[index] for p in projects}
+            total, weights = sum(done.values()) + 1, sum(arms.values())
+            deficit = {p: arms[p] / weights * total - done[p] for p in projects}
+            most = max(deficit.values())
+            candidates = [p for p in projects if most - deficit[p] < 1e-9]
+        return rng.choices(candidates, weights=[arms[p] for p in candidates])[0]
+
+    def enter_experiment(
+        self,
+        experiment_id: UUID4,
+        respondent_hash: str,
+        pid: str | None = None,
+        rng: random.Random | None = None,
+    ) -> ExperimentAssignmentTable | None:
+        """The respondent's assignment in this experiment, drawn if they have
+        none. None when the experiment is closed to them.
+
+        A known participant is matched by pid, anyone else by the hash of their
+        browser's `respondent` cookie. An existing assignment holds while its
+        project is open, whether or not it still takes *new* respondents: a
+        full target or a zero weight closes a project to newcomers only.
+
+        Raises NoResultFound for an experiment that does not exist.
+        """
+        experiment = self.session.get(ExperimentTable, experiment_id)
+        if experiment is None:
+            raise NoResultFound(f"No experiment {experiment_id}")
+        if experiment.status != ProjectStatus.ACTIVE:
+            return None
+
+        # A browser's own assignment is the one without a pid: the same browser
+        # may also have entered as a known participant, whose assignment
+        # records the browser it was last started in.
+        key = (
+            ExperimentAssignmentTable.pid == pid
+            if pid is not None
+            else (ExperimentAssignmentTable.respondent_hash == respondent_hash)
+            & ExperimentAssignmentTable.pid.is_(None)
+        )
+        assignment = self.session.execute(
+            select(ExperimentAssignmentTable)
+            .where(ExperimentAssignmentTable.experiment_id == experiment_id, key)
+            .order_by(ExperimentAssignmentTable.created_at)
+            .limit(1)
+        ).scalar_one_or_none()
+
+        if assignment is None or assignment.project_id not in self._open_projects(
+            experiment_id
+        ):
+            project_id = self._draw(experiment, rng or random.Random())
+            if project_id is None:
+                return None
+            if assignment is None:
+                assignment = ExperimentAssignmentTable(
+                    experiment_id=experiment_id,
+                    pid=pid,
+                    respondent_hash=None if pid is not None else respondent_hash,
+                )
+                self.session.add(assignment)
+            assignment.project_id = project_id
+            assignment.interview_id = None
+
+        assignment.entered_at = now()
+        self.session.commit()
+        self.session.refresh(assignment)
+        return assignment
+
+    def assignment_for_interview(
+        self, project_id: UUID4, respondent_hash: str | None, pid: str | None
+    ) -> ExperimentAssignmentTable | None:
+        """The assignment a new interview in this project belongs to: the
+        respondent's most recently entered one for it, by browser or by pid."""
+        keys = []
+        if respondent_hash is not None:
+            keys.append(ExperimentAssignmentTable.respondent_hash == respondent_hash)
+        if pid is not None:
+            keys.append(ExperimentAssignmentTable.pid == pid)
+        if not keys:
+            return None
+        return self.session.execute(
+            select(ExperimentAssignmentTable)
+            .where(ExperimentAssignmentTable.project_id == project_id, or_(*keys))
+            .order_by(ExperimentAssignmentTable.entered_at.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+
+    def record_assignment_interview(
+        self, assignment_id: UUID4, interview_id: UUID4, respondent_hash: str | None
+    ) -> None:
+        """Note the interview an assignment led to, and the browser it was
+        started in: entering again from that browser resumes it. A browser
+        without a `respondent` cookie (a known participant's direct link)
+        leaves the browser recorded before."""
+        values: dict = {"interview_id": interview_id}
+        if respondent_hash is not None:
+            values["respondent_hash"] = respondent_hash
+        self.session.execute(
+            update(ExperimentAssignmentTable)
+            .where(ExperimentAssignmentTable.id == assignment_id)
+            .values(**values)
+        )
+        self.session.commit()

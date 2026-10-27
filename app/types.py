@@ -132,6 +132,21 @@ class WSChatRole(StrEnum):
     INTERVIEWER = "interviewer"
 
 
+class ExperimentAllocation(StrEnum):
+    """How an experiment picks the project for a new respondent.
+
+    `random` draws by weight. The balanced modes give the respondent to the
+    project furthest below its weighted share, counted in assignments or in
+    completed interviews. Counting completions steers new respondents towards
+    projects people drop out of, which can bias the comparison; it is there for
+    studies that need completed interviews in fixed proportions.
+    """
+
+    RANDOM = "random"
+    BALANCED = "balanced"
+    BALANCED_COMPLETED = "balanced_completed"
+
+
 class ProjectStatus(StrEnum):
     ACTIVE = "active"
     INACTIVE = "inactive"

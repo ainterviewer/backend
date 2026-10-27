@@ -91,6 +91,7 @@ from ...schemas.interviews import (
 )
 from ...schemas.projects import (
     ArchiveRequest,
+    ExperimentOnlyRequest,
     ExternalParamsReplace,
     MoveProjectRequest,
     ProjectLanguage,
@@ -282,6 +283,22 @@ async def set_project_archived(
     _: ProjectAdmin,
 ):
     db.projects.set_project_archived(project_id, archive_request.archived)
+
+
+@router.patch(
+    "/projects/{project_id}/experiment-only",
+    description="Take respondents only through an experiment, or from any link",
+)
+async def set_project_experiment_only(
+    project_id: UUID4,
+    request: ExperimentOnlyRequest,
+    db: DBSession,
+    jwt: DemoToken,
+    _: ProjectEditor,
+):
+    """Editor, not admin: putting a project in an experiment takes the editor
+    role, and the experiment dialog sets this alongside it."""
+    db.projects.set_experiment_only(project_id, request.experiment_only)
 
 
 @router.patch(

@@ -549,6 +549,14 @@ class ProjectRepository(BaseRepository):
         )
         self.session.commit()
 
+    def set_experiment_only(self, project_id: UUID4, experiment_only: bool) -> None:
+        self.session.execute(
+            update(ProjectTable)
+            .where(ProjectTable.id == project_id)
+            .values(experiment_only=experiment_only)
+        )
+        self.session.commit()
+
     def update_project_title(
         self,
         project_id: UUID4,

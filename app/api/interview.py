@@ -1,3 +1,4 @@
+import secrets
 from typing import Annotated, Any
 
 import aiofiles
@@ -19,7 +20,7 @@ from sqlalchemy.exc import NoResultFound
 from uvicorn.config import logger
 
 from ainterviewer.settings import settings as lib_settings
-from ainterviewer.types import LanguageCode, MessageRole, TestType
+from ainterviewer.types import InterviewStatus, LanguageCode, MessageRole, TestType
 
 from ..auth import AuthToken, InterviewToken, create_interview_token, hash_token
 from ..collab.rooms import content_rooms
@@ -42,7 +43,11 @@ from ..schemas.interviews import (
     MessageFeedbackResponse,
     SpeechRequest,
 )
-from ..schemas.projects import ValidateExternalParamsRequest
+from ..schemas.projects import (
+    ExperimentEntryRequest,
+    ExperimentEntryResponse,
+    ValidateExternalParamsRequest,
+)
 from ..schemas.reports import MessageReportCreate, MessageReportPublic
 from ..services.audio import SpeechNotConfigured, SpeechUnavailable, synthesize
 from ..settings import app_settings
@@ -147,6 +152,108 @@ def set_interview_cookie(response: Response, interview_token: str) -> None:
     )
 
 
+#: The browser's handle in experiments: an opaque random value, stored only as
+#: its hash. It lets the browser resume the interview its assignment led to,
+#: so it is httponly like `interview_token`, and lives as long.
+RESPONDENT_COOKIE = "respondent"
+
+
+def _cookie_lifetime() -> int:
+    return int(
+        app_settings.app.jwt_interview_token_expiration.to_timedelta().total_seconds()
+    )
+
+
+def _decoded_interview_token(token: str | None) -> InterviewToken | None:
+    if token is None:
+        return None
+    try:
+        return InterviewToken.decode(token)
+    except (JWTError, ValidationError):
+        return None
+
+
+@router.post("/experiments/{experiment_id}/enter")
+async def enter_experiment(
+    request: Request,
+    experiment_id: UUID4,
+    entry: ExperimentEntryRequest,
+    response: Response,
+    db: DBSession,
+) -> ExperimentEntryResponse:
+    """Give this respondent a project of the experiment, and set their browser
+    up to take part in it.
+
+    Public: the experiment's link is handed out to respondents, who hold no
+    account. The project is decided here and held in `experiment_assignment`,
+    never taken from a link, so a respondent cannot pick one. A respondent
+    keeps their assignment while its project is open -- a known participant
+    (`pid`) for good, anyone else for as long as their `respondent` cookie
+    lasts, the lifetime of an interview they could resume.
+
+    The interview cookie is pointed at the assignment's own interview when this
+    browser started one that is not finished, so it resumes; otherwise an
+    interview cookie for the same project is cleared, so the page starts a new
+    interview instead of resuming one from another experiment or link.
+    """
+    respondent = request.cookies.get(RESPONDENT_COOKIE)
+    if respondent is None:
+        respondent = secrets.token_urlsafe(32)
+        response.set_cookie(
+            key=RESPONDENT_COOKIE,
+            value=respondent,
+            max_age=_cookie_lifetime(),
+            secure=True,
+            httponly=True,
+            samesite="lax",
+            path="/",
+        )
+    respondent_hash = hash_token(respondent)
+
+    try:
+        assignment = db.tests.enter_experiment(
+            experiment_id, respondent_hash, entry.pid
+        )
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    if assignment is None:
+        raise HTTPException(
+            status_code=409, detail="This study is not accepting responses right now."
+        )
+
+    current = _decoded_interview_token(request.cookies.get("interview_token"))
+    resumable = None
+    if (
+        assignment.interview_id is not None
+        and assignment.respondent_hash == respondent_hash
+    ):
+        try:
+            resumable = db.interviews.get_resume_target(
+                assignment.project_id, assignment.interview_id
+            )
+        except NoResultFound:
+            resumable = None
+        if resumable is not None and resumable.status == InterviewStatus.COMPLETED:
+            resumable = None
+
+    if resumable is not None:
+        if current is None or current.interview_id != resumable.id:
+            set_interview_cookie(
+                response,
+                create_interview_token(
+                    project_id=resumable.project_id,
+                    interviewer=resumable.interviewer,
+                    interview_id=resumable.id,
+                ),
+            )
+    elif current is not None and current.project_id == assignment.project_id:
+        response.delete_cookie(
+            "interview_token", path="/", secure=True, httponly=True, samesite="lax"
+        )
+
+    return ExperimentEntryResponse(project_id=assignment.project_id)
+
+
 @router.post("/projects/{project_id}/{lang}/interviews")
 async def create_interview(
     request: Request,
@@ -246,6 +353,26 @@ async def create_interview(
             status_code=404, detail="No such participant in this project"
         )
 
+    # The experiment comes from the respondent's assignment, never from the
+    # request: a link cannot put an interview in an experiment, or in a
+    # project the experiment did not give them.
+    assignment = None
+    respondent = request.cookies.get(RESPONDENT_COOKIE)
+    respondent_hash = hash_token(respondent) if respondent else None
+    if new_interview.interview_type == InterviewType.DISTRIBUTED:
+        assignment = db.tests.assignment_for_interview(
+            project_id, respondent_hash, new_interview.pid
+        )
+        if assignment is None and project.experiment_only:
+            logger.info(
+                "Refusing interview: project %s takes respondents only through "
+                "an experiment, and this one was not assigned to it",
+                project_id,
+            )
+            raise AppError(
+                "Invalid interview link parameters", code=ErrorCode.INVALID_LINK_PARAMS
+            )
+
     interview = db.interviews.create_interview(
         project_id,
         interview_guide=interview_guide,
@@ -258,8 +385,13 @@ async def create_interview(
         ip_address=ip_address,
         language=project_localization.language,
         participant_id=participant_id,
+        experiment_id=assignment.experiment_id if assignment else None,
         content_version_id=project_localization.content_version_id,
     )
+    if assignment is not None:
+        db.tests.record_assignment_interview(
+            assignment.id, interview.id, respondent_hash
+        )
 
     interview_token = create_interview_token(
         project_id=project_id,

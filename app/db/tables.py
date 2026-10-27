@@ -62,6 +62,7 @@ from ..types import (
     ContentPart,
     ContentVersionKind,
     EmbeddingTask,
+    ExperimentAllocation,
     ExternalParam,
     InterviewType,
     ParticipantEmails,
@@ -422,6 +423,12 @@ class ProjectTable(Base):
     #: When the project was archived. Only hides it from the dashboard: its
     #: status, links and interviews carry on as they were. NULL while it is not.
     archived_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
+    #: Refuse distributed interviews from respondents no experiment assigned
+    #: here, so the project's own link cannot bypass an experiment's
+    #: randomisation. Test interviews are unaffected.
+    experiment_only: Mapped[bool] = mapped_column(
+        default=False, server_default=sa.false()
+    )
     config: Mapped[InterviewConfig] = mapped_column(
         PydanticJSONB(InterviewConfig),
         default=InterviewConfig,
@@ -907,6 +914,10 @@ class ExperimentProjectTable(Base):
         index=True,
     )
     weight: Mapped[float | None] = mapped_column(default=None)
+    #: Completed interviews wanted from this project. Once reached it takes no
+    #: new respondents; those already assigned may still finish, so it can end
+    #: slightly over. None for no limit.
+    target: Mapped[int | None] = mapped_column(default=None)
     added_at: Mapped[datetime.datetime] = mapped_column(default=now)
 
     # Relationships
@@ -925,6 +936,11 @@ class ExperimentTable(Base):
         SQLEnum(ProjectStatus), default=ProjectStatus.ACTIVE
     )
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("user.id"), index=True)
+    allocation: Mapped[ExperimentAllocation] = mapped_column(
+        SQLEnum(ExperimentAllocation),
+        default=ExperimentAllocation.RANDOM,
+        server_default=ExperimentAllocation.RANDOM.name,
+    )
 
     # Relationships
     user: Mapped["UserTable"] = relationship(back_populates="experiments")
@@ -939,6 +955,41 @@ class ExperimentTable(Base):
     interviews: Mapped[list["InterviewTable"]] = relationship(
         back_populates="experiment"
     )
+
+
+class ExperimentAssignmentTable(Base):
+    """Which project an experiment gave a respondent.
+
+    A respondent is the browser holding a `respondent` cookie, stored here as
+    its hash because the cookie lets that browser resume the assignment's
+    interview, or a known participant's pid. A pid assignment holds for good;
+    a browser's lasts as long as its cookie. Recorded whether or not an
+    interview follows, so assignments per project can be compared with
+    completed interviews.
+    """
+
+    __tablename__ = "experiment_assignment"
+    __table_args__ = (
+        UniqueConstraint("experiment_id", "pid", name="uq_experiment_assignment_pid"),
+    )
+
+    experiment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("experiment.id", ondelete="CASCADE"), index=True
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("project.id", ondelete="CASCADE"), index=True
+    )
+    respondent_hash: Mapped[str | None] = mapped_column(default=None, index=True)
+    pid: Mapped[str | None] = mapped_column(default=None)
+    #: The latest interview started from this assignment, which entering the
+    #: experiment again from the same browser resumes.
+    interview_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("interview.id", ondelete="SET NULL"), index=True, default=None
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(default=now)
+    #: Bumped on every entry: an interview is tagged with the respondent's
+    #: most recently entered assignment for its project.
+    entered_at: Mapped[datetime.datetime] = mapped_column(default=now)
 
 
 #############

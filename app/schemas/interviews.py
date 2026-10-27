@@ -202,7 +202,6 @@ class InterviewCreate(Schema):
     interviewer: Interviewer = Interviewer.AI
     interview_type: InterviewType = InterviewType.DISTRIBUTED
     test_run_id: UUID4 | None = None
-    experiment_id: UUID4 | None = None
     synthetic_test_type: TestType | None = None
     participant_id: UUID4 | None = None
     pid: str | None = None

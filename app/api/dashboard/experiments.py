@@ -63,8 +63,13 @@ async def delete_experiment(
     experiment_id: UUID4,
     db: DBSession,
     jwt: UserToken,
+    clear_experiment_only: bool = False,
 ) -> None:
-    return db.tests.delete_experiment(experiment_id, user_id=jwt.user_id)
+    """`clear_experiment_only` lets the experiment's projects take respondents
+    from their own links again, unless another experiment still uses them."""
+    return db.tests.delete_experiment(
+        experiment_id, user_id=jwt.user_id, clear_experiment_only=clear_experiment_only
+    )
 
 
 @router.get(

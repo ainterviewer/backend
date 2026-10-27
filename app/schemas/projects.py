@@ -10,7 +10,7 @@ from pydantic import UUID4, EmailStr, Field, field_validator
 from ainterviewer.config import InterviewConfig
 from ainterviewer.types import LanguageCode, LanguageDict
 
-from ..types import CollaboratorRole, ExternalParam, ProjectStatus
+from ..types import CollaboratorRole, ExperimentAllocation, ExternalParam, ProjectStatus
 from .common import Schema
 from .users import UserPublic
 
@@ -61,6 +61,8 @@ class ProjectBase(Schema):
     last_updated: datetime | None = None
     status: ProjectStatus = ProjectStatus.ACTIVE
     archived_at: datetime | None = None
+    #: Only respondents an experiment assigned here may take part.
+    experiment_only: bool = False
     config: InterviewConfig
     external_params: list[ExternalParam] | None = None
     owner_id: UUID4
@@ -103,7 +105,13 @@ class ExperimentProjectCreate(Schema):
     """Input model for adding a project to an experiment."""
 
     project_id: UUID4
+    #: Unset counts as 1; zero or less leaves the project out of the draw.
     weight: float | None = None
+    #: Completed interviews wanted from the project; None for no limit.
+    target: int | None = Field(default=None, ge=1)
+    #: Sets the project's own `experiment_only`; None leaves it as it is. It
+    #: is the project's setting, so it holds for every experiment and link.
+    experiment_only: bool | None = None
 
 
 class ExperimentProjectPublic(Schema):
@@ -112,11 +120,17 @@ class ExperimentProjectPublic(Schema):
     id: UUID4
     project_id: UUID4
     weight: float | None = None
+    target: int | None = None
     added_at: datetime
+    #: Respondents the experiment has given this project.
+    assigned: int = 0
+    #: Completed interviews from those respondents.
+    completed: int = 0
 
 
 class ExperimentCreate(Schema):
     title: str
+    allocation: ExperimentAllocation = ExperimentAllocation.RANDOM
     projects: list[ExperimentProjectCreate]
 
 
@@ -126,7 +140,25 @@ class ExperimentPublic(Schema):
     user_id: UUID4
     created_at: datetime
     status: ProjectStatus = ProjectStatus.ACTIVE
+    allocation: ExperimentAllocation = ExperimentAllocation.RANDOM
     projects: list[ExperimentProjectPublic] = []
+
+
+class ExperimentEntryRequest(Schema):
+    """A respondent opening an experiment's link. `pid` is the link's, when it
+    names a known participant: their assignment is then kept for good."""
+
+    pid: str | None = Field(default=None, max_length=200)
+
+
+class ExperimentEntryResponse(Schema):
+    """The project the experiment gave this respondent, to send them on to."""
+
+    project_id: UUID4
+
+
+class ExperimentOnlyRequest(Schema):
+    experiment_only: bool
 
 
 class ProjectStatusChangeRequest(Schema):
