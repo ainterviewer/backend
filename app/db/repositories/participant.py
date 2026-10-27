@@ -222,15 +222,24 @@ class ParticipantRepository(BaseRepository):
             )
         )
 
-    def _get_link(self, project_participant_id: UUID4) -> ProjectParticipantTable:
-        return self.session.execute(
-            select(ProjectParticipantTable).where(
-                ProjectParticipantTable.id == project_participant_id
+    def _get_link(
+        self, project_participant_id: UUID4, project_id: UUID4 | None = None
+    ) -> ProjectParticipantTable:
+        """The link row. With `project_id`, only if it belongs to that project:
+        a link of another project raises NoResultFound like a missing one."""
+        statement = select(ProjectParticipantTable).where(
+            ProjectParticipantTable.id == project_participant_id
+        )
+        if project_id is not None:
+            statement = statement.where(
+                ProjectParticipantTable.project_id == project_id
             )
-        ).scalar_one()
+        return self.session.execute(statement).scalar_one()
 
-    def get_participant(self, project_participant_id: UUID4) -> ParticipantPublic:
-        return _to_public(self._get_link(project_participant_id))
+    def get_participant(
+        self, project_id: UUID4, project_participant_id: UUID4
+    ) -> ParticipantPublic:
+        return _to_public(self._get_link(project_participant_id, project_id))
 
     def get_participants(self, project_id: UUID4) -> list[ParticipantPublic]:
         rows = (
@@ -246,6 +255,7 @@ class ParticipantRepository(BaseRepository):
 
     def update_participant(
         self,
+        project_id: UUID4,
         project_participant_id: UUID4,
         update_data: ParticipantUpdate,
     ) -> ParticipantPublic:
@@ -253,7 +263,7 @@ class ParticipantRepository(BaseRepository):
         Changes propagate to every project in the same folder by design."""
         values = update_data.model_dump()
 
-        link = self._get_link(project_participant_id)
+        link = self._get_link(project_participant_id, project_id)
         if values:
             self.session.execute(
                 update(ParticipantTable)
@@ -318,8 +328,10 @@ class ParticipantRepository(BaseRepository):
                 delete(ParticipantTable).where(ParticipantTable.id == participant_id)
             )
 
-    def remove_participant(self, project_participant_id: UUID4) -> None:
-        link = self._get_link(project_participant_id)
+    def remove_participant(
+        self, project_id: UUID4, project_participant_id: UUID4
+    ) -> None:
+        link = self._get_link(project_participant_id, project_id)
         participant_id = link.participant_id
         self.session.execute(
             delete(ProjectParticipantTable).where(

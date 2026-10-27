@@ -11,6 +11,7 @@ import polars as pl
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, UploadFile
 from jinja2 import TemplateError
 from pydantic import UUID4
+from sqlalchemy.exc import NoResultFound
 
 from ainterviewer.constants import LANGUAGE_CODES
 from ainterviewer.settings import settings as lib_settings
@@ -78,6 +79,9 @@ router = APIRouter(
 public_router = APIRouter(tags=["participants"])
 
 
+PARTICIPANT_NOT_FOUND = "Participant not found."
+
+
 @router.get("/projects/{project_id}/participants")
 async def get_participants(
     project_id: UUID4,
@@ -96,7 +100,10 @@ async def get_participant(
     jwt: UserToken,
     _: ProjectViewer,
 ) -> ParticipantPublic:
-    return db.participants.get_participant(participant_id)
+    try:
+        return db.participants.get_participant(project_id, participant_id)
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail=PARTICIPANT_NOT_FOUND)
 
 
 @router.post(
@@ -310,7 +317,10 @@ async def update_participant(
     jwt: UserToken,
     _: ProjectEditor,
 ) -> ParticipantPublic:
-    return db.participants.update_participant(participant_id, update)
+    try:
+        return db.participants.update_participant(project_id, participant_id, update)
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail=PARTICIPANT_NOT_FOUND)
 
 
 @router.delete("/projects/{project_id}/participants/{participant_id}")
@@ -321,7 +331,10 @@ async def delete_participant(
     jwt: UserToken,
     _: ProjectAdmin,
 ):
-    db.participants.remove_participant(participant_id)
+    try:
+        db.participants.remove_participant(project_id, participant_id)
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail=PARTICIPANT_NOT_FOUND)
 
 
 @router.delete("/projects/{project_id}/participants")
