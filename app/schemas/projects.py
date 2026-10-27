@@ -134,6 +134,10 @@ class ExperimentCreate(Schema):
     projects: list[ExperimentProjectCreate]
 
 
+class ExperimentUpdate(ExperimentCreate):
+    """The experiment's settings in full: projects left out are removed."""
+
+
 class ExperimentPublic(Schema):
     id: UUID4
     title: str

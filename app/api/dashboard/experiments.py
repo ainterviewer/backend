@@ -9,7 +9,7 @@ from ainterviewer.settings import settings as lib_settings
 
 from ...auth import AuthToken
 from ...dependencies import DBSession, UserToken
-from ...schemas.projects import ExperimentCreate, ExperimentPublic
+from ...schemas.projects import ExperimentCreate, ExperimentPublic, ExperimentUpdate
 from ...types import CollaboratorRole, Scope
 from ...utils import generate_qr_img
 from ..files import file_response
@@ -56,6 +56,48 @@ async def create_experiment(
 ) -> ExperimentPublic:
     _require_editor_on_projects(db, jwt, [p.project_id for p in experiment.projects])
     return db.tests.create_experiment(experiment, user_id=jwt.user_id)
+
+
+@router.put("/experiments/{experiment_id}")
+async def update_experiment(
+    experiment_id: UUID4,
+    experiment: ExperimentUpdate,
+    db: DBSession,
+    jwt: UserToken,
+) -> ExperimentPublic:
+    """Replace the experiment's settings. A project respondents were already
+    given cannot be removed, as their assignments would no longer count; a
+    weight of zero closes it to new respondents instead.
+
+    Linking a project, or changing its `experiment_only`, takes the editor
+    role on it as creating does; changing a kept project's weight or target
+    only takes owning the experiment, as deleting it does."""
+    try:
+        current = db.tests.get_experiment(experiment_id, user_id=jwt.user_id)
+    except NoResultFound:
+        raise HTTPException(404, "Experiment not found")
+
+    arms = {arm.project_id: arm for arm in current.projects}
+    wanted = {project.project_id for project in experiment.projects}
+    if any(
+        arm.assigned or arm.completed
+        for project_id, arm in arms.items()
+        if project_id not in wanted
+    ):
+        raise HTTPException(
+            409, "Projects respondents were already given cannot be removed"
+        )
+
+    _require_editor_on_projects(
+        db,
+        jwt,
+        [
+            project.project_id
+            for project in experiment.projects
+            if project.project_id not in arms or project.experiment_only is not None
+        ],
+    )
+    return db.tests.update_experiment(experiment_id, experiment, user_id=jwt.user_id)
 
 
 @router.delete("/experiments/{experiment_id}")

@@ -15,6 +15,7 @@ from ...schemas.projects import (
     ExperimentCreate,
     ExperimentProjectPublic,
     ExperimentPublic,
+    ExperimentUpdate,
 )
 from ...schemas.testing import (
     SynthesizeRequest,
@@ -318,6 +319,64 @@ class TestRepository(BaseRepository):
         self.session.refresh(new_experiment)
 
         return self._to_experiment_public(new_experiment)
+
+    def update_experiment(
+        self, experiment_id: UUID4, experiment: ExperimentUpdate, user_id: UUID4
+    ) -> ExperimentPublic:
+        """Replace the settings of an experiment owned by `user_id`.
+
+        A kept project keeps its link, so its `added_at` and counts carry on.
+        A removed project has its `experiment_only` cleared unless another
+        experiment still uses it, as deleting the experiment does by default:
+        left set, a project nothing can assign to refuses everyone. Removing
+        a project respondents were already given is the caller's to refuse.
+
+        Raises NoResultFound for an experiment the user does not own.
+        """
+        existing = self.session.execute(
+            select(ExperimentTable).where(
+                ExperimentTable.id == experiment_id,
+                ExperimentTable.user_id == user_id,
+            )
+        ).scalar_one()
+        existing.title = experiment.title
+        existing.allocation = experiment.allocation
+
+        arms = {arm.project_id: arm for arm in existing.experiment_projects}
+        wanted = {project.project_id for project in experiment.projects}
+        removed = arms.keys() - wanted
+        for project_id in removed:
+            existing.experiment_projects.remove(arms[project_id])
+        if removed:
+            # Flushed first, so the removed links no longer count as others.
+            self.session.flush()
+            others = select(ExperimentProjectTable.project_id)
+            self.session.execute(
+                update(ProjectTable)
+                .where(ProjectTable.id.in_(removed), ProjectTable.id.not_in(others))
+                .values(experiment_only=False)
+            )
+
+        for project in experiment.projects:
+            arm = arms.get(project.project_id)
+            if arm is None:
+                arm = arms[project.project_id] = ExperimentProjectTable(
+                    project_id=project.project_id
+                )
+                existing.experiment_projects.append(arm)
+            arm.weight = project.weight
+            arm.target = project.target
+            if project.experiment_only is not None:
+                self.session.execute(
+                    update(ProjectTable)
+                    .where(ProjectTable.id == project.project_id)
+                    .values(experiment_only=project.experiment_only)
+                )
+
+        self.session.commit()
+        self.session.refresh(existing)
+
+        return self._to_experiment_public(existing)
 
     def get_experiments(self, user_id: UUID4) -> list[ExperimentPublic]:
         statement = (
