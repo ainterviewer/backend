@@ -8,7 +8,7 @@ from typing import Annotated
 from urllib.parse import quote
 
 import polars as pl
-from fastapi import APIRouter, Body, Depends, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, UploadFile
 from jinja2 import TemplateError
 from pydantic import UUID4
 from sqlalchemy.exc import NoResultFound
@@ -19,6 +19,7 @@ from ainterviewer.types import LanguageCode
 from ainterviewer.utils import now
 
 from ...db.repositories.errors import OptOutTokenError
+from ...db.repositories.participant import SORTABLE_PARTICIPANT_COLUMNS
 from ...dependencies import (
     DBSession,
     IfMatch,
@@ -29,13 +30,17 @@ from ...dependencies import (
     require_preview_features,
     set_etag,
 )
+from ...schemas.common import PageParams
+from ...schemas.interviews import FacetCount
 from ...schemas.participants import (
-    DeleteParticipantsRequest,
-    ExportParticipantsRequest,
     ParticipantCreate,
     ParticipantEmailAttachmentPublic,
     ParticipantEmailTemplateRequest,
+    ParticipantFacets,
+    ParticipantFilterParams,
+    ParticipantListResponse,
     ParticipantPublic,
+    ParticipantSelection,
     ParticipantUpdate,
     ParticipantUploadResponse,
     SendParticipantEmailRequest,
@@ -82,14 +87,64 @@ public_router = APIRouter(tags=["participants"])
 PARTICIPANT_NOT_FOUND = "Participant not found."
 
 
+def _selected_participant_ids(
+    db: DBSession, project_id: UUID4, selection: ParticipantSelection
+) -> list[UUID4]:
+    if selection.filters is None:
+        return selection.participant_ids or []
+    return db.participants.get_participant_ids(
+        project_id, **selection.filters.model_dump()
+    )
+
+
 @router.get("/projects/{project_id}/participants")
 async def get_participants(
     project_id: UUID4,
     db: DBSession,
     jwt: UserToken,
     _: ProjectViewer,
-) -> list[ParticipantPublic]:
-    return db.participants.get_participants(project_id)
+    paginated_query: Annotated[PageParams, Query()],
+    participant_filters: Annotated[ParticipantFilterParams, Query()],
+) -> ParticipantListResponse:
+    """One page of participants, with the filter options that fit the query.
+
+    `search` matches name, email and pid. `statuses` matches the status of each
+    participant's most recent interview.
+    """
+    if paginated_query.column not in SORTABLE_PARTICIPANT_COLUMNS:
+        # The repository raises ValueError, which would surface as a 500.
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot sort by {paginated_query.column!r}. Sortable columns: "
+            f"{', '.join(sorted(SORTABLE_PARTICIPANT_COLUMNS))}.",
+        )
+
+    # The page and the facet counts must be built from exactly the same
+    # filters, or the dropdown would offer options the list contradicts.
+    filters = participant_filters.model_dump()
+    participants, total = db.participants.get_participant_page(
+        project_id,
+        offset=paginated_query.offset,
+        limit=paginated_query.limit,
+        sorting_column=paginated_query.column,
+        sorting_order=paginated_query.order,
+        **filters,
+    )
+    facets = db.participants.get_participant_facets(project_id, **filters)
+
+    return ParticipantListResponse(
+        total=total,
+        items=participants,
+        facets=ParticipantFacets(
+            **{
+                name: [
+                    FacetCount(value=value, count=count)
+                    for value, count in sorted(counts.items())
+                ]
+                for name, counts in facets.items()
+            }
+        ),
+    )
 
 
 @router.get("/projects/{project_id}/participants/{participant_id:uuid}")
@@ -113,21 +168,21 @@ async def get_participant(
 )
 async def export_participants(
     project_id: UUID4,
-    export_request: ExportParticipantsRequest,
+    export_request: ParticipantSelection,
     db: DBSession,
     jwt: UserToken,
     _: ProjectViewer,
 ) -> Response:
-    participants = [
-        participant for participant in db.participants.get_participants(project_id)
-    ]
-
-    if export_request.participant_ids:
-        participants = [
-            participant
-            for participant in participants
-            if participant.id in export_request.participant_ids
-        ]
+    """Export the selected participants as CSV. `filters` exports every
+    participant matching them; empty filters, the whole project."""
+    if export_request.filters is not None:
+        participants = db.participants.get_participants(
+            project_id, **export_request.filters.model_dump()
+        )
+    else:
+        participants = db.participants.get_participants(
+            project_id, participant_ids=export_request.participant_ids
+        )
 
     csv = pl.DataFrame(
         participant.model_dump(mode="json") for participant in participants
@@ -340,12 +395,14 @@ async def delete_participant(
 @router.delete("/projects/{project_id}/participants")
 async def delete_participants(
     project_id: UUID4,
-    delete_request: DeleteParticipantsRequest,
+    delete_request: ParticipantSelection,
     db: DBSession,
     jwt: UserToken,
     _: ProjectAdmin,
 ):
-    db.participants.remove_participants(project_id, delete_request.participant_ids)
+    db.participants.remove_participants(
+        project_id, _selected_participant_ids(db, project_id, delete_request)
+    )
 
 
 def _validate_template_request(request: ParticipantEmailTemplateRequest) -> None:

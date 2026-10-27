@@ -1,10 +1,15 @@
 import csv
 import io
 import uuid
+from collections.abc import Sequence
+from typing import Literal
 
 from pydantic import UUID4
-from sqlalchemy import delete, exists, select, update
+from sqlalchemy import Select, case, delete, exists, func, or_, select, update
 from sqlalchemy.exc import NoResultFound
+from sqlalchemy.sql.elements import ColumnElement
+
+from ainterviewer.types import InterviewStatus
 
 from ...schemas.participants import (
     ParticipantCreate,
@@ -38,6 +43,22 @@ def _to_public(link: ProjectParticipantTable) -> ParticipantPublic:
         latest_interview_at=link.latest_interview_at,
         latest_interview_status=link.latest_interview_status,
     )
+
+
+#: The columns `get_participant_page` sorts by. Text columns sort
+#: case-insensitively and every column puts empty values last, as the
+#: client-side table did.
+SORTABLE_PARTICIPANT_COLUMNS = frozenset(
+    {
+        "name",
+        "email",
+        "pid",
+        "participating",
+        "created_at",
+        "latest_interview_at",
+        "latest_interview_status",
+    }
+)
 
 
 def _is_blank_row(row: dict[str | None, str | None]) -> bool:
@@ -241,17 +262,184 @@ class ParticipantRepository(BaseRepository):
     ) -> ParticipantPublic:
         return _to_public(self._get_link(project_participant_id, project_id))
 
-    def get_participants(self, project_id: UUID4) -> list[ParticipantPublic]:
-        rows = (
-            self.session.execute(
-                select(ProjectParticipantTable)
-                .where(ProjectParticipantTable.project_id == project_id)
-                .order_by(ProjectParticipantTable.created_at.desc())
-            )
-            .scalars()
-            .all()
+    @staticmethod
+    def _public_statement() -> Select:
+        """The columns of a `ParticipantPublic`, selected rather than loaded.
+
+        `_to_public` reads the participant and every interview of each link
+        through lazy relationships, which costs two queries a row; a page or
+        an export reads them from these expressions in one.
+        """
+        return select(
+            ProjectParticipantTable.id,
+            ProjectParticipantTable.project_id,
+            ParticipantTable.id.label("participant_id"),
+            ParticipantTable.folder_id,
+            ParticipantTable.name,
+            ParticipantTable.email,
+            func.coalesce(ParticipantTable.pid, "").label("pid"),
+            ParticipantTable.lang,
+            ParticipantTable.participating,
+            ProjectParticipantTable.created_at,
+            ProjectParticipantTable.latest_interview_at.label("latest_interview_at"),
+            ProjectParticipantTable.latest_interview_status.label(
+                "latest_interview_status"
+            ),
+        ).join(
+            ParticipantTable,
+            ProjectParticipantTable.participant_id == ParticipantTable.id,
         )
-        return [_to_public(link) for link in rows]
+
+    @staticmethod
+    def _participant_filters(
+        project_id: UUID4,
+        participant_ids: Sequence[UUID4] | None = None,
+        search: str | None = None,
+        participating: bool | None = None,
+        statuses: list[InterviewStatus] | None = None,
+    ) -> dict[str, ColumnElement[bool]]:
+        """The conditions for a filter set, keyed by the facet each narrows.
+
+        Keyed so `get_participant_facets` can count a facet with every filter
+        but its own applied.
+        """
+        filters: dict[str, ColumnElement[bool]] = {
+            "project": ProjectParticipantTable.project_id == project_id
+        }
+        if participant_ids is not None:
+            filters["ids"] = ProjectParticipantTable.id.in_(participant_ids)
+        if participating is not None:
+            filters["participating"] = ParticipantTable.participating == participating
+        if statuses:
+            filters["status"] = ProjectParticipantTable.latest_interview_status.in_(
+                statuses
+            )
+        if search and (term := search.strip()):
+            pattern = f"%{term}%"
+            # ilike() degrades to lower(x) LIKE lower(y) on SQLite.
+            filters["search"] = or_(
+                ParticipantTable.name.ilike(pattern),
+                ParticipantTable.email.ilike(pattern),
+                ParticipantTable.pid.ilike(pattern),
+            )
+        return filters
+
+    def get_participants(self, project_id: UUID4, **filters) -> list[ParticipantPublic]:
+        """Every participant matching the filters, newest first.
+
+        Takes the keywords of `_participant_filters`; with none, the whole
+        project.
+        """
+        conditions = self._participant_filters(project_id, **filters).values()
+        statement = (
+            self._public_statement()
+            .where(*conditions)
+            .order_by(ProjectParticipantTable.created_at.desc())
+        )
+        return [
+            ParticipantPublic.model_validate(row._mapping)
+            for row in self.session.execute(statement).all()
+        ]
+
+    def get_participant_page(
+        self,
+        project_id: UUID4,
+        offset: int | None = None,
+        limit: int | None = None,
+        sorting_column: str = "created_at",
+        sorting_order: Literal["desc", "asc"] = "desc",
+        **filters,
+    ) -> tuple[list[ParticipantPublic], int]:
+        """One page of participants, plus the total matching count."""
+        if sorting_column not in SORTABLE_PARTICIPANT_COLUMNS:
+            raise ValueError(f"Invalid sort column: {sorting_column}")
+
+        sort_columns = {
+            "name": func.lower(ParticipantTable.name),
+            "email": func.lower(ParticipantTable.email),
+            "pid": func.lower(ParticipantTable.pid),
+            "participating": ParticipantTable.participating,
+            "created_at": ProjectParticipantTable.created_at,
+            "latest_interview_at": ProjectParticipantTable.latest_interview_at,
+            "latest_interview_status": ProjectParticipantTable.latest_interview_status,
+        }
+        column = sort_columns[sorting_column]
+        direction = column.desc() if sorting_order == "desc" else column.asc()
+
+        conditions = list(self._participant_filters(project_id, **filters).values())
+        statement = (
+            self._public_statement()
+            .where(*conditions)
+            # The id breaks ties, so a page boundary cannot fall inside a run
+            # of equal values and show a row twice or never.
+            .order_by(direction.nulls_last(), ProjectParticipantTable.id)
+            .offset(offset)
+            .limit(limit)
+        )
+        count_statement = (
+            select(func.count())
+            .select_from(ProjectParticipantTable)
+            .join(
+                ParticipantTable,
+                ProjectParticipantTable.participant_id == ParticipantTable.id,
+            )
+            .where(*conditions)
+        )
+
+        total = self.session.execute(count_statement).scalar_one()
+        rows = self.session.execute(statement).all()
+        return [ParticipantPublic.model_validate(row._mapping) for row in rows], total
+
+    def get_participant_ids(self, project_id: UUID4, **filters) -> list[UUID4]:
+        """Every link id `get_participant_page` would page through, through the
+        same filters, so a bulk action on "all matching" covers exactly the
+        rows the list counted."""
+        conditions = self._participant_filters(project_id, **filters).values()
+        statement = (
+            select(ProjectParticipantTable.id)
+            .join(
+                ParticipantTable,
+                ProjectParticipantTable.participant_id == ParticipantTable.id,
+            )
+            .where(*conditions)
+        )
+        return list(self.session.execute(statement).scalars())
+
+    def get_participant_facets(
+        self, project_id: UUID4, **filters
+    ) -> dict[str, dict[str, int]]:
+        """Distinct values and their counts for each filterable column, each
+        counted with every *other* filter applied.
+
+        Participants with no interview have no status and are left out of
+        that facet: there is no status to filter them by.
+        """
+        conditions = self._participant_filters(project_id, **filters)
+        columns = {
+            "participating": case(
+                (ParticipantTable.participating, "true"), else_="false"
+            ),
+            "status": ProjectParticipantTable.latest_interview_status,
+        }
+
+        facets: dict[str, dict[str, int]] = {}
+        for facet, column in columns.items():
+            statement = (
+                select(column, func.count())
+                .select_from(ProjectParticipantTable)
+                .join(
+                    ParticipantTable,
+                    ProjectParticipantTable.participant_id == ParticipantTable.id,
+                )
+                .where(*(c for key, c in conditions.items() if key != facet))
+                .group_by(column)
+            )
+            facets[facet] = {
+                str(value): count
+                for value, count in self.session.execute(statement).all()
+                if value is not None
+            }
+        return facets
 
     def update_participant(
         self,
