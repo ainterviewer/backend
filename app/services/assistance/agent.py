@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from functools import cache
 from typing import Literal
 
 from pydantic import UUID4, Field
@@ -14,7 +15,9 @@ from pydantic_ai import (
 )
 from pydantic_ai.messages import FunctionToolResultEvent
 from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from ainterviewer.interview_guides import InterviewGuide, Question, QuestionSection
 from ainterviewer.interview_guides.generate import generate_question, generate_section
@@ -22,15 +25,35 @@ from ainterviewer.settings import settings as lib_settings
 
 from ...dependencies import DBSession
 from ...services.assistance.models import AssistanceDependencies, ChatMessage
+from ...settings import app_settings
 
 _GREETING_TRIGGER = "[system:new_session_greeting]"
 
-DEFAULT_MODEL = OpenAIChatModel(
-    "gpt-5.4-mini",
-    provider=OpenAIProvider(
-        api_key=lib_settings.secrets.openai_api_key.get_secret_value()
-    ),
-)
+# `provider:model`, as the lib's generators take it too.
+ASSISTANCE_MODEL = app_settings.services.assistance.model
+
+
+@cache
+def assistance_model() -> OpenAIChatModel:
+    """The agent's model, built on first use rather than at import.
+
+    Building it creates the provider's client, which refuses an empty API key.
+    At import that took the whole backend down with it on any deployment
+    without that key; now only the assistant fails, and only when used.
+    """
+    provider, _, name = ASSISTANCE_MODEL.partition(":")
+    secrets = lib_settings.secrets
+    if provider == "openrouter":
+        return OpenRouterModel(
+            name,
+            provider=OpenRouterProvider(
+                api_key=secrets.openrouter_api_key.get_secret_value()
+            ),
+        )
+    return OpenAIChatModel(
+        name,
+        provider=OpenAIProvider(api_key=secrets.openai_api_key.get_secret_value()),
+    )
 
 
 def agent_instruction(ctx: RunContext[AssistanceDependencies]) -> str:
@@ -68,8 +91,8 @@ GREETING_TEMPLATE = (
     "Feel free to share your research topic and I'll help you craft great questions."
 )
 
+# No model here: stream_messages passes assistance_model() per run.
 assistance_agent = Agent(
-    DEFAULT_MODEL,
     instructions=agent_instruction,
     deps_type=AssistanceDependencies,
 )
@@ -89,7 +112,7 @@ async def create_new_section(
     """
     return await generate_section(
         instructions,
-        "openai:" + DEFAULT_MODEL.model_name,
+        ASSISTANCE_MODEL,
         ctx.deps.guide,
     )
 
@@ -112,7 +135,7 @@ async def create_new_question(
     """
     return await generate_question(
         instructions,
-        "openai:" + DEFAULT_MODEL.model_name,
+        ASSISTANCE_MODEL,
         ctx.deps.guide,
         section=section,
     )
@@ -168,6 +191,7 @@ async def stream_messages(
 
     async with assistance_agent.iter(
         prompt,
+        model=assistance_model(),
         message_history=messages,
         deps=AssistanceDependencies(guide=guide, user_name=user_name),
     ) as agent_run:

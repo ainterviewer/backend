@@ -206,6 +206,27 @@ class SpeechSettings(BaseModel):
     tts_voice: str = "alloy"
 
 
+# The providers app/services/assistance/agent.py can build a model for.
+ASSISTANCE_PROVIDERS = ("openai:", "openrouter:")
+
+
+class AssistanceSettings(BaseModel):
+    """The dashboard's interview-guide assistant."""
+
+    # `provider:model`, spelled as in [llm]. It needs a model that can call
+    # tools, and the key for its provider.
+    model: str = "openai:gpt-6.1-terra"
+
+    @field_validator("model")
+    @classmethod
+    def supported_provider(cls, v: str) -> str:
+        if not v.startswith(ASSISTANCE_PROVIDERS):
+            raise ValueError(
+                f"assistance model must start with one of {ASSISTANCE_PROVIDERS}"
+            )
+        return v
+
+
 class EmbeddingSettings(BaseModel):
     """Text-embedding-inference server used to vectorise interview text.
 
@@ -296,6 +317,7 @@ class ServiceSettings(BaseSettings):
     email: EmailSettings | None = None
     speech: SpeechSettings = SpeechSettings()
     embedding: EmbeddingSettings = EmbeddingSettings()
+    assistance: AssistanceSettings = AssistanceSettings()
 
     model_config = BaseSettingsConfigDict(env_prefix="APP_SERVICE__")
 

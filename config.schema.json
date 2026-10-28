@@ -155,6 +155,18 @@
       "title": "AppSettings",
       "type": "object"
     },
+    "AssistanceSettings": {
+      "description": "The dashboard's interview-guide assistant.",
+      "properties": {
+        "model": {
+          "default": "openai:gpt-6.1-terra",
+          "title": "Model",
+          "type": "string"
+        }
+      },
+      "title": "AssistanceSettings",
+      "type": "object"
+    },
     "DatabaseSettings": {
       "properties": {
         "db": {
@@ -400,6 +412,12 @@
             "max_retry_after": 30.0,
             "circuit_breaker_threshold": 5,
             "circuit_breaker_reset_seconds": 60.0
+          }
+        },
+        "assistance": {
+          "$ref": "#/$defs/AssistanceSettings",
+          "default": {
+            "model": "openai:gpt-6.1-terra"
           }
         }
       },
