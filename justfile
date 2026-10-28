@@ -12,8 +12,7 @@ dev:
 
 [group("Database")]
 setup-db:
-    python -m app.db --recreate-db
-    python -m app.db --create-users
+    uv run python -m app.db.cli setup-db
 
 [group("Database")]
 update-projects:

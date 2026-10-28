@@ -3,8 +3,7 @@ from pathlib import Path
 from uuid import UUID
 
 import typer
-from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 from typer import Typer
 
@@ -16,6 +15,7 @@ from ..dependencies import engine, get_db
 from ..platform_release import Highlight, PlatformManifest
 from ..schemas.users import UserCreate
 from ..settings import app_settings
+from .repositories.errors import EmailTakenError
 
 cli = Typer()
 
@@ -29,13 +29,19 @@ def setup_db(
     fresh: bool = typer.Option(
         False, "--fresh", help="Delete existing database before setup"
     ),
-    users_file: Path = typer.Option(
-        Path("storage/users/default.json"),
+    users_file: Path | None = typer.Option(
+        None,
         "--users-file",
-        help="Path to users JSON file to seed on creation",
+        help="Path to a users JSON file to seed when the database is created",
     ),
 ):
-    """Create database tables and seed initial users."""
+    """Create the database on first run; leave an existing one untouched.
+
+    The migrations start from an existing schema, so a new database is built
+    from the models and stamped at head instead. An existing database is left
+    for `alembic upgrade head`: stamping it would mark migrations as applied
+    that never ran. Safe to run on every start, which is what entrypoint.sh does.
+    """
     if app_settings.database.db == DatabaseType.SQLITE:
         db_dir = Path(app_settings.database.db_path)
         db_dir.mkdir(parents=True, exist_ok=True)
@@ -47,28 +53,29 @@ def setup_db(
                 db_file.unlink()
                 typer.echo(f"Deleted {db_file}.")
 
+    # Not "any table": the vector extension adds its own on first connect, so
+    # a brand-new database is never empty by the time we look.
+    if inspect(engine).has_table("user"):
+        typer.echo("Database already exists, leaving it to migrations.")
+        return
+
     db = next(get_db())
     db.create_db_and_tables()
     typer.echo("Database and tables created.")
 
-    if users_file.exists():
-        with users_file.open() as f:
-            users = json.load(f)
-        n = 0
-        for user in users:
-            try:
-                db.users.create_user(UserCreate(**user))
-                n += 1
-            except IntegrityError:
-                typer.echo(f"User {user['email']} already exists, skipping.")
-        typer.echo(f"Created {n} user{'s' if n != 1 else ''}.")
-    else:
-        typer.echo(
-            typer.style(
-                f"No users file at {users_file}, skipping user creation.",
-                fg=typer.colors.RED,
-            )
-        )
+    if users_file is None:
+        return
+
+    with users_file.open() as f:
+        users = json.load(f)
+    n = 0
+    for user in users:
+        try:
+            db.users.create_user(UserCreate(**user))
+            n += 1
+        except EmailTakenError:
+            typer.echo(f"User {user['email']} already exists, skipping.")
+    typer.echo(f"Created {n} user{'s' if n != 1 else ''}.")
 
 
 @cli.command()
