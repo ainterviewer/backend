@@ -4,6 +4,13 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.13] - 2026-10-28
+
+### Internal
+
+- (assistance) Configure the guide assistant's model, built on first use
+- (translation) Configure the translation model
+
 ## [0.10.12] - 2026-10-28
 
 ### Breaking Changes
