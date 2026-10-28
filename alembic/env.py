@@ -23,6 +23,7 @@ from app.db.triggers import (
     uninstall_triggers,
 )
 from app.db.types import AppDateTime
+from app.settings import app_settings
 
 target_metadata = Base.metadata
 
@@ -50,21 +51,28 @@ def render_item(type_, obj, autogen_context):
     return False
 
 
-def _target_url() -> str | None:
+def _target_url() -> str:
     """The database to migrate.
 
-    `-x db_url=...` overrides the url configured in alembic.ini, which is what
-    makes it possible to rehearse a migration against a copy of a database
-    instead of the real one:
+    By default the one the app itself uses, from its settings, so migrations
+    follow `DATABASE__DB_PATH` instead of a path of their own that can drift
+    from it. `-x db_url=...` overrides that, which is what makes it possible
+    to rehearse a migration against a copy of a database instead of the real
+    one:
 
         uv run alembic -x db_url="sqlite:////tmp/db-copy.sqlite" upgrade head
 
     Without this, the flag is accepted and silently ignored, and the migration
     runs against the configured database -- which is exactly how a rehearsal
     once deleted rows from the live database instead of the copy.
+
+    A `sqlalchemy.url` set on the Config in code (the migration tests do) sits
+    between the two.
     """
-    return context.get_x_argument(as_dictionary=True).get("db_url") or (
-        config.get_main_option("sqlalchemy.url")
+    return (
+        context.get_x_argument(as_dictionary=True).get("db_url")
+        or config.get_main_option("sqlalchemy.url")
+        or app_settings.database.connection_string
     )
 
 
