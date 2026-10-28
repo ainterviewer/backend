@@ -227,6 +227,13 @@ class AssistanceSettings(BaseModel):
         return v
 
 
+class TranslationSettings(BaseModel):
+    """Machine translation of a project's guide, consent and welcome."""
+
+    # `provider:model`, spelled as in [llm]; needs the key for its provider.
+    model: str = "openai:gpt-6.1-terra"
+
+
 class EmbeddingSettings(BaseModel):
     """Text-embedding-inference server used to vectorise interview text.
 
@@ -318,6 +325,7 @@ class ServiceSettings(BaseSettings):
     speech: SpeechSettings = SpeechSettings()
     embedding: EmbeddingSettings = EmbeddingSettings()
     assistance: AssistanceSettings = AssistanceSettings()
+    translation: TranslationSettings = TranslationSettings()
 
     model_config = BaseSettingsConfigDict(env_prefix="APP_SERVICE__")
 

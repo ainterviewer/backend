@@ -35,6 +35,7 @@ from ...schemas.projects import (
     ProjectLanguage,
     ProjectPublic,
 )
+from ...settings import app_settings
 from ...types import (
     CollaboratorRole,
     ContentPart,
@@ -60,8 +61,6 @@ from .errors import ContentRevisionError, NotPublishedError, ProjectLanguageErro
 from .permissions import can_moderate_project
 
 logger = logging.getLogger(__name__)
-
-TRANSLATION_MODEL = "openai:gpt-5.4-mini"
 
 #: Which of a project's content to read: the draft the editor edits, the
 #: version respondents get, or a version by id. See `VersionRepository`.
@@ -813,7 +812,7 @@ class ProjectRepository(BaseRepository):
         kwargs = {
             "target": language,
             "source": content.default_language,
-            "model": TRANSLATION_MODEL,
+            "model": app_settings.services.translation.model,
         }
 
         async def maybe[T: (LocalizedConsent, LocalizedWelcome)](part: T | None):

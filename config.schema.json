@@ -419,6 +419,12 @@
           "default": {
             "model": "openai:gpt-6.1-terra"
           }
+        },
+        "translation": {
+          "$ref": "#/$defs/TranslationSettings",
+          "default": {
+            "model": "openai:gpt-6.1-terra"
+          }
         }
       },
       "title": "ServiceSettings",
@@ -535,6 +541,18 @@
         }
       },
       "title": "TimeDelta",
+      "type": "object"
+    },
+    "TranslationSettings": {
+      "description": "Machine translation of a project's guide, consent and welcome.",
+      "properties": {
+        "model": {
+          "default": "openai:gpt-6.1-terra",
+          "title": "Model",
+          "type": "string"
+        }
+      },
+      "title": "TranslationSettings",
       "type": "object"
     },
     "LLMSettings": {
