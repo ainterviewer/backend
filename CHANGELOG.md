@@ -4,6 +4,27 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.12] - 2026-10-28
+
+### Breaking Changes
+
+- (settings) App.public_url and app.contact_email must be set when
+app_env is production or staging; the backend refuses to start without
+them rather than mail out localhost links or a placeholder address.
+
+### Features
+
+- Add generate_names utility script
+
+### Internal
+
+- Document commit types and the Preview: trailer
+- Rename CLAUDE.md to AGENTS.md
+- (settings) Take deployment addresses from config [**breaking**]
+- (db) Migrate the database the app is configured to use
+- (db) Create the database on first start
+- (just) Remove recipes for a module that no longer exists
+
 ## [0.10.11] - 2026-10-27
 
 ### Features
