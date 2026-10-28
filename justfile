@@ -14,14 +14,6 @@ dev:
 setup-db:
     uv run python -m app.db.cli setup-db
 
-[group("Database")]
-update-projects:
-    python -m app.db --upgrade-projects
-
-[group("Database")]
-update-users:
-    python -m app.db --create-users
-
 [doc("Fetches the latest daily backup db from the remote AWS server.
 Pass \"migrate\" to run `alembic upgrade head` on the fetched database.
 ENV picks which environment's backups to pull from.")]
