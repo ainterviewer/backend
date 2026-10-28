@@ -226,7 +226,7 @@ async def export_email_bundle(
         rows.append(row)
     csv_bytes = pl.DataFrame(rows).write_csv().encode("utf-8")
 
-    base_url = app_settings.sveltekit_platform_public_addr
+    base_url = app_settings.app.public_url
     manifest = {
         "project_id": str(project_id),
         "project_title": project.title,
@@ -702,7 +702,7 @@ async def _send_participant_emails(
         lang: (subj, tmpl) for (lang, subj, tmpl) in all_localizations
     }
 
-    base_url = app_settings.sveltekit_platform_public_addr
+    base_url = app_settings.app.public_url
     sent: list[UUID4] = []
     skipped: list[UUID4] = []
 

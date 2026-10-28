@@ -1131,7 +1131,7 @@ async def create_interview_resume_link(
         expires_at,
     )
 
-    base_url = app_settings.sveltekit_platform_public_addr
+    base_url = app_settings.app.public_url
     return InterviewResumeLinkResponse(
         url=f"{base_url}/interview/resume/{raw_token}",
         expires_at=expires_at,

@@ -80,6 +80,26 @@
           "title": "Web Port",
           "type": "integer"
         },
+        "public_url": {
+          "default": "http://localhost:5173",
+          "title": "Public Url",
+          "type": "string"
+        },
+        "website_url": {
+          "default": "http://localhost:5174",
+          "title": "Website Url",
+          "type": "string"
+        },
+        "contact_email": {
+          "default": "contact@example.org",
+          "title": "Contact Email",
+          "type": "string"
+        },
+        "docs_url": {
+          "default": "https://docs.ainterviewer.dk",
+          "title": "Docs Url",
+          "type": "string"
+        },
         "jwt_interview_token_expiration": {
           "$ref": "#/$defs/TimeDelta"
         },
@@ -648,6 +668,10 @@
         "app_port": 5173,
         "web_host": "localhost",
         "web_port": 5174,
+        "public_url": "http://localhost:5173",
+        "website_url": "http://localhost:5174",
+        "contact_email": "contact@example.org",
+        "docs_url": "https://docs.ainterviewer.dk",
         "jwt_interview_token_expiration": {
           "days": 3,
           "hours": 0,

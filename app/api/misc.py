@@ -6,9 +6,16 @@ from ainterviewer.types import LanguageDict
 
 from ..auth import Scope
 from ..dependencies import DBSession, DemoToken
+from ..schemas.common import InstanceInfo
 from ..schemas.users import NewsletterRequest
+from ..settings import app_settings
 
 router = APIRouter()
+
+
+@router.get("/instance", description="Contact and links for this deployment")
+def get_instance() -> InstanceInfo:
+    return InstanceInfo.model_validate(app_settings.app)
 
 
 @router.get("/models", description="available models")

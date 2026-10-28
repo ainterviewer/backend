@@ -164,7 +164,7 @@
     </head>
     <body>
         <div class="container">
-            <img src="https://app.ainterviewer.dk/images/email_header.png"
+            <img src="{{ public_url }}/images/email_header.png"
                  alt="AInterviewer"
                  width="600"
                  style="width: 100%; max-width: 600px; height: auto; display: block;">
@@ -187,13 +187,13 @@
             <!-- Footer -->
             <div class="footer">
                 <div>
-                    <strong>AInterviewer.dk</strong>
+                    <strong>AInterviewer</strong>
                     <br>
                     Automated structured interviews at scale
                 </div>
                 <div class="social-links">
-                    <a href="https://ainterviewer.dk">Visit Website</a> |
-                    <a href="mailto:contact@ainterviewer.dk">Contact Us</a>
+                    <a href="{{ website_url }}">Visit Website</a> |
+                    <a href="mailto:{{ contact_email }}">Contact Us</a>
                 </div>
                 {% if show_unsubscribe|default(False) %}
                     <div class="unsubscribe">

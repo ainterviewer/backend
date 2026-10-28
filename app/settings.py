@@ -3,7 +3,14 @@ from __future__ import annotations
 import os
 from typing import Literal
 
-from pydantic import BaseModel, Field, SecretStr, computed_field
+from pydantic import (
+    BaseModel,
+    Field,
+    SecretStr,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -53,6 +60,22 @@ class AppSettings(BaseModel):
 
     web_host: str = "localhost"
     web_port: int = 5174
+
+    # Where people reach the platform and the website from outside. Every link
+    # the backend hands out -- invitations, participant links, verification
+    # and password-reset emails -- is built on public_url, and both are the
+    # allowed CORS origins. The defaults are the local dev servers, so a
+    # deployed environment must set public_url; see
+    # Settings.require_deployment_settings.
+    public_url: str = "http://localhost:5173"
+    website_url: str = "http://localhost:5174"
+
+    # Who runs this instance. Participants are told to write here with
+    # questions or corrections about their interview, so on a self-hosted
+    # instance it must be its operator and not the hosted platform's address;
+    # like public_url, a deployed environment must set it.
+    contact_email: str = "contact@example.org"
+    docs_url: str = "https://docs.ainterviewer.dk"
 
     jwt_interview_token_expiration: TimeDelta = Field(
         default_factory=lambda: TimeDelta(days=3)
@@ -106,6 +129,11 @@ class AppSettings(BaseModel):
     last_active_debounce: TimeDelta = Field(
         default_factory=lambda: TimeDelta(minutes=10)
     )
+
+    @field_validator("public_url", "website_url", "docs_url")
+    @classmethod
+    def strip_trailing_slash(cls, v: str) -> str:
+        return v.rstrip("/")
 
     @computed_field
     def api_endpoint(self) -> str:
@@ -307,45 +335,23 @@ class Settings(BaseSettings):
         pyproject_toml_table_header=("tool", "ainterviewer"),
     )
 
-    @property
-    def sveltekit_platform_public_addr(self) -> str:
-        match self.app_env:
-            case "development":
-                return "http://localhost:5173"
-            case "staging":
-                return "https://app.staging.ainterviewer.dk"
-            case "production":
-                return "https://app.ainterviewer.dk"
-
-    @property
-    def sveltekit_website_public_addr(self) -> str:
-        match self.app_env:
-            case "development":
-                return "http://localhost:5174"
-            case "staging":
-                return "https://staging.ainterviewer.dk"
-            case "production":
-                return "https://ainterviewer.dk"
-
-    @property
-    def sveltekit_platform_addr(self) -> str:
-        match self.app_env:
-            case "development":
-                return "http://localhost:5173"
-            case "staging":
-                return "http://localhost:4001"
-            case "production":
-                return "http://localhost:3001"
-
-    @property
-    def sveltekit_website_addr(self) -> str:
-        match self.app_env:
-            case "development":
-                return "http://localhost:5174"
-            case "staging":
-                return "http://localhost:4000"
-            case "production":
-                return "http://localhost:3000"
+    @model_validator(mode="after")
+    def require_deployment_settings(self) -> Settings:
+        # Falling back to a dev default in a deployed environment would mail
+        # out links to localhost and point participants at a placeholder
+        # address, so refuse to start instead.
+        if self.app_env != "development":
+            missing = [
+                f"app.{name}"
+                for name in ("public_url", "contact_email")
+                if name not in self.app.model_fields_set
+            ]
+            if missing:
+                raise ValueError(
+                    f"{' and '.join(missing)} must be set "
+                    f"when app_env is {self.app_env!r}"
+                )
+        return self
 
     @classmethod
     def settings_customise_sources(

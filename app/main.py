@@ -91,8 +91,8 @@ app.add_middleware(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        app_settings.sveltekit_platform_public_addr,
-        app_settings.sveltekit_website_public_addr,
+        app_settings.app.public_url,
+        app_settings.app.website_url,
     ],
     allow_credentials=True,
     allow_methods=["*"],

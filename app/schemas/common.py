@@ -116,3 +116,15 @@ class InvalidKeywordQueryError(ApiError):
 class MediaUploadResponse(Schema):
     message: str
     filename: str
+
+
+class InstanceInfo(Schema):
+    """What the frontend needs to know about this deployment.
+
+    Public, because the interview page shows the contact address to
+    respondents who have no account.
+    """
+
+    contact_email: str
+    website_url: str
+    docs_url: str

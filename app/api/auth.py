@@ -200,9 +200,7 @@ async def _send_verification_email(db, user: UserPublic | UserRecord) -> None:
         expires_at=now()
         + app_settings.app.email_verification_token_expiration.to_timedelta(),
     )
-    link = (
-        f"{app_settings.sveltekit_platform_public_addr}/verify-email?token={raw_token}"
-    )
+    link = f"{app_settings.app.public_url}/verify-email?token={raw_token}"
     try:
         await send_email(
             user.email,
@@ -524,7 +522,7 @@ async def _send_password_reset_email(db, user: UserRecord) -> None:
         purpose=VerificationPurpose.PASSWORD_RESET,
         expires_at=now() + expiration,
     )
-    link = f"{app_settings.sveltekit_platform_public_addr}/reset-password?token={raw_token}"
+    link = f"{app_settings.app.public_url}/reset-password?token={raw_token}"
     minutes = int(expiration.total_seconds() // 60)
     try:
         await send_email(

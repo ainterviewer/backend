@@ -111,7 +111,7 @@ class InvitationPublic(InvitationBase):
     @computed_field()
     def invitation_link(self) -> str:
         token = self.alias or self.id
-        return f"{app_settings.sveltekit_platform_public_addr}/sign-up?token={token}"
+        return f"{app_settings.app.public_url}/sign-up?token={token}"
 
 
 class UserBase(Schema):

@@ -4,7 +4,7 @@ from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formatdate, make_msgid
-from typing import overload
+from typing import Any, overload
 
 import aiosmtplib
 import css_inline
@@ -17,9 +17,10 @@ from ...settings import app_settings
 EmailAttachment = tuple[str, bytes]  # (filename, content)
 
 # The email header image is referenced by a public HTTPS URL in the templates
-# (served from app/main.py at /api/assets) rather than embedded inline as a
-# `cid:` part: corporate Outlook on the web / Exchange (e.g. webmail.ku.dk)
-# renders hosted URLs reliably but routinely drops inline CID images.
+# (the frontend serves it at `{public_url}/images/`) rather than embedded
+# inline as a `cid:` part: corporate Outlook on the web / Exchange (e.g.
+# webmail.ku.dk) renders hosted URLs reliably but routinely drops inline CID
+# images.
 
 email_templates = Environment(
     loader=PackageLoader(
@@ -29,6 +30,15 @@ email_templates = Environment(
     autoescape=select_autoescape(),
     undefined=StrictUndefined,
 )
+# This deployment's own addresses, so no template names the hosted platform.
+# Typed as Any: the type checker narrows `globals` to the kinds of value Jinja
+# ships there by default (range, dict, lipsum, ...), which excludes str.
+instance_globals: dict[str, Any] = {
+    "public_url": app_settings.app.public_url,
+    "website_url": app_settings.app.website_url,
+    "contact_email": app_settings.app.contact_email,
+}
+email_templates.globals.update(instance_globals)
 
 
 @overload
@@ -122,10 +132,11 @@ def _create_email_message(
     else:
         message = alternative
 
-    message["From"] = app_settings.services.email.sender.email  # ty:ignore[unresolved-attribute]
+    sender = app_settings.services.email.sender.email  # ty:ignore[unresolved-attribute]
+    message["From"] = sender
     message["To"] = recipients
     message["Subject"] = subject
     message["Date"] = formatdate(localtime=True)
-    message["Message-ID"] = make_msgid(domain="ainterviewer.dk")
+    message["Message-ID"] = make_msgid(domain=sender.rpartition("@")[2])
 
     return message
