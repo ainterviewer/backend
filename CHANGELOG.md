@@ -4,6 +4,12 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.15] - 2026-11-05
+
+### Bug Fixes
+
+- (reports) Let demo users mark read and review their projects' reports
+
 ## [0.10.14] - 2026-11-04
 
 ### Internal
