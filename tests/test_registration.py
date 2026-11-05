@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.api import auth as auth_api
 from app.db.crud import InterviewDataBase
-from app.db.repositories.errors import EmailTakenError, InvitationClaimedError
+from app.db.repositories.errors import InvitationClaimedError
 from app.db.tables import Base, UserTable
 from app.errors import AppError
 from app.schemas.users import InvitationCreate, RegisterRequest, UserCreate
@@ -70,16 +70,30 @@ def accounts(db, email="ada@example.com") -> int:
     return db.session.query(UserTable).filter_by(email=email).count()
 
 
-def test_email_in_use_is_a_409_and_keeps_the_invite(db, sent):
+def test_email_in_use_answers_like_a_new_account_and_keeps_the_invite(db, sent):
+    """Answering 409 told anyone holding a reusable invite link which
+    addresses have accounts. The owner is emailed instead."""
     first, second = invite(db), invite(db, alias="second")
-    register(db, first.id)
+    created = register(db, first.id)
 
-    with pytest.raises(EmailTakenError) as error:
-        register(db, second.id)
+    taken = register(db, second.id, email="ADA@example.com")
 
-    assert error.value.status == 409
+    assert taken == created
     assert db.users.check_invite_token(second.id).alias == "second"
     assert accounts(db) == 1
+    # The verification email, then the notice to the account's owner.
+    assert sent == ["ada@example.com", "ada@example.com"]
+
+
+def test_a_failed_notice_still_answers_like_a_new_account(db, sent, monkeypatch):
+    created = register(db, invite(db).id)
+
+    async def failing_send_email(*args, **kwargs):
+        raise OSError("SMTP down")
+
+    monkeypatch.setattr(auth_api, "send_email", failing_send_email)
+
+    assert register(db, invite(db).id) == created
 
 
 def test_failed_verification_email_restores_the_invite(db, email_down):

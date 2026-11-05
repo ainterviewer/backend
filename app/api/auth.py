@@ -532,10 +532,19 @@ async def register(user: RegisterRequest, db: DBSession) -> ActionResponse:
     # NOTE: Password hashing happens in the users.create_user method
     # Raises InvitationClaimedError when another request redeemed a single-use
     # token first, and EmailTakenError for an address with an account.
-    new_user = db.users.create_user(
-        UserCreate(**user.model_dump(), **snapshot),
-        claim_invitation=claim.id if claim else None,
-    )
+    try:
+        new_user = db.users.create_user(
+            UserCreate(**user.model_dump(), **snapshot),
+            claim_invitation=claim.id if claim else None,
+        )
+    except EmailTakenError:
+        # Answer as if the account were created, or this form tells anyone
+        # holding a reusable invite link which addresses have accounts. The
+        # owner hears about it instead. The insert was rolled back, claim
+        # included, so a single-use invitation stays redeemable; and the
+        # password was hashed either way, so the timing matches too.
+        await _send_signup_attempt_email(db, user.email)
+        return ActionResponse(message=_REGISTERED)
 
     # Hard gate: no session is issued until the email address is verified.
     # If the email can't be sent, roll back the new account so the address is
@@ -559,9 +568,32 @@ async def register(user: RegisterRequest, db: DBSession) -> ActionResponse:
         user_id=new_user.id,
     )
 
-    return ActionResponse(
-        message="Registration successful. Please verify your email to continue."
-    )
+    return ActionResponse(message=_REGISTERED)
+
+
+_REGISTERED = "Registration successful. Please verify your email to continue."
+
+
+async def _send_signup_attempt_email(db, email: str) -> None:
+    """Tell an account's owner someone tried to register with their address.
+
+    Best effort: a failure is logged, not raised, since answering differently
+    from a successful registration would give away that the address is taken.
+    """
+    user = db.users.get_user_private(email)
+    public_url = app_settings.app.public_url
+    try:
+        await send_email(
+            user.email,
+            "Someone tried to sign up with your email",
+            html_content=email_templates.get_template("signup_attempt.jinja").render(
+                recipient_name=user.first_name,
+                login_link=f"{public_url}/login",
+                reset_link=f"{public_url}/forgot-password",
+            ),
+        )
+    except Exception:
+        logger.exception("Failed to send sign-up attempt notice to user %s", user.id)
 
 
 @router.post("/verify-email")
