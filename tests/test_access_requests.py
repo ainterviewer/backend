@@ -19,6 +19,9 @@ from app.api import auth as auth_api
 from app.db.crud import InterviewDataBase
 from app.db.tables import Base
 from app.schemas.users import AccessRequestCreate, UserCreate
+from app.settings import EmailAccount, EmailSettings
+
+ADMIN_INBOX = "admins@example.com"
 
 
 @pytest.fixture
@@ -27,6 +30,24 @@ def db():
     Base.metadata.create_all(engine)
     with Session(engine) as session:
         yield InterviewDataBase(session)
+
+
+@pytest.fixture(autouse=True)
+def email_settings(monkeypatch):
+    """An admin inbox to notify. The route reads it from the settings, which
+    CI leaves unset (`services.email` is None) and a developer's config may
+    fill with anything."""
+    account = EmailAccount(email=ADMIN_INBOX, password="unused")
+    email = EmailSettings(smtp_server="smtp.invalid", sender=account, recipient=account)
+    settings = auth_api.app_settings
+    # The settings are frozen, so swap in a copy rather than editing them.
+    monkeypatch.setattr(
+        auth_api,
+        "app_settings",
+        settings.model_copy(
+            update={"services": settings.services.model_copy(update={"email": email})}
+        ),
+    )
 
 
 @pytest.fixture
@@ -50,8 +71,7 @@ def test_a_new_request_is_stored_and_the_admins_told(db, sent):
     request(db)
 
     assert [r.email for r in db.users.get_access_requests()] == ["ada@example.com"]
-    assert len(sent) == 1
-    assert sent[0]["subject"] == "New access request"
+    assert [m["recipient"] for m in sent] == [ADMIN_INBOX]
 
 
 def test_a_duplicate_answers_the_same_and_notifies_nobody(db, sent):
@@ -60,7 +80,7 @@ def test_a_duplicate_answers_the_same_and_notifies_nobody(db, sent):
 
     assert again == first
     assert len(db.users.get_access_requests()) == 1
-    assert [m["subject"] for m in sent] == ["New access request"]
+    assert [m["recipient"] for m in sent] == [ADMIN_INBOX]
 
 
 def test_an_account_holder_is_told_they_have_one(db, sent):
