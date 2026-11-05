@@ -1,7 +1,7 @@
 {% extends "base_email.jinja" %}
 {% block content %}
     <p class="main-text">
-        Someone just tried to create an <strong>AInterviewer</strong> account with this email address. You already have an account, so no new one was created.
+        Someone just used this email address to {{ attempt }} on <strong>AInterviewer</strong>. You already have an account with it, so nothing new was created.
     </p>
     <p class="main-text">If that was you, sign in instead:</p>
     <a href="{{ login_link }}" class="cta-button">Sign In</a>

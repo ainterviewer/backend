@@ -574,8 +574,11 @@ async def register(user: RegisterRequest, db: DBSession) -> ActionResponse:
 _REGISTERED = "Registration successful. Please verify your email to continue."
 
 
-async def _send_signup_attempt_email(db, email: str) -> None:
-    """Tell an account's owner someone tried to register with their address.
+async def _send_signup_attempt_email(
+    db, email: str, attempt: str = "create an account"
+) -> None:
+    """Tell an account's owner someone tried to register with their address,
+    or to `attempt` something else an account holder needn't.
 
     Best effort: a failure is logged, not raised, since answering differently
     from a successful registration would give away that the address is taken.
@@ -588,6 +591,7 @@ async def _send_signup_attempt_email(db, email: str) -> None:
             "Someone tried to sign up with your email",
             html_content=email_templates.get_template("signup_attempt.jinja").render(
                 recipient_name=user.first_name,
+                attempt=attempt,
                 login_link=f"{public_url}/login",
                 reset_link=f"{public_url}/forgot-password",
             ),
@@ -723,23 +727,35 @@ async def reset_password(body: ResetPasswordRequest, db: DBSession) -> ActionRes
 
 
 @router.post("/request-access")
-async def request_access(access_request: AccessRequestCreate, db: DBSession):
+async def request_access(
+    access_request: AccessRequestCreate, db: DBSession
+) -> ActionResponse:
+    """File a request for an account, for an admin to review.
+
+    Answers the same whether the address is new, already has a request, or
+    already has an account -- a 409 for a duplicate used to tell anyone which
+    addresses had asked. A duplicate is dropped without notifying the admins
+    again; an account holder is emailed that they already have one.
+    """
+    detail = "Thanks for your interest. We'll email you once your request is reviewed."
+    if db.users.email_in_use(access_request.email):
+        await _send_signup_attempt_email(db, access_request.email, "request access")
+        return ActionResponse(message=detail)
     try:
         db.users.create_access_request(access_request)
+    except sqlalchemy.exc.IntegrityError:
+        return ActionResponse(message=detail)
+
+    try:
         await send_email(
             app_settings.services.email.recipient.email,  # ty:ignore[unresolved-attribute]
             "New access request",
             body=f"New access request from {access_request.email}\n\nOrganization: {access_request.organization}\nMessage:\n{access_request.message}",
         )
-    except sqlalchemy.exc.IntegrityError as e:
-        # Check if the error is a UNIQUE constraint violation
-        if "UNIQUE constraint failed" in str(e.orig):
-            raise AppError(
-                "Access request already exists for this email.",
-                status=409,
-                code=ErrorCode.ACCESS_REQUEST_EXISTS,
-            ) from None
-        raise
+    except Exception:
+        # The request is stored and shows in the admin list either way.
+        logger.exception("Failed to notify admins of access request")
+    return ActionResponse(message=detail)
 
 
 @router.post("/logout")

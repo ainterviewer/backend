@@ -279,7 +279,12 @@ class UserRepository(BaseRepository):
             | {"email": normalize_email(access_request.email)}
         )
         self.session.add(request)
-        self.session.commit()
+        try:
+            self.session.commit()
+        except IntegrityError:
+            # An address asks once; leave the session usable for the caller.
+            self.session.rollback()
+            raise
 
     def get_access_request(self, access_request_id: UUID4) -> AccessRequestPublic:
         statement = select(AccessRequestTable).where(

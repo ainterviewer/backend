@@ -485,7 +485,6 @@ class ErrorCode(StrEnum):
     INVITE_REQUIRED = "invite_required"
     INVITE_INVALID = "invite_invalid"
     INVITE_EXPIRED = "invite_expired"
-    ACCESS_REQUEST_EXISTS = "access_request_exists"
     # Folder collaborators: the invited email is already a collaborator.
     ALREADY_COLLABORATOR = "already_collaborator"
     # A change above the caller's own role on the folder.
