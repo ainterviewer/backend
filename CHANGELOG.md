@@ -4,6 +4,24 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.16] - 2026-11-05
+
+### Features
+
+- (folders) Invite collaborators by email, and let them leave
+
+### Bug Fixes
+
+- (account) Confirm a new email address before switching to it
+- (account) Treat email addresses the same in any casing
+- (account) Stop sign-up revealing which emails have accounts
+- (folders) Keep invite emails from carrying the inviter's own text
+- (account) Stop access requests revealing who has already asked
+
+### Internal
+
+- Allow small self-contained commits straight to main
+
 ## [0.10.15] - 2026-11-05
 
 ### Bug Fixes
