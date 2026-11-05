@@ -43,8 +43,8 @@ async def get_notifications(
     in both and one number could only ever point at one of them.
 
     `DemoToken` is the lowest signed-in scope, so this answers for every
-    account. A demo user simply has no projects to have reports in, and gets
-    zeros rather than an error.
+    account. Demo users own projects too, and their reports count like
+    anyone's.
     """
     is_admin = Scope.ADMIN in {Scope(scope) for scope in jwt.scope.split()}
 

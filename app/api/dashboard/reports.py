@@ -5,6 +5,10 @@ acts in so the role check has something to check -- the report ids arrive in
 the request body, and a role on the project in the path says nothing about
 them, which is why the repository scopes each write by it as well.
 
+`DemoToken`, like the `/me/reports` queue these actions are taken from: demo
+users own projects, and reviewing a report reaches no respondent. The project
+role is the check that matters here.
+
 The platform admin's queue is `app.api.admin.reports`: the same rows, the
 other status. Neither track can clear the other's; see `MessageReportTable`.
 """
@@ -14,7 +18,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from pydantic import UUID4
 
-from ...dependencies import DBSession, ProjectAnnotator, ProjectViewer, UserToken
+from ...dependencies import DBSession, DemoToken, ProjectAnnotator, ProjectViewer
 from ...schemas.reports import (
     MessageReportRowPublic,
     ReportFilterParams,
@@ -30,7 +34,7 @@ router = APIRouter(tags=["reports"])
 async def get_project_reports(
     project_id: UUID4,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectViewer,
     filters: Annotated[ReportFilterParams, Query()],
 ) -> list[MessageReportRowPublic]:
@@ -53,7 +57,7 @@ async def resolve_project_reports(
     project_id: UUID4,
     review: ReportReviewRequest,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectAnnotator,
 ) -> ReportReviewResponse:
     """Resolve, dismiss or reopen reports on this project's questions.
@@ -77,7 +81,7 @@ async def mark_project_reports_read(
     project_id: UUID4,
     read: ReportReadRequest,
     db: DBSession,
-    jwt: UserToken,
+    jwt: DemoToken,
     _: ProjectViewer,
 ) -> ReportReviewResponse:
     """Record that this member has seen these reports.
