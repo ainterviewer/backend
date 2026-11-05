@@ -230,3 +230,68 @@ def test_a_question_for_an_unsaved_section_is_told_apart(setup):
     )
     assert response.status_code == 404
     assert response.json()["code"] == "section_not_found"
+
+
+# A test started part-way through the guide (app/services/guide_start.py).
+
+
+def _draft_question_id(engine, project_id):
+    with Session(engine) as session:
+        guide = (
+            InterviewDataBase(session)
+            .projects.get_project_localization(
+                project_id, "EN", source="draft", or_default=True
+            )
+            .interview_guide
+        )
+    return str(guide.question_sections[0].questions[0].id)
+
+
+def test_a_manual_test_can_start_at_a_question(setup):
+    client, project_id, cookies, engine = setup
+    question_id = _draft_question_id(engine, project_id)
+
+    created = client.post(
+        f"/api/projects/{project_id}/EN/interviews",
+        json={"interview_type": "manual_test", "start_question_id": question_id},
+        cookies=cookies,
+    )
+    assert created.status_code == 200
+
+    with Session(engine) as session:
+        interview = session.execute(select(InterviewTable)).scalar_one()
+        assert str(interview.start_question_id) == question_id
+        assert interview.interview_guide.introduction == ""
+
+    listed = client.get(
+        f"/api/projects/{project_id}/interviews",
+        params={"interview_types": ["manual_test"]},
+        cookies=cookies,
+    )
+    assert listed.status_code == 200
+    (row,) = listed.json()["items"]
+    assert row["start_question_id"] == question_id
+
+
+def test_only_a_manual_test_starts_part_way(setup):
+    client, project_id, cookies, engine = setup
+    question_id = _draft_question_id(engine, project_id)
+    create = f"/api/projects/{project_id}/EN/interviews"
+
+    for interview_type in ("distributed", "synthetic_test"):
+        refused = client.post(
+            create,
+            json={"interview_type": interview_type, "start_question_id": question_id},
+            cookies=cookies,
+        )
+        assert refused.status_code == 422
+
+    unknown = client.post(
+        create,
+        json={"interview_type": "manual_test", "start_question_id": str(uuid4())},
+        cookies=cookies,
+    )
+    assert unknown.status_code == 422
+
+    with Session(engine) as session:
+        assert session.execute(select(InterviewTable)).first() is None

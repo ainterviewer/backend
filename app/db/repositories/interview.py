@@ -420,6 +420,7 @@ class InterviewRepository(BaseRepository):
                 InterviewTable.last_updated,
                 InterviewTable.total_time_spent,
                 InterviewTable.n_messages.label("n_messages"),
+                InterviewTable.start_question_id,
                 test_name,
                 pid_column,
                 n_reports,

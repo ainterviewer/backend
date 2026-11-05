@@ -50,6 +50,7 @@ from ..schemas.projects import (
 )
 from ..schemas.reports import MessageReportCreate, MessageReportPublic
 from ..services.audio import SpeechNotConfigured, SpeechUnavailable, synthesize
+from ..services.guide_start import StartPointError, start_guide_at
 from ..settings import app_settings
 from ..types import (
     CollaboratorRole,
@@ -267,6 +268,18 @@ async def create_interview(
 ) -> str:
     project = db.projects.get_project(project_id)
 
+    # Starting part-way is for trying out a guide from the editor. Checked
+    # before anything is written, so a bad request leaves no snapshot behind.
+    starts_part_way = (
+        new_interview.start_section_id is not None
+        or new_interview.start_question_id is not None
+    )
+    if starts_part_way and new_interview.interview_type != InterviewType.MANUAL_TEST:
+        raise HTTPException(
+            status_code=422,
+            detail="Only a manual test can start part-way through the guide",
+        )
+
     if new_interview.interview_type == InterviewType.DISTRIBUTED:
         if project.owner.scope == Scope.DEMO:
             raise AuthError(
@@ -318,6 +331,19 @@ async def create_interview(
 
     if not (interview_guide := project_localization.interview_guide):
         raise ValueError("Interview guide is not set")
+
+    # Cut before shuffling: the start point means "from here on" in the order
+    # the guide was written, not wherever a shuffle happened to put it.
+    start_question_id = None
+    if starts_part_way:
+        try:
+            start_question_id = start_guide_at(
+                interview_guide,
+                section_id=new_interview.start_section_id,
+                question_id=new_interview.start_question_id,
+            )
+        except StartPointError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
 
     # Apply shuffling before the interview is created, to store the shuffled
     # state
@@ -387,6 +413,7 @@ async def create_interview(
         participant_id=participant_id,
         experiment_id=assignment.experiment_id if assignment else None,
         content_version_id=project_localization.content_version_id,
+        start_question_id=start_question_id,
     )
     if assignment is not None:
         db.tests.record_assignment_interview(

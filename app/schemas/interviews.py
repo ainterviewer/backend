@@ -78,6 +78,9 @@ class InterviewSummaryPublic(Schema):
     #: -- test interviews included, which `n_reports` never flags.
     n_interventions: int = 0
     test_name: str | None = None
+    #: The question a test started at, when it was started part-way through
+    #: the guide. NULL for an interview run from the beginning.
+    start_question_id: UUID4 | None = None
     # The participant this interview belongs to, joined in from the
     # participant record. NULL for interviews that were never distributed to
     # one, and for interviews whose participant has since been deleted.
@@ -205,6 +208,10 @@ class InterviewCreate(Schema):
     synthetic_test_type: TestType | None = None
     participant_id: UUID4 | None = None
     pid: str | None = None
+    #: Start a manual test part-way through the guide: at this section's first
+    #: question, or at this question. At most one; only for manual tests.
+    start_section_id: UUID4 | None = None
+    start_question_id: UUID4 | None = None
 
     # Extra context
     external_params: dict[str, Any] | None = Field(

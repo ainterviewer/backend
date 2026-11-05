@@ -1102,6 +1102,11 @@ class InterviewTable(Base):
         default=None,
         index=True,
     )
+    #: The question a manual test started at, when it was started part-way
+    #: through the guide; `interview_guide` then holds only what comes from it
+    #: on. NULL for an interview run from the beginning. No foreign key: a
+    #: question is an id inside the guide's JSON, not a row.
+    start_question_id: Mapped[uuid.UUID | None] = mapped_column(default=None)
 
     # Relationships
     project: Mapped["ProjectTable"] = relationship(back_populates="interviews")
