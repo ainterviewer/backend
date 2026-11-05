@@ -1,7 +1,7 @@
 {% extends "base_email.jinja" %}
 {% block content %}
     <p class="main-text">
-        {{ inviter_name }} has invited you to collaborate on the folder <strong>{{ folder_title }}</strong> on <strong>AInterviewer</strong>, as {{ role_article }} <strong>{{ role }}</strong>.
+        {{ inviter_name }} ({{ inviter_email }}) has invited you to collaborate on the folder <strong>{{ folder_title }}</strong> on <strong>AInterviewer</strong>, as {{ role_article }} <strong>{{ role }}</strong>.
     </p>
     {% if has_account %}
         <p class="main-text">Click the button below to accept the invitation:</p>

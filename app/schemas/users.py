@@ -14,6 +14,7 @@ from pydantic import (
     EmailStr,
     Field,
     NonNegativeInt,
+    StringConstraints,
     computed_field,
 )
 
@@ -67,6 +68,13 @@ def normalize_invitation_alias(value: str) -> str:
 
 
 InvitationAlias = Annotated[str, AfterValidator(normalize_invitation_alias)]
+
+# A name someone gives themselves. It reaches other people's inboxes (the
+# collaborator invite says who sent it), so it is bounded: a name, not a
+# paragraph of text that could pass for our own message.
+PersonName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
+]
 
 
 class InvitationBase(Schema):
@@ -144,8 +152,8 @@ class RegisterRequest(Schema):
     """
 
     email: NormalizedEmail
-    first_name: str
-    last_name: str | None = None
+    first_name: PersonName
+    last_name: PersonName | None = None
     invite_token: UUID4 | str | None = Field(union_mode="left_to_right")
     research_consent: bool = False
     password: NewPassword
@@ -215,8 +223,8 @@ class UserAdminUpdate(Schema):
 class UserSelfUpdate(Schema):
     """Profile fields a user may change on their own account."""
 
-    first_name: str | MISSING = MISSING
-    last_name: str | None | MISSING = MISSING
+    first_name: PersonName | MISSING = MISSING
+    last_name: PersonName | None | MISSING = MISSING
     organization: str | None | MISSING = MISSING
 
 

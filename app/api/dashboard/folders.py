@@ -168,10 +168,13 @@ async def _send_invite_email(
     expires_at = issued.invite.expires_at
     await send_email(
         issued.invite.email,
-        f"{inviter_name} invited you to collaborate on AInterviewer",
+        # Fixed: the inviter's name is free text they choose, and in a subject
+        # line it would be ours to vouch for ("Your account is suspended...").
+        "You've been invited to collaborate on AInterviewer",
         html_content=email_templates.get_template("collaborator_invite.jinja").render(
             recipient_name=issued.recipient_first_name or "there",
             inviter_name=inviter_name,
+            inviter_email=inviter.email,
             folder_title=issued.folder_title,
             role_article=article,
             role=role,

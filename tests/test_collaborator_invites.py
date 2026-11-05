@@ -15,6 +15,7 @@ from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import create_engine, update
 from sqlalchemy.orm import Session
 
@@ -34,7 +35,7 @@ from app.schemas.projects import (
     CollaboratorInviteRequest,
     FolderCreate,
 )
-from app.schemas.users import UserCreate
+from app.schemas.users import UserCreate, UserSelfUpdate
 from app.types import CollaboratorRole, Scope
 
 
@@ -132,6 +133,10 @@ def test_only_the_recipients_email_differs(db, folder, owner, member, sent):
     invite(db, folder, owner, "nobody@example.com")
 
     to_member, to_nobody = sent
+    # The subject is fixed: the inviter's name is text they chose.
+    assert to_member["subject"] == to_nobody["subject"]
+    assert "Olive" not in to_member["subject"]
+    assert "Olive (owner@example.com)" in to_member["html_content"]
     assert "Hello Mads" in to_member["html_content"]
     assert "/login?request" not in to_member["html_content"]
     assert "Hello there" in to_nobody["html_content"]
@@ -296,3 +301,11 @@ def test_deleting_the_folder_takes_its_invites(db, folder, owner, sent):
     db.projects.delete_folder(folder.id)
 
     assert db.session.query(CollaboratorInviteTable).count() == 0
+
+
+def test_a_name_that_reaches_invite_emails_is_bounded():
+    with pytest.raises(ValidationError):
+        UserSelfUpdate(first_name="x" * 101)
+    with pytest.raises(ValidationError):
+        UserSelfUpdate(first_name="   ")
+    assert UserSelfUpdate(first_name="  Olive ").first_name == "Olive"
