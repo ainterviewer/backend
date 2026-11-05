@@ -26,6 +26,7 @@ from ..schemas.common import ActionResponse
 from ..schemas.users import (
     AccessRequestCreate,
     AuthResponse,
+    ConfirmEmailChangeRequest,
     DeleteAccountRequest,
     ForgotPasswordRequest,
     InvitationPublic,
@@ -342,13 +343,114 @@ async def update_me(body: UserSelfUpdate, db: DBSession, jwt: DemoToken) -> User
 @router.patch("/me/email")
 async def update_my_email(
     body: UpdateEmailRequest, db: DBSession, jwt: DemoToken
-) -> UserPublic:
-    _verify_current_password(db, jwt.user_id, body.password)
+) -> ActionResponse:
+    """Email a confirmation link to the new address; following it makes the
+    change (`/confirm-email-change`). Nothing changes until then.
 
+    Answers the same whether or not another account has the address, so the
+    form cannot be used to find out who has an account: a taken address is
+    sent nothing. As with forgot-password, an SMTP failure still surfaces as a
+    502 for a free address -- a rare-condition leak.
+    """
+    user = _verify_current_password(db, jwt.user_id, body.password)
+    new_email = str(body.new_email).strip()
+    if new_email.lower() == user.email.lower():
+        raise HTTPException(status_code=400, detail="That is already your email")
+
+    detail = f"We sent a confirmation link to {new_email}. Your email changes once you follow it."
+    db.verification.invalidate_active(user.id, VerificationPurpose.EMAIL_CHANGE)
+    if db.users.email_in_use(new_email):
+        return ActionResponse(message=detail)
+
+    raw_token = generate_verification_token()
+    code = db.verification.create(
+        user_id=user.id,
+        code_hash=hash_token(raw_token),
+        purpose=VerificationPurpose.EMAIL_CHANGE,
+        expires_at=now()
+        + app_settings.app.email_change_token_expiration.to_timedelta(),
+        new_email=new_email,
+    )
+    link = f"{app_settings.app.public_url}/confirm-email-change?token={raw_token}"
     try:
-        return db.users.update_user_email(jwt.user_id, body.new_email)
+        await send_email(
+            new_email,
+            "Confirm your new email address",
+            html_content=email_templates.get_template(
+                "confirm_email_change.jinja"
+            ).render(
+                recipient_name=user.first_name,
+                confirmation_link=link,
+                old_email=user.email,
+            ),
+        )
+    except Exception:
+        logger.exception("Failed to send email-change link for user %s", user.id)
+        db.verification.delete(code.id)
+        raise EmailSendError from None
+
+    return ActionResponse(message=detail)
+
+
+@router.post("/confirm-email-change")
+async def confirm_email_change(
+    body: ConfirmEmailChangeRequest,
+    db: DBSession,
+    raw_refresh: str | None = Depends(refresh_cookie_scheme),
+) -> ActionResponse:
+    """Move the account to the address a change link was sent to.
+
+    The link is the proof of owning the address, so it needs no session. The
+    change ends the account's other sessions -- whoever asked for it may not
+    be its owner -- but keeps the browser confirming it, if that is signed in
+    to the same account. The old address is told.
+    """
+    code = db.verification.get_active_by_hash(
+        hash_token(body.token), VerificationPurpose.EMAIL_CHANGE
+    )
+    if code is None or code.new_email is None:
+        raise AppError(
+            "Invalid or expired confirmation link", code=ErrorCode.EMAIL_LINK_INVALID
+        )
+    user_id, new_email = code.user_id, code.new_email
+    old = db.users.get_user_private(user_id=user_id)
+    db.verification.consume(code.id)
+
+    # Someone may have registered the address since it was requested. Saying
+    # so tells nothing to whoever holds the link: they own the inbox.
+    if db.users.email_in_use(new_email):
+        raise EmailTakenError
+    try:
+        db.users.update_user_email(user_id, new_email)
     except sqlalchemy.exc.IntegrityError:
         raise EmailTakenError from None
+    db.users.set_email_verified(user_id)
+
+    current = (
+        db.auth.get_by_token_hash(hash_token(raw_refresh)) if raw_refresh else None
+    )
+    keep = (
+        current.family_id
+        if current and current.user_id == user_id and not current.is_revoked
+        else None
+    )
+    db.auth.revoke_all_for_user(user_id, keep_family=keep)
+
+    try:
+        await send_email(
+            old.email,
+            "Your email address was changed",
+            html_content=email_templates.get_template("email_changed.jinja").render(
+                recipient_name=old.first_name,
+                new_email=new_email,
+            ),
+        )
+    except Exception:
+        # The change is made and was asked for by the new address's owner;
+        # failing the request now would only hide that it went through.
+        logger.exception("Failed to notify %s of an email change", old.email)
+
+    return ActionResponse(message="Your email address has been changed")
 
 
 @router.post("/me/password")

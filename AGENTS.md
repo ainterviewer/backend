@@ -898,10 +898,23 @@ add a shortcut that adds existing users straight away: the collaborator list
 would show the difference again. The recipient's email is the one place the
 two cases differ (no account: request access first).
 
-Accepting goes by token, never by matching the signed-in account's email,
-because `PATCH /me/email` changes an address without verifying it. Signed-out
-visitors reach the accept page through `/login?next=…` (the frontend's
-`loginNext`). These routes are not rate limited.
+Accepting goes by the token in the link, not by matching the signed-in
+account's email. The link is the proof, so an invite to a work address can be
+accepted from a personal account. Signed-out visitors reach the accept page
+through `/login?next=…` (the frontend's `loginNext`). These routes are not
+rate limited.
+
+### Changing an account's email
+
+`PATCH /me/email` changes nothing. It stores an `EMAIL_CHANGE` verification
+code carrying `new_email` and emails a link to the new address. It answers the
+same whether or not another account has that address; a taken address is sent
+nothing. `POST /confirm-email-change` (no session needed) makes the change,
+marks the address verified, ends every other session except the confirming
+browser's (`revoke_all_for_user(keep_family=…)`) and tells the old address.
+Don't write `user.email` from a route without that link: sign-in codes and
+password resets go to it, and an unverified address there let accounts take
+addresses they didn't own.
 
 The routes need `FolderEditor`, but what a caller may change is capped by
 their own role on the folder (`actor_role`; a platform admin counts as an

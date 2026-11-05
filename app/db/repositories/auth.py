@@ -72,12 +72,16 @@ class AuthRepository(BaseRepository):
         )
         self.session.commit()
 
-    def revoke_all_for_user(self, user_id: UUID4) -> None:
-        self.session.execute(
-            update(RefreshTokenTable)
-            .where(RefreshTokenTable.user_id == user_id)
-            .values(is_revoked=True)
+    def revoke_all_for_user(
+        self, user_id: UUID4, keep_family: UUID4 | None = None
+    ) -> None:
+        """End every session of the user, except `keep_family`'s if given."""
+        statement = update(RefreshTokenTable).where(
+            RefreshTokenTable.user_id == user_id
         )
+        if keep_family is not None:
+            statement = statement.where(RefreshTokenTable.family_id != keep_family)
+        self.session.execute(statement.values(is_revoked=True))
         self.session.commit()
 
     def cleanup_expired(self) -> int:

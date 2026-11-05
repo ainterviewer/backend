@@ -252,6 +252,9 @@ class VerificationCodeTable(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     expires_at: Mapped[datetime.datetime] = mapped_column()
     consumed_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
+    # The address an EMAIL_CHANGE code moves the account to once its link is
+    # followed; NULL for every other purpose.
+    new_email: Mapped[str | None] = mapped_column(default=None)
 
     # Relationships
     user: Mapped["UserTable"] = relationship(back_populates="verification_codes")

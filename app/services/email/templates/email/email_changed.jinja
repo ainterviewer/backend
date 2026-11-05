@@ -1,0 +1,9 @@
+{% extends "base_email.jinja" %}
+{% block content %}
+    <p class="main-text">
+        The email address of your <strong>AInterviewer</strong> account was changed to <strong>{{ new_email }}</strong>. Sign-in codes and other emails now go there, and every other session on the account was signed out.
+    </p>
+    <p class="main-text">
+        If you didn't make this change, contact us right away at <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.
+    </p>
+{% endblock %}

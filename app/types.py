@@ -427,6 +427,8 @@ class VerificationPurpose(StrEnum):
     EMAIL_VERIFICATION = "email_verification"
     LOGIN = "login"
     PASSWORD_RESET = "password_reset"
+    # A link to a requested new address; the code carries it in `new_email`.
+    EMAIL_CHANGE = "email_change"
 
 
 class EmbeddingTask(StrEnum):

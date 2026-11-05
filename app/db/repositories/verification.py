@@ -28,12 +28,14 @@ class VerificationRepository(BaseRepository):
         code_hash: str,
         purpose: VerificationPurpose,
         expires_at: datetime.datetime,
+        new_email: str | None = None,
     ) -> VerificationCodeTable:
         code = VerificationCodeTable(
             user_id=user_id,
             code_hash=code_hash,
             purpose=purpose,
             expires_at=expires_at,
+            new_email=new_email,
         )
         self.session.add(code)
         self.session.commit()

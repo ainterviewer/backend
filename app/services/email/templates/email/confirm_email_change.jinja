@@ -1,0 +1,13 @@
+{% extends "base_email.jinja" %}
+{% block content %}
+    <p class="main-text">
+        You asked to change the email address of your <strong>AInterviewer</strong> account from {{ old_email }} to this one.
+    </p>
+    <p class="main-text">Click the button below to confirm the change:</p>
+    <a href="{{ confirmation_link }}" class="cta-button">Confirm New Email</a>
+    <p class="main-text">
+        This link will expire in {{ expires_in|default("24 hours") }}. Until you follow it, your account keeps its current address. If the button above doesn't work, copy and paste this URL into your browser:
+    </p>
+    <p class="main-text" style="word-break: break-all; color: #196858;">{{ confirmation_link }}</p>
+    <p class="main-text">If you didn't ask for this, you can safely ignore this email.</p>
+{% endblock %}

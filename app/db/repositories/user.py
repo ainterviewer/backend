@@ -4,7 +4,7 @@ from datetime import timedelta
 from typing import Literal
 
 from pydantic import UUID4
-from sqlalchemy import Update, delete, func, or_, select, update
+from sqlalchemy import Update, delete, exists, func, or_, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 
@@ -204,6 +204,16 @@ class UserRepository(BaseRepository):
         user = self.session.execute(statement).scalar_one()
 
         return UserRecord.model_validate(user)
+
+    def email_in_use(self, email: str) -> bool:
+        """Whether any account has this address, ignoring case."""
+        return bool(
+            self.session.scalar(
+                select(
+                    exists().where(func.lower(UserTable.email) == email.strip().lower())
+                )
+            )
+        )
 
     def get_user_by_id(self, user_id: UUID4) -> UserPublic:
         statement = select(UserTable).where(UserTable.id == user_id)

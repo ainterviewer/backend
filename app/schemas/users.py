@@ -267,6 +267,12 @@ class UpdateEmailRequest(Schema):
     new_email: EmailStr
 
 
+class ConfirmEmailChangeRequest(Schema):
+    """The token from an email-change confirmation link."""
+
+    token: str
+
+
 class _NewPasswordRequest(Schema):
     new_password: NewPassword
 

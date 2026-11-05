@@ -118,6 +118,9 @@ class AppSettings(BaseModel):
     email_verification_token_expiration: TimeDelta = Field(
         default_factory=lambda: TimeDelta(days=1)
     )
+    email_change_token_expiration: TimeDelta = Field(
+        default_factory=lambda: TimeDelta(days=1)
+    )
     login_code_expiration: TimeDelta = Field(
         default_factory=lambda: TimeDelta(minutes=10)
     )
