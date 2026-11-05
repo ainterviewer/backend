@@ -19,14 +19,54 @@ class CollaboratorBase(Schema):
     role: CollaboratorRole
 
 
-class CollaboratorCreate(CollaboratorBase):
-    email: EmailStr
-
-
 class CollaboratorPublic(CollaboratorBase):
     id: UUID4
     user: UserPublic
     added_at: datetime
+
+
+class CollaboratorInviteCreate(CollaboratorBase):
+    email: EmailStr
+
+
+class CollaboratorInvitePublic(CollaboratorBase):
+    """A pending invite as the folder's editors see it. It says nothing about
+    whether the email has an account."""
+
+    id: UUID4
+    email: str
+    invited_by: UserPublic | None
+    created_at: datetime
+    expires_at: datetime
+
+
+class CollaboratorInviteRequest(Schema):
+    """The token from an invite email's link."""
+
+    token: str
+
+
+class IssuedCollaboratorInvite(Schema):
+    """A just-created or refreshed invite, with what its email needs: the raw
+    token, which is stored only hashed, and whether the address has an
+    account. Never on the wire -- `has_account` is exactly what the API keeps
+    from the inviter."""
+
+    invite: CollaboratorInvitePublic
+    token: str
+    has_account: bool
+    recipient_first_name: str | None
+    folder_title: str
+
+
+class CollaboratorInviteDetails(Schema):
+    """What an invite offers, shown to its recipient before they accept."""
+
+    folder_id: UUID4
+    folder_title: str
+    role: CollaboratorRole
+    invited_by_name: str | None
+    expires_at: datetime
 
 
 class FolderBase(Schema):
@@ -34,7 +74,7 @@ class FolderBase(Schema):
 
 
 class FolderCreate(FolderBase):
-    collaborators: list[CollaboratorCreate] = Field(
+    collaborators: list[CollaboratorInviteCreate] = Field(
         default=[], validation_alias="folder_collaborations"
     )
 

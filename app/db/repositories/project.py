@@ -5,7 +5,7 @@ from collections.abc import Iterable, Sequence
 from typing import Any, Literal
 
 from pydantic import UUID4, BaseModel, ValidationError
-from sqlalchemy import delete, exists, func, select, update
+from sqlalchemy import exists, func, select, update
 from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlalchemy.orm import Session
 
@@ -25,13 +25,16 @@ from ainterviewer.interview_guides.translate import translate_missing
 from ainterviewer.types import LanguageCode
 from ainterviewer.utils import get_language_dict, now
 
+from ...auth import generate_verification_token, hash_token
 from ...collab.guide_doc import merge_guide_data
 from ...schemas.content import ProjectLocalizationPublic
 from ...schemas.projects import (
-    CollaboratorCreate,
+    CollaboratorInviteDetails,
+    CollaboratorInvitePublic,
     CollaboratorPublic,
     FolderPublic,
     FolderWithProjectsPublic,
+    IssuedCollaboratorInvite,
     ProjectLanguage,
     ProjectPublic,
 )
@@ -47,6 +50,7 @@ from ...types import (
     Scope,
 )
 from ..tables import (
+    CollaboratorInviteTable,
     CollaboratorTable,
     InterviewTable,
     ProjectContentTable,
@@ -57,7 +61,17 @@ from ..tables import (
     UserTable,
 )
 from .base import BaseRepository
-from .errors import ContentRevisionError, NotPublishedError, ProjectLanguageError
+from .errors import (
+    AlreadyCollaboratorError,
+    CollaboratorInviteExpiredError,
+    CollaboratorInviteInvalidError,
+    CollaboratorNotFoundError,
+    ContentRevisionError,
+    LastAdminError,
+    NotPublishedError,
+    ProjectLanguageError,
+    RoleAboveOwnError,
+)
 from .permissions import can_moderate_project
 
 logger = logging.getLogger(__name__)
@@ -141,12 +155,9 @@ class ProjectRepository(BaseRepository):
 
     # ==================== Folder Methods ====================
 
-    def create_folder(
-        self,
-        title: str,
-        user_id: UUID4,
-        collaborators: list[CollaboratorCreate] | None = None,
-    ) -> FolderPublic:
+    def create_folder(self, title: str, user_id: UUID4) -> FolderPublic:
+        """Create a folder with its creator as admin. Anyone else joins
+        through an invite (`create_collaborator_invite`)."""
         folder = ProjectFolderTable(title=title)
         self.session.add(folder)
         self.session.flush()
@@ -158,24 +169,6 @@ class ProjectRepository(BaseRepository):
             added_by_id=user_id,
         )
         self.session.add(collaborator)
-
-        if collaborators:
-            # Find users by email
-            stmt = select(UserTable).where(
-                UserTable.email.in_(
-                    collaborator.email for collaborator in collaborators
-                )
-            )
-            users = self.session.execute(stmt).scalars().all()
-
-            for user, collaborator in zip(users, collaborators):
-                collab = CollaboratorTable(
-                    folder_id=folder.id,
-                    user_id=user.id,
-                    role=collaborator.role,
-                    added_by_id=user_id,
-                )
-                self.session.add(collab)
 
         self.session.commit()
         self.session.refresh(folder)
@@ -262,53 +255,227 @@ class ProjectRepository(BaseRepository):
 
     # ================== Collaborator Methods ==================
 
-    def add_collaborator(
+    def create_collaborator_invite(
         self,
         folder_id: UUID4,
         email: str,
         role: CollaboratorRole,
-        added_by_id: UUID4,
-    ) -> CollaboratorPublic:
-        # Find user by email
-        statement = select(UserTable).where(UserTable.email == email)
-        user = self.session.execute(statement).scalar_one_or_none()
-        if not user:
-            raise ValueError(f"User with email {email} not found")
+        invited_by_id: UUID4,
+        actor_role: CollaboratorRole,
+    ) -> IssuedCollaboratorInvite:
+        """Invite an email to the folder, or refresh its pending invite.
 
-        collab = CollaboratorTable(
-            folder_id=folder_id,
-            user_id=user.id,
-            role=role,
-            added_by_id=added_by_id,
+        Behaves the same whether or not the email has an account, so the
+        caller learns nothing about who does. Refreshing sets the new role and
+        a new token and expiry, so only the newest email's link works.
+        """
+        if not actor_role.includes(role):
+            raise RoleAboveOwnError
+        email = email.strip().lower()
+        user = self.session.execute(
+            select(UserTable).where(func.lower(UserTable.email) == email)
+        ).scalar_one_or_none()
+        if user is not None and self.session.scalar(
+            select(
+                exists().where(
+                    CollaboratorTable.folder_id == folder_id,
+                    CollaboratorTable.user_id == user.id,
+                )
+            )
+        ):
+            raise AlreadyCollaboratorError
+
+        invite = self.session.execute(
+            select(CollaboratorInviteTable).where(
+                CollaboratorInviteTable.folder_id == folder_id,
+                CollaboratorInviteTable.email == email,
+            )
+        ).scalar_one_or_none()
+        if invite is None:
+            invite = CollaboratorInviteTable(folder_id=folder_id, email=email)
+            self.session.add(invite)
+        elif not actor_role.includes(invite.role):
+            # Resending someone else's admin invite would reissue its link.
+            raise RoleAboveOwnError
+
+        token = generate_verification_token()
+        invite.role = role
+        invite.invited_by_id = invited_by_id
+        invite.token_hash = hash_token(token)
+        invite.expires_at = (
+            now() + app_settings.app.collaborator_invite_expiration.to_timedelta()
         )
-        self.session.add(collab)
         self.session.commit()
-        self.session.refresh(collab)
-        return CollaboratorPublic.model_validate(collab)
+        self.session.refresh(invite)
 
-    def remove_collaborator(self, folder_id: UUID4, user_id: UUID4):
-        statement = delete(CollaboratorTable).where(
-            CollaboratorTable.folder_id == folder_id,
-            CollaboratorTable.user_id == user_id,
+        return IssuedCollaboratorInvite(
+            invite=CollaboratorInvitePublic.model_validate(invite),
+            token=token,
+            has_account=user is not None,
+            recipient_first_name=user.first_name if user else None,
+            folder_title=invite.folder.title,
         )
-        self.session.execute(statement)
-        self.session.commit()
 
-    def update_collaborator_role(
-        self, folder_id: UUID4, user_id: UUID4, role: CollaboratorRole
-    ) -> CollaboratorPublic:
+    def get_collaborator_invites(
+        self, folder_id: UUID4
+    ) -> list[CollaboratorInvitePublic]:
         statement = (
-            update(CollaboratorTable)
-            .where(
+            select(CollaboratorInviteTable)
+            .where(CollaboratorInviteTable.folder_id == folder_id)
+            .order_by(CollaboratorInviteTable.created_at)
+        )
+        return [
+            CollaboratorInvitePublic.model_validate(invite)
+            for invite in self.session.execute(statement).scalars()
+        ]
+
+    def delete_collaborator_invite(
+        self, folder_id: UUID4, invite_id: UUID4, actor_role: CollaboratorRole
+    ) -> None:
+        """Revoke an invite. Scoped to the folder, whose role the route
+        checked, so an editor of one folder cannot revoke another's."""
+        invite = self.session.execute(
+            select(CollaboratorInviteTable).where(
+                CollaboratorInviteTable.id == invite_id,
+                CollaboratorInviteTable.folder_id == folder_id,
+            )
+        ).scalar_one_or_none()
+        if invite is None:
+            return
+        if not actor_role.includes(invite.role):
+            raise RoleAboveOwnError
+        self.session.delete(invite)
+        self.session.commit()
+
+    def _invite_by_token(self, token: str) -> CollaboratorInviteTable:
+        invite = self.session.execute(
+            select(CollaboratorInviteTable).where(
+                CollaboratorInviteTable.token_hash == hash_token(token)
+            )
+        ).scalar_one_or_none()
+        if invite is None:
+            raise CollaboratorInviteInvalidError
+        if invite.expires_at <= now():
+            raise CollaboratorInviteExpiredError
+        return invite
+
+    def get_collaborator_invite_details(self, token: str) -> CollaboratorInviteDetails:
+        invite = self._invite_by_token(token)
+        inviter = invite.invited_by
+        return CollaboratorInviteDetails(
+            folder_id=invite.folder_id,
+            folder_title=invite.folder.title,
+            role=invite.role,
+            invited_by_name=(
+                " ".join(filter(None, [inviter.first_name, inviter.last_name]))
+                if inviter
+                else None
+            ),
+            expires_at=invite.expires_at,
+        )
+
+    def accept_collaborator_invite(self, token: str, user_id: UUID4) -> FolderPublic:
+        """Make the accepting user a collaborator with the invite's role.
+
+        The token is the proof: whoever holds the emailed link may accept it,
+        whatever their account's email. Someone already collaborating keeps
+        the role they have.
+        """
+        invite = self._invite_by_token(token)
+        folder = invite.folder
+        already = self.session.scalar(
+            select(
+                exists().where(
+                    CollaboratorTable.folder_id == invite.folder_id,
+                    CollaboratorTable.user_id == user_id,
+                )
+            )
+        )
+        if not already:
+            self.session.add(
+                CollaboratorTable(
+                    folder_id=invite.folder_id,
+                    user_id=user_id,
+                    role=invite.role,
+                    added_by_id=invite.invited_by_id,
+                )
+            )
+        self.session.delete(invite)
+        try:
+            self.session.commit()
+        except IntegrityError:
+            # Accepted twice at once: the other request made the collaborator
+            # and spent the invite.
+            self.session.rollback()
+        self.session.refresh(folder)
+        return FolderPublic.model_validate(folder)
+
+    def decline_collaborator_invite(self, token: str) -> None:
+        self.session.delete(self._invite_by_token(token))
+        self.session.commit()
+
+    # Collaborator changes are bounded by the caller's own role on the folder
+    # (`actor_role`, ADMIN for a platform admin): nobody grants, or changes
+    # someone holding, a role above their own -- so only admins touch admins --
+    # and a folder always keeps an admin.
+
+    def _collaborator(self, folder_id: UUID4, user_id: UUID4) -> CollaboratorTable:
+        collab = self.session.execute(
+            select(CollaboratorTable).where(
                 CollaboratorTable.folder_id == folder_id,
                 CollaboratorTable.user_id == user_id,
             )
-            .values(role=role)
-            .returning(CollaboratorTable)
-        )
-        collab = self.session.execute(statement).scalar_one()
+        ).scalar_one_or_none()
+        if collab is None:
+            raise CollaboratorNotFoundError
+        return collab
+
+    def _check_keeps_an_admin(self, collab: CollaboratorTable) -> None:
+        """Refuse to remove or demote the folder's only admin."""
+        if collab.role is not CollaboratorRole.ADMIN:
+            return
+        admins = self.session.execute(
+            select(func.count()).where(
+                CollaboratorTable.folder_id == collab.folder_id,
+                CollaboratorTable.role == CollaboratorRole.ADMIN,
+            )
+        ).scalar_one()
+        if admins <= 1:
+            raise LastAdminError
+
+    def remove_collaborator(
+        self, folder_id: UUID4, user_id: UUID4, actor_role: CollaboratorRole
+    ) -> None:
+        collab = self._collaborator(folder_id, user_id)
+        if not actor_role.includes(collab.role):
+            raise RoleAboveOwnError
+        self._check_keeps_an_admin(collab)
+        self.session.delete(collab)
         self.session.commit()
 
+    def leave_folder(self, folder_id: UUID4, user_id: UUID4) -> None:
+        """Remove the caller from the folder. Open to every role, since it
+        only gives up the caller's own access; the last admin cannot leave."""
+        collab = self._collaborator(folder_id, user_id)
+        self._check_keeps_an_admin(collab)
+        self.session.delete(collab)
+        self.session.commit()
+
+    def update_collaborator_role(
+        self,
+        folder_id: UUID4,
+        user_id: UUID4,
+        role: CollaboratorRole,
+        actor_role: CollaboratorRole,
+    ) -> CollaboratorPublic:
+        collab = self._collaborator(folder_id, user_id)
+        if not (actor_role.includes(collab.role) and actor_role.includes(role)):
+            raise RoleAboveOwnError
+        if role is not CollaboratorRole.ADMIN:
+            self._check_keeps_an_admin(collab)
+        collab.role = role
+        self.session.commit()
+        self.session.refresh(collab)
         return CollaboratorPublic.model_validate(collab)
 
     def get_collaborators(self, folder_id: UUID4) -> list[CollaboratorPublic]:

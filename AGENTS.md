@@ -886,6 +886,31 @@ else; a check a route makes itself is a 400.
 - `code` values are API: the frontend matches on them. Add one when a client
   needs it, rename none without the frontend.
 
+### Folder collaborators join by invite
+
+Adding someone to a folder never adds them directly. `POST
+/folders/{id}/invites` stores a `collaboratorinvite` row and emails a link,
+and only `POST /collaborator-invites/accept` with that link's token creates the
+`collaborator` row. The inviter gets the same response and sees the same
+pending row whether or not the email has an account. Before invites, an unknown
+email answered 500, which let any folder editor find out who is a user. Do not
+add a shortcut that adds existing users straight away: the collaborator list
+would show the difference again. The recipient's email is the one place the
+two cases differ (no account: request access first).
+
+Accepting goes by token, never by matching the signed-in account's email,
+because `PATCH /me/email` changes an address without verifying it. Signed-out
+visitors reach the accept page through `/login?next=…` (the frontend's
+`loginNext`). These routes are not rate limited.
+
+The routes need `FolderEditor`, but what a caller may change is capped by
+their own role on the folder (`actor_role`; a platform admin counts as an
+admin). Nobody grants a role above their own, or invites, re-invites, revokes,
+changes or removes anyone holding one (`role_above_own`, 403), so only admins
+touch admins. A folder always keeps an admin (`last_admin`, 409). The checks
+live in `ProjectRepository`, so pass the caller's role from any new route that
+changes collaborators.
+
 ### Repository Session Management
 
 Never create new sessions within repository methods. Always use `self.session`:

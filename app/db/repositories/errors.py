@@ -190,3 +190,69 @@ class InvitationClaimedError(AppError):
 
     def __init__(self):
         super().__init__("Invalid invite token")
+
+
+class AlreadyCollaboratorError(AppError):
+    """The invited email belongs to someone already collaborating on the
+    folder. The API answers 409. This reveals nothing the folder's
+    collaborator list does not already show its editors."""
+
+    status = 409
+    code = ErrorCode.ALREADY_COLLABORATOR
+
+    def __init__(self):
+        super().__init__("That person is already a collaborator on this folder")
+
+
+class CollaboratorInviteInvalidError(AppError):
+    """A collaborator invite link that is unknown, already used, revoked or
+    replaced by a newer invite. The API answers 404."""
+
+    status = 404
+    code = ErrorCode.INVITE_INVALID
+
+    def __init__(self):
+        super().__init__("This invitation is no longer valid")
+
+
+class CollaboratorInviteExpiredError(AppError):
+    """A collaborator invite link past its `expires_at`. The API answers 410."""
+
+    status = 410
+    code = ErrorCode.INVITE_EXPIRED
+
+    def __init__(self):
+        super().__init__(
+            "This invitation has expired. Ask whoever invited you to send a new one."
+        )
+
+
+class RoleAboveOwnError(AppError):
+    """A collaborator change that grants, or touches someone holding, a role
+    above the caller's own on the folder: an editor inviting an admin, or
+    demoting one. The API answers 403."""
+
+    status = 403
+    code = ErrorCode.ROLE_ABOVE_OWN
+
+    def __init__(self):
+        super().__init__("You can only manage collaborators up to your own role")
+
+
+class LastAdminError(AppError):
+    """The change would leave the folder without an admin. The API answers 409."""
+
+    status = 409
+    code = ErrorCode.LAST_ADMIN
+
+    def __init__(self):
+        super().__init__("A folder needs at least one admin")
+
+
+class CollaboratorNotFoundError(AppError):
+    """No such collaborator on the folder. The API answers 404."""
+
+    status = 404
+
+    def __init__(self):
+        super().__init__("Collaborator not found")

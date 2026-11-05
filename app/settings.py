@@ -108,6 +108,12 @@ class AppSettings(BaseModel):
         default_factory=lambda: TimeDelta(seconds=30)
     )
     registration_requires_token: bool = True
+    # How long a folder collaborator invite's emailed link stays acceptable.
+    # Long, because someone without an account first has to request one and
+    # wait for an admin to approve it.
+    collaborator_invite_expiration: TimeDelta = Field(
+        default_factory=lambda: TimeDelta(days=30)
+    )
 
     email_verification_token_expiration: TimeDelta = Field(
         default_factory=lambda: TimeDelta(days=1)

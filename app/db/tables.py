@@ -400,6 +400,9 @@ class ProjectFolderTable(Base):
     participants: Mapped[list["ParticipantTable"]] = relationship(
         back_populates="folder", cascade="all, delete-orphan"
     )
+    collaborator_invites: Mapped[list["CollaboratorInviteTable"]] = relationship(
+        back_populates="folder", cascade="all, delete-orphan"
+    )
 
 
 class ProjectTable(Base):
@@ -891,6 +894,42 @@ class CollaboratorTable(Base):
         foreign_keys=[user_id],
     )
     added_by: Mapped[Optional["UserTable"]] = relationship(foreign_keys=[added_by_id])
+
+
+class CollaboratorInviteTable(Base):
+    """An invitation to collaborate on a folder, pending until accepted.
+
+    Every addition goes through one, whether or not the email belongs to an
+    account: the inviter sees a pending row either way, so adding someone
+    cannot be used to find out who has an account. It is accepted by the token
+    in the email it sends -- never by matching the accepting account's email,
+    which `PATCH /me/email` changes without verifying the new address.
+    """
+
+    __tablename__ = "collaboratorinvite"
+    __table_args__ = (
+        UniqueConstraint("folder_id", "email", name="uq_collaboratorinvite"),
+    )
+
+    folder_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projectfolder.id", ondelete="CASCADE"), index=True
+    )
+    # Stored lowercased.
+    email: Mapped[str] = mapped_column()
+    role: Mapped[CollaboratorRole] = mapped_column(SQLEnum(CollaboratorRole))
+    invited_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), index=True
+    )
+    # SHA-256 of the token in the emailed link (`hash_token`); re-inviting
+    # replaces it, so only the newest email's link works.
+    token_hash: Mapped[str] = mapped_column(unique=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(default=now)
+    expires_at: Mapped[datetime.datetime] = mapped_column()
+
+    folder: Mapped["ProjectFolderTable"] = relationship(
+        back_populates="collaborator_invites"
+    )
+    invited_by: Mapped[Optional["UserTable"]] = relationship()
 
 
 ##############

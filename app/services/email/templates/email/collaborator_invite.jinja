@@ -1,0 +1,24 @@
+{% extends "base_email.jinja" %}
+{% block content %}
+    <p class="main-text">
+        {{ inviter_name }} has invited you to collaborate on the folder <strong>{{ folder_title }}</strong> on <strong>AInterviewer</strong>, as {{ role_article }} <strong>{{ role }}</strong>.
+    </p>
+    {% if has_account %}
+        <p class="main-text">Click the button below to accept the invitation:</p>
+        <a href="{{ accept_link }}" class="cta-button">Accept Invitation</a>
+    {% else %}
+        <p class="main-text">
+            You need an AInterviewer account to join. Request one below; once your request is approved and you have signed up, come back to this email to accept.
+        </p>
+        <a href="{{ request_access_link }}" class="cta-button">Request Access</a>
+        <p class="main-text">When your account is ready, accept the invitation here:</p>
+        <p class="main-text">
+            <a href="{{ accept_link }}">Accept Invitation</a>
+        </p>
+    {% endif %}
+    <p class="main-text">
+        This invitation expires on {{ expires_on }}. If the link above doesn't work, copy and paste this URL into your browser:
+    </p>
+    <p class="main-text" style="word-break: break-all; color: #196858;">{{ accept_link }}</p>
+    <p class="main-text">If you weren't expecting this invitation, you can safely ignore this email.</p>
+{% endblock %}
