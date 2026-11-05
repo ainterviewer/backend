@@ -20,15 +20,14 @@ from pydantic import (
 from ainterviewer.types import TimeDelta
 from ainterviewer.utils import now
 
-from ..db._extra import CustomEmailStr
 from ..settings import app_settings
 from ..types import AccessRequestStatus, Scope
-from .common import Schema
+from .common import EmailLookup, NormalizedEmail, Schema
 
 
 class AccessRequestBase(Schema):
     name: str
-    email: CustomEmailStr
+    email: NormalizedEmail
     organization: str | None = None
     message: str | None = None
 
@@ -89,7 +88,7 @@ class InvitationCreate(InvitationBase): ...
 
 
 class InvitationUpdate(Schema):
-    email: str | None | MISSING = MISSING
+    email: NormalizedEmail | None | MISSING = MISSING
     expires_at: datetime | None | MISSING = MISSING
     reuseable: bool | MISSING = MISSING
     user_scope: Scope | MISSING = MISSING
@@ -144,7 +143,7 @@ class RegisterRequest(Schema):
     to send them in.
     """
 
-    email: EmailStr
+    email: NormalizedEmail
     first_name: str
     last_name: str | None = None
     invite_token: UUID4 | str | None = Field(union_mode="left_to_right")
@@ -155,6 +154,7 @@ class RegisterRequest(Schema):
 class UserCreate(UserBase):
     """Internal model for creating a user, includes snapshot fields."""
 
+    email: NormalizedEmail
     invite_token: UUID4 | str | None = Field(union_mode="left_to_right")
     created_at: datetime = Field(default_factory=now)
     last_active: datetime = Field(default_factory=now)
@@ -235,7 +235,7 @@ class AuthorPublic(Schema):
 
 
 class LoginRequest(Schema):
-    email: str
+    email: EmailLookup
     password: str
     extended: bool = False
 
@@ -253,18 +253,18 @@ class VerifyEmailRequest(Schema):
 
 
 class ResendVerificationRequest(Schema):
-    email: EmailStr
+    email: EmailLookup
 
 
 class VerifyLoginCodeRequest(Schema):
-    email: str
+    email: EmailLookup
     code: str
     extended: bool = False
 
 
 class UpdateEmailRequest(Schema):
     password: str
-    new_email: EmailStr
+    new_email: NormalizedEmail
 
 
 class ConfirmEmailChangeRequest(Schema):
@@ -282,7 +282,7 @@ class UpdatePasswordRequest(_NewPasswordRequest):
 
 
 class ForgotPasswordRequest(Schema):
-    email: EmailStr
+    email: EmailLookup
 
 
 class ResetPasswordRequest(_NewPasswordRequest):
@@ -346,4 +346,4 @@ class UserNotifications(Schema):
 
 
 class NewsletterRequest(Schema):
-    email: EmailStr
+    email: NormalizedEmail

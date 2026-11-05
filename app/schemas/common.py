@@ -4,12 +4,34 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field
 
 from ainterviewer.constants import LANGUAGES
 from ainterviewer.types import LanguageCode
 
 from ..types import ContentPart, ErrorCode
+
+
+def normalize_email(email: str) -> str:
+    """The one stored form of an address: stripped and lowercased, local part
+    included.
+
+    Mail providers treat the local part as case-insensitive in practice, and
+    an account is found by exact match, so `Ada@example.com` and
+    `ada@example.com` must be one address -- they used to be able to be two
+    accounts, and you could only sign in with the casing you registered with.
+    Every address written to the database goes through this; repositories
+    apply it again to what they are handed, so a caller that skips the schema
+    (a CLI, a test) cannot store another form.
+    """
+    return email.strip().lower()
+
+
+# An address a request stores: validated, then normalised.
+NormalizedEmail = Annotated[EmailStr, AfterValidator(normalize_email)]
+# An address a request only looks up (login), normalised but not validated:
+# a malformed one should fail like a wrong one, not with a 422.
+EmailLookup = Annotated[str, AfterValidator(normalize_email)]
 
 
 class Schema(BaseModel):

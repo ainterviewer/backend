@@ -5,13 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import UUID4, EmailStr, Field, field_validator
+from pydantic import UUID4, Field, field_validator
 
 from ainterviewer.config import InterviewConfig
 from ainterviewer.types import LanguageCode, LanguageDict
 
 from ..types import CollaboratorRole, ExperimentAllocation, ExternalParam, ProjectStatus
-from .common import Schema
+from .common import NormalizedEmail, Schema
 from .users import UserPublic
 
 
@@ -26,7 +26,7 @@ class CollaboratorPublic(CollaboratorBase):
 
 
 class CollaboratorInviteCreate(CollaboratorBase):
-    email: EmailStr
+    email: NormalizedEmail
 
 
 class CollaboratorInvitePublic(CollaboratorBase):

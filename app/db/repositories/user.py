@@ -12,6 +12,7 @@ from ainterviewer.settings import settings as lib_settings
 from ainterviewer.utils import now
 
 from ...auth import get_password_hash
+from ...schemas.common import normalize_email
 from ...schemas.users import (
     AccessRequestCreate,
     AccessRequestPublic,
@@ -49,6 +50,7 @@ class UserRepository(BaseRepository):
         an account.
         """
         user.password = get_password_hash(user.password)
+        user.email = normalize_email(user.email)
 
         if claim_invitation is not None:
             claimed = self.session.execute(
@@ -106,7 +108,11 @@ class UserRepository(BaseRepository):
         return self.get_user_by_id(user_id)
 
     def update_user_email(self, user_id: UUID4, email: str) -> UserPublic:
-        statement = update(UserTable).where(UserTable.id == user_id).values(email=email)
+        statement = (
+            update(UserTable)
+            .where(UserTable.id == user_id)
+            .values(email=normalize_email(email))
+        )
         self.session.execute(statement)
         self.session.commit()
 
@@ -199,19 +205,20 @@ class UserRepository(BaseRepository):
         user_id: UUID4 | None = None,
     ) -> UserRecord:
         statement = select(UserTable).where(
-            or_(UserTable.email == email, UserTable.id == user_id)
+            or_(
+                UserTable.email == (normalize_email(email) if email else None),
+                UserTable.id == user_id,
+            )
         )
         user = self.session.execute(statement).scalar_one()
 
         return UserRecord.model_validate(user)
 
     def email_in_use(self, email: str) -> bool:
-        """Whether any account has this address, ignoring case."""
+        """Whether any account has this address, in any casing."""
         return bool(
             self.session.scalar(
-                select(
-                    exists().where(func.lower(UserTable.email) == email.strip().lower())
-                )
+                select(exists().where(UserTable.email == normalize_email(email)))
             )
         )
 
@@ -267,7 +274,10 @@ class UserRepository(BaseRepository):
     # ==================== Access Request Methods ====================
 
     def create_access_request(self, access_request: AccessRequestCreate):
-        request = AccessRequestTable(**access_request.model_dump())
+        request = AccessRequestTable(
+            **access_request.model_dump()
+            | {"email": normalize_email(access_request.email)}
+        )
         self.session.add(request)
         self.session.commit()
 
@@ -371,6 +381,8 @@ class UserRepository(BaseRepository):
     ) -> InvitationPublic:
         if expires_at is None:
             expires_at = now() + timedelta(days=1)
+        if email:
+            email = normalize_email(email)
 
         invitation = InvitationTable(
             email=email,
@@ -398,6 +410,8 @@ class UserRepository(BaseRepository):
         data: InvitationUpdate,
     ) -> InvitationPublic:
         values = data.model_dump()
+        if values.get("email"):
+            values["email"] = normalize_email(values["email"])
 
         if not values:
             return self.check_invite_token(id)

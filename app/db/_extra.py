@@ -3,8 +3,6 @@ Extra classes for the database models.
 """
 
 from typing import (
-    TYPE_CHECKING,
-    Annotated,
     Any,
     TypeVar,
     cast,
@@ -12,22 +10,11 @@ from typing import (
     get_origin,
 )
 
-from pydantic import BaseModel, EmailStr, TypeAdapter, validate_email
+from pydantic import BaseModel, TypeAdapter
 from pydantic_core import to_jsonable_python
 from sqlalchemy import JSON, types
 from sqlalchemy.dialects.postgresql import JSONB  # noqa: F401 for Postgres JSONB
 from sqlalchemy.engine.interfaces import Dialect
-
-if TYPE_CHECKING:
-    CustomEmailStr = Annotated[str, ...]
-else:
-
-    class CustomEmailStr(EmailStr):
-        @classmethod
-        def validate(cls, value: EmailStr) -> EmailStr:
-            email = validate_email(value)[1]
-            return email.lower()
-
 
 BaseModelType = TypeVar("BaseModelType", bound=BaseModel)
 

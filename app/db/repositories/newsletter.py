@@ -2,6 +2,7 @@ from sqlalchemy import select
 
 from ainterviewer.utils import now
 
+from ...schemas.common import normalize_email
 from ..tables import NewsletterSubscriptionTable
 from .base import BaseRepository
 
@@ -10,6 +11,7 @@ class NewsletterRepository(BaseRepository):
     """Repository for newsletter subscriptions."""
 
     def subscribe(self, email: str) -> NewsletterSubscriptionTable:
+        email = normalize_email(email)
         existing = self.session.execute(
             select(NewsletterSubscriptionTable).where(
                 NewsletterSubscriptionTable.email == email
@@ -30,6 +32,7 @@ class NewsletterRepository(BaseRepository):
         return subscription
 
     def unsubscribe(self, email: str) -> bool:
+        email = normalize_email(email)
         subscription = self.session.execute(
             select(NewsletterSubscriptionTable).where(
                 NewsletterSubscriptionTable.email == email

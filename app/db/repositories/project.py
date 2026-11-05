@@ -27,6 +27,7 @@ from ainterviewer.utils import get_language_dict, now
 
 from ...auth import generate_verification_token, hash_token
 from ...collab.guide_doc import merge_guide_data
+from ...schemas.common import normalize_email
 from ...schemas.content import ProjectLocalizationPublic
 from ...schemas.projects import (
     CollaboratorInviteDetails,
@@ -271,9 +272,9 @@ class ProjectRepository(BaseRepository):
         """
         if not actor_role.includes(role):
             raise RoleAboveOwnError
-        email = email.strip().lower()
+        email = normalize_email(email)
         user = self.session.execute(
-            select(UserTable).where(func.lower(UserTable.email) == email)
+            select(UserTable).where(UserTable.email == email)
         ).scalar_one_or_none()
         if user is not None and self.session.scalar(
             select(
