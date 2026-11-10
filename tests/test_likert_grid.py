@@ -22,6 +22,7 @@ from ainterviewer.types import InterviewStatus, MessageRole
 from app.collab.guide_doc import new_doc, read_guide, roots
 from app.collab.parts import _validate_guide
 from app.db.survey_answers import AnswerRow, values_of
+from app.db.utils import messages_to_dataframe
 from app.db.versioning import Bump, _guide_bump
 from app.schemas.interviews import InterviewSummaryPublic, MessagePublic
 from app.services.exports.transcripts import InterviewExport, build_view
@@ -212,6 +213,43 @@ def test_a_transcript_shows_the_ratings():
     assert answer.survey is not None
     assert answer.survey.kind == "Likert grid"
     assert answer.survey.answer == "Cleanliness: Satisfied\nSignage: Neutral"
+
+
+def test_the_message_table_shows_the_ratings():
+    interview_id, project_id = uuid.uuid4(), uuid.uuid4()
+    started = datetime.datetime(2026, 11, 10, 10, tzinfo=datetime.UTC)
+    item = _item()
+    answer = item.encode_answer({ROWS[0].id: "Satisfied", ROWS[1].id: "Neutral"})
+
+    def message(message_id, role, content, **extra) -> MessagePublic:
+        return MessagePublic(
+            id=uuid.uuid4(),
+            message_id=message_id,
+            content=content,
+            role=role,
+            interview_id=interview_id,
+            project_id=project_id,
+            created_at=started,
+            interview_type=InterviewType.DISTRIBUTED,
+            section=0,
+            **extra,
+        )
+
+    frame = messages_to_dataframe(
+        [
+            message(0, MessageRole.ASSISTANT, "Rate:", survey_item=item),
+            message(1, MessageRole.USER, answer),
+            message(2, MessageRole.ASSISTANT, "Why?"),
+            # Only the answer to the grid: this one is the participant's own.
+            message(3, MessageRole.USER, answer),
+        ]
+    )
+    assert frame["content"].to_list() == [
+        "Rate:",
+        "Cleanliness: Satisfied\nSignage: Neutral",
+        "Why?",
+        answer,
+    ]
 
 
 # ── Resuming an interview ────────────────────────────────────────────────────
