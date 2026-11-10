@@ -4,6 +4,12 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.20] - 2026-11-10
+
+### Features
+
+- (versions) Serve the draft's content to compare versions against
+
 ## [0.10.19] - 2026-11-10
 
 ### Features
