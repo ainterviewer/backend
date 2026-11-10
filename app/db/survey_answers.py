@@ -41,6 +41,7 @@ from ainterviewer.interview_guides.survey_items import (
     RadioItem,
     SliderItem,
     TimeItem,
+    split_checkbox_answer,
 )
 from ainterviewer.lpm.types import CustomToken
 from ainterviewer.types import MessageRole, MessageType
@@ -84,11 +85,6 @@ def normalize_answer(value: str) -> str:
     ``"yes"`` and ``"Yes"`` are the same choice and have to compare equal.
     """
     return " ".join(value.split()).casefold()
-
-
-def split_checkbox(answer: str) -> list[str]:
-    """Undo the ``", "`` join the checkbox widget submits its selection with."""
-    return [part.strip() for part in answer.split(",") if part.strip()]
 
 
 def index_options(options: Sequence[str]) -> dict[str, int]:
@@ -286,7 +282,7 @@ def values_of(row: AnswerRow) -> list[Value]:
 
     index = index_options(options)
     multiple = isinstance(row.item, CheckboxItem)
-    parts = split_checkbox(row.content) if multiple else [row.content]
+    parts = split_checkbox_answer(row.content, options) if multiple else [row.content]
 
     values: list[Value] = []
     for part in parts:

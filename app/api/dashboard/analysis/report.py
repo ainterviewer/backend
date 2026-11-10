@@ -32,6 +32,7 @@ from ainterviewer.interview_guides.survey_items import (
     RadioItem,
     SliderItem,
     TimeItem,
+    split_checkbox_answer,
 )
 from ainterviewer.lpm.types import CustomToken
 from ainterviewer.types import InterviewStatus, LanguageCode, MessageRole, MessageType
@@ -236,11 +237,6 @@ def _index_options(options: list[str]) -> dict[str, int]:
     return index
 
 
-def _split_checkbox(answer: str) -> list[str]:
-    """Undo the `", "` join the checkbox widget submits its selection with."""
-    return [part.strip() for part in answer.split(",") if part.strip()]
-
-
 def _categorical_counts(
     options: list[str], answers: list[_Answer], *, multi: bool
 ) -> tuple[list[CategoryCount], int, int]:
@@ -277,7 +273,14 @@ def _categorical_counts(
             else None
         )
 
-        for value in _split_checkbox(answer.content) if multi else [answer.content]:
+        values = (
+            # Both spellings, so an option holding a comma is kept whole in
+            # whichever language the respondent answered.
+            split_checkbox_answer(answer.content, [*options, *(answer.options or [])])
+            if multi
+            else [answer.content]
+        )
+        for value in values:
             normalized = _normalize(value)
             if not normalized:
                 continue
