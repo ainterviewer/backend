@@ -30,10 +30,10 @@ from ainterviewer.interfaces import (
     OutgoingHistoryMessage,
     OutgoingMessage,
 )
-from ainterviewer.interview_guides import InterviewGuide, LikertGridItem
+from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.lpm.types import CustomToken
 from ainterviewer.settings import settings as lib_settings
-from ainterviewer.types import MessageRole, MessageType
+from ainterviewer.types import MessageType
 
 from .paths import APP_DIR
 from .schemas.interviews import MessagePublic
@@ -139,22 +139,9 @@ def replay_history(
     messages: list[OutgoingHistoryMessage | OutgoingData | OutgoingMessage] = []
     continue_from_history = True
 
-    # History goes out as text, survey answers included ("Agree"). A grid's
-    # answer is stored as JSON keyed by row id, which means nothing to the
-    # respondent reading it back, so it is replayed as "row: option" lines.
-    pending_item = None
-
-    def shown(message: MessagePublic) -> str:
-        nonlocal pending_item
-        content = message.content
-        if message.role == MessageRole.USER:
-            if isinstance(pending_item, LikertGridItem):
-                content = pending_item.describe_answer(content)
-            pending_item = None
-        elif message.role == MessageRole.ASSISTANT:
-            pending_item = message.survey_item
-        return content
-
+    # A survey question goes out with its item, and its answer as stored
+    # (a grid's JSON included): the client pairs the two and draws the
+    # answered item read-only, the way it looked when it was answered.
     for message in interview_history[:-1]:
         # NOTE: Why did we skip these in the first place?
         # if message.content in CustomTokens:
@@ -172,11 +159,12 @@ def replay_history(
             message.image.encode(project_id)  # ty:ignore[unresolved-attribute]
 
         data = OutgoingHistoryMessage(
-            content=shown(message),
+            content=message.content,
             role=message.role,
             message_id=message.message_id,
             feedback=message.feedback,
             image=message.image,
+            survey_item=message.survey_item,
             security_intervention=message.security_intervention,
         )
 
@@ -188,7 +176,7 @@ def replay_history(
         pass
     elif last_message.role == "user":
         data = OutgoingHistoryMessage(
-            content=shown(last_message),
+            content=last_message.content,
             role=last_message.role,
             message_id=last_message.message_id,
         )

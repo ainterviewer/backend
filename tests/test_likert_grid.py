@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 
 from pycrdt import Doc
 
+from ainterviewer.interfaces import OutgoingHistoryMessage
 from ainterviewer.interview_guides import GridRow, InterviewGuide, LikertGridItem
 from ainterviewer.interview_guides.localized import (
     LocalizedInterviewGuide,
@@ -216,7 +217,7 @@ def test_a_transcript_shows_the_ratings():
 # ── Resuming an interview ────────────────────────────────────────────────────
 
 
-def test_a_resumed_interview_replays_the_ratings_not_the_json():
+def test_a_resumed_interview_replays_the_grid_with_its_answer():
     interview_id, project_id = uuid.uuid4(), uuid.uuid4()
     started = datetime.datetime(2026, 11, 10, 10, tzinfo=datetime.UTC)
     item = _item()
@@ -239,25 +240,17 @@ def test_a_resumed_interview_replays_the_ratings_not_the_json():
     grid = message(0, MessageRole.ASSISTANT, "Rate:", main_question=0, survey_item=item)
     probe = message(2, MessageRole.ASSISTANT, "Why?", main_question=0, sub_question=1)
 
-    # The answer mid-history, and as the last message.
+    # The client draws the answered grid from the item and the stored answer,
+    # so both go out as they are, mid-history and as the last message.
     replayed, _ = replay_history(
         [grid, message(1, MessageRole.USER, answer), probe], project_id, interview_id
     )
-    assert replayed[1].content == "Cleanliness: Satisfied\nSignage: Neutral"
+    assert isinstance(question := replayed[0], OutgoingHistoryMessage)
+    assert question.survey_item == item
+    assert replayed[1].content == answer
     replayed, _ = replay_history(
         [grid, message(1, MessageRole.USER, answer)], project_id, interview_id
     )
-    assert replayed[-1].content == "Cleanliness: Satisfied\nSignage: Neutral"
-
-    # Only the answer to the grid: a probe's answer after it is left alone.
-    replayed, _ = replay_history(
-        [
-            grid,
-            message(1, MessageRole.USER, answer),
-            probe,
-            message(3, MessageRole.USER, answer),
-        ],
-        project_id,
-        interview_id,
-    )
+    assert isinstance(question := replayed[0], OutgoingHistoryMessage)
+    assert question.survey_item == item
     assert replayed[-1].content == answer
