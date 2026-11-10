@@ -58,15 +58,30 @@ class ContentVersionSummaryPublic(Schema):
     languages_in_progress: list[LanguageCode]
 
 
-class ContentVersionPublic(ContentVersionSummaryPublic):
-    """A version with its content, for previewing it read-only."""
+class ContentPublic(Schema):
+    """A project's content (`ContentColumns`): what a version and the draft
+    both hold."""
 
+    languages: list[LanguageCode]
+    default_language: LanguageCode
+    languages_in_progress: list[LanguageCode]
     guide: LocalizedInterviewGuide
     consent: LocalizedConsent | None
     welcome: LocalizedWelcome | None
     emails: ParticipantEmails
     agent_configs: AgentConfigs
     prompt_overrides: dict[str, str]
+
+
+class ContentVersionPublic(ContentVersionSummaryPublic, ContentPublic):
+    """A version with its content, for previewing it read-only."""
+
+
+class ContentDraftPublic(ContentPublic):
+    """The draft's content, for comparing a version against it."""
+
+    #: The draft's revision, as `ContentStatus.revision`.
+    revision: int
 
 
 class ContentStatus(Schema):

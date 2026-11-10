@@ -295,3 +295,38 @@ def test_only_a_manual_test_starts_part_way(setup):
 
     with Session(engine) as session:
         assert session.execute(select(InterviewTable)).first() is None
+
+
+def test_the_draft_is_served_in_a_versions_shape_to_compare_against(setup):
+    client, project_id, cookies, _ = setup
+    guide_url = f"/api/projects/{project_id}/guide"
+    guide = client.get(guide_url, cookies=cookies)
+    client.put(
+        guide_url,
+        json={**guide.json(), "introduction": {"EN": "Hello"}},
+        headers={"If-Match": guide.headers["ETag"]},
+        cookies=cookies,
+    )
+    _publish(client, project_id, cookies)
+    guide = client.get(guide_url, cookies=cookies)
+    client.put(
+        guide_url,
+        json={**guide.json(), "introduction": {"EN": "Hi"}},
+        headers={"If-Match": guide.headers["ETag"]},
+        cookies=cookies,
+    )
+
+    draft = client.get(f"/api/projects/{project_id}/versions/draft", cookies=cookies)
+    assert draft.status_code == 200
+    status = client.get(f"/api/projects/{project_id}/versions/status", cookies=cookies)
+    assert draft.headers["ETag"] == status.headers["ETag"]
+    assert draft.json()["guide"]["introduction"] == {"EN": "Hi"}
+
+    published_id = status.json()["published"]["id"]
+    published = client.get(
+        f"/api/projects/{project_id}/versions/{published_id}", cookies=cookies
+    ).json()
+    assert published["guide"]["introduction"] == {"EN": "Hello"}
+    # The content fields line up, so the two can be compared field by field.
+    content = set(draft.json()) - {"revision"}
+    assert content <= set(published)

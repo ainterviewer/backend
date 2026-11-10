@@ -22,6 +22,7 @@ from ...dependencies import (
 )
 from ...schemas.common import PageParams, PaginatedResponse
 from ...schemas.content import (
+    ContentDraftPublic,
     ContentStatus,
     ContentVersionCreate,
     ContentVersionPublic,
@@ -62,6 +63,22 @@ async def list_content_versions(
         project_id, limit=params.limit, offset=params.offset
     )
     return PaginatedResponse(items=versions, total=total)
+
+
+@router.get("/projects/{project_id}/versions/draft")
+async def get_content_draft(
+    project_id: UUID4,
+    db: DBSession,
+    jwt: DemoToken,
+    _: ProjectViewer,
+    response: Response,
+) -> ContentDraftPublic:
+    """The draft's content, to compare a version against."""
+    # As editors see it: an open guide room saves first.
+    await content_rooms.flush(project_id)
+    draft = db.versions.get_draft(project_id)
+    set_etag(response, draft.revision)
+    return draft
 
 
 @router.get("/projects/{project_id}/versions/{version_id}")

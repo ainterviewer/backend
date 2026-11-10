@@ -18,6 +18,7 @@ from sqlalchemy import delete, exists, func, select
 from ainterviewer.utils import get_language_dict
 
 from ...schemas.content import (
+    ContentDraftPublic,
     ContentStatus,
     ContentVersionPublic,
     ContentVersionSummaryPublic,
@@ -101,6 +102,21 @@ def missing_text(source: ContentColumns) -> dict[str, list[str]]:
         if paths:
             missing[language] = paths
     return missing
+
+
+def _content_fields(source: ContentColumns) -> dict[str, Any]:
+    """`source`'s columns, as `ContentPublic` takes them."""
+    return {
+        "languages": list(source.languages),
+        "default_language": source.default_language,
+        "languages_in_progress": list(source.languages_in_progress),
+        "guide": source.guide,
+        "consent": source.consent,
+        "welcome": source.welcome,
+        "emails": source.emails,
+        "agent_configs": source.agent_configs,
+        "prompt_overrides": dict(source.prompt_overrides),
+    }
 
 
 def _semver_of(version: ProjectContentVersionTable) -> SemVer:
@@ -194,14 +210,12 @@ class VersionRepository(BaseRepository):
         version = self._version(project_id, version_id)
         summary = self._summary(version, self._content(project_id).published_version_id)
         return ContentVersionPublic(
-            **summary.model_dump(),
-            guide=version.guide,
-            consent=version.consent,
-            welcome=version.welcome,
-            emails=version.emails,
-            agent_configs=version.agent_configs,
-            prompt_overrides=dict(version.prompt_overrides),
+            **{**summary.model_dump(), **_content_fields(version)}
         )
+
+    def get_draft(self, project_id: UUID4) -> ContentDraftPublic:
+        content = self._content(project_id)
+        return ContentDraftPublic(revision=content.revision, **_content_fields(content))
 
     def _latest_semver(self, project_id: UUID4) -> SemVer | None:
         """The highest version published so far, None if none ever was."""
