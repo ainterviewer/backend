@@ -4,6 +4,26 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.19] - 2026-11-10
+
+### Features
+
+- (survey) Support Likert grid questions
+- (interview) Replay survey questions with their items and answers
+
+### Bug Fixes
+
+- (survey) Keep a checkbox option that contains a comma whole
+- (export) Show a Likert grid's ratings in the message table
+
+### Preview
+
+- [report] Break a Likert grid down by row
+
+### Internal
+
+- Update lib
+
 ## [0.10.18] - 2026-11-05
 
 ### Features
