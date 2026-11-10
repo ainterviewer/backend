@@ -27,6 +27,7 @@ from docx.text.paragraph import Paragraph
 from markupsafe import Markup
 from pydantic import UUID4
 
+from ainterviewer.interview_guides import LikertGridItem
 from ainterviewer.types import InterviewStatus, MessageRole
 
 from ...db.utils import fix_nested_columns, messages_to_dataframe, write_messages_xlsx
@@ -64,6 +65,7 @@ SURVEY_LABELS = {
     "radio": "Single choice",
     "checkbox": "Multiple choice",
     "likert": "Likert",
+    "likert_grid": "Likert grid",
     "slider": "Slider",
     "number": "Number",
     "date": "Date",
@@ -191,6 +193,11 @@ def _survey_answer(item: Any, answer: str) -> SurveyAnswer:
     one of the options is what the participant wrote under "Other".
     """
     kind = SURVEY_LABELS.get(item.type, str(item.type))
+    if isinstance(item, LikertGridItem):
+        # `answer` is already one "row: option" line per rated row.
+        return SurveyAnswer(
+            kind=kind, options=[], answer=answer, scale=" · ".join(item.options)
+        )
     options: list[str] = list(getattr(item, "options", None) or [])
     if not options:
         scale = None
@@ -261,6 +268,9 @@ def build_view(interview: InterviewExport, tz: ZoneInfo) -> TranscriptView:
 
         is_participant = message.role == MessageRole.USER
         content = _clean(message.content.strip())
+        if is_participant and isinstance(pending_survey, LikertGridItem):
+            # Stored as JSON keyed by row id; a reader wants the ratings.
+            content = _clean(pending_survey.describe_answer(content))
         # Guide markup is the interviewer's; a participant's `<b>` is text.
         spans = markup.parse(content, markup=not is_participant)
 

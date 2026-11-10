@@ -9,7 +9,8 @@ The shape keeps concurrent edits apart wherever they can be:
 - Every piece of text is a `Y.Map` from language to `Y.Text`, so two people
   typing in the same field merge character by character, and translators of
   different languages never touch the same item.
-- Sections, questions and survey options are `Y.Map`s keyed by id, each
+- Sections, questions, survey options and grid rows are `Y.Map`s keyed by
+  id, each
   entry carrying an `order` key (fractional indexing, sorted as strings).
   Questions are flat, with a `section_id`. Moving one rewrites two plain
   values, so an edit to its text is never lost to a concurrent move -- a
@@ -61,6 +62,8 @@ _SECTION_TEXTS = ("description",)
 _QUESTION_TEXTS = ("main_question", "description")
 _QUESTION_TEXT_LISTS = ("probes", "alternative_main_questions")
 _SURVEY_TEXTS = ("min_label", "max_label")
+#: A survey item's lists of things with ids: a choice's options, a grid's rows.
+_SURVEY_KEYED = ("options", "rows")
 _IMAGE_TEXTS = ("primer", "description", "alt")
 _TIMED_TEXTS = ("message",)
 
@@ -386,17 +389,18 @@ def _write_option(entry: Map, data: Json) -> None:
 
 
 def _write_survey_item(target: Map, data: Json) -> None:
-    options = data.get("options")
-    _set_fields(target, data, texts=_SURVEY_TEXTS, skip=("options",))
-    if options is None:
-        if "options" in target:
-            del target["options"]
-        return
-    _set_keyed(
-        _child(target, "options"),
-        [(str(option["id"]), option) for option in options],
-        _write_option,
-    )
+    _set_fields(target, data, texts=_SURVEY_TEXTS, skip=_SURVEY_KEYED)
+    for key in _SURVEY_KEYED:
+        entries = data.get(key)
+        if entries is None:
+            if key in target:
+                del target[key]
+            continue
+        _set_keyed(
+            _child(target, key),
+            [(str(entry["id"]), entry) for entry in entries],
+            _write_option,
+        )
 
 
 def _write_image(target: Map, data: Json) -> None:
@@ -689,6 +693,13 @@ def _sorted(collection: Map) -> list[tuple[str, Map]]:
     )
 
 
+def _read_keyed(id_: str, entry: Map) -> Json:
+    """An option or a grid row: its text, and any plain fields (`required`)."""
+    data = _read_entity(entry, ())
+    data.pop(ORDER, None)
+    return {"id": id_, **data, "text": _read_texts(entry.get("text") or Map())}
+
+
 def _read_question(id_: str, entry: Map) -> Json:
     data = _read_entity(entry, _QUESTION_TEXTS)
     data.pop(ORDER, None)
@@ -696,12 +707,12 @@ def _read_question(id_: str, entry: Map) -> Json:
     item = data.get("survey_item")
     if isinstance(item, Map):
         survey = _read_entity(item, _SURVEY_TEXTS)
-        options = survey.get("options")
-        if isinstance(options, Map):
-            survey["options"] = [
-                {"id": option_id, "text": _read_texts(option.get("text") or Map())}
-                for option_id, option in _sorted(options)
-            ]
+        for key in _SURVEY_KEYED:
+            entries = survey.get(key)
+            if isinstance(entries, Map):
+                survey[key] = [
+                    _read_keyed(entry_id, entry) for entry_id, entry in _sorted(entries)
+                ]
         data["survey_item"] = survey
     image = data.get("image")
     if isinstance(image, Map):

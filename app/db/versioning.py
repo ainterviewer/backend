@@ -120,16 +120,22 @@ def _survey_bump(old: LocalizedQuestion, new: LocalizedQuestion) -> Bump:
     new_options = {o.id for o in getattr(after, "options", None) or []}
     if old_options - new_options:
         return Bump.MAJOR
-    rest_before = _structure(before, exclude={"options"})
-    rest_after = _structure(after, exclude={"options"})
+    # A grid's rows are like its options: one taken away loses the answers
+    # to it, one added or moved does not change what the others meant.
+    old_rows = {r.id: r.required for r in getattr(before, "rows", None) or []}
+    new_rows = {r.id: r.required for r in getattr(after, "rows", None) or []}
+    if old_rows.keys() - new_rows.keys():
+        return Bump.MAJOR
+    rest_before = _structure(before, exclude={"options", "rows"})
+    rest_after = _structure(after, exclude={"options", "rows"})
     if rest_before != rest_after:
         # The scale, the slider's range, "other" allowed: answers read
         # differently on either side.
         return Bump.MAJOR
     old_order = [o.id for o in getattr(before, "options", None) or []]
     new_order = [o.id for o in getattr(after, "options", None) or []]
-    if old_order != new_order:
-        return Bump.MINOR  # added, or reordered
+    if old_order != new_order or list(old_rows.items()) != list(new_rows.items()):
+        return Bump.MINOR  # added, reordered, or a row made (not) required
     return Bump.NONE
 
 
