@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 from enum import StrEnum
+from uuid import UUID
 
 from pydantic import Field
 
@@ -212,6 +213,8 @@ class DistributionKind(StrEnum):
     TEMPORAL = "temporal"
     # `buckets` + `stats` over the word count of free-text answers.
     TEXT = "text"
+    # `rows`, one categorical distribution per row of a Likert grid.
+    GRID = "grid"
     # Nothing: a statement the respondent could not answer (`can_answer` is
     # false). Carried so the guide's shape survives on the page -- every count
     # is zero and every collection empty.
@@ -262,6 +265,17 @@ class NumericStats(Schema):
     max: float
     mean: float
     median: float
+
+
+class GridRowDistribution(Schema):
+    """One row of a Likert grid: how its ratings fell across the scale."""
+
+    id: UUID
+    label: str
+    # One bar per scale option, in the scale's order, even at zero.
+    counts: list[CategoryCount]
+    # Respondents who rated this row; a row they may skip can be left blank.
+    n_answered: int
 
 
 class ItemDistribution(Schema):
@@ -319,6 +333,9 @@ class ItemDistribution(Schema):
     # categorical and had more write-ins than fit.
     n_other_hidden: int = 0
     n_other_hidden_count: int = 0
+
+    # A Likert grid's rows, in the grid's order. Empty for any other item.
+    rows: list[GridRowDistribution] = Field(default_factory=list)
 
 
 class GuideSection(Schema):

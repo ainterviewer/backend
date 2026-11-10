@@ -16,6 +16,7 @@ import datetime
 import statistics
 from collections import Counter, defaultdict
 from typing import Annotated, NamedTuple
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import UUID4
@@ -27,6 +28,7 @@ from ainterviewer.interview_guides.survey_items import (
     CheckboxItem,
     DateItem,
     DatetimeItem,
+    LikertGridItem,
     LikertItem,
     NumberItem,
     RadioItem,
@@ -50,6 +52,7 @@ from ....schemas.monitoring import (
     CategoryCount,
     DistributionBucket,
     DistributionKind,
+    GridRowDistribution,
     GuideSection,
     ItemDistribution,
     ItemDistributionParams,
@@ -118,6 +121,8 @@ class _Answer(NamedTuple):
     content: str
     language: LanguageCode
     options: list[str] | None
+    # The whole snapshot, for a grid: its rows are what the answer is keyed by.
+    item: SurveyItem | None = None
 
 
 class _Firings(NamedTuple):
@@ -323,6 +328,36 @@ def _categorical_counts(
     return bars, len(hidden), sum(entry.count for entry in hidden)
 
 
+def _grid_rows(
+    item: LikertGridItem, answers: list[_Answer]
+) -> list[GridRowDistribution]:
+    """Each authored row's ratings, counted like a Likert item of its own.
+
+    Rows are matched by id, so a row reworded or translated since is still
+    the same row; a rating is placed on the scale by position in the snapshot
+    the respondent saw, as `_categorical_counts` does for any choice.
+    """
+    by_row: dict[UUID, list[_Answer]] = {row.id: [] for row in item.rows}
+    for answer in answers:
+        seen = answer.item if isinstance(answer.item, LikertGridItem) else item
+        for row_id, rating in seen.parse_answer(answer.content).items():
+            if row_id in by_row:
+                by_row[row_id].append(
+                    _Answer(
+                        content=rating, language=answer.language, options=seen.options
+                    )
+                )
+    return [
+        GridRowDistribution(
+            id=row.id,
+            label=row.text,
+            counts=_categorical_counts(item.options, by_row[row.id], multi=False)[0],
+            n_answered=len(by_row[row.id]),
+        )
+        for row in item.rows
+    ]
+
+
 def _temporal_counts(answers: list[_Answer], item: SurveyItem) -> list[CategoryCount]:
     """Bin date/datetime answers by day and time answers by hour.
 
@@ -419,6 +454,7 @@ def _build_distribution(
     counts: list[CategoryCount] = []
     buckets: list[DistributionBucket] = []
     samples: list[AnswerSample] = []
+    rows: list[GridRowDistribution] = []
     stats: NumericStats | None = None
     hidden_values = 0
     hidden_answers = 0
@@ -446,6 +482,10 @@ def _build_distribution(
             counts, hidden_values, hidden_answers = _categorical_counts(
                 item.options, answers, multi=True
             )
+
+        case LikertGridItem():
+            kind = DistributionKind.GRID
+            rows = _grid_rows(item, answers)
 
         case SliderItem() | NumberItem():
             kind = DistributionKind.NUMERIC
@@ -498,6 +538,7 @@ def _build_distribution(
         samples=samples,
         n_other_hidden=hidden_values,
         n_other_hidden_count=hidden_answers,
+        rows=rows,
     )
 
 
@@ -776,6 +817,7 @@ def get_project_item_distributions(
                     content=content,
                     language=row.language or "",
                     options=getattr(row.survey_item, "options", None),
+                    item=row.survey_item,
                 )
             )
 
