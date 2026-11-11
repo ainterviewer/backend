@@ -886,6 +886,29 @@ else; a check a route makes itself is a 400.
 - `code` values are API: the frontend matches on them. Add one when a client
   needs it, rename none without the frontend.
 
+### Completion redirects
+
+`ProjectTable.redirects` (`CompletionRedirects`, `app/types.py`) sends the
+respondent of a **distributed** interview on when it ends -- a survey panel's
+return links. It is keyed by `InterviewTable.end_reason`, which the library
+records with `COMPLETED` (`InterviewEndReason`): `finished` goes to
+`complete`, `condition` (a guide `END_INTERVIEW`, declined consent included)
+to `screened`, and `security` nowhere, deliberately, until what each security
+decision means for a panel is documented. Test interviews never redirect.
+
+- It lives on the project, not in `ContentColumns`, like `external_params`:
+  distribution plumbing, so a fixed URL needs no republish and reaches
+  running interviews.
+- URLs are https with a fixed host; `{{ name }}` placeholders take the
+  interview's external param values, URL-encoded, and only in the path, query
+  and fragment. Those values come from the respondent's own link, so a
+  placeholder in the host would be an open redirect.
+- The websocket sends a backend-owned `RedirectFrame` (`type: "redirect"`)
+  after the end frame, and again when a finished interview reconnects, so a
+  reload of the end screen still leaves. It is not in the OpenAPI schema.
+- Quota-full (an experiment whose arms reached their `target`) is not covered:
+  it happens at experiment entry, before any interview exists.
+
 ### Folder collaborators join by invite
 
 Adding someone to a folder never adds them directly. `POST
