@@ -4,6 +4,18 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.21] - 2026-11-11
+
+### Features
+
+- (interviews) Redirect respondents when an interview ends
+
+### Internal
+
+- (settings) Default the assistant and translation to OpenRouter
+- Describe completion redirects
+- (deps) Upgrade dependencies and ainterviewer to v0.7.6
+
 ## [0.10.20] - 2026-11-10
 
 ### Features
