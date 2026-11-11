@@ -224,7 +224,7 @@ class AssistanceSettings(BaseModel):
 
     # `provider:model`, spelled as in [llm]. It needs a model that can call
     # tools, and the key for its provider.
-    model: str = "openai:gpt-6.1-terra"
+    model: str = "openrouter:z-ai/glm-5.3-flash"
 
     @field_validator("model")
     @classmethod
@@ -240,7 +240,7 @@ class TranslationSettings(BaseModel):
     """Machine translation of a project's guide, consent and welcome."""
 
     # `provider:model`, spelled as in [llm]; needs the key for its provider.
-    model: str = "openai:gpt-6.1-terra"
+    model: str = "openrouter:z-ai/glm-5.3-flash"
 
 
 class EmbeddingSettings(BaseModel):

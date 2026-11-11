@@ -126,7 +126,13 @@
           "title": "Registration Requires Token",
           "type": "boolean"
         },
+        "collaborator_invite_expiration": {
+          "$ref": "#/$defs/TimeDelta"
+        },
         "email_verification_token_expiration": {
+          "$ref": "#/$defs/TimeDelta"
+        },
+        "email_change_token_expiration": {
           "$ref": "#/$defs/TimeDelta"
         },
         "login_code_expiration": {
@@ -159,7 +165,7 @@
       "description": "The dashboard's interview-guide assistant.",
       "properties": {
         "model": {
-          "default": "openai:gpt-6.1-terra",
+          "default": "openrouter:z-ai/glm-5.3-flash",
           "title": "Model",
           "type": "string"
         }
@@ -417,13 +423,13 @@
         "assistance": {
           "$ref": "#/$defs/AssistanceSettings",
           "default": {
-            "model": "openai:gpt-6.1-terra"
+            "model": "openrouter:z-ai/glm-5.3-flash"
           }
         },
         "translation": {
           "$ref": "#/$defs/TranslationSettings",
           "default": {
-            "model": "openai:gpt-6.1-terra"
+            "model": "openrouter:z-ai/glm-5.3-flash"
           }
         }
       },
@@ -547,7 +553,7 @@
       "description": "Machine translation of a project's guide, consent and welcome.",
       "properties": {
         "model": {
-          "default": "openai:gpt-6.1-terra",
+          "default": "openrouter:z-ai/glm-5.3-flash",
           "title": "Model",
           "type": "string"
         }
@@ -566,6 +572,18 @@
           "default": 8880,
           "title": "Llm Port",
           "type": "integer"
+        },
+        "vllm_base_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vllm Base Url"
         },
         "available_models": {
           "items": {
@@ -772,7 +790,25 @@
           "weeks": 0
         },
         "registration_requires_token": true,
+        "collaborator_invite_expiration": {
+          "days": 30,
+          "hours": 0,
+          "microseconds": 0,
+          "milliseconds": 0,
+          "minutes": 0,
+          "seconds": 0,
+          "weeks": 0
+        },
         "email_verification_token_expiration": {
+          "days": 1,
+          "hours": 0,
+          "microseconds": 0,
+          "milliseconds": 0,
+          "minutes": 0,
+          "seconds": 0,
+          "weeks": 0
+        },
+        "email_change_token_expiration": {
           "days": 1,
           "hours": 0,
           "microseconds": 0,
@@ -866,6 +902,7 @@
       "default": {
         "llm_host": "0.0.0.0",
         "llm_port": 8880,
+        "vllm_base_url": null,
         "available_models": [
           "gpt-5-mini"
         ],

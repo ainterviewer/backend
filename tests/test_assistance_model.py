@@ -52,3 +52,7 @@ def test_openrouter_model(build):
 def test_unsupported_provider_is_rejected():
     with pytest.raises(ValidationError, match="must start with one of"):
         AssistanceSettings(model="gemini:gemini-3-flash")
+
+
+def test_default_model_goes_through_openrouter():
+    assert AssistanceSettings().model.startswith("openrouter:")
