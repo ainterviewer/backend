@@ -10,7 +10,13 @@ from pydantic import UUID4, Field, field_validator
 from ainterviewer.config import InterviewConfig
 from ainterviewer.types import LanguageCode, LanguageDict
 
-from ..types import CollaboratorRole, ExperimentAllocation, ExternalParam, ProjectStatus
+from ..types import (
+    CollaboratorRole,
+    CompletionRedirects,
+    ExperimentAllocation,
+    ExternalParam,
+    ProjectStatus,
+)
 from .common import NormalizedEmail, Schema
 from .users import UserPublic
 
@@ -105,6 +111,7 @@ class ProjectBase(Schema):
     experiment_only: bool = False
     config: InterviewConfig
     external_params: list[ExternalParam] | None = None
+    redirects: CompletionRedirects | None = None
     owner_id: UUID4
 
 

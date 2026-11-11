@@ -107,7 +107,14 @@ from ...services.exports.transcripts import (
 )
 from ...services.project_storage import copy_email_attachments, delete_project_storage
 from ...settings import app_settings
-from ...types import CollaboratorRole, ContentPart, ErrorCode, InterviewType, Scope
+from ...types import (
+    CollaboratorRole,
+    CompletionRedirects,
+    ContentPart,
+    ErrorCode,
+    InterviewType,
+    Scope,
+)
 from ...utils import as_aware, ensure_filename, generate_qr_img
 from ..errors import STALE_REVISION
 from ..files import file_response
@@ -762,6 +769,21 @@ async def update_external_params(
     _: ProjectEditor,
 ):
     db.projects.update_external_params(project_id, request.params)
+
+
+@router.put("/projects/{project_id}/redirects")
+async def replace_redirects(
+    project_id: UUID4,
+    redirects: CompletionRedirects,
+    db: DBSession,
+    jwt: DemoToken,
+    _: ProjectEditor,
+) -> CompletionRedirects:
+    """Set where respondents are sent when a distributed interview ends; an
+    outcome left null redirects nowhere. Takes effect at once, interviews
+    already running included: it is not part of the published content."""
+    db.projects.update_redirects(project_id, redirects)
+    return redirects
 
 
 @router.get("/prompt-defaults")

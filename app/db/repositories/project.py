@@ -42,6 +42,7 @@ from ...schemas.projects import (
 from ...settings import app_settings
 from ...types import (
     CollaboratorRole,
+    CompletionRedirects,
     ContentPart,
     ExternalParam,
     InterviewType,
@@ -1147,6 +1148,17 @@ class ProjectRepository(BaseRepository):
             update(ProjectTable)
             .where(ProjectTable.id == project_id)
             .values(external_params=external_params)
+        )
+        self.session.execute(statement)
+        self.session.commit()
+
+    def update_redirects(
+        self, project_id: UUID4, redirects: CompletionRedirects | None
+    ) -> None:
+        statement = (
+            update(ProjectTable)
+            .where(ProjectTable.id == project_id)
+            .values(redirects=redirects)
         )
         self.session.execute(statement)
         self.session.commit()

@@ -312,3 +312,14 @@ class MessageFeedbackResponse(Schema):
     project_id: UUID4
     message_id: int
     feedback: Feedback | None
+
+
+class RedirectFrame(Schema):
+    """Sent over the interview websocket after the end of a distributed
+    interview whose project redirects that ending: the frontend leaves for
+    `url` once `delay_seconds` have passed. Not an HTTP model -- it has no
+    place in the OpenAPI schema."""
+
+    type: Literal["redirect"] = "redirect"
+    url: str
+    delay_seconds: int

@@ -3,16 +3,18 @@ and the services. SQLAlchemy column types are in `app.db.types`."""
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
-from typing import Any, Literal, NotRequired, TypedDict
+from typing import Annotated, Any, Literal, NotRequired, TypedDict
+from urllib.parse import quote, urlsplit
 
 from fastapi import WebSocket
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AfterValidator, BaseModel, Field, model_validator
 
 from ainterviewer.interfaces import SecurityOverride
 from ainterviewer.interview_guides import LocalizedText
 from ainterviewer.interview_guides.types import SecurityAction
-from ainterviewer.types import LanguageCode
+from ainterviewer.types import InterviewEndReason, LanguageCode
 
 
 class Scope(StrEnum):
@@ -231,6 +233,80 @@ class ExternalParam(BaseModel):
                     f"default '{self.default}' must be one of {self.options}"
                 )
         return self
+
+
+#: `{{ name }}` in a redirect URL: the same syntax as external params in the
+#: guide's text, and nothing more of Jinja.
+_REDIRECT_PLACEHOLDER = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
+
+
+def _validate_redirect_url(url: str) -> str:
+    """An https URL whose host is fixed, with `{{ name }}` placeholders allowed
+    in its path, query and fragment only.
+
+    The placeholders take external param values, which come from the
+    respondent's own link. One in the host would let anyone who edits a link
+    send respondents wherever they like from a page on our domain.
+    """
+    url = url.strip()
+    bare = _REDIRECT_PLACEHOLDER.sub("x", url)
+    if "{{" in bare or "}}" in bare or "{%" in bare:
+        raise ValueError("Only {{ name }} placeholders are allowed")
+    parts = urlsplit(url)
+    if parts.scheme != "https" or not parts.netloc:
+        raise ValueError("Must be an https:// URL")
+    if "{" in parts.netloc:
+        raise ValueError("Placeholders are not allowed in the host")
+    return url
+
+
+RedirectUrl = Annotated[
+    str, Field(max_length=2048), AfterValidator(_validate_redirect_url)
+]
+
+
+class CompletionRedirects(BaseModel):
+    """Where a respondent is sent when a distributed interview ends, by how it
+    ended -- the return links a survey panel hands out.
+
+    Unset outcomes send nobody anywhere: the respondent stays on the outro.
+    Interviews ended by the security check never redirect, whatever is set.
+    """
+
+    #: The respondent finished the interview.
+    complete: RedirectUrl | None = None
+    #: A condition in the guide ended it early, including declined consent.
+    screened: RedirectUrl | None = None
+    #: How long the outro stays up before the redirect.
+    delay_seconds: int = Field(default=5, ge=0, le=60)
+
+    def url_for(self, end_reason: InterviewEndReason | None) -> RedirectUrl | None:
+        """The configured URL template for an ending, or None."""
+        match end_reason:
+            case InterviewEndReason.FINISHED:
+                return self.complete
+            case InterviewEndReason.CONDITION:
+                return self.screened
+            case _:
+                return None
+
+
+def render_redirect_url(template: str, values: dict[str, Any]) -> tuple[str, set[str]]:
+    """Fill a redirect URL's placeholders from an interview's external param
+    values, URL-encoded so a value cannot add path segments or query
+    parameters of its own. A missing value is filled in empty rather than
+    stranding the respondent; its name comes back so the caller can log it.
+    """
+    missing: set[str] = set()
+
+    def fill(match: re.Match[str]) -> str:
+        value = values.get(match[1])
+        if value is None:
+            missing.add(match[1])
+            return ""
+        return quote(str(value), safe="")
+
+    return _REDIRECT_PLACEHOLDER.sub(fill, template), missing
 
 
 def build_external_params_model(

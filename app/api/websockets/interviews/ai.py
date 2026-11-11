@@ -134,6 +134,18 @@ def _log_failure(exc: Exception, error: InterviewError, interview_id) -> None:
         logger.exception("Unhandled error in interview %s", interview_id)
 
 
+async def _send_redirect(
+    websocket: WebSocket, db: InterviewDataBase, project_id, interview_id
+) -> None:
+    """Tell the frontend where to send the respondent, after the end frame,
+    when the project redirects how this interview ended. Nothing for an
+    interview that has not ended: `interview()` also returns when it does not
+    complete, and `completion_redirect` checks the stored status."""
+    frame = db.interviews.completion_redirect(project_id, interview_id)
+    if frame is not None:
+        await websocket.send_json(frame.model_dump(mode="json"))
+
+
 @router.websocket("/ai")
 async def ai_interview_websocket_endpoint(
     *,
@@ -253,6 +265,9 @@ async def _run_interview(
                 await websocket.send_json(message.model_dump())
 
         if not continue_from_history:
+            # Finished already: a reload of the end screen still has to leave
+            # for the panel, or the respondent is stuck on it.
+            await _send_redirect(websocket, db, project_id, interview_id)
             await websocket.close()
             return
 
@@ -289,6 +304,7 @@ async def _run_interview(
             embedder=embedder,
         ) as interviewer:
             await interviewer.interview(interview_history=interview_history)
+        await _send_redirect(websocket, db, project_id, interview_id)
     except WebSocketDisconnect:
         pass
     except InterviewGoneError:

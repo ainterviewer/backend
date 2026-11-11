@@ -33,6 +33,7 @@ from ainterviewer.interview_guides import (
 )
 from ainterviewer.types import (
     Feedback,
+    InterviewEndReason,
     Interviewer,
     InterviewStatus,
     MessageRole,
@@ -46,9 +47,10 @@ from ...schemas.interviews import (
     InterviewPublic,
     InterviewSummaryPublic,
     MessagePublic,
+    RedirectFrame,
 )
 from ...schemas.reports import MessageReportCreate, MessageReportPublic
-from ...types import InterviewType, ReportSource, SafetyFlag
+from ...types import InterviewType, ReportSource, SafetyFlag, render_redirect_url
 from ...utils import as_aware
 from ..tables import (
     CodingTable,
@@ -824,6 +826,7 @@ class InterviewRepository(BaseRepository):
         interview_id: UUID4,
         status: InterviewStatus | None = None,
         time_spent: int = 0,
+        end_reason: InterviewEndReason | None = None,
     ):
         values: dict = {
             "last_updated": now(),
@@ -831,6 +834,10 @@ class InterviewRepository(BaseRepository):
         }
         if status is not None:
             values["status"] = status
+            # Any other status means the interview has not ended.
+            values["end_reason"] = (
+                end_reason if status == InterviewStatus.COMPLETED else None
+            )
 
         statement = (
             update(InterviewTable)
@@ -840,6 +847,48 @@ class InterviewRepository(BaseRepository):
         )
         self.session.execute(statement)
         self.session.commit()
+
+    def completion_redirect(
+        self, project_id: UUID4, interview_id: UUID4
+    ) -> RedirectFrame | None:
+        """Where the respondent of a completed interview is sent, filled in
+        from the interview's external param values, or None when nowhere:
+        a test interview, an ending the project does not redirect (the
+        security check's always), or an interview not completed.
+        """
+        row = self.session.execute(
+            select(
+                InterviewTable.type,
+                InterviewTable.status,
+                InterviewTable.end_reason,
+                InterviewTable.external_params,
+                ProjectTable.redirects,
+            )
+            .join(ProjectTable, ProjectTable.id == InterviewTable.project_id)
+            .where(
+                InterviewTable.project_id == project_id,
+                InterviewTable.id == interview_id,
+            )
+        ).one_or_none()
+        if row is None:
+            return None
+        type_, status, end_reason, values, redirects = row
+        if (
+            type_ != InterviewType.DISTRIBUTED
+            or status != InterviewStatus.COMPLETED
+            or redirects is None
+            or (template := redirects.url_for(end_reason)) is None
+        ):
+            return None
+
+        url, missing = render_redirect_url(template, values or {})
+        if missing:
+            logger.warning(
+                "Interview %s redirects with no value for %s",
+                interview_id,
+                ", ".join(sorted(missing)),
+            )
+        return RedirectFrame(url=url, delay_seconds=redirects.delay_seconds)
 
     # ==================== Message Methods ====================
 

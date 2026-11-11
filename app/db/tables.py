@@ -44,6 +44,7 @@ from ainterviewer.synthesize.interviewees import (
 from ainterviewer.types import (
     EmbeddingKind,
     Feedback,
+    InterviewEndReason,
     Interviewer,
     InterviewStatus,
     LanguageCode,
@@ -59,6 +60,7 @@ from ..types import (
     AccessRequestStatus,
     CodeKind,
     CollaboratorRole,
+    CompletionRedirects,
     ContentPart,
     ContentVersionKind,
     EmbeddingTask,
@@ -441,6 +443,14 @@ class ProjectTable(Base):
     )
     external_params: Mapped[list[ExternalParam] | None] = mapped_column(
         PydanticJSONB(list[ExternalParam]), default=None
+    )
+    #: Where respondents of distributed interviews are sent when the interview
+    #: ends, e.g. a survey panel's return links. On the project rather than
+    #: the versioned content: like `external_params` it is plumbing for one
+    #: way of distributing the project, so fixing a URL needs no republish and
+    #: reaches interviews already running.
+    redirects: Mapped[CompletionRedirects | None] = mapped_column(
+        PydanticJSONB(CompletionRedirects), default=None
     )
     #: The codebook's palette. It lives on the project rather than on a code
     #: because it is the set a colour is *chosen from* -- an analyst edits it
@@ -1066,6 +1076,12 @@ class InterviewTable(Base):
     )
     status: Mapped[InterviewStatus] = mapped_column(
         SQLEnum(InterviewStatus), default=InterviewStatus.INACTIVE
+    )
+    #: How a completed interview ended: finished, or ended early by a
+    #: condition or the security check. NULL while it is not completed, and
+    #: for interviews completed before it was recorded.
+    end_reason: Mapped[InterviewEndReason | None] = mapped_column(
+        SQLEnum(InterviewEndReason), default=None
     )
 
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
