@@ -37,7 +37,7 @@ class ParticipantPublic(ParticipantBase):
     participant_id: UUID4
     folder_id: UUID4
     created_at: datetime
-    pid: str  # ty:ignore[invalid-mutable-override]
+    pid: str  # ty:ignore[incompatible-mutable-override]
     latest_interview_at: datetime | None = None
     latest_interview_status: InterviewStatus | None = None
 

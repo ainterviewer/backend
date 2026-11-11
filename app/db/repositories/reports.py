@@ -361,7 +361,7 @@ class ReportRepository(BaseRepository):
             .values(**values)
         )
         self.session.commit()
-        return result.rowcount or 0  # ty: ignore[unresolved-attribute]
+        return result.rowcount or 0  # ty: ignore[missing-attribute]
 
     def _visible_ids(
         self, report_ids: Sequence[UUID4], project_id: UUID4 | None

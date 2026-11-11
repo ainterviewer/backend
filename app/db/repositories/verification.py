@@ -144,4 +144,4 @@ class VerificationRepository(BaseRepository):
             )
         )
         self.session.commit()
-        return result.rowcount  # ty:ignore[unresolved-attribute]
+        return result.rowcount  # ty:ignore[missing-attribute]

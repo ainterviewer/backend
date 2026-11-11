@@ -457,4 +457,4 @@ class VersionRepository(BaseRepository):
             .where(ProjectContentVersionTable.id.in_(candidates), ~referenced)
             .execution_options(synchronize_session=False)
         )
-        return result.rowcount  # ty:ignore[unresolved-attribute]
+        return result.rowcount  # ty:ignore[missing-attribute]

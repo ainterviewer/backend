@@ -77,10 +77,10 @@ async def send_email(
 
     return await aiosmtplib.send(
         message,
-        hostname=app_settings.services.email.smtp_server,  # ty:ignore[unresolved-attribute]
-        port=app_settings.services.email.smtp_port,  # ty:ignore[unresolved-attribute]
-        username=app_settings.services.email.sender.email,  # ty:ignore[unresolved-attribute]
-        password=app_settings.services.email.sender.password.get_secret_value(),  # ty:ignore[unresolved-attribute]
+        hostname=app_settings.services.email.smtp_server,  # ty:ignore[missing-union-attribute]
+        port=app_settings.services.email.smtp_port,  # ty:ignore[missing-union-attribute]
+        username=app_settings.services.email.sender.email,  # ty:ignore[missing-union-attribute]
+        password=app_settings.services.email.sender.password.get_secret_value(),  # ty:ignore[missing-union-attribute]
     )
 
 
@@ -132,7 +132,7 @@ def _create_email_message(
     else:
         message = alternative
 
-    sender = app_settings.services.email.sender.email  # ty:ignore[unresolved-attribute]
+    sender = app_settings.services.email.sender.email  # ty:ignore[missing-union-attribute]
     message["From"] = sender
     message["To"] = recipients
     message["Subject"] = subject

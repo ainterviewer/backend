@@ -50,7 +50,7 @@ class AuthRepository(BaseRepository):
             .values(is_used=True, used_at=now())
         )
         self.session.commit()
-        return result.rowcount == 1  # ty:ignore[unresolved-attribute]
+        return result.rowcount == 1  # ty:ignore[missing-attribute]
 
     def used_since(self, token_id: UUID4, since: datetime.datetime) -> bool:
         """Whether the token was spent at or after `since`."""
@@ -89,4 +89,4 @@ class AuthRepository(BaseRepository):
             delete(RefreshTokenTable).where(RefreshTokenTable.expires_at < now())
         )
         self.session.commit()
-        return result.rowcount  # ty:ignore[unresolved-attribute]
+        return result.rowcount  # ty:ignore[missing-attribute]

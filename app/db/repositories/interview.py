@@ -645,7 +645,7 @@ class InterviewRepository(BaseRepository):
             .values(revoked_at=now())
         )
         self.session.commit()
-        return result.rowcount or 0  # ty: ignore[unresolved-attribute]
+        return result.rowcount or 0  # ty: ignore[missing-attribute]
 
     def redeem_resume_token(self, token_hash: str) -> InterviewTable:
         """Spend a resume link and return the interview it unlocks.

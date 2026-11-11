@@ -524,7 +524,7 @@ class EmbeddingRepository(BaseRepository):
         result = self.session.execute(
             delete(EmbeddingTable).where(EmbeddingTable.interview_id.in_(interview_ids))
         )
-        return result.rowcount or 0  # ty: ignore[unresolved-attribute]
+        return result.rowcount or 0  # ty: ignore[missing-attribute]
 
     # ------------------------------------------------------------------ #
     # Reading                                                            #
@@ -2254,7 +2254,7 @@ class EmbeddingRepository(BaseRepository):
             )
             .values(text=text)
         )
-        return bool(result.rowcount)  # ty: ignore[unresolved-attribute]
+        return bool(result.rowcount)  # ty: ignore[missing-attribute]
 
     def coverage(self, project_id: UUID) -> dict[str, int]:
         """Stored vector counts per kind, for one project."""

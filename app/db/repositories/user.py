@@ -56,7 +56,7 @@ class UserRepository(BaseRepository):
             claimed = self.session.execute(
                 delete(InvitationTable).where(InvitationTable.id == claim_invitation)
             )
-            if claimed.rowcount == 0:  # ty:ignore[unresolved-attribute]
+            if claimed.rowcount == 0:  # ty:ignore[missing-attribute]
                 self.session.rollback()
                 raise InvitationClaimedError
 
@@ -477,7 +477,7 @@ class UserRepository(BaseRepository):
         statement = delete(InvitationTable).where(InvitationTable.id == id)
         result = self.session.execute(statement)
         self.session.commit()
-        return result.rowcount > 0  # ty:ignore[unresolved-attribute]
+        return result.rowcount > 0  # ty:ignore[missing-attribute]
 
     def delete_invitations(self, ids: list[UUID4]):
         statement = delete(InvitationTable).where(InvitationTable.id.in_(ids))

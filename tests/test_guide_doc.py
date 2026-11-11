@@ -136,7 +136,7 @@ def test_numbers_come_back_as_they_went_in():
     # Yjs has only doubles; a slider's int bounds must not come back floats.
     guide = read_guide(new_doc(_guide()))
     item = guide.question_sections[1].questions[0].survey_item
-    assert item is not None and type(item.min) is int  # ty: ignore[unresolved-attribute]
+    assert item is not None and type(item.min) is int  # ty: ignore[missing-union-attribute]
 
 
 def test_reapplying_the_same_guide_changes_nothing():

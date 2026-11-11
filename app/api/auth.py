@@ -748,7 +748,7 @@ async def request_access(
 
     try:
         await send_email(
-            app_settings.services.email.recipient.email,  # ty:ignore[unresolved-attribute]
+            app_settings.services.email.recipient.email,  # ty:ignore[missing-union-attribute]
             "New access request",
             body=f"New access request from {access_request.email}\n\nOrganization: {access_request.organization}\nMessage:\n{access_request.message}",
         )

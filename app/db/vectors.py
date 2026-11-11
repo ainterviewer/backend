@@ -862,7 +862,7 @@ class VectorExtension:
         scan_func = "vector_quantize_scan" if use_quantization else "vector_full_scan"
 
         # Get primary key column(s)
-        pk_cols = [c.name for c in table.__table__.primary_key.columns]  # ty:ignore[unresolved-attribute]
+        pk_cols = [c.name for c in table.__table__.primary_key.columns]  # ty:ignore[missing-attribute]
         if not pk_cols:
             raise ValueError(f"Table {table_name} has no primary key defined")
 

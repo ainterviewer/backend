@@ -83,9 +83,8 @@ def generate_qr_img(
             file_path = file_path.with_suffix(".png")
         with open(file_path, "wb") as f:
             _ = f.write(img_byte_array)
-    elif ctx:
-        if not ctx.resilient_parsing:
-            sys.stdout.buffer.write(img_byte_array)
+    elif ctx and not ctx.resilient_parsing:
+        sys.stdout.buffer.write(img_byte_array)
 
     return img_byte_array
 
@@ -156,7 +155,7 @@ def replay_history(
             continue
 
         if message.image:
-            message.image.encode(project_id)  # ty:ignore[unresolved-attribute]
+            message.image.encode(project_id)  # ty:ignore[missing-union-attribute]
 
         data = OutgoingHistoryMessage(
             content=message.content,
@@ -192,7 +191,7 @@ def replay_history(
             pass
         else:
             if last_message.image:
-                last_message.image.encode(project_id)  # ty:ignore[unresolved-attribute]
+                last_message.image.encode(project_id)  # ty:ignore[missing-union-attribute]
 
             data = OutgoingMessage(
                 content=last_message.content,

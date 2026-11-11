@@ -33,7 +33,7 @@ class WebsocketMessageHandler(IOProtocol):
                     MessageType.AUDIO if data.type == "audio" else MessageType.TEXT
                 )
 
-        elif data.type == "image":
+        elif data.type == "image":  # noqa: SIM102 (placeholder for the image branch)
             # NOTE: The actual images are send over API, and the path is send
             # over the websocket
 
