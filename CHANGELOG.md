@@ -4,6 +4,25 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.23] - 2026-11-13
+
+### Features
+
+- (guide) Send guide errors with the question they are in
+- (guide) Mark history versions that hold the same content as the draft
+
+### Bug Fixes
+
+- (guide) Name questions in condition order errors as the editor numbers them
+
+### Preview
+
+- [participants] Download email attachments
+
+### Internal
+
+- (deps) Update lib
+
 ## [0.10.22] - 2026-11-12
 
 ### Internal
