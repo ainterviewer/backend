@@ -9,6 +9,7 @@ from urllib.parse import quote
 
 import polars as pl
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, UploadFile
+from fastapi.responses import FileResponse
 from jinja2 import TemplateError
 from pydantic import UUID4
 from sqlalchemy.exc import NoResultFound
@@ -555,6 +556,26 @@ def _list_attachments(directory: Path) -> list[ParticipantEmailAttachmentPublic]
     return items
 
 
+def _attachment_download(directory: Path, filename: str) -> FileResponse:
+    """Hand an attachment back to the editor who uploaded it.
+
+    Always a download, never rendered inline: these are user uploads served
+    from our own origin, and files from before the type allowlist can be
+    anything.
+    """
+    target = directory / _safe_filename(filename)
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="Attachment not found.")
+    return FileResponse(
+        target,
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": _content_disposition(target.name),
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/projects/{project_id}/{language}/participant-email-attachments")
 async def list_participant_email_attachments(
     project_id: UUID4,
@@ -608,6 +629,22 @@ async def upload_participant_email_attachments(
         (directory / name).write_bytes(content)
 
     return _list_attachments(directory)
+
+
+@router.get(
+    "/projects/{project_id}/{language}/participant-email-attachments/{filename}",
+    response_class=Response,
+    responses=file_response("application/octet-stream"),
+)
+async def download_participant_email_attachment(
+    project_id: UUID4,
+    language: LanguageCode,
+    filename: str,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectViewer,
+) -> FileResponse:
+    return _attachment_download(_attachments_dir(project_id, language), filename)
 
 
 @router.delete(
@@ -874,6 +911,24 @@ async def upload_participant_reminder_email_attachments(
         (directory / name).write_bytes(content)
 
     return _list_attachments(directory)
+
+
+@router.get(
+    "/projects/{project_id}/{language}/participant-reminder-email-attachments/{filename}",
+    response_class=Response,
+    responses=file_response("application/octet-stream"),
+)
+async def download_participant_reminder_email_attachment(
+    project_id: UUID4,
+    language: LanguageCode,
+    filename: str,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectViewer,
+) -> FileResponse:
+    return _attachment_download(
+        _reminder_attachments_dir(project_id, language), filename
+    )
 
 
 @router.delete(

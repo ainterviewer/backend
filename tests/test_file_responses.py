@@ -18,6 +18,14 @@ FILE_ROUTES = [
     ("post", "/api/projects/{project_id}/interviews/messages/export"),
     ("post", "/api/projects/{project_id}/participants/export"),
     ("get", "/api/projects/{project_id}/email-bundle"),
+    (
+        "get",
+        "/api/projects/{project_id}/{language}/participant-email-attachments/{filename}",
+    ),
+    (
+        "get",
+        "/api/projects/{project_id}/{language}/participant-reminder-email-attachments/{filename}",
+    ),
     ("post", "/api/speech"),
 ]
 
