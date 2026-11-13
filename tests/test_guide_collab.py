@@ -365,7 +365,9 @@ async def test_a_welcome_without_a_valid_email_is_not_saved(server):
         assert column(db, project_id).welcome is None
         with db() as database:
             errors = database.versions.status(project_id).doc_errors
-        assert errors[ContentPart.WELCOME] == ["Enter a valid contact email address."]
+        assert [e.message for e in errors[ContentPart.WELCOME]] == [
+            "Enter a valid contact email address."
+        ]
 
         _meta, content = flat_roots(a)
         content["email"] = json.dumps("team@example.com")

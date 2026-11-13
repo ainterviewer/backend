@@ -61,6 +61,7 @@ from ..types import (
     CodeKind,
     CollaboratorRole,
     CompletionRedirects,
+    ContentError,
     ContentPart,
     ContentVersionKind,
     EmbeddingTask,
@@ -761,7 +762,9 @@ class ContentDocTable(Base):
     part: Mapped[ContentPart] = mapped_column(SQLEnum(ContentPart))
     state: Mapped[bytes] = mapped_column(LargeBinary)
     revision: Mapped[int] = mapped_column()
-    errors: Mapped[list[str] | None] = mapped_column(JSON, default=None)
+    errors: Mapped[list[ContentError] | None] = mapped_column(
+        PydanticJSONB(list[ContentError]), default=None
+    )
     updated_at: Mapped[datetime.datetime] = mapped_column(default=now, onupdate=now)
 
 

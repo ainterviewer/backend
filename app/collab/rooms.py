@@ -50,7 +50,7 @@ from sqlalchemy.orm import Session, object_session
 
 from ..db.crud import InterviewDataBase
 from ..db.tables import ProjectContentTable
-from ..types import ContentPart, ContentVersionKind
+from ..types import ContentError, ContentPart, ContentVersionKind
 from .guide_doc import doc_id, merge_guide_data
 from .parts import LIVE_PARTS, DocPart
 
@@ -116,7 +116,7 @@ class ContentRoom:
         base: dict[str, Any],
         languages: tuple[str, ...],
         default_language: str,
-        errors: list[str] | None,
+        errors: list[ContentError] | None,
     ):
         self.project_id = project_id
         self.part = part
@@ -250,7 +250,7 @@ class ContentRoom:
         await asyncio.to_thread(write)
         self._unsnapshotted = False
 
-    async def save(self) -> list[str] | None:
+    async def save(self) -> list[ContentError] | None:
         """Save the doc now, merging in whatever wrote the column since. The
         errors that keep it from being valid, if any."""
         part = self.part
@@ -328,7 +328,10 @@ class ContentRoom:
                 "server": True,
                 "doc_id": self.doc_id,
                 "revision": self.synced_revision,
-                "errors": self.errors or [],
+                "errors": [
+                    error.model_dump(mode="json", exclude_none=True)
+                    for error in self.errors or []
+                ],
                 # Moves on every save, so editors can tell their changes have
                 # been saved even when the part's revision did not move.
                 "saved_at": time.time(),

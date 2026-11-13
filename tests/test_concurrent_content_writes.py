@@ -22,7 +22,7 @@ from ainterviewer.interview_guides import (
 from app.db.crud import InterviewDataBase
 from app.db.repositories import project as project_repository
 from app.db.tables import Base, ProjectContentTable, ProjectFolderTable, UserTable
-from app.types import ContentPart
+from app.types import ContentError, ContentPart
 
 
 @pytest.fixture
@@ -157,11 +157,16 @@ def test_errors_of_a_doc_the_column_has_moved_past_do_not_block_publishing(db):
     with session() as database:
         revision = database.projects.get_revision(project_id, ContentPart.GUIDE)
         database.content_docs.save(
-            project_id, ContentPart.GUIDE, b"", revision, None, ["broken"]
+            project_id,
+            ContentPart.GUIDE,
+            b"",
+            revision,
+            None,
+            [ContentError(message="broken")],
         )
         database.session.commit()
         assert database.versions.status(project_id).doc_errors == {
-            ContentPart.GUIDE: ["broken"]
+            ContentPart.GUIDE: [ContentError(message="broken")]
         }
 
     # A restore or a PUT, with no room open: the doc will become this

@@ -12,7 +12,7 @@ from fastapi import WebSocket
 from pydantic import AfterValidator, BaseModel, Field, model_validator
 
 from ainterviewer.interfaces import SecurityOverride
-from ainterviewer.interview_guides import LocalizedText
+from ainterviewer.interview_guides import GuideError, LocalizedText
 from ainterviewer.interview_guides.types import SecurityAction
 from ainterviewer.types import InterviewEndReason, LanguageCode
 
@@ -263,6 +263,16 @@ def _validate_redirect_url(url: str) -> str:
 RedirectUrl = Annotated[
     str, Field(max_length=2048), AfterValidator(_validate_redirect_url)
 ]
+
+
+class ContentError(GuideError):
+    """Why what editors wrote in a co-edited part (guide, consent, welcome)
+    is not valid. Guide errors say where they are (`GuideError`); the other
+    parts' leave that empty."""
+
+    @classmethod
+    def of(cls, error: GuideError) -> ContentError:
+        return cls.model_validate(error.model_dump())
 
 
 class CompletionRedirects(BaseModel):

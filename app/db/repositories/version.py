@@ -23,7 +23,7 @@ from ...schemas.content import (
     ContentVersionPublic,
     ContentVersionSummaryPublic,
 )
-from ...types import ContentPart, ContentVersionKind
+from ...types import ContentError, ContentPart, ContentVersionKind
 from ..tables import (
     ContentColumns,
     InterviewTable,
@@ -272,7 +272,7 @@ class VersionRepository(BaseRepository):
             doc_errors=self._doc_errors(project_id),
         )
 
-    def _doc_errors(self, project_id: UUID4) -> dict[ContentPart, list[str]]:
+    def _doc_errors(self, project_id: UUID4) -> dict[ContentPart, list[ContentError]]:
         return ContentDocRepository(self.session).errors(project_id)
 
     # ==================== Writing ====================

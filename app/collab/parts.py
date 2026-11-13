@@ -16,19 +16,20 @@ from typing import Any
 from pycrdt import Doc
 from pydantic import BaseModel, ValidationError
 
+from ainterviewer.interview_guides import validation_errors
 from ainterviewer.interview_guides.localized import (
     LocalizedConsent,
     LocalizedInterviewGuide,
     LocalizedWelcome,
 )
 
-from ..types import ContentPart
+from ..types import ContentError, ContentPart
 from .flat_doc import apply_flat_data, read_flat_data
 from .guide_doc import Json, apply_guide_data, read_guide_data
 
 #: A part's value as validated from a doc's data: the model to store, or
 #: None for "none configured"; and why it is not valid, if it is not.
-type Validated = tuple[BaseModel | None, list[str]]
+type Validated = tuple[BaseModel | None, list[ContentError]]
 
 
 @dataclass(frozen=True)
@@ -43,9 +44,12 @@ class DocPart:
     dump: Callable[[BaseModel | None], Json]
 
 
-def _messages(error: ValidationError) -> list[str]:
+def _messages(error: ValidationError) -> list[ContentError]:
     return [
-        f"{'.'.join(str(part) for part in e['loc'])}: {e['msg']}"
+        ContentError(
+            message=f"{'.'.join(str(part) for part in e['loc'])}: {e['msg']}",
+            field=str(e["loc"][0]) if e["loc"] else None,
+        )
         for e in error.errors()
     ]
 
@@ -58,9 +62,9 @@ def _validate_guide(data: Json, language: str) -> Validated:
     try:
         guide = LocalizedInterviewGuide.model_validate(data)
     except ValidationError as error:
-        return None, _messages(error)
+        return None, [ContentError.of(e) for e in validation_errors(error, data)]
     if order_errors := guide.render(language).condition_order_errors():
-        return None, order_errors
+        return None, [ContentError.of(e) for e in order_errors]
     _trim_options(guide)
     return guide, []
 
@@ -119,7 +123,11 @@ def _validate_welcome(data: Json, _language: str) -> Validated:
         # Editors see these. The email is the one field the page can leave
         # invalid; say so in its terms rather than pydantic's.
         if any(e["loc"] and e["loc"][0] == "email" for e in error.errors()):
-            return None, ["Enter a valid contact email address."]
+            return None, [
+                ContentError(
+                    message="Enter a valid contact email address.", field="email"
+                )
+            ]
         return None, _messages(error)
 
 

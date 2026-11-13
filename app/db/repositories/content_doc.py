@@ -9,7 +9,7 @@ from typing import Any, NamedTuple
 from pydantic import UUID4, BaseModel
 from sqlalchemy import select
 
-from ...types import ContentPart
+from ...types import ContentError, ContentPart
 from ..tables import ContentDocTable, ProjectContentTable
 from .base import BaseRepository
 
@@ -54,7 +54,7 @@ class ContentDocRepository(BaseRepository):
             content.default_language,
         )
 
-    def errors(self, project_id: UUID4) -> dict[ContentPart, list[str]]:
+    def errors(self, project_id: UUID4) -> dict[ContentPart, list[ContentError]]:
         """Per part, why its doc does not make a valid one, where it does not.
 
         Only a doc still in step with its column counts. One the column has
@@ -84,7 +84,7 @@ class ContentDocRepository(BaseRepository):
         state: bytes,
         synced_revision: int,
         value: BaseModel | None,
-        errors: list[str] | None,
+        errors: list[ContentError] | None,
     ) -> int | None:
         """Store the doc's state and, unless it has `errors`, its `value`.
 

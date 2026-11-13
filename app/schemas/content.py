@@ -17,7 +17,7 @@ from ainterviewer.interview_guides.extra import Consent, Welcome
 from ainterviewer.types import LanguageCode
 
 from ..db.versioning import BumpName
-from ..types import ContentPart, ContentVersionKind, ParticipantEmails
+from ..types import ContentError, ContentPart, ContentVersionKind, ParticipantEmails
 from .common import PromptRequest, Schema
 
 
@@ -106,7 +106,7 @@ class ContentStatus(Schema):
     #: Per co-edited part (guide, consent, welcome), why what editors have
     #: written is not valid, while it is not (`contentdoc.errors`). The draft
     #: keeps the last valid one, and publishing is refused meanwhile.
-    doc_errors: dict[ContentPart, list[str]] = {}
+    doc_errors: dict[ContentPart, list[ContentError]] = {}
 
 
 class InterviewGuideGenerationRequest(PromptRequest): ...
