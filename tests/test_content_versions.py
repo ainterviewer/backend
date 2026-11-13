@@ -319,6 +319,27 @@ def test_restore_replaces_the_draft_and_keeps_what_it_replaced(db):
     assert restored.guide.introduction == {"EN": "Hi"}
 
 
+def test_the_history_marks_the_versions_holding_the_draft(db):
+    database, project_id, user_id = db
+
+    def matching():
+        versions, _ = database.versions.list_versions(project_id, 10, 0)
+        return {v.version_no for v in versions if v.matches_draft}
+
+    first = database.versions.publish(project_id, user_id, None)
+    assert first.matches_draft
+    _edit_guide(database, project_id, lambda g: g.introduction.update(EN="Hi"))
+    assert matching() == set()
+
+    saved = database.versions.save_version(project_id, user_id, None)
+    assert saved.matches_draft
+    assert matching() == {saved.version_no}
+
+    # Not only the newest: restoring brings an older one back level with it.
+    database.versions.restore(project_id, first.id, user_id)
+    assert matching() == {first.version_no}
+
+
 def test_prune_keeps_saved_published_and_referenced_versions(db):
     database, project_id, user_id = db
     published = database.versions.publish(project_id, user_id, None)

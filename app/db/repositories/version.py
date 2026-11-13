@@ -165,9 +165,16 @@ class VersionRepository(BaseRepository):
             raise ContentRevisionError(revision, current, part)
 
     def _summary(
-        self, version: ProjectContentVersionTable, published_id: UUID4 | None
+        self,
+        version: ProjectContentVersionTable,
+        content: ProjectContentTable,
+        draft_digest: str | None = None,
     ) -> ContentVersionSummaryPublic:
+        """`draft_digest` is `content_hash(content)`, passed in when
+        summarising many versions against the same draft."""
         author = version.created_by
+        if draft_digest is None:
+            draft_digest = content_hash(content)
         return ContentVersionSummaryPublic(
             id=version.id,
             version_no=version.version_no,
@@ -181,7 +188,10 @@ class VersionRepository(BaseRepository):
             created_by_name=None
             if author is None
             else " ".join(filter(None, (author.first_name, author.last_name))),
-            is_published=version.id == published_id,
+            is_published=version.id == content.published_version_id,
+            # Recomputed rather than read from the stored hash, which a
+            # library upgrade that adds a field would leave stale.
+            matches_draft=content_hash(version) == draft_digest,
             languages=version.languages,
             default_language=version.default_language,
             languages_in_progress=list(version.languages_in_progress),
@@ -191,7 +201,8 @@ class VersionRepository(BaseRepository):
         self, project_id: UUID4, limit: int, offset: int
     ) -> tuple[list[ContentVersionSummaryPublic], int]:
         """The project's versions, newest first, and how many there are."""
-        published_id = self._content(project_id).published_version_id
+        content = self._content(project_id)
+        digest = content_hash(content)
         versions = self.session.execute(
             select(ProjectContentVersionTable)
             .where(ProjectContentVersionTable.project_id == project_id)
@@ -204,11 +215,11 @@ class VersionRepository(BaseRepository):
                 ProjectContentVersionTable.project_id == project_id
             )
         ).scalar_one()
-        return [self._summary(v, published_id) for v in versions], total
+        return [self._summary(v, content, digest) for v in versions], total
 
     def get_version(self, project_id: UUID4, version_id: UUID4) -> ContentVersionPublic:
         version = self._version(project_id, version_id)
-        summary = self._summary(version, self._content(project_id).published_version_id)
+        summary = self._summary(version, self._content(project_id))
         return ContentVersionPublic(
             **{**summary.model_dump(), **_content_fields(version)}
         )
@@ -256,15 +267,11 @@ class VersionRepository(BaseRepository):
         content = self._content(project_id)
         published = content.published_version
         bump, next_semver = self._pending(content)
+        summary = None if published is None else self._summary(published, content)
         return ContentStatus(
             revision=content.revision,
-            published=None
-            if published is None
-            else self._summary(published, published.id),
-            # Recomputed on both sides rather than read from the stored hash,
-            # which a library upgrade that adds a field would leave stale.
-            has_unpublished_changes=published is None
-            or content_hash(published) != content_hash(content),
+            published=summary,
+            has_unpublished_changes=summary is None or not summary.matches_draft,
             pending_bump=bump.label,
             languages_in_progress=list(content.languages_in_progress),
             next_semver=format_semver(next_semver),
@@ -349,7 +356,7 @@ class VersionRepository(BaseRepository):
             project_id, ContentVersionKind.MANUAL, label=label, user_id=user_id
         )
         self.session.commit()
-        return self._summary(version, self._content(project_id).published_version_id)
+        return self._summary(version, self._content(project_id))
 
     def publish(
         self,
@@ -383,7 +390,7 @@ class VersionRepository(BaseRepository):
             )
         published = content.published_version
         if published is not None and content_hash(published) == content_hash(content):
-            return self._summary(published, published.id)
+            return self._summary(published, content)
 
         computed, _ = self._pending(content)
         if bump is not None and bump < computed:
@@ -403,7 +410,7 @@ class VersionRepository(BaseRepository):
         version.major, version.minor, version.patch = semver
         content.published_version_id = version.id
         self.session.commit()
-        return self._summary(version, version.id)
+        return self._summary(version, content)
 
     def restore(
         self, project_id: UUID4, version_id: UUID4, user_id: UUID4

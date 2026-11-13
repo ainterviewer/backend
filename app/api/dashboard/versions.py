@@ -59,6 +59,8 @@ async def list_content_versions(
     params: Annotated[PageParams, Query()],
 ) -> PaginatedResponse[ContentVersionSummaryPublic]:
     """The history, newest first."""
+    # Against the draft as editors see it: an open guide room saves first.
+    await content_rooms.flush(project_id)
     versions, total = db.versions.list_versions(
         project_id, limit=params.limit, offset=params.offset
     )

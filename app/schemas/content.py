@@ -51,6 +51,9 @@ class ContentVersionSummaryPublic(Schema):
     #: The author's name, None once the user is deleted.
     created_by_name: str | None
     is_published: bool
+    #: Whether it holds the same content as the draft does now: comparing
+    #: or restoring it would change nothing.
+    matches_draft: bool
     languages: list[LanguageCode]
     default_language: LanguageCode
     #: Of `languages`, those still being translated: not offered to
