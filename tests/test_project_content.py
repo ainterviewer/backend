@@ -212,6 +212,10 @@ async def test_saving_a_condition_on_a_later_question_is_rejected(db):
         )
 
     assert error.value.status_code == 400
+    assert error.value.detail == (
+        "Question 1.1 has a condition on question 1.2, which is asked after it.\n"
+        "Move question 1.2 above question 1.1, or change the condition."
+    )
 
 
 @pytest.mark.anyio

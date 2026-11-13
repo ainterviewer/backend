@@ -430,11 +430,7 @@ async def update_guide(
     # same in every language, so one rendering answers for all of them.
     rendered = guide.render(db.projects.get_default_language(project_id))
     if order_errors := rendered.condition_order_errors():
-        raise HTTPException(
-            status_code=400,
-            detail="Conditions must read questions asked before the one they gate: "
-            + "; ".join(order_errors),
-        )
+        raise HTTPException(status_code=400, detail="\n".join(order_errors))
 
     images = [
         question.image

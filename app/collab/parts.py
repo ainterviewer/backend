@@ -60,10 +60,7 @@ def _validate_guide(data: Json, language: str) -> Validated:
     except ValidationError as error:
         return None, _messages(error)
     if order_errors := guide.render(language).condition_order_errors():
-        return None, [
-            "Conditions must read questions asked before the one they gate: "
-            + "; ".join(order_errors)
-        ]
+        return None, order_errors
     _trim_options(guide)
     return guide, []
 
