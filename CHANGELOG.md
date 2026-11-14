@@ -4,6 +4,21 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.26] - 2026-11-14
+
+### Bug Fixes
+
+- (assistance) Keep a separate conversation in each project
+- (assistance) Let the assistant explain a generation that failed
+
+### Performance
+
+- (assistance) Show the assistant the guide without its settings
+
+### Internal
+
+- (deps) Update lib
+
 ## [0.10.25] - 2026-11-14
 
 ### Features
