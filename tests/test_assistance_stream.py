@@ -14,6 +14,7 @@ exactly as `AssistanceRepository` stores and reads it.
 import asyncio
 import json
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from pydantic_ai.messages import ModelMessagesTypeAdapter
@@ -21,6 +22,7 @@ from pydantic_ai.models.function import AgentInfo, DeltaToolCall, FunctionModel
 
 from ainterviewer.interview_guides import InterviewGuide, Question, QuestionSection
 from app.services.assistance import agent as assistance
+from app.services.assistance.models import AssistanceDependencies
 
 QUESTION = Question(main_question="What brought you here?")
 SECTION = QuestionSection(description="Background", questions=[QUESTION])
@@ -329,27 +331,34 @@ def test_the_next_turn_runs_after_an_interrupted_one(cut):
     assert stored_prompts(db) == ["First", "Second"]
 
 
+def instructions_for(guide: InterviewGuide, language: str = "EN") -> str:
+    deps = AssistanceDependencies(guide=guide, user_name="Tess", language=language)
+    return assistance.agent_instruction(SimpleNamespace(deps=deps))  # ty:ignore[invalid-argument-type]
+
+
 def test_instructions_name_the_language_being_edited():
-    from types import SimpleNamespace
-
-    from app.services.assistance.models import AssistanceDependencies
-
-    deps = AssistanceDependencies(
-        guide=InterviewGuide(), user_name="Tess", language="DA"
-    )
-    instructions = assistance.agent_instruction(SimpleNamespace(deps=deps))  # ty:ignore[invalid-argument-type]
+    instructions = instructions_for(InterviewGuide(), "DA")
 
     assert "write the sections\nand questions you generate in Danish" in instructions
 
 
 def test_instructions_keep_questions_out_of_the_introduction_and_outro():
-    from types import SimpleNamespace
-
-    from app.services.assistance.models import AssistanceDependencies
-
-    deps = AssistanceDependencies(
-        guide=InterviewGuide(), user_name="Tess", language="EN"
-    )
-    instructions = assistance.agent_instruction(SimpleNamespace(deps=deps))  # ty:ignore[invalid-argument-type]
+    instructions = instructions_for(InterviewGuide())
 
     assert "introduction or outro, so neither\nmay contain a question" in instructions
+
+
+def test_instructions_show_the_guide_without_its_settings():
+    likert = Question(
+        main_question="How satisfied are you?",
+        survey_item={"type": "likert", "options": ["Not at all", "Very"]},
+    )
+    section = QuestionSection(description="Satisfaction", questions=[likert])
+    instructions = instructions_for(InterviewGuide(question_sections=[section]))
+
+    # The section id is what create_new_question takes.
+    assert str(section.id) in instructions
+    assert "How satisfied are you?" in instructions
+    assert "Not at all" in instructions
+    for setting in ("check_if_exhausted", "max_probes_time", "can_skip", "index"):
+        assert f'"{setting}"' not in instructions

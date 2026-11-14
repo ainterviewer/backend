@@ -57,6 +57,35 @@ _TEXT_FRAME_INTERVAL = 0.05
 
 _LANGUAGE_NAMES = {language["code"]: language["name"] for language in LANGUAGES}
 
+# What the agent is shown of the guide: its text, as the generators see it
+# (`InterviewGuide.prompt_json`), plus each section's id, which
+# `create_new_question` takes, and whole survey items, so it can comment on
+# their options. Settings, flags and conditions are left out; they were close
+# to half of an average guide's tokens, sent again on every model request.
+_GUIDE_PROMPT_FIELDS = {
+    "framing": True,
+    "introduction": True,
+    "outro": True,
+    "question_sections": {
+        "__all__": {
+            "id": True,
+            "description": True,
+            "questions": {
+                "__all__": {
+                    "main_question": True,
+                    "description": True,
+                    "probes": True,
+                    "survey_item": True,
+                }
+            },
+        }
+    },
+}
+
+
+def _guide_json(guide: InterviewGuide) -> str:
+    return guide.model_dump_json(include=_GUIDE_PROMPT_FIELDS, exclude_none=True)
+
 
 @cache
 def assistance_model() -> Model:
@@ -114,7 +143,7 @@ the user's introduction or outro asks the interviewee anything.
 
 This is the state of the user's interview guide:
 ```
-{ctx.deps.guide.model_dump_json()}
+{_guide_json(ctx.deps.guide)}
 ```
 """
 
