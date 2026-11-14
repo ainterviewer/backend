@@ -211,6 +211,8 @@ def test_question_tool_resolves_its_section_by_id(generated):
     run_chat(FakeDB(), stream_function=question_in(str(SECTION.id)), guide=guide)
 
     assert [c["section"].id for c in generated] == [SECTION.id]
+    # The generator writes in the language the user is editing.
+    assert [c["language"] for c in generated] == ["EN"]
 
 
 def test_unknown_section_id_is_sent_back_to_the_model(generated):

@@ -162,7 +162,9 @@ async def create_new_section(
         instructions: What the section should cover, and anything it must take
             into account.
     """
-    return await generate_section(instructions, ASSISTANCE_MODEL, ctx.deps.guide)
+    return await generate_section(
+        instructions, ASSISTANCE_MODEL, ctx.deps.guide, language=ctx.deps.language
+    )
 
 
 @assistance_agent.tool
@@ -192,7 +194,11 @@ async def create_new_question(
                 "use an `id` from its `question_sections`, or omit `section_id`."
             )
     return await generate_question(
-        instructions, ASSISTANCE_MODEL, ctx.deps.guide, section=section
+        instructions,
+        ASSISTANCE_MODEL,
+        ctx.deps.guide,
+        section=section,
+        language=ctx.deps.language,
     )
 
 

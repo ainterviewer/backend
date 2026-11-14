@@ -51,7 +51,7 @@ from ainterviewer.interview_guides.localized import (
 )
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import InterviewStatus, LanguageCode
-from ainterviewer.utils import get_language_dict, now
+from ainterviewer.utils import now
 
 from ...auth import generate_resume_token, hash_token
 from ...collab.rooms import content_rooms
@@ -513,14 +513,8 @@ async def generate_guide(
     _: ProjectEditor,
     response: Response,
 ) -> LocalizedInterviewGuide:
-    language = get_language_dict(language_code=lang)["name"]
-
-    data.prompt += f"\n\nYou must generate the interview guide in the following language: {language}"
-
     generated = await generate_interview_guide(
-        data.prompt,
-        model=lib_settings.llm.default_model,
-        output_path=None,
+        data.prompt, model=lib_settings.llm.default_model, language=lang
     )
     guide = LocalizedInterviewGuide.from_rendered({lang: generated}, structure=lang)
 
@@ -547,6 +541,7 @@ async def generate_guide_section(
         data.prompt,
         model=lib_settings.llm.default_model,
         guide=project.interview_guide,
+        language=lang,
     )
 
     return LocalizedQuestionSection.from_rendered({lang: section}, structure=lang)
@@ -583,6 +578,7 @@ async def generate_section_question(
         section=section,
         max_probes_n=data.max_probes_n,
         max_probes_time=data.max_probes_time,
+        language=lang,
     )
 
     # Built through a section: that is the level the lib merges renderings at.
