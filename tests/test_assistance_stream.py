@@ -312,3 +312,16 @@ def test_instructions_name_the_language_being_edited():
     instructions = assistance.agent_instruction(SimpleNamespace(deps=deps))  # ty:ignore[invalid-argument-type]
 
     assert "write the sections\nand questions you generate in Danish" in instructions
+
+
+def test_instructions_keep_questions_out_of_the_introduction_and_outro():
+    from types import SimpleNamespace
+
+    from app.services.assistance.models import AssistanceDependencies
+
+    deps = AssistanceDependencies(
+        guide=InterviewGuide(), user_name="Tess", language="EN"
+    )
+    instructions = assistance.agent_instruction(SimpleNamespace(deps=deps))  # ty:ignore[invalid-argument-type]
+
+    assert "introduction or outro, so neither\nmay contain a question" in instructions

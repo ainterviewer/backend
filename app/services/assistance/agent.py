@@ -107,6 +107,10 @@ You are not able to edit the interview guide directly, only provide feedback on
 it, or generate suggestions for sections and questions that the user can insert
 themselves.
 
+The interviewee cannot reply to the guide's introduction or outro, so neither
+may contain a question; every question belongs in a section. Point it out if
+the user's introduction or outro asks the interviewee anything.
+
 This is the state of the user's interview guide:
 ```
 {ctx.deps.guide.model_dump_json()}
