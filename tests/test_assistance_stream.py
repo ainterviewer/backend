@@ -241,6 +241,34 @@ def test_unknown_section_id_is_sent_back_to_the_model(generated):
     assert [f["type"] for f in frames].count("question") == 1
 
 
+def test_a_failed_generation_is_told_to_the_model_not_the_chat(monkeypatch):
+    async def generate_section(*args, **kwargs):
+        raise RuntimeError("the generator's LLM returned nothing")
+
+    monkeypatch.setattr(assistance, "generate_section", generate_section)
+
+    async def stream(messages, info: AgentInfo):
+        if not tool_returned(messages):
+            yield {
+                0: DeltaToolCall(
+                    "create_new_section", '{"instructions": "s"}', tool_call_id="c1"
+                )
+            }
+        else:
+            failure = messages[-1].parts[-1]
+            assert failure.outcome == "failed"
+            assert "Generating the section failed" in failure.model_response_str()
+            yield "Sorry, that didn't work."
+
+    db = FakeDB()
+    frames = run_chat(db, stream_function=stream)
+
+    # The turn carries on: no item, and the agent's reply reaches the chat.
+    assert [f["type"] for f in frames] == ["message", "message"]
+    assert frames[-1]["content"] == "Sorry, that didn't work."
+    assert stored_prompts(db) == ["Help me"]
+
+
 def test_a_failed_run_keeps_the_prompt():
     async def stream(messages, info: AgentInfo):
         yield "Partial "

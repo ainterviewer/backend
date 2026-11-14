@@ -1,6 +1,6 @@
 import logging
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable
 from datetime import UTC, datetime
 from functools import cache
 from typing import Literal
@@ -15,6 +15,7 @@ from pydantic_ai import (
     ModelRetry,
     RunContext,
     TextPart,
+    ToolFailed,
     ToolReturnPart,
     UserPromptPart,
 )
@@ -149,6 +150,23 @@ assistance_agent = Agent(
 )
 
 
+async def _generated[T](kind: str, generation: Awaitable[T]) -> T:
+    """What `generation` returns, or a failed tool call the agent can tell the
+    user about.
+
+    The generators make an LLM call of their own, which can fail or come back
+    empty. Left to propagate, that ended the whole turn with nothing shown.
+    """
+    try:
+        return await generation
+    except Exception as error:
+        logger.exception("The assistant could not generate a %s", kind)
+        raise ToolFailed(
+            f"Generating the {kind} failed, so the user has nothing to insert. "
+            "Tell them it did not work, and offer to try again."
+        ) from error
+
+
 @assistance_agent.tool
 async def create_new_section(
     ctx: RunContext[AssistanceDependencies], instructions: str
@@ -162,8 +180,11 @@ async def create_new_section(
         instructions: What the section should cover, and anything it must take
             into account.
     """
-    return await generate_section(
-        instructions, ASSISTANCE_MODEL, ctx.deps.guide, language=ctx.deps.language
+    return await _generated(
+        "section",
+        generate_section(
+            instructions, ASSISTANCE_MODEL, ctx.deps.guide, language=ctx.deps.language
+        ),
     )
 
 
@@ -193,12 +214,15 @@ async def create_new_question(
                 f"The interview guide has no section with id {section_id}; "
                 "use an `id` from its `question_sections`, or omit `section_id`."
             )
-    return await generate_question(
-        instructions,
-        ASSISTANCE_MODEL,
-        ctx.deps.guide,
-        section=section,
-        language=ctx.deps.language,
+    return await _generated(
+        "question",
+        generate_question(
+            instructions,
+            ASSISTANCE_MODEL,
+            ctx.deps.guide,
+            section=section,
+            language=ctx.deps.language,
+        ),
     )
 
 
