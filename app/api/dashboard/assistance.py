@@ -8,6 +8,7 @@ from pydantic_ai import ModelRequest, ModelResponse, TextPart, UserPromptPart
 from ainterviewer.types import LanguageCode
 
 from ...auth import AssistanceSessionToken
+from ...db.crud import InterviewDataBase
 from ...dependencies import AssistanceSessionCookie, DBSession, ProjectEditor
 from ...schemas.content import AssistanceChatRequest
 from ...services.assistance.agent import (
@@ -19,6 +20,22 @@ from ...services.assistance.agent import (
 from ...services.assistance.models import ChatMessage, _messages_adapter
 
 router = APIRouter(tags=["assistance"])
+
+
+def _owned_session(
+    cookie: AssistanceSessionToken | None,
+    project_id: UUID4,
+    user_id: UUID4,
+    db: InterviewDataBase,
+) -> UUID4 | None:
+    """The cookie's session, if it is this user's in this project.
+
+    The cookie is plain JSON the client can rewrite, so its session id is
+    checked against the owner rather than trusted.
+    """
+    if cookie is None or cookie.project_id != project_id:
+        return None
+    return db.assistance.owned_session(cookie.session_id, project_id, user_id)
 
 
 @router.post("/assistance/{project_id}/{lang}/chat/new")
@@ -47,7 +64,8 @@ async def get_chat(
     jwt: ProjectEditor,
     assistance_session: AssistanceSessionCookie = None,
 ) -> Response:
-    if not assistance_session or assistance_session.project_id != project_id:
+    session_id = _owned_session(assistance_session, project_id, jwt.user_id, db)
+    if session_id is None:
         user = db.users.get_user_by_id(jwt.user_id)
         session_id = db.assistance.create_new_session(project_id, jwt.user_id)
 
@@ -69,8 +87,6 @@ async def get_chat(
                 ]
             ),
             session_id=session_id,
-            project_id=project_id,
-            user_id=jwt.user_id,
         )
 
         response = Response(
@@ -94,7 +110,7 @@ async def get_chat(
         return response
 
     messages = db.assistance.get_messages(
-        session_id=assistance_session.session_id,
+        session_id=session_id,
         project_id=project_id,
         user_id=jwt.user_id,
     )
@@ -126,12 +142,10 @@ async def send_chat(
     jwt: ProjectEditor,
     assistance_session: AssistanceSessionCookie = None,
 ) -> StreamingResponse:
-    if not assistance_session or assistance_session.project_id != project_id:
+    session_id = _owned_session(assistance_session, project_id, jwt.user_id, db)
+    new_session = session_id is None
+    if session_id is None:
         session_id = db.assistance.create_new_session(project_id, jwt.user_id)
-        new_session = True
-    else:
-        session_id = assistance_session.session_id
-        new_session = False
 
     user = db.users.get_user_by_id(jwt.user_id)
 

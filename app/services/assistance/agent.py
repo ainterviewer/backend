@@ -218,10 +218,7 @@ async def stream_messages(
         raise AgentRunError("Unexpected empty result from assistance agent")
 
     db.assistance.add_messages(
-        agent_run.result.new_messages_json(),
-        session_id=session_id,
-        project_id=project_id,
-        user_id=user_id,
+        agent_run.result.new_messages_json(), session_id=session_id
     )
 
 
