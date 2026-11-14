@@ -4,6 +4,24 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.25] - 2026-11-14
+
+### Features
+
+- (assistance) Write generated sections and questions in the guide's language
+- (assistance) Flag questions in the guide's introduction and outro
+
+### Bug Fixes
+
+- (assistance) Open a chat session only to its owner in its project
+- (assistance) Keep a turn that fails or is abandoned, and pick sections by id
+- (guide) Generate sections and questions in the language being edited
+
+### Internal
+
+- (deps) Bump pydantic-ai-slim to 2.68
+- (deps) Update lib
+
 ## [0.10.24] - 2026-11-13
 
 ### Internal
