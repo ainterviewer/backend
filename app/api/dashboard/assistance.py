@@ -97,6 +97,8 @@ async def send_chat(
     jwt: ProjectEditor,
     assistance_session: AssistanceSessionCookie = None,
 ) -> StreamingResponse:
+    # A session spans languages: switching the editor's language keeps the
+    # conversation, and each turn is told which language it is in.
     session_id = _owned_session(assistance_session, project_id, jwt.user_id, db)
     new_session = session_id is None
     if session_id is None:
@@ -112,6 +114,7 @@ async def send_chat(
             db,
             request.guide,
             user_name=user.first_name,
+            language=lang,
         ),
         media_type=NDJSON,
     )

@@ -99,6 +99,7 @@ def chat(db: FakeDB, stream_function, guide: InterviewGuide, prompt: str):
         db,  # ty:ignore[invalid-argument-type]
         guide,
         "Tess",
+        "EN",
     )
 
 
@@ -298,3 +299,16 @@ def test_the_next_turn_runs_after_an_interrupted_one(cut):
 
     assert frames[-1]["content"] == "Here you go."
     assert stored_prompts(db) == ["First", "Second"]
+
+
+def test_instructions_name_the_language_being_edited():
+    from types import SimpleNamespace
+
+    from app.services.assistance.models import AssistanceDependencies
+
+    deps = AssistanceDependencies(
+        guide=InterviewGuide(), user_name="Tess", language="DA"
+    )
+    instructions = assistance.agent_instruction(SimpleNamespace(deps=deps))  # ty:ignore[invalid-argument-type]
+
+    assert "write the sections\nand questions you generate in Danish" in instructions

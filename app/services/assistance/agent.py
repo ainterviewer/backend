@@ -33,9 +33,11 @@ from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
+from ainterviewer.constants import LANGUAGES
 from ainterviewer.interview_guides import InterviewGuide, Question, QuestionSection
 from ainterviewer.interview_guides.generate import generate_question, generate_section
 from ainterviewer.settings import settings as lib_settings
+from ainterviewer.types import LanguageCode
 
 from ...db.crud import InterviewDataBase
 from ...services.assistance.models import AssistanceDependencies, ChatMessage
@@ -51,6 +53,8 @@ ASSISTANCE_MODEL = app_settings.services.assistance.model
 # How often a streaming reply is re-sent at most. Every frame carries the whole
 # reply so far, so a frame per token would send it quadratically.
 _TEXT_FRAME_INTERVAL = 0.05
+
+_LANGUAGE_NAMES = {language["code"]: language["name"] for language in LANGUAGES}
 
 
 @cache
@@ -77,6 +81,7 @@ def assistance_model() -> Model:
 
 
 def agent_instruction(ctx: RunContext[AssistanceDependencies]) -> str:
+    language = _LANGUAGE_NAMES.get(ctx.deps.language, ctx.deps.language)
     return f"""\
 You are a helpful assistant whose job is to assist users with constructing
 their interview guides for qualitative research purposes.
@@ -91,6 +96,9 @@ Keep your messages and questions brief, so that it's easy for the user to
 provide feedback.
 
 Refer to the user's name, {ctx.deps.user_name}, when appropriate.
+
+The user is editing the {language} version of the guide, so write the sections
+and questions you generate in {language}.
 
 Do not reiterate the output of tool calls, the user will see them in a
 different interface.
@@ -263,6 +271,7 @@ async def stream_messages(
     db: InterviewDataBase,
     guide: InterviewGuide,
     user_name: str,
+    language: LanguageCode,
 ) -> AsyncIterator[bytes]:
     """Streams newline-delimited JSON ChatMessages to the client.
 
@@ -280,7 +289,7 @@ async def stream_messages(
     history = db.assistance.get_messages(
         session_id=session_id, project_id=project_id, user_id=user_id
     )
-    deps = AssistanceDependencies(guide=guide, user_name=user_name)
+    deps = AssistanceDependencies(guide=guide, user_name=user_name, language=language)
 
     async with assistance_agent.run_stream_events(
         prompt, model=assistance_model(), message_history=history, deps=deps
