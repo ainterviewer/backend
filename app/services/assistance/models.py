@@ -1,11 +1,8 @@
 from typing import Literal
 
-from pydantic import BaseModel, TypeAdapter, model_validator
-from pydantic_ai import ModelMessage
+from pydantic import BaseModel, model_validator
 
 from ainterviewer.interview_guides import InterviewGuide, Question, QuestionSection
-
-_messages_adapter = TypeAdapter(list[ModelMessage])
 
 
 class AssistanceDependencies(BaseModel):

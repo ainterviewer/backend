@@ -27,20 +27,30 @@ SECTION = QuestionSection(description="Background", questions=[QUESTION])
 
 
 @pytest.fixture(autouse=True)
-def stub_generators(monkeypatch):
+def generated(monkeypatch) -> list[dict]:
+    """Stub the lib's generators, recording what each call was given."""
+    calls: list[dict] = []
+
     async def generate_question(*args, **kwargs):
+        calls.append({"tool": "question", **kwargs})
         return QUESTION
 
     async def generate_section(*args, **kwargs):
+        calls.append({"tool": "section", **kwargs})
         return SECTION
 
     monkeypatch.setattr(assistance, "generate_question", generate_question)
     monkeypatch.setattr(assistance, "generate_section", generate_section)
+    return calls
+
+
+def tool_returned(messages) -> bool:
+    return any(part.part_kind == "tool-return" for m in messages for part in m.parts)
 
 
 async def both_tools_then_text(messages, info: AgentInfo):
     """Call both tools in one turn, then answer in text once they returned."""
-    if not any(part.part_kind == "tool-return" for m in messages for part in m.parts):
+    if not tool_returned(messages):
         yield {
             0: DeltaToolCall(
                 name="create_new_question",
@@ -80,25 +90,45 @@ class FakeDB:
         self.assistance = FakeAssistanceRepository()
 
 
-def run_chat(db: FakeDB, prompt: str = "Help me") -> list[dict]:
+def chat(db: FakeDB, stream_function, guide: InterviewGuide, prompt: str):
+    return assistance.stream_messages(
+        prompt,
+        uuid.uuid4(),
+        uuid.uuid4(),
+        uuid.uuid4(),
+        db,  # ty:ignore[invalid-argument-type]
+        guide,
+        "Tess",
+    )
+
+
+def run_chat(
+    db: FakeDB,
+    prompt: str = "Help me",
+    stream_function=both_tools_then_text,
+    guide: InterviewGuide | None = None,
+) -> list[dict]:
     async def collect():
         with assistance.assistance_agent.override(
-            model=FunctionModel(stream_function=both_tools_then_text)
+            model=FunctionModel(stream_function=stream_function)
         ):
             return [
                 json.loads(frame)
-                async for frame in assistance.stream_messages(
-                    prompt,
-                    uuid.uuid4(),
-                    uuid.uuid4(),
-                    uuid.uuid4(),
-                    db,  # ty:ignore[invalid-argument-type]
-                    InterviewGuide(),
-                    "Tess",
+                async for frame in chat(
+                    db, stream_function, guide or InterviewGuide(), prompt
                 )
             ]
 
     return asyncio.run(collect())
+
+
+def stored_prompts(db: FakeDB) -> list[str]:
+    return [
+        part.content
+        for m in db.assistance.get_messages()
+        for part in m.parts
+        if part.part_kind == "user-prompt"
+    ]
 
 
 def test_stream_emits_prompt_tool_results_and_text():
@@ -114,6 +144,16 @@ def test_stream_emits_prompt_tool_results_and_text():
     # Text arrives as the reply so far; the last frame holds all of it.
     assert frames[-1] == frames[-1] | {"role": "model", "type": "message"}
     assert frames[-1]["content"] == "Here you go."
+
+
+def test_reply_frames_only_grow():
+    """Each text frame is the reply so far, never a fragment of it."""
+    frames = [f for f in run_chat(FakeDB())[1:] if f["type"] == "message"]
+
+    texts = [f["content"] for f in frames]
+    assert texts == sorted(texts, key=len)
+    assert all("Here you go.".startswith(t) for t in texts)
+    assert len({f["timestamp"] for f in frames}) == 1
 
 
 def test_replay_shows_every_part_of_a_turn():
@@ -141,9 +181,120 @@ def test_replay_shows_every_part_of_a_turn():
     assert replayed[2]["content"] == live_items["section"]
 
 
-def test_replay_hides_the_greeting_trigger():
-    from pydantic_ai import ModelRequest, UserPromptPart
+def test_replay_shows_the_greeting_but_not_its_trigger():
+    messages, frame = assistance.greeting("Tess")
 
-    trigger = ModelRequest(parts=[UserPromptPart(assistance._GREETING_TRIGGER)])
+    replayed = [f for m in messages for f in assistance.to_chat_messages(m)]
 
-    assert assistance.to_chat_messages(trigger) == []
+    assert replayed == [frame]
+    assert "Tess" in json.loads(frame)["content"]
+
+
+def question_in(section_id: str):
+    async def stream(messages, info: AgentInfo):
+        if not tool_returned(messages):
+            args = json.dumps({"instructions": "q", "section_id": section_id})
+            yield {0: DeltaToolCall("create_new_question", args, tool_call_id="c1")}
+        else:
+            yield "Done."
+
+    return stream
+
+
+def test_question_tool_resolves_its_section_by_id(generated):
+    other = QuestionSection(
+        description="Other", questions=[Question(main_question="Anything else?")]
+    )
+    guide = InterviewGuide(question_sections=[other, SECTION])
+
+    run_chat(FakeDB(), stream_function=question_in(str(SECTION.id)), guide=guide)
+
+    assert [c["section"].id for c in generated] == [SECTION.id]
+
+
+def test_unknown_section_id_is_sent_back_to_the_model(generated):
+    calls = 0
+
+    async def stream(messages, info: AgentInfo):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            args = json.dumps({"instructions": "q", "section_id": str(uuid.uuid4())})
+            yield {0: DeltaToolCall("create_new_question", args, tool_call_id="c1")}
+        elif calls == 2:
+            retry = messages[-1].parts[-1]
+            assert retry.outcome == "retried"
+            assert "no section with id" in retry.model_response_str()
+            yield {
+                0: DeltaToolCall(
+                    "create_new_question", '{"instructions": "q"}', tool_call_id="c2"
+                )
+            }
+        else:
+            yield "Done."
+
+    frames = run_chat(FakeDB(), stream_function=stream)
+
+    assert [c["section"] for c in generated] == [None]
+    # The failed call's error goes to the model, not to the chat.
+    assert [f["type"] for f in frames].count("question") == 1
+
+
+def test_a_failed_run_keeps_the_prompt():
+    async def stream(messages, info: AgentInfo):
+        yield "Partial "
+        raise RuntimeError("provider went away")
+
+    db = FakeDB()
+    with pytest.raises(RuntimeError, match="provider went away"):
+        run_chat(db, prompt="My topic", stream_function=stream)
+
+    assert stored_prompts(db) == ["My topic"]
+
+
+def test_a_client_that_leaves_keeps_the_prompt():
+    db = FakeDB()
+
+    async def leave_early():
+        with assistance.assistance_agent.override(
+            model=FunctionModel(stream_function=both_tools_then_text)
+        ):
+            stream = chat(db, both_tools_then_text, InterviewGuide(), "My topic")
+            await anext(stream)  # the echoed prompt
+            await anext(stream)  # the first item
+            await stream.aclose()
+
+    asyncio.run(leave_early())
+
+    assert stored_prompts(db) == ["My topic"]
+
+
+@pytest.mark.parametrize("cut", ["after the first item", "mid-reply"])
+def test_the_next_turn_runs_after_an_interrupted_one(cut):
+    """pydantic-ai closes out what an interrupted turn left open."""
+    db = FakeDB()
+
+    async def interrupted(messages, info: AgentInfo):
+        if cut == "mid-reply" or tool_returned(messages):
+            yield "Partial "
+        else:
+            yield {
+                0: DeltaToolCall(
+                    "create_new_question", '{"instructions": "q"}', tool_call_id="c1"
+                )
+            }
+            yield {
+                1: DeltaToolCall(
+                    "create_new_section", '{"instructions": "s"}', tool_call_id="c2"
+                )
+            }
+            return
+        raise RuntimeError("provider went away")
+
+    with pytest.raises(RuntimeError):
+        run_chat(db, prompt="First", stream_function=interrupted)
+
+    frames = run_chat(db, prompt="Second")
+
+    assert frames[-1]["content"] == "Here you go."
+    assert stored_prompts(db) == ["First", "Second"]
