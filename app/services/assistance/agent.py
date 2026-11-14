@@ -276,8 +276,6 @@ class _Reply:
 async def stream_messages(
     prompt: str,
     session_id: UUID4,
-    project_id: UUID4,
-    user_id: UUID4,
     db: InterviewDataBase,
     guide: InterviewGuide,
     user_name: str,
@@ -296,9 +294,7 @@ async def stream_messages(
     """
     yield _frame("user", datetime.now(tz=UTC), prompt)
 
-    history = db.assistance.get_messages(
-        session_id=session_id, project_id=project_id, user_id=user_id
-    )
+    history = db.assistance.get_messages(session_id)
     deps = AssistanceDependencies(guide=guide, user_name=user_name, language=language)
 
     async with assistance_agent.run_stream_events(

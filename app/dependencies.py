@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from ainterviewer.types import LanguageCode
 from ainterviewer.utils import now
 
-from .auth import AssistanceSessionToken, AuthToken, InterviewToken
+from .auth import AuthToken, InterviewToken
 from .db.crud import InterviewDataBase
 from .db.pragmas import register_pragmas
 from .db.regexp import register_regexp
@@ -254,22 +254,6 @@ def require_preview_features(
 DBSession = Annotated[InterviewDataBase, Depends(get_db)]
 LocalizationCookie = Annotated[LanguageCode, Cookie(alias="localization")]
 LanguageCookie = Annotated[LanguageCode, Cookie(alias="language")]
-
-
-def _parse_assistance_session(
-    assistance_session: Annotated[str | None, Cookie()] = None,
-) -> AssistanceSessionToken | None:
-    if assistance_session is None:
-        return None
-    try:
-        return AssistanceSessionToken.model_validate_json(assistance_session)
-    except Exception:
-        return None
-
-
-AssistanceSessionCookie = Annotated[
-    AssistanceSessionToken | None, Depends(_parse_assistance_session)
-]
 
 
 def _require_interview_token(

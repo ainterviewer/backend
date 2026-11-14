@@ -10,8 +10,9 @@ from .base import BaseRepository
 class AssistanceRepository(BaseRepository):
     """Chat sessions with the guide assistant, each owned by one user in one project.
 
-    The session id reaches the server in a cookie the client can rewrite, so
-    every read goes through the owner: a session id alone opens nothing.
+    A user's current session in a project is their newest one: starting a new
+    chat creates a session, and the old ones are kept but no longer read.
+    Session ids never leave the server, so nothing a client sends picks one.
     """
 
     def create_new_session(self, project_id: UUID, user_id: UUID) -> UUID:
@@ -20,29 +21,25 @@ class AssistanceRepository(BaseRepository):
         self.session.commit()
         return session.id
 
-    def owned_session(
-        self, session_id: UUID, project_id: UUID, user_id: UUID
-    ) -> UUID | None:
-        """`session_id` if it is this user's session in this project, else None."""
+    def current_session(self, project_id: UUID, user_id: UUID) -> UUID | None:
+        """This user's newest session in this project, if they have one."""
         return self.session.scalar(
-            select(AssistanceSessionTable.id).where(
-                AssistanceSessionTable.id == session_id,
+            select(AssistanceSessionTable.id)
+            .where(
                 AssistanceSessionTable.project_id == project_id,
                 AssistanceSessionTable.user_id == user_id,
             )
+            .order_by(
+                AssistanceSessionTable.created_at.desc(),
+                AssistanceSessionTable.id.desc(),
+            )
+            .limit(1)
         )
 
-    def get_messages(
-        self, session_id: UUID, project_id: UUID, user_id: UUID
-    ) -> list[ModelMessage]:
+    def get_messages(self, session_id: UUID) -> list[ModelMessage]:
         chunks = self.session.scalars(
             select(AssistanceMessageChunkTable.messages_json)
-            .join(AssistanceSessionTable)
-            .where(
-                AssistanceMessageChunkTable.session_id == session_id,
-                AssistanceSessionTable.project_id == project_id,
-                AssistanceSessionTable.user_id == user_id,
-            )
+            .where(AssistanceMessageChunkTable.session_id == session_id)
             .order_by(AssistanceMessageChunkTable.created_at)
         )
         return [
@@ -50,8 +47,7 @@ class AssistanceRepository(BaseRepository):
         ]
 
     def add_messages(self, messages_json: bytes | str, session_id: UUID) -> None:
-        """Append one run's messages to a session the caller has already resolved
-        through `owned_session` or `create_new_session`."""
+        """Append one run's messages to a session."""
         if isinstance(messages_json, bytes):
             messages_json = messages_json.decode()
         self.session.add(

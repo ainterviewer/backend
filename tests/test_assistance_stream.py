@@ -72,7 +72,7 @@ class FakeAssistanceRepository:
     def __init__(self):
         self.chunks: list[str] = []
 
-    def get_messages(self, **kwargs):
+    def get_messages(self, session_id=None):
         return [
             m
             for chunk in self.chunks
@@ -93,8 +93,6 @@ class FakeDB:
 def chat(db: FakeDB, stream_function, guide: InterviewGuide, prompt: str):
     return assistance.stream_messages(
         prompt,
-        uuid.uuid4(),
-        uuid.uuid4(),
         uuid.uuid4(),
         db,  # ty:ignore[invalid-argument-type]
         guide,
