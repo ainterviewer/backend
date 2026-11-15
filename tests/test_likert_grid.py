@@ -19,6 +19,7 @@ from ainterviewer.interview_guides.localized import (
     LocalizedLikertGridItem,
 )
 from ainterviewer.types import InterviewStatus, MessageRole
+from app.api.websockets.interviews.replay import replay_history
 from app.collab.guide_doc import new_doc, read_guide, roots
 from app.collab.parts import _validate_guide
 from app.db.survey_answers import AnswerRow, values_of
@@ -27,7 +28,6 @@ from app.db.versioning import Bump, _guide_bump
 from app.schemas.interviews import InterviewSummaryPublic, MessagePublic
 from app.services.exports.transcripts import InterviewExport, build_view
 from app.types import InterviewType
-from app.utils import replay_history
 
 QUESTION = uuid.UUID(int=10)
 SCALE = ["Very dissatisfied", "Dissatisfied", "Neutral", "Satisfied"]
@@ -281,13 +281,13 @@ def test_a_resumed_interview_replays_the_grid_with_its_answer():
     # The client draws the answered grid from the item and the stored answer,
     # so both go out as they are, mid-history and as the last message.
     replayed, _ = replay_history(
-        [grid, message(1, MessageRole.USER, answer), probe], project_id, interview_id
+        [grid, message(1, MessageRole.USER, answer), probe], project_id
     )
     assert isinstance(question := replayed[0], OutgoingHistoryMessage)
     assert question.survey_item == item
     assert replayed[1].content == answer
     replayed, _ = replay_history(
-        [grid, message(1, MessageRole.USER, answer)], project_id, interview_id
+        [grid, message(1, MessageRole.USER, answer)], project_id
     )
     assert isinstance(question := replayed[0], OutgoingHistoryMessage)
     assert question.survey_item == item

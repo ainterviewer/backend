@@ -40,10 +40,10 @@ from ....db.repositories.project import ContentSource
 from ....dependencies import DBSession
 from ....embed.client import embedding_client
 from ....embed.queue import QueueEmbedder, chunk_queue
-from ....utils import replay_history
 from ..auth import authenticate_or_close
 from ..handler import WebsocketMessageHandler
 from ..manager import session_manager
+from .replay import replay_history
 
 router = APIRouter(prefix="/ws", tags=["interviews"])
 
@@ -257,7 +257,6 @@ async def _run_interview(
             messages, continue_from_history = replay_history(
                 interview_history=interview_history,
                 project_id=project_id,
-                interview_id=interview_id,
                 interview_guide=interview.interview_guide,
             )
 

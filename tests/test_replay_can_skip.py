@@ -11,10 +11,10 @@ from sqlalchemy.orm import Session
 from ainterviewer.interfaces import OutgoingMessage
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.types import MessageRole
+from app.api.websockets.interviews.replay import replay_history
 from app.db.repositories.interview import InterviewRepository
 from app.db.tables import Base, InterviewTable
 from app.types import InterviewType
-from app.utils import replay_history
 
 PROJECT = uuid.uuid4()
 INTERVIEW = uuid.uuid4()
@@ -75,7 +75,7 @@ def replay_waiting_on(
         project_id=PROJECT,
     )
     replayed, _ = replay_history(
-        interviews.get_messages(INTERVIEW, PROJECT), PROJECT, INTERVIEW, GUIDE
+        interviews.get_messages(INTERVIEW, PROJECT), PROJECT, GUIDE
     )
     last = replayed[-1]
     assert isinstance(last, OutgoingMessage)
