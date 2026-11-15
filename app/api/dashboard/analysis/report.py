@@ -43,8 +43,8 @@ from ....db.repositories.project import render_default_guide
 from ....db.tables import InterviewTable, MessageTable, TaskTable
 from ....dependencies import (
     DBSession,
-    DemoToken,
     ProjectViewer,
+    UserToken,
     require_preview_features,
 )
 from ....schemas.monitoring import (
@@ -675,7 +675,7 @@ def _condition_firings(
 def get_project_item_distributions(
     project_id: UUID4,
     db: DBSession,
-    jwt: DemoToken,
+    jwt: UserToken,
     _: ProjectViewer,
     params: Annotated[ItemDistributionParams, Query()],
 ) -> ItemDistributions:

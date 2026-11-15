@@ -152,6 +152,24 @@ def _record_activity(
     return auth_token
 
 
+def is_demo(token: AuthToken) -> bool:
+    """Whether the token carries the demo scope and nothing above it."""
+    return {Scope(scope) for scope in token.scope.split()} == {Scope.DEMO}
+
+
+def demo_restricted() -> AppError:
+    """The refusal for something demo accounts may not do.
+
+    Its own code so the dashboard can tell "not with demo access" from any
+    other refusal: in a section demo accounts may not use, it leaves the page
+    on its loading state behind the restriction overlay instead of an error
+    (`demo-interceptor.ts`).
+    """
+    return AppError(
+        "Not available with demo access.", status=403, code=ErrorCode.DEMO_RESTRICTED
+    )
+
+
 class ScopeChecker:
     def __init__(self, required_scope: Scope = Scope.ADMIN):
         self.required_scope = required_scope
@@ -170,6 +188,8 @@ class ScopeChecker:
         user_scopes = {Scope(scope) for scope in scope_strings}
 
         if not self.has_required_scope(user_scopes):
+            if is_demo(auth_token):
+                raise demo_restricted()
             raise AuthError(
                 status_code=403,
                 detail="Insufficient permissions",

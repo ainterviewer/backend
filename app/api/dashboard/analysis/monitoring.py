@@ -12,7 +12,7 @@ from ainterviewer.types import InterviewStatus
 
 from ....db.repositories.project import render_default_guide
 from ....db.tables import InterviewTable, MessageTable, ProjectParticipantTable
-from ....dependencies import DBSession, DemoToken, ProjectViewer
+from ....dependencies import DBSession, ProjectViewer, UserToken
 from ....schemas.monitoring import (
     DailyInterviewCount,
     DropoutPoint,
@@ -93,7 +93,7 @@ _DROPOUT_STAGE_ORDER = {
 def get_project_monitoring_stats(
     project_id: UUID4,
     db: DBSession,
-    jwt: DemoToken,
+    jwt: UserToken,
     _: ProjectViewer,
     params: Annotated[MonitoringParams, Query()],
 ) -> MonitoringStats:

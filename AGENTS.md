@@ -628,6 +628,23 @@ async def user_endpoint(token: UserToken):  # USER and ADMIN allowed
     pass
 ```
 
+### Demo accounts
+
+`Scope.DEMO` accounts try the product on their own projects, so some of what
+a user may do is closed to them. Analysis, distribution (participants,
+emails, monitoring), experiments and publishing are `UserToken` or refused
+outright; the interview data routes they share with the test results page
+answer them for test interviews only (`_refuse_distributed_to_demo`,
+`app/api/dashboard/projects.py`), and the publish in `POST .../versions`
+refuses them while saving and restoring versions stay open.
+
+Refuse a demo account with `demo_restricted()` (`app/dependencies.py`; a
+403, `code: demo_restricted`), and test for one with `is_demo(token)`.
+`ScopeChecker` already answers it when a demo token fails a scope check. The
+code is what the dashboard's `demo-interceptor` holds, so a section demo
+accounts may not use sits on its skeletons behind the restriction overlay
+instead of filling with errors; a refusal without the code shows as one.
+
 ### Pagination Pattern
 
 Use `PageParams` and `PaginatedResponse[T]`:

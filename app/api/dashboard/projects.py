@@ -53,7 +53,7 @@ from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import InterviewStatus, LanguageCode
 from ainterviewer.utils import now
 
-from ...auth import generate_resume_token, hash_token
+from ...auth import AuthToken, generate_resume_token, hash_token
 from ...collab.rooms import content_rooms
 from ...db.repositories.interview import SORTABLE_INTERVIEW_COLUMNS
 from ...db.repositories.project import ContentSource
@@ -67,6 +67,8 @@ from ...dependencies import (
     ProjectViewer,
     RespondentContent,
     UserToken,
+    demo_restricted,
+    is_demo,
     set_etag,
 )
 from ...errors import AppError
@@ -942,6 +944,18 @@ def _filter_kwargs(filters: InterviewFilterParams) -> dict:
     }
 
 
+def _refuse_distributed_to_demo(
+    db: DBSession, jwt: AuthToken, project_id: UUID4, interview_ids: list[UUID4]
+) -> None:
+    """Demo accounts see test interviews only: the interview data of a
+    project they collaborate on is not theirs to read with demo access. The
+    test results page reads tests through the same routes."""
+    if is_demo(jwt) and db.interviews.any_of_type(
+        project_id, interview_ids, InterviewType.DISTRIBUTED
+    ):
+        raise demo_restricted()
+
+
 def _selected_interview_ids(
     db: DBSession, project_id: UUID4, selection: InterviewSelection
 ) -> list[UUID4]:
@@ -990,6 +1004,9 @@ async def get_interviews(
     # The page and the facet counts must be built from exactly the same
     # filters, or the dropdown would offer options the list contradicts.
     filters = _filter_kwargs(interview_filters)
+    if is_demo(jwt) and InterviewType.DISTRIBUTED in filters["interview_types"]:
+        # See `_refuse_distributed_to_demo`.
+        raise demo_restricted()
 
     interviews, total = db.interviews.get_interviews(
         project_id,
@@ -1025,6 +1042,7 @@ async def delete_interviews(
     _: ProjectAdmin,
 ):
     interview_ids = _selected_interview_ids(db, project_id, delete_request)
+    _refuse_distributed_to_demo(db, jwt, project_id, interview_ids)
     await session_manager.end([project_id], interview_ids)
     db.interviews.delete_interviews(project_id, interview_ids)
 
@@ -1205,6 +1223,7 @@ async def get_interview_messages(
     jwt: DemoToken,
     _: ProjectViewer,
 ) -> list[MessagePublic]:
+    _refuse_distributed_to_demo(db, jwt, project_id, [interview_id])
     return db.interviews.get_messages(interview_id, project_id)
 
 
@@ -1228,6 +1247,7 @@ async def get_interview_audio(
         db.interviews.get_interview(project_id=project_id, interview_id=interview_id)
     except NoResultFound:
         raise HTTPException(status_code=404, detail="Interview not found")
+    _refuse_distributed_to_demo(db, jwt, project_id, [interview_id])
 
     audio_path = (
         lib_settings.storage.interview_storage.audio_path(interview_id)
@@ -1252,6 +1272,7 @@ async def export_messages(
     _: ProjectViewer,
 ):
     interview_ids = _selected_interview_ids(db, project_id, export_request)
+    _refuse_distributed_to_demo(db, jwt, project_id, interview_ids)
     summaries = db.interviews.get_interview_summaries(project_id, interview_ids)
     param_values = db.projects.get_external_param_values_for_interviews(
         project_id, interview_ids

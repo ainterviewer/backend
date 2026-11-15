@@ -21,6 +21,7 @@ from ....dependencies import (
     ProjectAnnotator,
     ProjectEditor,
     ProjectViewer,
+    UserToken,
     require_preview_features,
 )
 from ....schemas.analysis import (
@@ -36,9 +37,11 @@ from ....schemas.interviews import MessagePublic
 
 router = APIRouter()
 
-# Gates the routes only the Analysis pages use. Reading the codebook and
-# reading, adding and editing codings stay open: the interview transcript page,
-# which is not a preview feature, codes messages through them.
+# Gates the routes only the Analysis pages use, which also take `UserToken`:
+# analysis is closed to demo accounts. Reading the codebook and reading, adding
+# and editing codings stay open to both: the interview transcript page, which
+# is not a preview feature and which demo accounts use, codes messages through
+# them.
 _preview = [Depends(require_preview_features)]
 
 
@@ -78,7 +81,7 @@ async def save_codebook(
     project_id: UUID4,
     codebook: CodebookReplace,
     db: DBSession,
-    jwt: DemoToken,
+    jwt: UserToken,
     _: ProjectEditor,
 ) -> CodebookPublic:
     return db.analysis.save_codebook(project_id, codebook)
@@ -88,7 +91,7 @@ async def save_codebook(
 async def get_code_counts(
     project_id: UUID4,
     db: DBSession,
-    jwt: DemoToken,
+    jwt: UserToken,
     _: ProjectViewer,
 ) -> dict[UUID4, int]:
     """How many passages carry each code. Codes with none are left out."""
@@ -178,7 +181,7 @@ async def get_filtered_messages_count(
     project_id: UUID4,
     filters: FilteredMessagesRequest,
     db: DBSession,
-    jwt: DemoToken,
+    jwt: UserToken,
     _: ProjectViewer,
 ) -> int:
     return db.analysis.count_filtered_messages(
@@ -196,7 +199,7 @@ async def get_filtered_messages(
     project_id: UUID4,
     filters: FilteredMessagesRequest,
     db: DBSession,
-    jwt: DemoToken,
+    jwt: UserToken,
     _: ProjectViewer,
     page: Annotated[OffsetParams, Query()],
 ) -> list[MessagePublic]:
@@ -222,7 +225,7 @@ async def get_message_context_before(
     interview_id: UUID4,
     message_id: UUID4,
     db: DBSession,
-    jwt: DemoToken,
+    jwt: UserToken,
     _: ProjectViewer,
 ) -> list[MessagePublic]:
     return db.analysis.get_message_context(
@@ -242,7 +245,7 @@ async def get_message_context_after(
     interview_id: UUID4,
     message_id: UUID4,
     db: DBSession,
-    jwt: DemoToken,
+    jwt: UserToken,
     _: ProjectViewer,
 ) -> list[MessagePublic]:
     return db.analysis.get_message_context(

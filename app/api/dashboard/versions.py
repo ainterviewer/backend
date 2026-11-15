@@ -18,6 +18,8 @@ from ...dependencies import (
     IfMatch,
     ProjectEditor,
     ProjectViewer,
+    demo_restricted,
+    is_demo,
     set_etag,
 )
 from ...schemas.common import PageParams, PaginatedResponse
@@ -114,8 +116,11 @@ async def save_content_version(
     `If-Match` is the revision the caller is looking at: publishing what
     someone else changed since would release work nobody reviewed (412).
     Publishing is refused (409) while a language lacks text, or for a bump
-    lower than the changes need.
+    lower than the changes need. Demo accounts may save versions but not
+    publish one: what is published is what respondents get.
     """
+    if request.publish and is_demo(jwt):
+        raise demo_restricted()
     # So what is published is what editors see. Anything it saves that the
     # caller has not seen moves the revision, and is a 412 below.
     await content_rooms.flush(project_id)

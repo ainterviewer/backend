@@ -578,3 +578,6 @@ class ErrorCode(StrEnum):
     # The change would leave the folder without an admin.
     LAST_ADMIN = "last_admin"
     PREVIEW_FEATURES_REQUIRED = "preview_features_required"
+    # A demo account calling a route that needs the user scope. Its own code
+    # so the dashboard can tell "not with demo access" from any other refusal.
+    DEMO_RESTRICTED = "demo_restricted"

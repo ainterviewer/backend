@@ -1250,6 +1250,27 @@ class InterviewRepository(BaseRepository):
 
     # ==================== Interviewee Methods ====================
 
+    def any_of_type(
+        self,
+        project_id: UUID4,
+        interview_ids: Sequence[UUID4],
+        interview_type: InterviewType,
+    ) -> bool:
+        """Whether any of these interviews of the project is of this type."""
+        if not interview_ids:
+            return False
+        return bool(
+            self.session.scalar(
+                select(
+                    exists().where(
+                        InterviewTable.project_id == project_id,
+                        InterviewTable.id.in_(interview_ids),
+                        InterviewTable.type == interview_type,
+                    )
+                )
+            )
+        )
+
     def interview_in_project(self, interview_id: UUID4, project_id: UUID4) -> bool:
         return bool(
             self.session.scalar(

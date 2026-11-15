@@ -46,6 +46,7 @@ from ....dependencies import (
     DBSession,
     ProjectEditor,
     ProjectViewer,
+    ScopeChecker,
     require_preview_features,
 )
 from ....embed.backfill import pending_chunks
@@ -82,10 +83,17 @@ from ....schemas.embeddings import (
 )
 from ....settings import app_settings
 from ....types import GroupKind, Projection
+from ....types import Scope as TokenScope
 from ...errors import INVALID_KEYWORD_QUERY
 
 # The whole explore surface is a preview feature; see `require_preview_features`.
-router = APIRouter(dependencies=[Depends(require_preview_features)])
+# Analysis is closed to demo accounts, so these need the user scope as well.
+router = APIRouter(
+    dependencies=[
+        Depends(require_preview_features),
+        Depends(ScopeChecker(TokenScope.USER)),
+    ]
+)
 
 
 def embedding_filters(
