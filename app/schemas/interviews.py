@@ -172,6 +172,8 @@ class InterviewFilterParams(Schema):
     pid: str | None = Field(default=None, max_length=200)
     reported: bool | None = None
     intervened: bool | None = None
+    #: Guide versions, by the per-project number (`version_no`).
+    versions: list[int] | None = None
 
 
 class InterviewSelection(Schema):
@@ -253,6 +255,8 @@ class FacetCount(Schema):
 
     value: str
     count: int
+    #: What to call the value, when the client cannot work it out itself.
+    label: str | None = None
 
 
 class InterviewFacets(Schema):
@@ -271,6 +275,8 @@ class InterviewFacets(Schema):
     reported: list[FacetCount] = []
     #: Likewise: whether the safety check intervened in an interview at all.
     intervened: list[FacetCount] = []
+    #: Guide versions by `version_no`, newest first, each with its name.
+    version: list[FacetCount] = []
 
 
 class InterviewListResponse(PaginatedResponse[InterviewSummaryPublic]):

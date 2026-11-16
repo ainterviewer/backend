@@ -286,7 +286,7 @@ class InterviewRepository(BaseRepository):
         """Join everything a filter, sort or selected column reaches through.
 
         test_name comes from the test run and pid from the participant, and
-        both are searchable. Every statement built from `_interview_filters`
+        both are searchable; the guide version is filtered and sorted on. Every statement built from `_interview_filters`
         needs these joins, not just the one selecting rows: a search on the
         test name or pid is a condition like any other, and the count and
         facet queries apply it too. All outer joins -- an interview has a test
@@ -305,6 +305,10 @@ class InterviewRepository(BaseRepository):
                 ParticipantTable,
                 ProjectParticipantTable.participant_id == ParticipantTable.id,
             )
+            .outerjoin(
+                ProjectContentVersionTable,
+                InterviewTable.content_version_id == ProjectContentVersionTable.id,
+            )
         )
 
     @classmethod
@@ -322,6 +326,7 @@ class InterviewRepository(BaseRepository):
         pid: str | None = None,
         reported: bool | None = None,
         intervened: bool | None = None,
+        versions: list[int] | None = None,
     ) -> dict[str, ColumnElement[bool]]:
         """The active filters, keyed by the facet each one belongs to.
 
@@ -392,6 +397,10 @@ class InterviewRepository(BaseRepository):
                 has_intervention if intervened else ~has_intervention
             )
 
+        if versions:
+            # By the per-project number the table shows, not the row id.
+            filters["version"] = ProjectContentVersionTable.version_no.in_(versions)
+
         if search and (term := search.strip()):
             pattern = f"%{term}%"
             filters["search"] = or_(
@@ -442,7 +451,7 @@ class InterviewRepository(BaseRepository):
                 semver.label("semver"),
                 version.label.label("version_label"),
             )
-        ).outerjoin(version, InterviewTable.content_version_id == version.id)
+        )
 
     def get_interview_summaries(
         self, project_id: UUID4, interview_ids: Sequence[UUID4]
@@ -485,6 +494,7 @@ class InterviewRepository(BaseRepository):
         pid: str | None = None,
         reported: bool | None = None,
         intervened: bool | None = None,
+        versions: list[int] | None = None,
     ) -> tuple[Sequence[InterviewSummaryPublic], int]:
         """One page of interview summaries, plus the total matching count.
 
@@ -544,6 +554,7 @@ class InterviewRepository(BaseRepository):
                 pid=pid,
                 reported=reported,
                 intervened=intervened,
+                versions=versions,
             ).values()
         )
 
@@ -718,6 +729,7 @@ class InterviewRepository(BaseRepository):
         pid: str | None = None,
         reported: bool | None = None,
         intervened: bool | None = None,
+        versions: list[int] | None = None,
     ) -> dict[str, dict[str, int]]:
         """Distinct values and their counts for each filterable column.
 
@@ -738,6 +750,7 @@ class InterviewRepository(BaseRepository):
             pid=pid,
             reported=reported,
             intervened=intervened,
+            versions=versions,
         )
 
         columns = {
@@ -757,6 +770,9 @@ class InterviewRepository(BaseRepository):
                 else_="false",
             ),
             "intervened": case((self._has_intervention(), "true"), else_="false"),
+            # NULL for interviews without a version, which the loop drops: a
+            # filter on the version cannot select them.
+            "version": ProjectContentVersionTable.version_no,
         }
 
         facets: dict[str, dict[str, int]] = {}
@@ -782,6 +798,33 @@ class InterviewRepository(BaseRepository):
             }
 
         return facets
+
+    def get_version_names(
+        self, project_id: UUID4, version_nos: Sequence[int]
+    ) -> dict[int, str]:
+        """What the version facet calls each version: its semver for a
+        published one, its number otherwise, then the label it was saved
+        with. The client cannot name them, holding one page of interviews."""
+        if not version_nos:
+            return {}
+        version = ProjectContentVersionTable
+        rows = self.session.execute(
+            select(
+                version.version_no,
+                version.major,
+                version.minor,
+                version.patch,
+                version.label,
+            ).where(
+                version.project_id == project_id,
+                version.version_no.in_(version_nos),
+            )
+        )
+        names = {}
+        for no, major, minor, patch, label in rows:
+            name = f"v{major}.{minor}.{patch}" if major is not None else f"#{no}"
+            names[no] = f"{name} · {label}" if label else name
+        return names
 
     def get_interview(
         self,

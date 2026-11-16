@@ -941,6 +941,7 @@ def _filter_kwargs(filters: InterviewFilterParams) -> dict:
         "pid": filters.pid,
         "reported": filters.reported,
         "intervened": filters.intervened,
+        "versions": filters.versions,
     }
 
 
@@ -1017,6 +1018,10 @@ async def get_interviews(
         **filters,
     )
     facets = db.interviews.get_interview_facets(project_id, **filters)
+    versions = facets.pop("version", {})
+    version_names = db.interviews.get_version_names(
+        project_id, [int(no) for no in versions]
+    )
 
     return InterviewListResponse(
         total=total,
@@ -1028,7 +1033,14 @@ async def get_interviews(
                     for value, count in sorted(counts.items())
                 ]
                 for name, counts in facets.items()
-            }
+            },
+            # Newest first, by number rather than as strings ("10" < "9").
+            version=[
+                FacetCount(value=no, count=count, label=version_names.get(int(no)))
+                for no, count in sorted(
+                    versions.items(), key=lambda item: int(item[0]), reverse=True
+                )
+            ],
         ),
     )
 

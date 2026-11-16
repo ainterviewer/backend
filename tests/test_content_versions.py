@@ -414,6 +414,54 @@ def test_interview_list_names_the_version_each_ran(db):
     assert versioned == [test.id, live.id]
 
 
+def test_interview_list_filters_and_counts_by_version(db):
+    database, project_id, user_id = db
+    published = database.versions.publish(project_id, user_id, None)
+    _edit_guide(database, project_id, lambda g: g.introduction.update(EN="Hi"))
+    snapshot = database.versions.snapshot(project_id, ContentVersionKind.TEST)
+    snapshot.label = "Shorter intro"
+
+    def interview(version_id):
+        row = InterviewTable(
+            project_id=project_id,
+            interview_guide=InterviewGuide(),
+            type=InterviewType.MANUAL_TEST,
+            content_version_id=version_id,
+        )
+        database.session.add(row)
+        return row
+
+    on_published = [interview(published.id), interview(published.id)]
+    on_snapshot = interview(snapshot.id)
+    interview(None)
+    database.session.commit()
+    scope = {"interview_types": list(InterviewType)}
+
+    rows, total = database.interviews.get_interviews(
+        project_id, versions=[snapshot.version_no], **scope
+    )
+    assert [row.id for row in rows] == [on_snapshot.id]
+    assert total == 1
+
+    # Its own selection is left out of the version facet, and an interview
+    # without a version is not offered.
+    facets = database.interviews.get_interview_facets(
+        project_id, versions=[snapshot.version_no], **scope
+    )
+    assert facets["version"] == {
+        str(published.version_no): len(on_published),
+        str(snapshot.version_no): 1,
+    }
+
+    names = database.interviews.get_version_names(
+        project_id, [published.version_no, snapshot.version_no]
+    )
+    assert names == {
+        published.version_no: "v1.0.0",
+        snapshot.version_no: f"#{snapshot.version_no} · Shorter intro",
+    }
+
+
 # ---- revisions ---------------------------------------------------------------
 
 
