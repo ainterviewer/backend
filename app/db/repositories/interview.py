@@ -63,6 +63,7 @@ from ..tables import (
     MessageTable,
     ParticipantTable,
     PlatformReleaseTable,
+    ProjectContentVersionTable,
     ProjectParticipantTable,
     ProjectTable,
     TaskTable,
@@ -103,6 +104,7 @@ SORTABLE_INTERVIEW_COLUMNS = frozenset(
         "pid",
         "n_reports",
         "n_interventions",
+        "version_no",
     }
 )
 """Columns `get_interviews` will sort by.
@@ -411,6 +413,14 @@ class InterviewRepository(BaseRepository):
         Takes the computed columns rather than building them, because
         `get_interviews` sorts by the same expressions.
         """
+        version = ProjectContentVersionTable
+        semver = (
+            cast(version.major, String)
+            + "."
+            + cast(version.minor, String)
+            + "."
+            + cast(version.patch, String)
+        )
         return cls._join_filter_sources(
             select(
                 InterviewTable.id,
@@ -427,8 +437,12 @@ class InterviewRepository(BaseRepository):
                 pid_column,
                 n_reports,
                 n_interventions,
+                version.version_no,
+                # NULL unless all three parts are, i.e. on non-publish kinds.
+                semver.label("semver"),
+                version.label.label("version_label"),
             )
-        )
+        ).outerjoin(version, InterviewTable.content_version_id == version.id)
 
     def get_interview_summaries(
         self, project_id: UUID4, interview_ids: Sequence[UUID4]
@@ -509,6 +523,10 @@ class InterviewRepository(BaseRepository):
             _sorting_col = n_reports
         elif sorting_column == "n_interventions":
             _sorting_col = n_interventions
+        elif sorting_column == "version_no":
+            # On the joined version. Numbered in the order written, so it
+            # orders published versions the way their semver does.
+            _sorting_col = ProjectContentVersionTable.version_no
         else:
             _sorting_col = getattr(InterviewTable, sorting_column)
 

@@ -375,6 +375,45 @@ def test_prune_keeps_saved_published_and_referenced_versions(db):
     assert {published.id, manual.id, referenced.id, tests[-1].id} == kept
 
 
+def test_interview_list_names_the_version_each_ran(db):
+    database, project_id, user_id = db
+    published = database.versions.publish(project_id, user_id, None)
+    _edit_guide(database, project_id, lambda g: g.introduction.update(EN="Hi"))
+    snapshot = database.versions.snapshot(project_id, ContentVersionKind.TEST)
+    snapshot.label = "Shorter intro"
+
+    def interview(type_, version_id):
+        row = InterviewTable(
+            project_id=project_id,
+            interview_guide=InterviewGuide(),
+            type=type_,
+            content_version_id=version_id,
+        )
+        database.session.add(row)
+        return row
+
+    live = interview(InterviewType.DISTRIBUTED, published.id)
+    test = interview(InterviewType.MANUAL_TEST, snapshot.id)
+    legacy = interview(InterviewType.DISTRIBUTED, None)
+    database.session.commit()
+
+    summaries, _ = database.interviews.get_interviews(
+        project_id,
+        interview_types=list(InterviewType),
+        sorting_column="version_no",
+        sorting_order="desc",
+    )
+    by_id = {s.id: (s.version_no, s.semver, s.version_label) for s in summaries}
+    assert by_id == {
+        live.id: (published.version_no, "1.0.0", None),
+        test.id: (snapshot.version_no, None, "Shorter intro"),
+        legacy.id: (None, None, None),
+    }
+    # Newest version first; where NULL lands differs between databases.
+    versioned = [s.id for s in summaries if s.version_no is not None]
+    assert versioned == [test.id, live.id]
+
+
 # ---- revisions ---------------------------------------------------------------
 
 

@@ -85,6 +85,13 @@ class InterviewSummaryPublic(Schema):
     # participant record. NULL for interviews that were never distributed to
     # one, and for interviews whose participant has since been deleted.
     pid: str | None = None
+    #: The version of the guide it ran, joined in from `content_version_id`:
+    #: its per-project number, its semver when it is a published version, and
+    #: the label it was saved with. All NULL for interviews from before
+    #: versions existed and for tests whose snapshot was pruned.
+    version_no: int | None = None
+    semver: str | None = None
+    version_label: str | None = None
 
 
 class MessageBase(Schema):
