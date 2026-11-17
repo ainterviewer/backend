@@ -6,7 +6,8 @@ from ainterviewer.types import LanguageDict
 
 from ..auth import Scope
 from ..dependencies import DBSession, DemoToken
-from ..schemas.common import InstanceInfo
+from ..distribution import speech_is_test_only
+from ..schemas.common import InstanceInfo, ModelOption
 from ..schemas.users import NewsletterRequest
 from ..settings import app_settings
 
@@ -15,16 +16,21 @@ router = APIRouter()
 
 @router.get("/instance", description="Contact and links for this deployment")
 def get_instance() -> InstanceInfo:
-    return InstanceInfo.model_validate(app_settings.app)
+    return InstanceInfo.model_validate(
+        {**app_settings.app.model_dump(), "speech_test_only": speech_is_test_only()}
+    )
 
 
 @router.get("/models", description="available models")
-def get_models(jwt: DemoToken) -> list[str]:
-    if jwt.scope == Scope.DEMO:
-        # Never None once settings validate; `finalize` fills it in.
-        return lib_settings.llm.demo_models or []
-    else:
-        return lib_settings.llm.available_models
+def get_models(jwt: DemoToken) -> list[ModelOption]:
+    llm = lib_settings.llm
+    # Never None once settings validate; `finalize` fills it in.
+    models = (
+        (llm.demo_models or []) if jwt.scope == Scope.DEMO else llm.available_models
+    )
+    return [
+        ModelOption(id=model, test_only=llm.is_test_only(model)) for model in models
+    ]
 
 
 @router.get("/languages", description="Get supported languages")

@@ -12,6 +12,7 @@ from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import DatabaseType
 
 from ..dependencies import engine, get_db
+from ..distribution import runs_on_answers, speech_is_test_only
 from ..platform_release import Highlight, PlatformManifest
 from ..schemas.users import UserCreate
 from ..settings import app_settings
@@ -208,6 +209,145 @@ def fix_invalid_models(
         else:
             session.commit()
             typer.echo(f"Updated {len(changes)} model reference(s).")
+
+
+def distributed_model_changes(
+    session: Session, to: str, disable_audio: bool = False
+) -> list[str]:
+    """Open every published project to respondents again where a model is
+    what closes it (app/distribution.py): point each agent that runs on
+    respondents' answers and uses a test-only model at `to`, in the published
+    version and in the draft, and describe each change. Writes in `session`;
+    the caller commits or rolls back.
+
+    The published version is rewritten in place, as `invalid_model_changes`
+    does, so interviews already running on it move too; older versions are
+    history and left alone, so restoring one brings its models back and
+    publishing it is refused. The draft follows, so it stays what was
+    published and publishing it again is not refused.
+
+    Speech cannot be moved to another model: a published version with
+    `with_audio` on while speech is test only is reported, and switched off,
+    in it and in the draft, with `disable_audio`.
+    """
+    llm = lib_settings.llm
+    changes: list[str] = []
+    rows = session.execute(
+        text(
+            "SELECT pc.project_id, pc.id, pc.agent_configs, pv.id, pv.agent_configs "
+            "FROM projectcontent pc "
+            "JOIN projectcontentversion pv ON pv.id = pc.published_version_id"
+        )
+    ).all()
+    for project_id, draft_id, draft_raw, version_id, version_raw in rows:
+        for table, row_id, raw in (
+            ("projectcontentversion", version_id, version_raw),
+            ("projectcontent", draft_id, draft_raw),
+        ):
+            data = _as_dict(raw)
+            if not isinstance(data, dict):
+                continue
+            mutated = False
+            for name, sub in data.items():
+                if not isinstance(sub, dict) or "model" not in sub:
+                    continue
+                if not runs_on_answers(name, sub.get("include", True)):
+                    continue
+                if llm.is_test_only(sub["model"]):
+                    changes.append(
+                        f"{table} {row_id} agent_configs.{name}.model: "
+                        f"{sub['model']!r} -> {to!r}"
+                    )
+                    sub["model"] = to
+                    mutated = True
+            if mutated:
+                # As in `invalid_model_changes`: an editor that loaded the
+                # old model gets a conflict rather than saving it back.
+                bump = (
+                    ", revision = revision + 1, agents_revision = agents_revision + 1"
+                    if table == "projectcontent"
+                    else ""
+                )
+                session.execute(
+                    text(f"UPDATE {table} SET agent_configs = :v{bump} WHERE id = :id"),
+                    {"v": json.dumps(data), "id": row_id},
+                )
+
+        if not speech_is_test_only():
+            continue
+        # Audio is in the interview config, versioned like the agents: the
+        # published version's is what respondents get, and the draft follows.
+        for table, row_id in (
+            ("projectcontentversion", version_id),
+            ("projectcontent", draft_id),
+        ):
+            config = _as_dict(
+                session.execute(
+                    text(f"SELECT config FROM {table} WHERE id = :id"), {"id": row_id}
+                ).scalar_one_or_none()
+            )
+            if not isinstance(config, dict) or not config.get("with_audio"):
+                continue
+            if not disable_audio:
+                changes.append(
+                    f"{table} {row_id} config.with_audio: speech is test only; "
+                    "still closed to respondents (--disable-audio to switch it off)"
+                )
+                continue
+            config["with_audio"] = False
+            bump = (
+                ", revision = revision + 1, settings_revision = settings_revision + 1"
+                if table == "projectcontent"
+                else ""
+            )
+            session.execute(
+                text(f"UPDATE {table} SET config = :v{bump} WHERE id = :id"),
+                {"v": json.dumps(config), "id": row_id},
+            )
+            changes.append(f"{table} {row_id} config.with_audio: True -> False")
+
+    return changes
+
+
+@cli.command()
+def fix_distributed_models(
+    to: str = typer.Option(
+        ...,
+        "--to",
+        help="The model to configure instead: one of [llm] models, which "
+        "respondents' answers may be sent to.",
+    ),
+    disable_audio: bool = typer.Option(
+        False,
+        "--disable-audio",
+        help="Also switch off audio answers on published projects while speech "
+        "is test only.",
+    ),
+    dry_run: bool = False,
+):
+    """Move published projects off test-only models, so distributed interviews
+    can start on them again.
+
+    See `distributed_model_changes` for what is rewritten and what is not.
+    """
+    if lib_settings.llm.is_test_only(to):
+        typer.echo(
+            f"{to!r} is not one of the distributable models: "
+            f"{sorted(lib_settings.llm.models)}"
+        )
+        raise typer.Exit(1)
+
+    prefix = "[DRY-RUN] " if dry_run else ""
+    with Session(engine) as session:
+        changes = distributed_model_changes(session, to, disable_audio)
+        for change in changes:
+            typer.echo(f"{prefix}{change}")
+        if dry_run:
+            session.rollback()
+            typer.echo(f"[DRY-RUN] Would make {len(changes)} change(s).")
+        else:
+            session.commit()
+            typer.echo(f"Made {len(changes)} change(s).")
 
 
 @cli.command()

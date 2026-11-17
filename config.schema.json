@@ -398,7 +398,8 @@
             "sst_delay": "medium",
             "tts_model": null,
             "tts_endpoint": null,
-            "tts_voice": "alloy"
+            "tts_voice": "alloy",
+            "test_only": true
           }
         },
         "embedding": {
@@ -502,6 +503,11 @@
           "default": "alloy",
           "title": "Tts Voice",
           "type": "string"
+        },
+        "test_only": {
+          "default": true,
+          "title": "Test Only",
+          "type": "boolean"
         }
       },
       "title": "SpeechSettings",
@@ -585,15 +591,22 @@
           "default": null,
           "title": "Vllm Base Url"
         },
-        "available_models": {
+        "models": {
           "items": {
             "type": "string"
           },
-          "title": "Available Models",
+          "title": "Models",
+          "type": "array"
+        },
+        "test_only_models": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Test Only Models",
           "type": "array"
         },
         "default_model": {
-          "default": "gpt-5-mini",
+          "default": "openrouter:openai/gpt-oss-120b",
           "title": "Default Model",
           "type": "string"
         },
@@ -903,14 +916,15 @@
         "llm_host": "0.0.0.0",
         "llm_port": 8880,
         "vllm_base_url": null,
-        "available_models": [
-          "gpt-5-mini"
+        "models": [],
+        "test_only_models": [
+          "openrouter:openai/gpt-oss-120b"
         ],
-        "default_model": "gpt-5-mini",
+        "default_model": "openrouter:openai/gpt-oss-120b",
         "demo_models": [
-          "gpt-5-mini"
+          "openrouter:openai/gpt-oss-120b"
         ],
-        "default_demo_model": "gpt-5-mini",
+        "default_demo_model": "openrouter:openai/gpt-oss-120b",
         "seed": 4268,
         "llm_endpoint": "http://0.0.0.0:8880"
       }

@@ -50,11 +50,20 @@ def db():
         project_id = database.projects.create_project(
             folder_id=folder.id, title="p", owner_id=user.id, default_language="EN"
         )
+        # Published before the model goes, as publishing refuses a model
+        # that is not distributable; then gone from both, as from config.
+        database.versions.publish(project_id, user.id, None)
         configs = AgentConfigs()
         assert configs.probing is not None
         configs.probing.model = OLD
         database.projects.update_agent_configs(project_id, configs)
-        database.versions.publish(project_id, user.id, None)
+        session.execute(
+            text(
+                "UPDATE projectcontentversion SET agent_configs = "
+                "json_set(agent_configs, '$.probing.model', :old)"
+            ),
+            {"old": OLD},
+        )
         setup = TestSetupTable(
             project_id=project_id,
             name="s",

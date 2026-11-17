@@ -123,9 +123,12 @@ class StaleRevisionError(ApiError):
 
 
 class CannotPublishError(ApiError):
-    """409 `cannot_publish`: the paths each offered language still lacks."""
+    """409 `cannot_publish`: the paths each offered language still lacks, and
+    what uses a model or speech for test interviews only (agent name, or
+    "speech", to its model)."""
 
     missing: dict[LanguageCode, list[str]]
+    test_only: dict[str, str] = {}
 
 
 class InvalidKeywordQueryError(ApiError):
@@ -150,3 +153,15 @@ class InstanceInfo(Schema):
     contact_email: str
     website_url: str
     docs_url: str
+    #: Speech (audio answers) is for test interviews only here: a project
+    #: with `with_audio` on cannot be published (app/distribution.py).
+    speech_test_only: bool = False
+
+
+class ModelOption(Schema):
+    """A model a project's agents may be configured with."""
+
+    id: str
+    #: For drafts and test interviews only: respondents' answers may not be
+    #: sent to it, so a project using it cannot be published.
+    test_only: bool

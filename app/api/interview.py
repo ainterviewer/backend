@@ -110,16 +110,19 @@ async def validate_interview_params(
     project_id: Annotated[UUID4, URLPath],
     params: ValidateExternalParamsRequest,
 ) -> None:
-    """Check a link's query params against the project's schema without
-    creating an interview.
+    """Check that a distributed interview could start from this link without
+    creating one: the link's query params against the project's schema, and
+    that the published version is open to respondents (`not_distributable`,
+    see app/distribution.py).
 
-    `create_interview` runs the same check; this only moves the feedback
-    earlier, it does not replace it.
+    `create_interview` runs the same checks; this only moves the feedback
+    earlier, it does not replace them.
     """
     project = db.projects.get_project(project_id)
     validate_external_params(
         project.external_params, params.external_params, project_id
     )
+    db.versions.check_distributable(project_id)
 
 
 def set_interview_cookie(response: Response, interview_token: str) -> None:
@@ -309,6 +312,9 @@ async def create_interview(
         validate_external_params(
             project.external_params, new_interview.external_params, project_id
         )
+        # Nothing for tests only on respondents' answers (app/distribution.py),
+        # whatever was published before that rule or switched on since.
+        db.versions.check_distributable(project_id)
 
     # Respondents get the published version, and nothing until there is one
     # (NotPublishedError, a 409). A test runs the draft, through a snapshot so

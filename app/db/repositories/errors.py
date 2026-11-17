@@ -59,17 +59,36 @@ class PublishError(AppError):
     """The draft cannot be published as it stands.
 
     Raised while an offered language has untranslated text; `missing` maps
-    each such language to the paths of what it lacks. The API answers 409
-    with `missing` and shows the message.
+    each such language to the paths of what it lacks. Raised too while it
+    uses a test-only model or speech; `test_only` maps each agent (or
+    "speech") to it (app/distribution.py). The API answers 409 with both and
+    shows the message.
     """
 
     status = 409
     code = ErrorCode.CANNOT_PUBLISH
 
-    def __init__(self, message: str, missing: dict[str, list[str]]):
-        super().__init__(message, missing=missing)
+    def __init__(
+        self,
+        message: str,
+        missing: dict[str, list[str]],
+        test_only: dict[str, str] | None = None,
+    ):
+        test_only = test_only or {}
+        super().__init__(message, missing=missing, test_only=test_only)
         self.missing = missing
-        self.missing = missing
+        self.test_only = test_only
+
+
+class NotDistributableError(AppError):
+    """The published version sends respondents' answers somewhere this
+    deployment allows for test interviews only (app/distribution.py), so no
+    distributed interview may start on it. Respondents see the message;
+    editors see why in the versions status (`test_only`).
+    """
+
+    status = 409
+    code = ErrorCode.NOT_DISTRIBUTABLE
 
 
 class ResumeTokenError(Exception):

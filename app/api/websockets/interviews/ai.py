@@ -236,10 +236,6 @@ async def _run_interview(
         )
         return
 
-    project = db.projects.get_project(project_id)
-
-    interview_config = project.config
-
     # The interview's own language, fixed when it was created. Not a cookie:
     # nothing has set one since the server-rendered routes went, and falling
     # back to the project default ran Danish interviews with English agents.
@@ -313,7 +309,7 @@ async def _run_interview(
             io=wmh,
             db=db,
             interview_guide=interview.interview_guide,
-            config=interview_config,
+            config=project_localization.config,
             agent_configs=agent_configs,
             template_loader=prompt_loader,
             project_id=project_id,

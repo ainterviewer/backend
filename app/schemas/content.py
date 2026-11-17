@@ -7,6 +7,7 @@ from datetime import datetime
 from pydantic import UUID4, Field
 
 from ainterviewer.agents.config import AgentConfigs
+from ainterviewer.config import InterviewConfig
 from ainterviewer.interview_guides import (
     InterviewGuide,
     LocalizedConsent,
@@ -33,6 +34,7 @@ class ProjectLocalizationPublic(Schema):
     interview_guide: InterviewGuide
     prompt_overrides: dict[str, str]
     agent_configs: AgentConfigs
+    config: InterviewConfig
     #: The version rendered, None when it was the draft.
     content_version_id: UUID4 | None = None
 
@@ -110,6 +112,14 @@ class ContentStatus(Schema):
     #: written is not valid, while it is not (`contentdoc.errors`). The draft
     #: keeps the last valid one, and publishing is refused meanwhile.
     doc_errors: dict[ContentPart, list[ContentError]] = {}
+    #: What the draft would send respondents' answers to that this deployment
+    #: allows in test interviews only: each agent's name (or "speech") with
+    #: its model (app/distribution.py). Publishing is refused while this is
+    #: not empty.
+    test_only: dict[str, str] = {}
+    #: The same for the published version: while this is not empty, no
+    #: distributed interview can start (`not_distributable`).
+    published_test_only: dict[str, str] = {}
 
 
 class InterviewGuideGenerationRequest(PromptRequest): ...
@@ -156,3 +166,7 @@ class ContentVersionCreate(Schema):
     publish: bool = False
     #: Raise the computed bump when publishing; lowering it is refused.
     bump: BumpName | None = None
+    #: When publishing, first move every agent on a model for test interviews
+    #: only to this one (one of `[llm] models`), in the draft as well. The
+    #: switch is part of what is published, so it counts towards the bump.
+    switch_models_to: str | None = None

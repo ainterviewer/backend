@@ -503,6 +503,8 @@ class ContentPart(StrEnum):
     EMAILS = "emails"
     #: `languages`, `default_language` and `languages_in_progress`.
     LANGUAGES = "languages"
+    #: `config`: which screens and features the interview has.
+    SETTINGS = "settings"
 
     @property
     def revision_column(self) -> str:
@@ -546,6 +548,7 @@ class ErrorCode(StrEnum):
     # Content and publishing
     NOT_PUBLISHED = "not_published"
     CANNOT_PUBLISH = "cannot_publish"
+    NOT_DISTRIBUTABLE = "not_distributable"
     STALE_REVISION = "stale_revision"
     REVISION_REQUIRED = "revision_required"
     PROJECT_LANGUAGE = "project_language"

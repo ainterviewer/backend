@@ -15,8 +15,15 @@ from pydantic import UUID4, BaseModel
 from pydantic_core import to_jsonable_python
 from sqlalchemy import delete, exists, func, select
 
+from ainterviewer.settings import settings as lib_settings
 from ainterviewer.utils import get_language_dict
 
+from ...distribution import (
+    SPEECH,
+    describe_uses,
+    switch_test_only,
+    uses_of_test_only,
+)
 from ...schemas.content import (
     ContentDraftPublic,
     ContentStatus,
@@ -33,7 +40,12 @@ from ..tables import (
 from ..versioning import FIRST_VERSION, Bump, SemVer, bumped, classify, format_semver
 from .base import BaseRepository
 from .content_doc import ContentDocRepository
-from .errors import ContentRevisionError, NotPublishedError, PublishError
+from .errors import (
+    ContentRevisionError,
+    NotDistributableError,
+    NotPublishedError,
+    PublishError,
+)
 
 #: What the publish refusal calls a part whose doc has errors.
 _PAGE_NAMES = {
@@ -45,6 +57,11 @@ _PAGE_NAMES = {
 #: Automatic versions kept per project by `prune`, newest first. Ones an
 #: interview runs on, and the published one, are kept beyond it.
 KEEP_AUTOMATIC_VERSIONS = 20
+
+
+def _test_only(source: ContentColumns) -> dict[str, str]:
+    """`uses_of_test_only` for `source`'s agents and interview config."""
+    return uses_of_test_only(source.agent_configs, source.config)
 
 
 def content_hash(source: ContentColumns) -> str:
@@ -153,6 +170,21 @@ class VersionRepository(BaseRepository):
         if version is None:
             raise NotPublishedError("This study has not been published yet.")
         return version
+
+    def is_published(self, project_id: UUID4) -> bool:
+        return self._content(project_id).published_version_id is not None
+
+    def check_distributable(self, project_id: UUID4) -> None:
+        """Raise NotDistributableError unless a distributed interview may
+        start on the published version (app/distribution.py), and
+        NotPublishedError if nothing is published."""
+        content = self._content(project_id)
+        if content.published_version is None:
+            raise NotPublishedError("This study has not been published yet.")
+        if _test_only(content.published_version):
+            raise NotDistributableError(
+                "This study is not open to respondents right now."
+            )
 
     def check_revision(
         self, project_id: UUID4, revision: int, part: ContentPart | None = None
@@ -277,6 +309,8 @@ class VersionRepository(BaseRepository):
             next_semver=format_semver(next_semver),
             missing=missing_text(content),
             doc_errors=self._doc_errors(project_id),
+            test_only=_test_only(content),
+            published_test_only=({} if published is None else _test_only(published)),
         )
 
     def _doc_errors(self, project_id: UUID4) -> dict[ContentPart, list[ContentError]]:
@@ -364,6 +398,7 @@ class VersionRepository(BaseRepository):
         user_id: UUID4,
         label: str | None,
         bump: Bump | None = None,
+        switch_models_to: str | None = None,
     ) -> ContentVersionSummaryPublic:
         """Make the draft what respondents get, numbered by how far it is from
         the published version (app/db/versioning.py).
@@ -374,8 +409,25 @@ class VersionRepository(BaseRepository):
         language lacks text: the respondent would get the default language's
         in its place. Publishing a draft identical to the published version
         changes nothing.
+
+        `switch_models_to` first moves the agents on test-only models to that
+        model in the draft (app/distribution.py), so it is published with the
+        rest; refused unless respondents' answers may be sent to it.
         """
         content = self._content(project_id)
+        if switch_models_to is not None:
+            if lib_settings.llm.is_test_only(switch_models_to):
+                raise PublishError(
+                    f"{switch_models_to} is for test interviews only; choose a "
+                    "model respondents' answers may be sent to.",
+                    {},
+                )
+            switched = switch_test_only(content.agent_configs, switch_models_to)
+            if switched != content.agent_configs:
+                # Flushed now so the revisions move before the checks below,
+                # and the version written is the switched draft.
+                content.agent_configs = switched
+                self.session.flush()
         if errors := self._doc_errors(project_id):
             pages = " and ".join(_PAGE_NAMES.get(part, part.value) for part in errors)
             raise PublishError(
@@ -388,8 +440,27 @@ class VersionRepository(BaseRepository):
             raise PublishError(
                 f"Translate everything into {names} before publishing.", missing
             )
+        if test_only := _test_only(content):
+            fixes = [
+                f"choose {'other models' if len(agents) > 1 else 'another model'}"
+                for agents in [[a for a in test_only if a != SPEECH]]
+                if agents
+            ]
+            if SPEECH in test_only:
+                fixes.append("turn off audio answers")
+            raise PublishError(
+                f"{describe_uses(test_only).capitalize()} "
+                f"{'are' if len(test_only) > 1 else 'is'} set up for test "
+                "interviews only, so respondents' answers may not be sent "
+                f"there. {' or '.join(fixes).capitalize()} before publishing.",
+                {},
+                test_only,
+            )
         published = content.published_version
         if published is not None and content_hash(published) == content_hash(content):
+            # A switch that brought the draft back to what is published is
+            # still the draft's change to keep.
+            self.session.commit()
             return self._summary(published, content)
 
         computed, _ = self._pending(content)

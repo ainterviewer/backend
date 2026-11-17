@@ -214,6 +214,13 @@ class SpeechSettings(BaseModel):
     tts_endpoint: str | None = None
     tts_voice: str = "alloy"
 
+    #: Whether respondents' recordings and the interviewer's messages may only
+    #: be sent to these endpoints from test interviews, as `[llm]
+    #: test_only_models` for models. A project with `with_audio` cannot then
+    #: be published or distributed. True unless set: say so for an endpoint
+    #: that may receive respondents' answers.
+    test_only: bool = True
+
 
 # The providers app/services/assistance/agent.py can build a model for.
 ASSISTANCE_PROVIDERS = ("openai:", "openrouter:")

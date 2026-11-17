@@ -734,6 +734,12 @@ versioned automatically; anything that changes what respondents get belongs on
 it. The participant emails are versioned too; attachments (files on disk) are
 not.
 
+- **The interview config is content too** (`ContentColumns.config`, part
+  `settings`): consent and welcome screens, audio answers, probing strategies.
+  It used to sit on `project`, where a change reached respondents the moment
+  it was saved; revision `081b6053adbe` moved it. `GET /projects/{id}/config`
+  serves the published version's, the draft's with `?draft=true`; the POST
+  writes the draft with `If-Match`.
 - **Who reads what.** Distributed interviews, the public `available_languages`,
   `guide/consent|welcome/{lang}` and `models` routes, and participant email
   sending (invites, reminders, the bundle) read the **published** version, and
@@ -767,7 +773,8 @@ not.
   (`app/db/versioning.py`): major when something answered is removed or
   reshaped (a section, question or option removed; a survey item's type or
   scale; conditions), minor for additions and settings (questions added,
-  reordering, probing, agent configs, languages), patch for text only. So
+  reordering, probing, agent configs, the interview config, languages), patch
+  for text only. So
   every interview within one major answered the same questions. The diff
   cannot read meaning, so the publisher may raise the bump, never lower it.
   Only `publish` versions carry one; numbering continues from the highest
@@ -902,6 +909,47 @@ else; a check a route makes itself is a 400.
   share the status.
 - `code` values are API: the frontend matches on them. Add one when a client
   needs it, rename none without the frontend.
+
+### Test-only models and speech
+
+**Respondents' answers only go where the deployment says they may.** `[llm]`
+splits the models into `models` (usable everywhere) and `test_only_models`
+(drafts and test interviews only); a model in neither counts as test only, so
+adding one forces a choice. `available_models` is their union, read-only --
+the old key in a config fails validation rather than being ignored.
+`[services.speech] test_only` (default `true`) does the same for STT/TTS,
+which only run with the project's `with_audio`. `default_model` may be test
+only.
+
+`app/distribution.py` decides what counts: every agent that runs on answers
+(not `answering`, which only runs in simulations; `security` and `visual` only
+when included), plus speech while `with_audio` is on.
+
+- **Publishing** refuses a draft that uses one (`PublishError`,
+  `cannot_publish`, with `test_only` mapping agent or `"speech"` to model).
+  The versions status reports it for the draft (`test_only`) and for what is
+  live (`published_test_only`).
+- **Distributed interviews** are refused on a published version that uses one
+  (`NotDistributableError`, 409, `not_distributable`), in `create_interview`
+  and in the respondent page's preflight (`.../external_params/validate`).
+  This is what catches versions published before the rule.
+- **`/models`** returns `ModelOption`s with `test_only`, and `/instance`
+  carries `speech_test_only`, so the dashboard can label them.
+- `uv run python -m app.db.cli fix-distributed-models --to <model>
+  [--disable-audio] [--dry-run]` moves published projects off test-only
+  models: the published version in place and the draft with it.
+- Publishing can switch them in the same request (`switch_models_to` on
+  `POST .../versions`): the draft's test-only agents move to that model, which
+  counts towards the bump, then the draft is published. Drafts are expected to
+  sit on hosted models while the local one is down; this is the deliberate
+  step to the model respondents get.
+- **Simulations compare models without touching the project.**
+  `SynthesizeRequest.interviewer_models` starts one run per model, all drawing
+  the same synthetic interviewees, and `TestRunTable.interviewer_model` puts
+  every interview agent except `answering` and `visual` on it
+  (`with_interviewer_model`, applied by the websocket). `GET
+  .../tests/{id}/runs/compare?run_id=...` returns the runs' transcripts with
+  each interviewee's persona, which the dashboard pairs on.
 
 ### Completion redirects
 

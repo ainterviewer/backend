@@ -206,6 +206,7 @@ def classify(old: ContentColumns, new: ContentColumns) -> Bump:
         or old.default_language != new.default_language
         or _dump(old.agent_configs) != _dump(new.agent_configs)
         or dict(old.prompt_overrides) != dict(new.prompt_overrides)
+        or _dump(old.config) != _dump(new.config)
     ):
         bump = max(bump, Bump.MINOR)
 

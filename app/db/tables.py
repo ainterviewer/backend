@@ -438,10 +438,6 @@ class ProjectTable(Base):
     experiment_only: Mapped[bool] = mapped_column(
         default=False, server_default=sa.false()
     )
-    config: Mapped[InterviewConfig] = mapped_column(
-        PydanticJSONB(InterviewConfig),
-        default=InterviewConfig,
-    )
     external_params: Mapped[list[ExternalParam] | None] = mapped_column(
         PydanticJSONB(list[ExternalParam]), default=None
     )
@@ -546,6 +542,13 @@ class ContentColumns:
         PydanticJSONB(AgentConfigs),
         default=lambda: AgentConfigs(),
     )
+    #: Which screens (consent, welcome) and features (audio answers, probing
+    #: strategies) the interview has. Versioned like the rest: it changes what
+    #: respondents get, and a test of the draft has to run the draft's.
+    config: Mapped[InterviewConfig] = mapped_column(
+        PydanticJSONB(InterviewConfig),
+        default=lambda: InterviewConfig(),
+    )
     #: The invitation and reminder emails sent to participants, text per
     #: language like the rest. Sending reads the published version's.
     emails: Mapped[ParticipantEmails] = mapped_column(
@@ -572,6 +575,7 @@ class ContentColumns:
         ContentPart.WELCOME: ("welcome",),
         ContentPart.AGENTS: ("prompt_overrides", "agent_configs"),
         ContentPart.EMAILS: ("emails",),
+        ContentPart.SETTINGS: ("config",),
     }
 
     #: The attribute names of the columns above, for copying between the
@@ -641,6 +645,9 @@ class ProjectContentTable(ContentColumns, Base):
     )
     agents_revision: Mapped[int] = mapped_column(default=1, server_default=sa.text("1"))
     emails_revision: Mapped[int] = mapped_column(default=1, server_default=sa.text("1"))
+    settings_revision: Mapped[int] = mapped_column(
+        default=1, server_default=sa.text("1")
+    )
     languages_revision: Mapped[int] = mapped_column(
         default=1, server_default=sa.text("1")
     )

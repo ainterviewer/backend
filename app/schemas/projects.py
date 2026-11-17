@@ -7,7 +7,6 @@ from typing import Any
 
 from pydantic import UUID4, Field, field_validator
 
-from ainterviewer.config import InterviewConfig
 from ainterviewer.types import LanguageCode, LanguageDict
 
 from ..types import (
@@ -109,7 +108,6 @@ class ProjectBase(Schema):
     archived_at: datetime | None = None
     #: Only respondents an experiment assigned here may take part.
     experiment_only: bool = False
-    config: InterviewConfig
     external_params: list[ExternalParam] | None = None
     redirects: CompletionRedirects | None = None
     owner_id: UUID4

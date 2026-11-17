@@ -500,8 +500,6 @@ class ProjectRepository(BaseRepository):
     ) -> UUID4:
         project_kwargs = {}
 
-        if interview_config:
-            project_kwargs["config"] = interview_config
         if project_id:
             project_kwargs["id"] = project_id
 
@@ -527,6 +525,7 @@ class ProjectRepository(BaseRepository):
                         LocalizedQuestionSection(questions=[LocalizedQuestion()])
                     ]
                 ),
+                config=interview_config or InterviewConfig(),
             )
         )
         self.session.commit()
@@ -549,7 +548,6 @@ class ProjectRepository(BaseRepository):
 
         # 2. Create the new project
         base_title = orig_project.title
-        original_config = orig_project.config
         original_status = orig_project.status
 
         copy_attempt = 0
@@ -564,7 +562,6 @@ class ProjectRepository(BaseRepository):
             new_project = ProjectTable(
                 folder_id=orig_project.folder_id,
                 title=clone_title,
-                config=original_config,
                 status=original_status,
                 owner_id=owner_id,
             )
@@ -600,6 +597,7 @@ class ProjectRepository(BaseRepository):
                 emails=content.emails,
                 prompt_overrides=dict(content.prompt_overrides),
                 agent_configs=content.agent_configs,
+                config=content.config,
             )
         )
 
@@ -829,6 +827,7 @@ class ProjectRepository(BaseRepository):
             else content.welcome.render(language, fallback),
             prompt_overrides=dict(content.prompt_overrides),
             agent_configs=content.agent_configs,
+            config=content.config,
         )
 
     @staticmethod
@@ -1086,17 +1085,24 @@ class ProjectRepository(BaseRepository):
         self._content(project_id, revision, ContentPart.GUIDE).guide = guide
         self.session.commit()
 
+    def get_interview_config(
+        self, project_id: UUID4, source: ContentSource = "draft"
+    ) -> InterviewConfig:
+        """The interview config of the draft, the published version or a
+        given version (`_source`)."""
+        return self._source(project_id, source).config
+
     def update_interview_config(
         self,
         project_id: UUID4,
         interview_config: InterviewConfig,
+        revision: int | None = None,
     ):
-        statement = (
-            update(ProjectTable)
-            .where(ProjectTable.id == project_id)
-            .values(config=interview_config)
-        )
-        self.session.execute(statement)
+        """Write the draft's interview config; with `revision`, refused
+        unless the settings part is at it."""
+        self._content(
+            project_id, revision, ContentPart.SETTINGS
+        ).config = interview_config
         self.session.commit()
 
     def get_external_param_values_for_interview(

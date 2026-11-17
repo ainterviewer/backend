@@ -131,6 +131,7 @@ async def save_content_version(
             jwt.user_id,
             request.label,
             None if request.bump is None else Bump.named(request.bump),
+            switch_models_to=request.switch_models_to,
         )
     return db.versions.save_version(project_id, jwt.user_id, request.label)
 

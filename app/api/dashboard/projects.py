@@ -720,10 +720,15 @@ _PREVIEW_CONFIG_FIELDS = ("with_audio", "probing_strategy")
 async def get_interview_config(
     project_id: UUID4,
     db: DBSession,
+    source: RespondentContent,
+    response: Response,
 ) -> InterviewConfig:
-    project = db.projects.get_project(project_id)
-
-    return project.config
+    """Which screens and features the interview has: the published version's,
+    or the draft's with `?draft=true` for a viewer (the setup page, and manual
+    tests through the respondent page). The draft's comes with its `ETag`."""
+    if source == "draft":
+        set_etag(response, db.projects.get_revision(project_id, ContentPart.SETTINGS))
+    return db.projects.get_interview_config(project_id, source)
 
 
 @router.get("/projects/{project_id}/models")
@@ -740,24 +745,29 @@ async def get_interview_models(
     }
 
 
-@router.post("/projects/{project_id}/config")
+@router.post("/projects/{project_id}/config", responses=STALE_REVISION)
 async def create_interview_config(
     project_id: UUID4,
     config: InterviewConfig,
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
+    revision: IfMatch,
+    response: Response,
 ):
+    """Write the draft's interview config. Like the rest of the content it
+    reaches respondents when published."""
     if not jwt.preview_features:
         # Keep what is stored rather than refusing: the setup page posts the
         # whole config, so an editor without the flag saving consent or
         # welcome on a project whose owner turned audio on must neither fail
         # nor silently switch audio back off.
-        stored = db.projects.get_project(project_id).config
+        stored = db.projects.get_interview_config(project_id)
         config = config.model_copy(
             update={field: getattr(stored, field) for field in _PREVIEW_CONFIG_FIELDS}
         )
-    db.projects.update_interview_config(project_id, config)
+    db.projects.update_interview_config(project_id, config, revision)
+    set_etag(response, db.projects.get_revision(project_id, ContentPart.SETTINGS))
 
 
 @router.patch("/projects/{project_id}/external_params")
