@@ -33,6 +33,7 @@ from ..dependencies import (
     InterviewCredential,
     ResourceRoleChecker,
     ScopeChecker,
+    verify_test_share,
 )
 from ..errors import AppError
 from ..schemas.common import MediaUploadResponse
@@ -283,12 +284,22 @@ async def create_interview(
             detail="Only a manual test can start part-way through the guide",
         )
 
+    via_share_link = False
     if new_interview.interview_type == InterviewType.DISTRIBUTED:
         if project.owner.scope == Scope.DEMO:
             raise AuthError(
                 status_code=403,
                 detail="Forbidden, scope required: " + Scope.USER,
             )
+    elif new_interview.share_token is not None:
+        # Someone a collaborator shared a test link with: no account needed.
+        if new_interview.interview_type != InterviewType.MANUAL_TEST:
+            raise HTTPException(
+                status_code=400,
+                detail="A shared test link only starts manual tests",
+            )
+        verify_test_share(db, project_id, new_interview.share_token)
+        via_share_link = True
     else:
         if not (token := request.cookies.get("access_token")):
             raise AuthError(
@@ -306,8 +317,9 @@ async def create_interview(
             project_id=project_id, token=auth_token, db=db
         )
 
-    # Test runs are started from the dashboard by a collaborator, not from a
-    # distributed link, so there are no link params to satisfy.
+    # Test runs are started from the dashboard by a collaborator or from a
+    # shared test link, not from a distributed link, so there are no link
+    # params to satisfy.
     if new_interview.interview_type == InterviewType.DISTRIBUTED:
         validate_external_params(
             project.external_params, new_interview.external_params, project_id
@@ -420,6 +432,7 @@ async def create_interview(
         experiment_id=assignment.experiment_id if assignment else None,
         content_version_id=project_localization.content_version_id,
         start_question_id=start_question_id,
+        via_share_link=via_share_link,
     )
     if assignment is not None:
         db.tests.record_assignment_interview(

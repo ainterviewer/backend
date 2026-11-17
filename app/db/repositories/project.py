@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import secrets
 import uuid
 from collections.abc import Iterable, Sequence
 from typing import Any, Literal
@@ -1408,3 +1409,32 @@ class ProjectRepository(BaseRepository):
         ).scalar_one()
 
         return project.owner.scope == Scope.DEMO
+
+    def test_share_nonce(self, project_id: UUID4) -> str | None:
+        """What shared test links must carry to be accepted; None while none is."""
+        return self.session.execute(
+            select(ProjectTable.test_share_nonce).where(ProjectTable.id == project_id)
+        ).scalar_one()
+
+    def ensure_test_share_nonce(self, project_id: UUID4) -> str:
+        """The nonce for a new shared test link: the current one, so links
+        already handed out stay valid, or a fresh one after a revoke."""
+        if nonce := self.test_share_nonce(project_id):
+            return nonce
+        nonce = secrets.token_urlsafe(16)
+        self.session.execute(
+            update(ProjectTable)
+            .where(ProjectTable.id == project_id)
+            .values(test_share_nonce=nonce)
+        )
+        self.session.commit()
+        return nonce
+
+    def revoke_test_shares(self, project_id: UUID4) -> None:
+        """End every shared test link of the project handed out so far."""
+        self.session.execute(
+            update(ProjectTable)
+            .where(ProjectTable.id == project_id)
+            .values(test_share_nonce=None)
+        )
+        self.session.commit()

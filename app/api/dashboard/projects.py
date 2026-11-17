@@ -53,7 +53,12 @@ from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import InterviewStatus, LanguageCode
 from ainterviewer.utils import now
 
-from ...auth import AuthToken, generate_resume_token, hash_token
+from ...auth import (
+    AuthToken,
+    create_test_share_token,
+    generate_resume_token,
+    hash_token,
+)
 from ...collab.rooms import content_rooms
 from ...db.repositories.interview import SORTABLE_INTERVIEW_COLUMNS
 from ...db.repositories.project import ContentSource
@@ -90,6 +95,7 @@ from ...schemas.interviews import (
     InterviewResumeLinkResponse,
     InterviewSelection,
     MessagePublic,
+    TestShareLinkResponse,
 )
 from ...schemas.projects import (
     ArchiveRequest,
@@ -1222,6 +1228,54 @@ async def revoke_interview_resume_link(
             revoked,
         )
     return _resume_link_public(db.interviews.get_resume_token(interview_id))
+
+
+@router.post("/projects/{project_id}/test_share")
+async def create_test_share_link(
+    project_id: UUID4,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectEditor,
+) -> TestShareLinkResponse:
+    """A link that lets anyone try the project's draft as a manual test,
+    without an account: for piloting the guide before publishing it.
+
+    Not for demo accounts, nor on a project a demo account owns: those may
+    not distribute, and a link anyone can open would be distributing.
+    """
+    if db.projects.is_project_owner_demo_user(project_id):
+        raise demo_restricted()
+    nonce = db.projects.ensure_test_share_nonce(project_id)
+    token, expires_at = create_test_share_token(project_id, nonce)
+
+    # A credential to unreleased work: record who minted it.
+    logger.info(
+        "test share link issued: project=%s user=%s expires=%s",
+        project_id,
+        jwt.user_id,
+        expires_at,
+    )
+
+    query = urlencode(
+        {"id": str(project_id), "interview_type": "manual_test", "share": token}
+    )
+    return TestShareLinkResponse(
+        url=f"{app_settings.app.public_url}/interview?{query}",
+        expires_at=expires_at,
+    )
+
+
+@router.delete("/projects/{project_id}/test_share", status_code=204)
+async def revoke_test_share_links(
+    project_id: UUID4,
+    db: DBSession,
+    jwt: UserToken,
+    _: ProjectEditor,
+) -> None:
+    """End every shared test link of the project handed out so far.
+    Interviews already started from one carry on."""
+    db.projects.revoke_test_shares(project_id)
+    logger.info("test share links revoked: project=%s user=%s", project_id, jwt.user_id)
 
 
 @router.get("/projects/{project_id}/interviews/{interview_id}/messages/{message_id}")

@@ -91,6 +91,13 @@ class AppSettings(BaseModel):
         default_factory=lambda: TimeDelta(days=7)
     )
 
+    # How long a shared test link (`POST .../test_share`) lets people without
+    # an account try the project's draft. Each link carries its own expiry;
+    # revoking ends every link of the project at once, whatever is left.
+    test_share_link_expiration: TimeDelta = Field(
+        default_factory=lambda: TimeDelta(days=14)
+    )
+
     jwt_auth_token_expiration: TimeDelta = Field(
         default_factory=lambda: TimeDelta(minutes=15)
     )

@@ -557,6 +557,9 @@ class ErrorCode(StrEnum):
     SECTION_NOT_FOUND = "section_not_found"
     # Interviews
     INVALID_LINK_PARAMS = "invalid_link_params"
+    # A shared test link that is malformed, expired, revoked, or whose
+    # project no longer allows sharing tests.
+    TEST_SHARE_INVALID = "test_share_invalid"
     # Analysis
     INVALID_CODEBOOK = "invalid_codebook"
     INVALID_CODING = "invalid_coding"

@@ -81,6 +81,8 @@ class InterviewSummaryPublic(Schema):
     #: The question a test started at, when it was started part-way through
     #: the guide. NULL for an interview run from the beginning.
     start_question_id: UUID4 | None = None
+    #: Started from a shared test link rather than by a collaborator.
+    via_share_link: bool = False
     # The participant this interview belongs to, joined in from the
     # participant record. NULL for interviews that were never distributed to
     # one, and for interviews whose participant has since been deleted.
@@ -221,6 +223,9 @@ class InterviewCreate(Schema):
     #: question, or at this question. At most one; only for manual tests.
     start_section_id: UUID4 | None = None
     start_question_id: UUID4 | None = None
+    #: A shared test link's token (`POST .../test_share`), in place of a
+    #: collaborator's session. Only for manual tests.
+    share_token: str | None = None
 
     # Extra context
     external_params: dict[str, Any] | None = Field(
@@ -304,6 +309,14 @@ class InterviewResumeLinkPublic(Schema):
 
 class InterviewResumeLinkResponse(Schema):
     """A freshly minted resume link. The only time the URL ever exists."""
+
+    url: str
+    expires_at: datetime
+
+
+class TestShareLinkResponse(Schema):
+    """A freshly minted shared test link: anyone who opens it can try the
+    project's draft, without an account, until `expires_at` or a revoke."""
 
     url: str
     expires_at: datetime

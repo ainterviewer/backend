@@ -109,6 +109,9 @@
         "interview_resume_link_expiration": {
           "$ref": "#/$defs/TimeDelta"
         },
+        "test_share_link_expiration": {
+          "$ref": "#/$defs/TimeDelta"
+        },
         "jwt_auth_token_expiration": {
           "$ref": "#/$defs/TimeDelta"
         },
@@ -759,6 +762,15 @@
         },
         "interview_resume_link_expiration": {
           "days": 7,
+          "hours": 0,
+          "microseconds": 0,
+          "milliseconds": 0,
+          "minutes": 0,
+          "seconds": 0,
+          "weeks": 0
+        },
+        "test_share_link_expiration": {
+          "days": 14,
           "hours": 0,
           "microseconds": 0,
           "milliseconds": 0,

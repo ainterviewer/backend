@@ -750,6 +750,15 @@ not.
   viewer of the project (`RespondentContent`, `app/dependencies.py`), because
   manual tests go through the respondent interview page. The editor and the
   analysis views read the draft.
+- **Shared test links** let someone without an account try the draft.
+  `POST /projects/{id}/test_share` (editors; refused to demo accounts and on
+  demo-owned projects, which may not distribute) mints a `TestShareToken`
+  (`app/auth.py`) carrying the project's `test_share_nonce`; `DELETE` clears
+  the nonce, revoking every link at once. The token is accepted as `?share=`
+  on the draft reads (`RespondentContent`) and as `share_token` in
+  `create_interview`, for manual tests only, through `verify_test_share`
+  (`app/dependencies.py`; one code, `test_share_invalid`, for every refusal).
+  Interviews it starts are `manual_test` with `via_share_link` set.
 - **Render through `get_project_localization(..., source=...)`** (`"draft"`,
   `"published"` or a version id), never a second renderer.
   `InterviewTable.content_version_id` records what an interview ran; the

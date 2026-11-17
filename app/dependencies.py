@@ -1,22 +1,23 @@
 import datetime
 import logging
+import secrets
 import threading
 from collections.abc import Generator
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import Cookie, Depends, Header, HTTPException, Response
+from fastapi import Cookie, Depends, Header, HTTPException, Query, Response
 from fastapi.security import APIKeyCookie
 from jose import JWTError
 from pydantic import UUID4, ValidationError
 from sqlalchemy import create_engine
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import NoResultFound, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ainterviewer.types import LanguageCode
 from ainterviewer.utils import now
 
-from .auth import AuthToken, InterviewToken
+from .auth import AuthToken, InterviewToken, TestShareToken
 from .db.crud import InterviewDataBase
 from .db.pragmas import register_pragmas
 from .db.regexp import register_regexp
@@ -340,14 +341,46 @@ FolderAdmin = Annotated[
 ]
 
 
+def verify_test_share(db: InterviewDataBase, project_id: UUID4, share: str) -> None:
+    """Refuse a shared test link that does not let its holder try this
+    project's draft: malformed, expired, for another project, revoked, or of
+    a project owned by a demo account -- which may not distribute, and a
+    link anyone can open would be distributing.
+
+    One code for all of them (`test_share_invalid`): whoever holds the link
+    can do nothing about which it is but ask for a new one.
+    """
+    invalid = AppError(
+        "This test link is no longer valid.",
+        status=403,
+        code=ErrorCode.TEST_SHARE_INVALID,
+    )
+    try:
+        token = TestShareToken.decode(share)
+    except (JWTError, ValidationError):
+        raise invalid
+    if token.project_id != project_id:
+        raise invalid
+    try:
+        nonce = db.projects.test_share_nonce(project_id)
+    except NoResultFound:
+        raise invalid
+    if nonce is None or not secrets.compare_digest(nonce, token.nonce):
+        raise invalid
+    if db.projects.is_project_owner_demo_user(project_id):
+        raise invalid
+
+
 def _respondent_content(
     project_id: UUID4,
     db: DBSession,
     token: OptionalToken,
     draft: bool = False,
+    share: Annotated[str | None, Query()] = None,
 ) -> Literal["draft", "published"]:
     """Which content a public, respondent-facing route serves: the published
-    version, or with `?draft=true` the draft, for a viewer of the project.
+    version, or with `?draft=true` the draft, for a viewer of the project or
+    for whoever holds one of its shared test links (`share`).
 
     Test interviews run the draft through the same interview page
     respondents use, so that page has to be able to ask for it; nobody else
@@ -355,6 +388,9 @@ def _respondent_content(
     """
     if not draft:
         return "published"
+    if share is not None:
+        verify_test_share(db, project_id, share)
+        return "draft"
     if token is None:
         raise AuthError(status_code=401, detail="Not authenticated")
     ScopeChecker(Scope.DEMO)(auth_token=token)

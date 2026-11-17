@@ -1,7 +1,8 @@
 import hashlib
 import logging
 import secrets
-from typing import Self
+from datetime import UTC, datetime
+from typing import Literal, Self
 from uuid import UUID
 
 from jose import jwt
@@ -56,6 +57,21 @@ class InterviewToken(_Token):
     role: InterviewRole = InterviewRole.RESPONDENT
 
     _timedelta: TimeDelta = app_settings.app.jwt_interview_token_expiration
+
+
+class TestShareToken(_Token):
+    """A shared test link: lets anyone holding it try one project's draft.
+
+    `kind` keeps it from ever passing for another token signed with the same
+    key. Accepted only while `nonce` is the project's `test_share_nonce`, so
+    clearing that revokes every link at once.
+    """
+
+    kind: Literal["test_share"]
+    project_id: UUID4
+    nonce: str
+
+    _timedelta: TimeDelta = app_settings.app.test_share_link_expiration
 
 
 class AuthToken(_Token):
@@ -134,3 +150,12 @@ def create_auth_token(
     )
 
     return token.encode()
+
+
+def create_test_share_token(project_id: UUID4, nonce: str) -> tuple[str, datetime]:
+    """A shared test link's token, and when it expires."""
+    token = TestShareToken(
+        kind="test_share", project_id=project_id, nonce=nonce
+    ).encode()
+    expires_at = datetime.fromtimestamp(jwt.get_unverified_claims(token)["exp"], UTC)
+    return token, expires_at

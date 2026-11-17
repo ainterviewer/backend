@@ -457,6 +457,10 @@ class ProjectTable(Base):
     #: Plain `JSON`, not `PydanticJSONB`: a list of colour strings has no
     #: model to validate against, and that decoder expects one.
     codebook_palette: Mapped[list[str] | None] = mapped_column(JSON, default=None)
+    #: What shared test links of this project must carry to be accepted
+    #: (`TestShareToken.nonce`). Created by the first link, cleared on revoke,
+    #: which ends every link handed out so far. NULL while none is valid.
+    test_share_nonce: Mapped[str | None] = mapped_column(default=None)
     owner_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE"),
         index=True,
@@ -1133,6 +1137,11 @@ class InterviewTable(Base):
     #: on. NULL for an interview run from the beginning. No foreign key: a
     #: question is an id inside the guide's JSON, not a row.
     start_question_id: Mapped[uuid.UUID | None] = mapped_column(default=None)
+    #: A manual test started from a shared test link, by someone who need not
+    #: be a collaborator, rather than by a collaborator trying the draft.
+    via_share_link: Mapped[bool] = mapped_column(
+        default=False, server_default=sa.false()
+    )
 
     # Relationships
     project: Mapped["ProjectTable"] = relationship(back_populates="interviews")

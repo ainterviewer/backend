@@ -442,6 +442,7 @@ class InterviewRepository(BaseRepository):
                 InterviewTable.total_time_spent,
                 InterviewTable.n_messages.label("n_messages"),
                 InterviewTable.start_question_id,
+                InterviewTable.via_share_link,
                 test_name,
                 pid_column,
                 n_reports,
