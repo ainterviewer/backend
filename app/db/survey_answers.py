@@ -36,7 +36,6 @@ from ainterviewer.interview_guides.survey_items import (
     CheckboxItem,
     DateItem,
     DatetimeItem,
-    LikertGridItem,
     LikertItem,
     NumberItem,
     RadioItem,
@@ -278,9 +277,9 @@ def values_of(row: AnswerRow) -> list[Value]:
     cannot be matched across languages the way an option can.
     """
     options = options_of(row.item)
-    if options is None or isinstance(row.item, LikertGridItem):
-        # A grid's answer is a rating per row, not one value; it is not
-        # offered as a filter (yet).
+    if options is None or not isinstance(row.item, CATEGORICAL_TYPES):
+        # A grid's answer is a rating per row and a ranking's an order, not
+        # one value; neither is offered as a filter (yet).
         return []
 
     index = index_options(options)

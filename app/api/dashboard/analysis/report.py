@@ -30,8 +30,10 @@ from ainterviewer.interview_guides.survey_items import (
     DatetimeItem,
     LikertGridItem,
     LikertItem,
+    ListItem,
     NumberItem,
     RadioItem,
+    RankingItem,
     SliderItem,
     TimeItem,
     split_checkbox_answer,
@@ -58,6 +60,7 @@ from ....schemas.monitoring import (
     ItemDistributionParams,
     ItemDistributions,
     NumericStats,
+    RankingOptionDistribution,
 )
 from .cohort import interview_cohort
 from .histogram import compute_histogram_buckets
@@ -85,6 +88,10 @@ MAX_EXACT_RANGE = 25
 # How many distinct write-in answers a categorical item lists before the rest
 # are folded into a single summary line.
 MAX_OTHER_CATEGORIES = 8
+
+# A list item's entries are all typed in, so all of them are a tail; more of
+# it is shown than of a choice's write-ins, since it is the whole answer.
+MAX_LIST_ENTRIES = 15
 
 # Longest span a date item draws one bar per day for. Past it the bars are
 # months, which keeps a multi-year study from asking for a thousand of them.
@@ -358,6 +365,105 @@ def _grid_rows(
     ]
 
 
+def _ranking_options(
+    item: RankingItem, answers: list[_Answer]
+) -> list[RankingOptionDistribution]:
+    """Each authored option's ranks, best ranked first.
+
+    A ranked option is placed by its position in the snapshot the respondent
+    saw, as `_categorical_counts` does for any choice: that is what counts the
+    same option as one across languages. A snapshot of another length (the
+    options were edited) falls back to matching the text against the
+    authored options; an option matching neither is left out.
+    """
+    ranks = item.ranked_count
+    authored = _index_options(item.options)
+    counts = [[0] * ranks for _ in item.options]
+    by_language: list[list[Counter[str]]] = [
+        [Counter() for _ in range(ranks)] for _ in item.options
+    ]
+
+    for answer in answers:
+        seen = answer.item if isinstance(answer.item, RankingItem) else item
+        same_shape = len(seen.options) == len(item.options)
+        for rank, option in enumerate(seen.parse_answer(answer.content)[:ranks]):
+            position = (
+                seen.options.index(option)
+                if same_shape
+                else authored.get(_normalize(option))
+            )
+            if position is None:
+                continue
+            counts[position][rank] += 1
+            by_language[position][rank][answer.language] += 1
+
+    options = []
+    for position, label in enumerate(item.options):
+        n_ranked = sum(counts[position])
+        options.append(
+            RankingOptionDistribution(
+                position=position,
+                label=label,
+                counts=[
+                    CategoryCount(
+                        label=str(rank + 1),
+                        count=count,
+                        by_language=dict(by_language[position][rank]),
+                    )
+                    for rank, count in enumerate(counts[position])
+                ],
+                n_ranked=n_ranked,
+                mean_rank=(
+                    sum((rank + 1) * n for rank, n in enumerate(counts[position]))
+                    / n_ranked
+                    if n_ranked
+                    else None
+                ),
+            )
+        )
+    return sorted(
+        options,
+        key=lambda option: (
+            option.mean_rank is None,
+            option.mean_rank or 0,
+            option.position,
+        ),
+    )
+
+
+def _list_entries(
+    item: ListItem, answers: list[_Answer]
+) -> tuple[list[CategoryCount], int, int, list[AnswerSample]]:
+    """The entries respondents commonly gave, and how many each answer held.
+
+    Entries are free text, so they are counted on their normalized form, the
+    first spelling seen shown; an entry repeated within one answer counts
+    once. Only the most common are returned, the tail reported as a pair of
+    counts the way `_categorical_counts` reports write-ins.
+
+    Returns `(counts, hidden_values, hidden_answers, entries_per_answer)`.
+    """
+    entries: dict[str, _OtherEntry] = {}
+    sizes: list[AnswerSample] = []
+    for answer in answers:
+        given = item.parse_answer(answer.content)
+        sizes.append(AnswerSample(value=float(len(given)), language=answer.language))
+        for normalized, value in {_normalize(e): e for e in reversed(given)}.items():
+            entry = entries.setdefault(normalized, _OtherEntry(value.strip()))
+            entry.count += 1
+            entry.by_language[answer.language] += 1
+
+    ranked = sorted(entries.values(), key=lambda entry: (-entry.count, entry.label))
+    shown, hidden = ranked[:MAX_LIST_ENTRIES], ranked[MAX_LIST_ENTRIES:]
+    counts = [
+        CategoryCount(
+            label=entry.label, count=entry.count, by_language=dict(entry.by_language)
+        )
+        for entry in shown
+    ]
+    return counts, len(hidden), sum(entry.count for entry in hidden), sizes
+
+
 def _temporal_counts(answers: list[_Answer], item: SurveyItem) -> list[CategoryCount]:
     """Bin date/datetime answers by day and time answers by hour.
 
@@ -455,6 +561,7 @@ def _build_distribution(
     buckets: list[DistributionBucket] = []
     samples: list[AnswerSample] = []
     rows: list[GridRowDistribution] = []
+    ranking: list[RankingOptionDistribution] = []
     stats: NumericStats | None = None
     hidden_values = 0
     hidden_answers = 0
@@ -486,6 +593,16 @@ def _build_distribution(
         case LikertGridItem():
             kind = DistributionKind.GRID
             rows = _grid_rows(item, answers)
+
+        case RankingItem():
+            kind = DistributionKind.RANKING
+            ranking = _ranking_options(item, answers)
+
+        case ListItem():
+            kind = DistributionKind.LIST
+            counts, hidden_values, hidden_answers, sizes = _list_entries(item, answers)
+            if sizes:
+                _, stats = _numeric_distribution(sizes)
 
         case SliderItem() | NumberItem():
             kind = DistributionKind.NUMERIC
@@ -539,6 +656,7 @@ def _build_distribution(
         n_other_hidden=hidden_values,
         n_other_hidden_count=hidden_answers,
         rows=rows,
+        ranking=ranking,
     )
 
 

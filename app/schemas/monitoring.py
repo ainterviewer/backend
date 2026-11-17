@@ -215,6 +215,11 @@ class DistributionKind(StrEnum):
     TEXT = "text"
     # `rows`, one categorical distribution per row of a Likert grid.
     GRID = "grid"
+    # `ranking`, one distribution over the ranks per option of a ranking.
+    RANKING = "ranking"
+    # `counts`, one bar per entry respondents commonly gave to a list item,
+    # with the tail in `n_other_hidden*`; `stats` over entries per answer.
+    LIST = "list"
     # Nothing: a statement the respondent could not answer (`can_answer` is
     # false). Carried so the guide's shape survives on the page -- every count
     # is zero and every collection empty.
@@ -278,6 +283,22 @@ class GridRowDistribution(Schema):
     n_answered: int
 
 
+class RankingOptionDistribution(Schema):
+    """One option of a ranking: how often it was given each rank."""
+
+    # The option's position in the authored options.
+    position: int
+    label: str
+    # One bar per rank, first choice first, labelled by the rank ("1", "2").
+    # A ranking of the top N has N; an option outside a respondent's top N is
+    # in none of them, and counted by `n_answered - n_ranked`.
+    counts: list[CategoryCount]
+    # Respondents who gave this option a rank.
+    n_ranked: int
+    # The average rank among them; `None` while nobody has ranked it.
+    mean_rank: float | None
+
+
 class ItemDistribution(Schema):
     """The distribution of answers to one authored question."""
 
@@ -336,6 +357,10 @@ class ItemDistribution(Schema):
 
     # A Likert grid's rows, in the grid's order. Empty for any other item.
     rows: list[GridRowDistribution] = Field(default_factory=list)
+
+    # A ranking's options, best ranked first (lowest mean rank; options nobody
+    # ranked last, in authored order). Empty for any other item.
+    ranking: list[RankingOptionDistribution] = Field(default_factory=list)
 
 
 class GuideSection(Schema):

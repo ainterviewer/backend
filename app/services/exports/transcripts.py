@@ -27,7 +27,7 @@ from docx.text.paragraph import Paragraph
 from markupsafe import Markup
 from pydantic import UUID4
 
-from ainterviewer.interview_guides import LikertGridItem
+from ainterviewer.interview_guides import LikertGridItem, ListItem, RankingItem
 from ainterviewer.types import InterviewStatus, MessageRole
 
 from ...db.utils import fix_nested_columns, messages_to_dataframe, write_messages_xlsx
@@ -66,6 +66,8 @@ SURVEY_LABELS = {
     "checkbox": "Multiple choice",
     "likert": "Likert",
     "likert_grid": "Likert grid",
+    "list": "List",
+    "ranking": "Ranking",
     "slider": "Slider",
     "number": "Number",
     "date": "Date",
@@ -198,6 +200,9 @@ def _survey_answer(item: Any, answer: str) -> SurveyAnswer:
         return SurveyAnswer(
             kind=kind, options=[], answer=answer, scale=" · ".join(item.options)
         )
+    if isinstance(item, (ListItem, RankingItem)):
+        # `answer` is already described: one line per entry, or per rank.
+        return SurveyAnswer(kind=kind, options=[], answer=answer)
     options: list[str] = list(getattr(item, "options", None) or [])
     if not options:
         scale = None
