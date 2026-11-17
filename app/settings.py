@@ -11,7 +11,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings
 
 from ainterviewer.settings import (
     BaseSettingsConfigDict,
@@ -389,7 +389,6 @@ class ServiceSettings(BaseSettings):
         env_prefix="APP_SERVICE__",
         extra="forbid",
         dotenv_filtering="only_existing",
-        hide_input_in_errors=True,
     )
 
 
@@ -406,20 +405,13 @@ class AppSecrets(SecretSettings):
     db_username: str | None = None
     db_password: SecretStr | None = None
 
-    model_config = BaseSettingsConfigDict(
-        env_prefix="APP_SECRET__", hide_input_in_errors=True
-    )
+    model_config = BaseSettingsConfigDict(env_prefix="APP_SECRET__")
 
 
 app_secrets = AppSecrets()
 
 
 class Settings(ConfigSettings):
-    # A validation error otherwise prints the offending value, and the
-    # environment it validates carries the secrets. Only the outermost
-    # model's setting counts, so it goes on each class constructed directly.
-    model_config = SettingsConfigDict(hide_input_in_errors=True)
-
     # The library reads its tables ([llm], [storage]) from the same file.
     shares_file_with: ClassVar[tuple[type[BaseSettings], ...]] = (LibSettings,)
 
