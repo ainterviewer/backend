@@ -30,6 +30,7 @@ from jinja2 import ChoiceLoader, DictLoader, PackageLoader
 from sqlalchemy.exc import NoResultFound
 from uvicorn.config import logger
 
+from ainterviewer.agents.config import AgentConfigs
 from ainterviewer.interfaces import OutgoingData
 from ainterviewer.interview import AInterviewer
 from ainterviewer.lpm.types import CustomToken
@@ -44,6 +45,21 @@ from ..auth import authenticate_or_close
 from ..handler import WebsocketMessageHandler
 from ..manager import session_manager
 from .replay import replay_history
+
+#: Agents a test run's interviewer model leaves alone: the synthetic
+#: interviewee, whose model the run sets apart, and the image model.
+_KEEP_OWN_MODEL = frozenset({"answering", "visual"})
+
+
+def with_interviewer_model(agent_configs: AgentConfigs, model: str) -> AgentConfigs:
+    """`agent_configs` with every interview agent on `model`
+    (`TestRunTable.interviewer_model`); temperatures and prompts stay."""
+    configs = agent_configs.model_copy(deep=True)
+    for name in AgentConfigs.model_fields:
+        if name not in _KEEP_OWN_MODEL:
+            getattr(configs, name).model = model
+    return configs
+
 
 router = APIRouter(prefix="/ws", tags=["interviews"])
 
@@ -246,6 +262,11 @@ async def _run_interview(
             project_id, language, or_default=True
         )
 
+    agent_configs = project_localization.agent_configs
+    # A test run comparing models puts every interview agent on its model.
+    if interviewer_model := db.tests.interviewer_model(interview_id):
+        agent_configs = with_interviewer_model(agent_configs, interviewer_model)
+
     if interview_history:
         if initialized:
             last_message = interview_history[-1]
@@ -293,7 +314,7 @@ async def _run_interview(
             db=db,
             interview_guide=interview.interview_guide,
             config=interview_config,
-            agent_configs=project_localization.agent_configs,
+            agent_configs=agent_configs,
             template_loader=prompt_loader,
             project_id=project_id,
             interview_id=interview_id,

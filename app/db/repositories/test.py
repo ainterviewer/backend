@@ -8,7 +8,7 @@ from sqlalchemy import Column, delete, exists, func, or_, select, update
 from sqlalchemy.exc import NoResultFound
 
 from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
-from ainterviewer.types import InterviewStatus
+from ainterviewer.types import InterviewStatus, MessageRole
 from ainterviewer.utils import now
 
 from ...schemas.projects import (
@@ -18,6 +18,10 @@ from ...schemas.projects import (
     ExperimentUpdate,
 )
 from ...schemas.testing import (
+    ComparisonInterview,
+    ComparisonTurn,
+    RunComparison,
+    RunComparisonResponse,
     SynthesizeRequest,
     TestRunCreate,
     TestRunPublic,
@@ -241,6 +245,87 @@ class TestRepository(BaseRepository):
         test_runs = self.session.execute(statement).scalars().all()
 
         return [TestRunPublic.model_validate(test_run) for test_run in test_runs]
+
+    def interviewer_model(self, interview_id: UUID4) -> str | None:
+        """The model the interview's test run puts every interview agent on,
+        if it is one that does (`TestRunTable.interviewer_model`)."""
+        return self.session.execute(
+            select(TestRunTable.interviewer_model)
+            .join(InterviewTable, InterviewTable.test_run_id == TestRunTable.id)
+            .where(InterviewTable.id == interview_id)
+        ).scalar_one_or_none()
+
+    def compare_runs(
+        self, test_setup_id: UUID4, run_ids: list[UUID4]
+    ) -> RunComparisonResponse:
+        """The runs' interviews with their transcripts, in the order the ids
+        were given. NoResultFound unless every run is the setup's."""
+        runs = {
+            run.id: run
+            for run in self.session.execute(
+                select(TestRunTable).where(
+                    TestRunTable.test_setup_id == test_setup_id,
+                    TestRunTable.id.in_(run_ids),
+                )
+            ).scalars()
+        }
+        if len(runs) != len(set(run_ids)):
+            raise NoResultFound("Not every run is this test's")
+
+        interviews = (
+            self.session.execute(
+                select(InterviewTable)
+                .where(InterviewTable.test_run_id.in_(run_ids))
+                .order_by(InterviewTable.created_at)
+            )
+            .scalars()
+            .all()
+        )
+        interview_ids = [interview.id for interview in interviews]
+        turns: dict[uuid.UUID, list[ComparisonTurn]] = {i: [] for i in interview_ids}
+        for message in self.session.execute(
+            select(MessageTable)
+            .where(
+                MessageTable.interview_id.in_(interview_ids),
+                MessageTable.role != MessageRole.SYSTEM,
+            )
+            .order_by(MessageTable.created_at, MessageTable.message_id)
+        ).scalars():
+            # Control tokens ("<|...|>") are the loop talking to itself.
+            if message.content and not message.content.startswith("<|"):
+                turns[message.interview_id].append(
+                    ComparisonTurn.model_validate(message)
+                )
+        personas = {
+            row.interview_id: row.interview_subject
+            for row in self.session.execute(
+                select(IntervieweeTable).where(
+                    IntervieweeTable.interview_id.in_(interview_ids)
+                )
+            ).scalars()
+        }
+
+        by_run: dict[uuid.UUID, list[ComparisonInterview]] = {i: [] for i in runs}
+        for interview in interviews:
+            if interview.test_run_id is None:
+                continue
+            by_run[interview.test_run_id].append(
+                ComparisonInterview(
+                    interview_id=interview.id,
+                    status=interview.status,
+                    persona=personas.get(interview.id),
+                    turns=turns[interview.id],
+                )
+            )
+        return RunComparisonResponse(
+            runs=[
+                RunComparison(
+                    run=TestRunPublic.model_validate(runs[run_id]),
+                    interviews=by_run[run_id],
+                )
+                for run_id in dict.fromkeys(run_ids)
+            ]
+        )
 
     def update_test_run_status(
         self, test_setup_id: UUID4, test_run_id: UUID4, status: TestRunStatus

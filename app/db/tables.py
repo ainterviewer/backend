@@ -1402,6 +1402,9 @@ class TestRunTable(Base):
     language: Mapped[LanguageCode] = mapped_column(LanguageType, default="EN")
     n_interviews: Mapped[int] = mapped_column()
     answering_model: Mapped[str | None] = mapped_column()
+    #: The model every interview agent ran on instead of the project's own,
+    #: to compare models; null for the project's agent configs.
+    interviewer_model: Mapped[str | None] = mapped_column()
     delay_before_answers: Mapped[Any | None] = mapped_column(JSON)
     created_at: Mapped[datetime.datetime] = mapped_column(default=now)
     # Changes here also bump TestSetupTable.last_updated and

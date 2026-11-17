@@ -249,6 +249,11 @@ async def run_synthesis_job_fixed_answers(
     return results
 
 
+def draw_fixed_personas(fixed_personas: list[str], n_interviews: int) -> list[str]:
+    """`n_interviews` personas drawn from a FIXED_AI setup's, with repeats."""
+    return [random.choice(fixed_personas) for _ in range(n_interviews)]
+
+
 async def run_synthesis_job_fixed_ai(
     project_id: str,
     test_run_id: str,
@@ -258,8 +263,11 @@ async def run_synthesis_job_fixed_ai(
     answering_model: str,
     language: LanguageCode,
     delay_before_answer: tuple[float, float] | None = None,
+    personas: list[str] | None = None,
 ):
-    shuffled_personas = [random.choice(fixed_personas) for _ in range(n_interviews)]
+    """`personas`, when given, are the interviewees to play, in order: the
+    same in every run being compared. Drawn from `fixed_personas` otherwise."""
+    shuffled_personas = personas or draw_fixed_personas(fixed_personas, n_interviews)
 
     # Create agents
     agents = []
@@ -302,8 +310,13 @@ async def run_synthesis_job_shuffled_ai(
     answering_model: str,
     language: LanguageCode,
     delay_before_answer: tuple[float, float] | None = None,
+    subjects: list[InterviewSubject] | None = None,
 ):
-    subjects = generate_synthetic_persons(background_info_options, n_interviews)
+    """`subjects`, when given, are the interviewees to play, in order: the
+    same in every run being compared. Generated otherwise."""
+    subjects = subjects or generate_synthetic_persons(
+        background_info_options, n_interviews
+    )
 
     # Create agents
     agents = []

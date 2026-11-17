@@ -1,10 +1,12 @@
 from datetime import timedelta
+from typing import Annotated
 
 from fastapi import (
     APIRouter,
     BackgroundTasks,
     Depends,
     HTTPException,
+    Query,
     Request,
     Response,
 )
@@ -12,13 +14,18 @@ from pydantic import UUID4
 from sqlalchemy.exc import NoResultFound
 from uvicorn.config import logger
 
-from ainterviewer.synthesize.interviewees import BackgroundInfoOptions
+from ainterviewer.settings import settings as lib_settings
+from ainterviewer.synthesize.interviewees import (
+    BackgroundInfoOptions,
+    generate_synthetic_persons,
+)
 from ainterviewer.types import TestType
 from ainterviewer.utils import now
 
 from ...dependencies import DBSession, IfMatch, ProjectEditor, ProjectViewer, set_etag
 from ...schemas.interviews import IntervieweeCreate, IntervieweePublic
 from ...schemas.testing import (
+    RunComparisonResponse,
     SynthesizeRequest,
     SynthesizeResponse,
     TestRunCreate,
@@ -31,6 +38,7 @@ from ...schemas.testing import (
 )
 from ...schemas.users import DemoBudget, DemoBudgetItem
 from ...synthesize.core import (
+    draw_fixed_personas,
     run_synthesis_job_fixed_ai,
     run_synthesis_job_fixed_answers,
     run_synthesis_job_shuffled_ai,
@@ -317,7 +325,9 @@ async def run_synthetic_test(
     # https://fastapi.tiangolo.com/tutorial/background-tasks/#create-a-task-function
     # https://docs.celeryq.dev/en/stable/
 
-    def handle_exceptions(func):
+    def handle_exceptions(func, run_id: UUID4):
+        # The run's id is passed rather than read from the loop below, which
+        # would leave every run's status to the last one's.
         async def wrapper(*args, **kwargs):
             try:
                 results = await func(*args, **kwargs)
@@ -328,22 +338,36 @@ async def run_synthetic_test(
 
                 db.tests.update_test_run_status(
                     test_setup_id=test_id,
-                    test_run_id=test_run_id,
+                    test_run_id=run_id,
                     status=TestRunStatus.COMPLETED,
                 )
             except Exception:
                 logger.error("Error running synthesis job")
                 db.tests.update_test_run_status(
                     test_setup_id=test_id,
-                    test_run_id=test_run_id,
+                    test_run_id=run_id,
                     status=TestRunStatus.FAILED,
                 )
                 raise
 
         return wrapper
 
+    # Any model a project may configure, test-only ones included: a run is a
+    # test, and trying a model before switching to it is the point.
+    llm = lib_settings.llm
+    offered = (
+        (llm.demo_models or []) if jwt.scope == Scope.DEMO else llm.available_models
+    )
+    if unknown := [m for m in request_data.interviewer_models if m not in offered]:
+        raise HTTPException(
+            status_code=400, detail=f"Not an available model: {', '.join(unknown)}"
+        )
+    # One run per interviewer model, or one on the project's own models.
+    interviewer_models: list[str | None] = [*request_data.interviewer_models] or [None]
+    n_total = request_data.n_interviews * len(interviewer_models)
+
     if jwt.scope == Scope.DEMO:
-        check_demo_synthetic_limits(db, jwt.user_id, request_data.n_interviews)
+        check_demo_synthetic_limits(db, jwt.user_id, n_total)
 
     test_setup = db.tests.update_test_setup_settings(test_id, request_data)
 
@@ -354,63 +378,109 @@ async def run_synthetic_test(
             status_code=400,
             detail="Answering model is required for SHUFFLED_AI test type",
         )
+    if test_setup.type == TestType.FIXED_AI and not test_setup.fixed_personas:
+        raise HTTPException(status_code=400, detail="Add a persona to run this test")
 
-    test_run_id = db.tests.create_test_run(
-        TestRunCreate(
-            test_setup_id=test_id,
-            started_by_id=jwt.user_id,
-            **request_data.model_dump(),
+    # Drawn once, so every run being compared interviews the same people.
+    personas = (
+        draw_fixed_personas(test_setup.fixed_personas, request_data.n_interviews)
+        if test_setup.type == TestType.FIXED_AI and test_setup.fixed_personas
+        else None
+    )
+    subjects = (
+        generate_synthetic_persons(
+            test_setup.background_info, request_data.n_interviews
         )
+        if test_setup.type == TestType.SHUFFLED_AI and test_setup.background_info
+        else None
     )
 
-    match test_setup.type:
-        case TestType.FIXED_ANSWERS:
-            background_tasks.add_task(
-                handle_exceptions(run_synthesis_job_fixed_answers),
-                project_id=str(project_id),
-                test_run_id=str(test_run_id),
-                user_token=request.cookies["access_token"],
-                fixed_answers=test_setup.fixed_answers or {},
-                n_interviews=request_data.n_interviews,
+    test_run_ids: list[UUID4] = []
+    for interviewer_model in interviewer_models:
+        test_run_id = db.tests.create_test_run(
+            TestRunCreate(
+                test_setup_id=test_id,
+                started_by_id=jwt.user_id,
                 language=request_data.language,
-                delay_before_answer=request_data.delay_before_answers,
-            )
-
-        case TestType.FIXED_AI:
-            background_tasks.add_task(
-                handle_exceptions(run_synthesis_job_fixed_ai),
-                project_id=str(project_id),
-                test_run_id=str(test_run_id),
-                user_token=request.cookies["access_token"],
-                fixed_personas=test_setup.fixed_personas,
                 n_interviews=request_data.n_interviews,
                 answering_model=request_data.answering_model,
-                language=request_data.language,
-                delay_before_answer=request_data.delay_before_answers,
+                interviewer_model=interviewer_model,
+                delay_before_answers=request_data.delay_before_answers,
             )
+        )
+        test_run_ids.append(test_run_id)
 
-        case TestType.SHUFFLED_AI:
-            # Start the synthesis job in the background
-            background_tasks.add_task(
-                handle_exceptions(run_synthesis_job_shuffled_ai),
-                project_id=str(project_id),
-                test_run_id=str(test_run_id),
-                user_token=request.cookies["access_token"],
-                background_info_options=test_setup.background_info,
-                n_interviews=request_data.n_interviews,
-                answering_model=request_data.answering_model,
-                language=request_data.language,
-                delay_before_answer=request_data.delay_before_answers,
-            )
+        match test_setup.type:
+            case TestType.FIXED_ANSWERS:
+                background_tasks.add_task(
+                    handle_exceptions(run_synthesis_job_fixed_answers, test_run_id),
+                    project_id=str(project_id),
+                    test_run_id=str(test_run_id),
+                    user_token=request.cookies["access_token"],
+                    fixed_answers=test_setup.fixed_answers or {},
+                    n_interviews=request_data.n_interviews,
+                    language=request_data.language,
+                    delay_before_answer=request_data.delay_before_answers,
+                )
 
-    db.tests.update_test_run_status(
-        test_setup_id=test_id,
-        test_run_id=test_run_id,
-        status=TestRunStatus.RUNNING,
-    )
+            case TestType.FIXED_AI:
+                background_tasks.add_task(
+                    handle_exceptions(run_synthesis_job_fixed_ai, test_run_id),
+                    project_id=str(project_id),
+                    test_run_id=str(test_run_id),
+                    user_token=request.cookies["access_token"],
+                    fixed_personas=test_setup.fixed_personas,
+                    n_interviews=request_data.n_interviews,
+                    answering_model=request_data.answering_model,
+                    language=request_data.language,
+                    delay_before_answer=request_data.delay_before_answers,
+                    personas=personas,
+                )
 
+            case TestType.SHUFFLED_AI:
+                background_tasks.add_task(
+                    handle_exceptions(run_synthesis_job_shuffled_ai, test_run_id),
+                    project_id=str(project_id),
+                    test_run_id=str(test_run_id),
+                    user_token=request.cookies["access_token"],
+                    background_info_options=test_setup.background_info,
+                    n_interviews=request_data.n_interviews,
+                    answering_model=request_data.answering_model,
+                    language=request_data.language,
+                    delay_before_answer=request_data.delay_before_answers,
+                    subjects=subjects,
+                )
+
+        db.tests.update_test_run_status(
+            test_setup_id=test_id,
+            test_run_id=test_run_id,
+            status=TestRunStatus.RUNNING,
+        )
+
+    runs = f" in each of {len(test_run_ids)} runs" if len(test_run_ids) > 1 else ""
     return SynthesizeResponse(
         project_id=project_id,
-        message=f"Synthesis job started with {request_data.n_interviews} interviews",
+        message=f"Synthesis job started with {request_data.n_interviews} interviews{runs}",
         status="initializing",
+        test_run_ids=test_run_ids,
     )
+
+
+@router.get(
+    "/projects/{project_id}/tests/{test_id}/runs/compare",
+    dependencies=_test_in_project,
+)
+async def compare_test_runs(
+    project_id: UUID4,
+    test_id: UUID4,
+    db: DBSession,
+    jwt: ProjectViewer,
+    run_id: Annotated[list[UUID4], Query(min_length=1, max_length=5)],
+) -> RunComparisonResponse:
+    """The runs' synthetic interviews with their transcripts, to read side by
+    side: typically the runs one request started on several interviewer
+    models, which interviewed the same people."""
+    try:
+        return db.tests.compare_runs(test_id, run_id)
+    except NoResultFound as exc:
+        raise HTTPException(status_code=404, detail="Test run not found") from exc
