@@ -35,7 +35,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
   --mount=type=secret,id=github_token \
   TOKEN=$(cat /run/secrets/github_token) && \
   git config --global url."https://${TOKEN}@github.com/".insteadOf "https://github.com/" && \
-  uv sync --locked --no-install-project && \
+  uv sync --locked --no-dev --no-install-project && \
   git config --global --unset-all url."https://${TOKEN}@github.com/".insteadOf
 
 # --- build: install the project itself ---
@@ -45,7 +45,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
   --mount=type=secret,id=github_token \
   TOKEN=$(cat /run/secrets/github_token) && \
   git config --global url."https://${TOKEN}@github.com/".insteadOf "https://github.com/" && \
-  uv sync --locked && \
+  uv sync --locked --no-dev && \
   git config --global --unset-all url."https://${TOKEN}@github.com/".insteadOf
 
 # --- runtime: final compact image ---
