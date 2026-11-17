@@ -4,6 +4,25 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.27] - 2026-11-17
+
+### Features
+
+- (interviews) Return the guide version each interview ran in the list
+- (interviews) Filter interviews by guide version
+- (survey) Support list and ranking questions
+
+### Bug Fixes
+
+- (auth) Close analysis, interview data and publishing to demo accounts
+- (explore) Show a Likert grid's ratings rather than its JSON
+
+### Internal
+
+- (ws) Move replay_history next to the interview websocket
+- (deps) Bump ainterviewer to v0.7.12
+- (export) Describe any structured survey answer, not just a grid's
+
 ## [0.10.26] - 2026-11-14
 
 ### Bug Fixes
