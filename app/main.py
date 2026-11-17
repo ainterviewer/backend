@@ -20,7 +20,7 @@ from .db.crud import InterviewDataBase
 from .dependencies import engine
 from .embed.worker import embedding_worker
 from .errors import add_error_handlers
-from .settings import app_settings
+from .settings import app_secrets, app_settings
 
 # =========== #
 # Init Logger #
@@ -84,7 +84,7 @@ app = FastAPI(
 # Middleware
 app.add_middleware(
     SessionMiddleware,
-    secret_key=app_settings.secrets.session_secret_key.get_secret_value(),
+    secret_key=app_secrets.session_secret_key.get_secret_value(),
     max_age=6000,
 )
 

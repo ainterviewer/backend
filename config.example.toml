@@ -1,0 +1,58 @@
+#:schema ./config.schema.json
+# Copy to config.toml (git-ignored) and adjust. Every key is optional in
+# development; a deployed app_env must set app.public_url and app.contact_email.
+#
+# No secrets here: they are read from the environment and .env only (see
+# .env.example), and a secret in this file stops startup. So does a key a
+# table does not know, so a typo cannot silently fall back to a default; an
+# unknown top-level table is warned about.
+#
+# The ainterviewer library reads [llm], [storage] and tzinfo from this same
+# file. Any key can also be set in the environment, sections joined by `__`:
+# `[database] db_path` is DATABASE__DB_PATH (`[services]` is APP_SERVICE__...,
+# and a value in this file wins over that one).
+
+debug = true
+app_env = "development"
+
+[app]
+public_url = "http://localhost:5173"
+website_url = "http://localhost:5174"
+contact_email = "contact@example.org"
+registration_requires_token = false
+
+[llm]
+default_model = "openrouter:openai/gpt-oss-120b"
+# Models respondents' answers may be sent to (distributed interviews).
+models = []
+# Drafts and test interviews only: a project using one cannot be published.
+# Each provider needs its key in .env.
+test_only_models = ["openrouter:openai/gpt-oss-120b"]
+
+[database]
+db = "sqlite"
+db_path = "storage"
+
+[storage]
+base_path = "storage/"
+
+# Spoken interviews; both use OpenAI and need OPENAI_API_KEY.
+# [services.speech]
+# stt_model = "gpt-realtime-whisper"
+# stt_endpoint = "wss://api.openai.com"
+# tts_model = "gpt-4o-mini-tts"
+# tts_voice = "cedar"
+# test_only = true
+
+# Outgoing mail. The sender's password is APP_SECRET__SMTP_PASSWORD in .env.
+# [services.email]
+# smtp_server = "smtp.example.org"
+#
+# [services.email.sender]
+# email = "noreply@example.org"
+#
+# [services.email.recipient]
+# email = "admin@example.org"
+
+# [services.embedding]
+# enabled = false

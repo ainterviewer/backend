@@ -7,9 +7,11 @@ not in links, not in the contact address, not in email footers.
 import pytest
 from pydantic import ValidationError
 
+from ainterviewer.settings import ConfigError, ConfigWarning
+from app import settings as settings_module
 from app.api.misc import get_instance
 from app.services.email.mail import email_templates
-from app.settings import Settings, app_settings
+from app.settings import AppSecrets, Settings, app_settings
 
 
 @pytest.fixture
@@ -62,3 +64,63 @@ def test_email_footer_uses_the_configured_addresses():
     assert f"mailto:{app_settings.app.contact_email}" in html
     assert f'href="{app_settings.app.website_url}"' in html
     assert f"{app_settings.app.public_url}/images/email_header.png" in html
+
+
+# Secrets come from the environment only, so config.toml can be committed.
+
+
+def _email_env(env):
+    env.setenv("APP_SERVICE__EMAIL__SMTP_SERVER", "smtp.invalid")
+    env.setenv("APP_SERVICE__EMAIL__SENDER__EMAIL", "info@example.org")
+    env.setenv("APP_SERVICE__EMAIL__RECIPIENT__EMAIL", "admin@example.org")
+
+
+def test_a_backend_secret_in_config_toml_names_its_variable(bare_env, tmp_path):
+    (tmp_path / "config.toml").write_text('[app]\njwt_secret_key = "x"')
+
+    with pytest.raises(ConfigError, match="APP_SECRET__JWT_SECRET_KEY"):
+        Settings()
+
+
+def test_email_needs_the_smtp_password(bare_env):
+    _email_env(bare_env)
+    bare_env.setattr(settings_module, "app_secrets", AppSecrets())
+
+    with pytest.raises(ValidationError, match="APP_SECRET__SMTP_PASSWORD"):
+        Settings()
+
+    bare_env.setattr(settings_module, "app_secrets", AppSecrets(smtp_password="secret"))
+    email = Settings().services.email
+    assert email is not None
+    assert email.sender.email == "info@example.org"
+
+
+def test_the_old_smtp_password_variable_says_where_it_went(bare_env):
+    _email_env(bare_env)
+    bare_env.setenv("APP_SERVICE__EMAIL__SENDER__PASSWORD", "secret")
+
+    with pytest.raises(ValidationError, match="APP_SECRET__SMTP_PASSWORD"):
+        Settings()
+
+
+def test_an_unknown_key_in_a_table_is_refused(bare_env, tmp_path):
+    (tmp_path / "config.toml").write_text('[app]\npublic_ulr = "https://x"')
+
+    with pytest.raises(ValidationError, match="public_ulr"):
+        Settings()
+
+
+def test_an_unknown_table_is_warned_about_but_the_librarys_are_not(bare_env, tmp_path):
+    (tmp_path / "config.toml").write_text("[llm]\n[storage]\n[servics]")
+
+    with pytest.warns(ConfigWarning, match="nothing reads servics;"):
+        Settings()
+
+
+def test_migrated_registration_tokens_only_warn(bare_env, tmp_path):
+    (tmp_path / "config.toml").write_text(
+        '[app]\nspecial_registration_tokens = [{token = "workshop", scope = "user"}]'
+    )
+
+    with pytest.warns(ConfigWarning, match="special_registration_tokens"):
+        Settings()

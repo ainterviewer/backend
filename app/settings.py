@@ -1,31 +1,33 @@
 from __future__ import annotations
 
 import os
-from typing import Literal
+import warnings
+from typing import Any, ClassVar, Literal
 
 from pydantic import (
-    BaseModel,
     Field,
     SecretStr,
     computed_field,
     field_validator,
     model_validator,
 )
-from pydantic_settings import (
-    BaseSettings,
-    PydanticBaseSettingsSource,
-    PyprojectTomlConfigSettingsSource,
-    TomlConfigSettingsSource,
-)
+from pydantic_settings import BaseSettings
 
-from ainterviewer.settings import BaseSettingsConfigDict
+from ainterviewer.settings import (
+    BaseSettingsConfigDict,
+    ConfigSection,
+    ConfigSettings,
+    ConfigWarning,
+    SecretSettings,
+)
+from ainterviewer.settings import Settings as LibSettings
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import DatabaseType, TimeDelta
 
 os.environ.setdefault("ANY_LLM_UNIFIED_EXCEPTIONS", "1")
 
 
-class DemoLimits(BaseModel):
+class DemoLimits(ConfigSection):
     """Synthetic-interview budgets for `Scope.DEMO` accounts, counted per user.
 
     Every synthetic interview is a full interview against the shared inference
@@ -51,7 +53,7 @@ class DemoLimits(BaseModel):
     lifetime_synthetic_interviews: int = 100
 
 
-class AppSettings(BaseModel):
+class AppSettings(ConfigSection):
     api_host: str = "127.0.0.1"
     api_port: int = 8666
 
@@ -146,6 +148,22 @@ class AppSettings(BaseModel):
         default_factory=lambda: TimeDelta(minutes=10)
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def drop_special_registration_tokens(cls, data: Any) -> Any:
+        # Revision 8c9dc147b75f turned these into invitations, reading them
+        # from config.toml itself, so an instance upgrading from before it
+        # still has them there when it first starts.
+        if isinstance(data, dict) and "special_registration_tokens" in data:
+            warnings.warn(
+                "app.special_registration_tokens are invitations now (see the "
+                "admin page); remove them from config.toml",
+                ConfigWarning,
+                stacklevel=2,
+            )
+            data = {k: v for k, v in data.items() if k != "special_registration_tokens"}
+        return data
+
     @field_validator("public_url", "website_url", "docs_url")
     @classmethod
     def strip_trailing_slash(cls, v: str) -> str:
@@ -164,7 +182,7 @@ class AppSettings(BaseModel):
         return f"{self.web_host}:{self.web_port}"
 
 
-class DatabaseSettings(BaseModel):
+class DatabaseSettings(ConfigSection):
     db: DatabaseType = DatabaseType.SQLITE
     db_path: str = "storage"
 
@@ -199,12 +217,25 @@ class DatabaseSettings(BaseModel):
         return connection_string
 
 
-class EmailAccount(BaseModel):
+class EmailAccount(ConfigSection):
     email: str
-    password: SecretStr
+
+    @model_validator(mode="before")
+    @classmethod
+    def password_moved(cls, data: Any) -> Any:
+        # Still accepted from APP_SERVICE__EMAIL__*__PASSWORD, so say where
+        # it went rather than leave pydantic's "extra inputs".
+        if isinstance(data, dict) and "password" in data:
+            raise ValueError(
+                "the SMTP password is a secret now: set "
+                "APP_SECRET__SMTP_PASSWORD (the sender's) and remove "
+                "APP_SERVICE__EMAIL__SENDER__PASSWORD and "
+                "APP_SERVICE__EMAIL__RECIPIENT__PASSWORD"
+            )
+        return data
 
 
-class EmailSettings(BaseModel):
+class EmailSettings(ConfigSection):
     smtp_server: str
     smtp_port: int = 587
     smtp_use_ssl: bool = False
@@ -212,7 +243,7 @@ class EmailSettings(BaseModel):
     recipient: EmailAccount
 
 
-class SpeechSettings(BaseModel):
+class SpeechSettings(ConfigSection):
     stt_model: str | None = None
     stt_endpoint: str | None = None
     sst_delay: Literal["minimal", "low", "medium", "high", "xhigh"] = "medium"
@@ -233,7 +264,7 @@ class SpeechSettings(BaseModel):
 ASSISTANCE_PROVIDERS = ("openai:", "openrouter:")
 
 
-class AssistanceSettings(BaseModel):
+class AssistanceSettings(ConfigSection):
     """The dashboard's interview-guide assistant."""
 
     # `provider:model`, spelled as in [llm]. It needs a model that can call
@@ -250,14 +281,14 @@ class AssistanceSettings(BaseModel):
         return v
 
 
-class TranslationSettings(BaseModel):
+class TranslationSettings(ConfigSection):
     """Machine translation of a project's guide, consent and welcome."""
 
     # `provider:model`, spelled as in [llm]; needs the key for its provider.
     model: str = "openrouter:z-ai/glm-5.3-flash"
 
 
-class EmbeddingSettings(BaseModel):
+class EmbeddingSettings(ConfigSection):
     """Text-embedding-inference server used to vectorise interview text.
 
     Disabled by default: with `enabled = false` nothing is embedded and no
@@ -350,12 +381,18 @@ class ServiceSettings(BaseSettings):
     assistance: AssistanceSettings = AssistanceSettings()
     translation: TranslationSettings = TranslationSettings()
 
-    model_config = BaseSettingsConfigDict(env_prefix="APP_SERVICE__")
+    model_config = BaseSettingsConfigDict(env_prefix="APP_SERVICE__", extra="forbid")
 
 
-class AppSecrets(BaseSettings):
+class AppSecrets(SecretSettings):
+    """Read from the environment and .env only, never from config.toml."""
+
     jwt_secret_key: SecretStr
     session_secret_key: SecretStr
+
+    # The sender's login to `[services.email] smtp_server`, required once that
+    # is configured.
+    smtp_password: SecretStr | None = None
 
     db_username: str | None = None
     db_password: SecretStr | None = None
@@ -363,7 +400,13 @@ class AppSecrets(BaseSettings):
     model_config = BaseSettingsConfigDict(env_prefix="APP_SECRET__")
 
 
-class Settings(BaseSettings):
+app_secrets = AppSecrets()
+
+
+class Settings(ConfigSettings):
+    # The library reads its tables ([llm], [storage]) from the same file.
+    shares_file_with: ClassVar[tuple[type[BaseSettings], ...]] = (LibSettings,)
+
     debug: bool = False
     app_env: Literal["production", "staging", "development"] = "development"
 
@@ -376,17 +419,6 @@ class Settings(BaseSettings):
     # ever consulted. Deferred, it runs only when config.toml supplies no
     # `services` at all, which is the case in CI and in a fresh clone.
     services: ServiceSettings = Field(default_factory=ServiceSettings)
-
-    # TODO:
-    # - Should the secrets be a standalone class so they cant be read
-    # through the config.toml file?
-    # - Should all "secrets" be moved to that class?
-    secrets: AppSecrets = AppSecrets()
-
-    model_config = BaseSettingsConfigDict(
-        toml_file="config.toml",
-        pyproject_toml_table_header=("tool", "ainterviewer"),
-    )
 
     @model_validator(mode="after")
     def require_deployment_settings(self) -> Settings:
@@ -406,30 +438,19 @@ class Settings(BaseSettings):
                 )
         return self
 
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
-    ) -> tuple[PydanticBaseSettingsSource, ...]:
-        return (
-            env_settings,
-            dotenv_settings,
-            TomlConfigSettingsSource(settings_cls),
-            PyprojectTomlConfigSettingsSource(settings_cls),
-        )
+    @model_validator(mode="after")
+    def require_smtp_password(self) -> Settings:
+        if self.services.email and not app_secrets.smtp_password:
+            raise ValueError(
+                "[services.email] is configured but APP_SECRET__SMTP_PASSWORD is not set"
+            )
+        return self
 
 
 # TODO: Read/write to/from database or config file to get persistent changes?
 app_settings = Settings()
 
 if __name__ == "__main__":
-    # from ainterviewer.settings import settings as lib_settings
-
-    # print(app_settings.secrets)
     # print(lib_settings)
     # print(app_settings.services)
     print(app_settings.app)

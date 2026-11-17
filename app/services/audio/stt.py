@@ -18,7 +18,7 @@ from websockets.asyncio.client import ClientConnection
 from websockets.exceptions import ConnectionClosed
 from websockets.exceptions import WebSocketException as WSException
 
-from ainterviewer.settings import settings as lib_settings
+from ainterviewer.settings import api_keys
 from ainterviewer.types import LanguageCode
 
 from ...settings import app_settings
@@ -97,7 +97,7 @@ class TranscriptionSession:
                 _transcription_url(speech_settings.stt_endpoint),
                 additional_headers={
                     "Authorization": "Bearer "
-                    + lib_settings.secrets.openai_api_key.get_secret_value(),
+                    + api_keys.openai_api_key.get_secret_value(),
                     "OpenAI-Safety-Identifier": str(interview_id),
                 },
                 max_size=None,

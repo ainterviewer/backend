@@ -470,15 +470,35 @@ recomputed and no text can land beside a vector made from something else.
 
 ### Configuration Management
 
-**Multi-source configuration** (`app/settings.py`):
+**Multi-source configuration** (`app/settings.py`, on the library's
+`ConfigSettings` / `SecretSettings` in `ainterviewer.settings`):
 
-- Sources (priority order): Environment variables → `.env` → `pyproject.toml` → `config.toml`
-- Pydantic BaseSettings with validation
+- **config.toml holds no secrets, so it can be committed.** Secrets are
+  `AppSecrets` (`app_secrets`, `APP_SECRET__*`) and the library's `ApiKeys`
+  (`api_keys`, `OPENAI_API_KEY` etc.), read from the environment and `.env`
+  only. They are standalone objects, never fields of `Settings`: a field would
+  be read from config.toml too. A secret in config.toml or
+  `[tool.ainterviewer]` stops startup (`check_config_file`): a registered
+  secret's name, a `[secrets]` table, or a name like `password`/`*_api_key`.
+  A new secret goes on a `SecretSettings`, not on a config model.
+- Settings sources (priority order): environment variables → `.env` →
+  `config.toml` → `pyproject.toml` `[tool.ainterviewer]`.
+- **Unknown keys.** Every table is a `ConfigSection` (`extra="forbid"`), so a
+  key nothing reads in `[app]`, `[database]`, `[services.*]` or `[llm]` stops
+  startup rather than silently falling back to a default. Tables are the unit
+  the file is shared at -- the library reads `[llm]`, `[storage]` and `tzinfo`
+  from the same file -- so an unknown *top-level* key only warns
+  (`ConfigWarning`); `Settings.shares_file_with` names the library so its
+  tables are not warned about. Removing a setting means removing it from
+  every deployment's config, or tolerating it explicitly as
+  `AppSettings.drop_special_registration_tokens` does.
 - Prefixes: `APP_SECRET__` and `APP_SERVICE__` for those two sections; every
   other section is read with no prefix and `__` as the nesting delimiter, so
-  `[database] enforce_foreign_keys` is `DATABASE__ENFORCE_FOREIGN_KEYS`, not
-  `APP_DATABASE__…` (which is silently ignored)
-- Example: `APP_SECRET__JWT_SECRET_KEY` overrides default JWT secret
+  `[database] enforce_foreign_keys` is `DATABASE__ENFORCE_FOREIGN_KEYS`.
+  `ServiceSettings` reads `APP_SERVICE__*` itself, which a `[services]` table
+  in config.toml overrides, unlike every other section.
+- `config.example.toml` and `.env.example` document both; `config.schema.json`
+  (`python -m app.cli export-config-schema`) lists no secrets.
 
 ## Commits
 
@@ -1159,9 +1179,11 @@ APP_SECRET__JWT_SECRET_KEY=your-secret-key
 # Session Management
 APP_SECRET__SESSION_SECRET_KEY=your-session-key
 
-# Email Service (optional)
-APP_SERVICE__EMAIL__SMTP_PASSWORD=your-smtp-password
+# Email Service: required once [services.email] is configured
+APP_SECRET__SMTP_PASSWORD=your-smtp-password
 ```
+
+See `.env.example` for the model providers' keys.
 
 ## Package Manager: uv
 

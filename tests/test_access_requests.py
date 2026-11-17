@@ -37,7 +37,7 @@ def email_settings(monkeypatch):
     """An admin inbox to notify. The route reads it from the settings, which
     CI leaves unset (`services.email` is None) and a developer's config may
     fill with anything."""
-    account = EmailAccount(email=ADMIN_INBOX, password="unused")
+    account = EmailAccount(email=ADMIN_INBOX)
     email = EmailSettings(smtp_server="smtp.invalid", sender=account, recipient=account)
     settings = auth_api.app_settings
     # The settings are frozen, so swap in a copy rather than editing them.

@@ -31,7 +31,7 @@ from app.db.tables import (
 from app.db.triggers import register_trigger_functions
 from app.dependencies import get_db
 from app.main import app
-from app.settings import app_settings
+from app.settings import app_secrets
 from app.types import CollaboratorRole, Scope
 
 
@@ -193,7 +193,7 @@ def test_a_malformed_or_expired_link_is_refused(setup):
     client, _, project_id, _, _, editor, _ = setup
     share = _mint(client, project_id, editor)
     claims = jwt.get_unverified_claims(share)
-    secret = app_settings.secrets.jwt_secret_key.get_secret_value()
+    secret = app_secrets.jwt_secret_key.get_secret_value()
 
     expired = jwt.encode(
         {**claims, "exp": now() - timedelta(minutes=1)}, secret, algorithm="HS256"

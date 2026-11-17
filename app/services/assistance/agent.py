@@ -37,7 +37,7 @@ from pydantic_ai.providers.openrouter import OpenRouterProvider
 from ainterviewer.constants import LANGUAGES
 from ainterviewer.interview_guides import InterviewGuide, Question, QuestionSection
 from ainterviewer.interview_guides.generate import generate_question, generate_section
-from ainterviewer.settings import settings as lib_settings
+from ainterviewer.settings import api_keys
 from ainterviewer.types import LanguageCode
 
 from ...db.crud import InterviewDataBase
@@ -96,17 +96,16 @@ def assistance_model() -> Model:
     without that key; now only the assistant fails, and only when used.
     """
     provider, _, name = ASSISTANCE_MODEL.partition(":")
-    secrets = lib_settings.secrets
     if provider == "openrouter":
         return OpenRouterModel(
             name,
             provider=OpenRouterProvider(
-                api_key=secrets.openrouter_api_key.get_secret_value()
+                api_key=api_keys.openrouter_api_key.get_secret_value()
             ),
         )
     return OpenAIChatModel(
         name,
-        provider=OpenAIProvider(api_key=secrets.openai_api_key.get_secret_value()),
+        provider=OpenAIProvider(api_key=api_keys.openai_api_key.get_secret_value()),
     )
 
 

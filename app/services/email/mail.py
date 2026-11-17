@@ -12,7 +12,7 @@ from aiosmtplib import SMTPResponse
 from html2text import html2text
 from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescape
 
-from ...settings import app_settings
+from ...settings import app_secrets, app_settings
 
 EmailAttachment = tuple[str, bytes]  # (filename, content)
 
@@ -80,7 +80,7 @@ async def send_email(
         hostname=app_settings.services.email.smtp_server,  # ty:ignore[missing-union-attribute]
         port=app_settings.services.email.smtp_port,  # ty:ignore[missing-union-attribute]
         username=app_settings.services.email.sender.email,  # ty:ignore[missing-union-attribute]
-        password=app_settings.services.email.sender.password.get_secret_value(),  # ty:ignore[missing-union-attribute]
+        password=app_secrets.smtp_password.get_secret_value(),  # ty:ignore[missing-union-attribute]
     )
 
 

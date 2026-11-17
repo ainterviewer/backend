@@ -12,7 +12,7 @@ from pydantic import UUID4, BaseModel, PrivateAttr
 from ainterviewer.types import Interviewer, InterviewRole, TimeDelta
 from ainterviewer.utils import now
 
-from .settings import app_settings
+from .settings import app_secrets, app_settings
 from .types import Scope
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -35,7 +35,7 @@ class _Token(BaseModel):
 
         return jwt.encode(
             serializable_payload,
-            app_settings.secrets.jwt_secret_key.get_secret_value(),
+            app_secrets.jwt_secret_key.get_secret_value(),
             algorithm="HS256",
         )
 
@@ -43,7 +43,7 @@ class _Token(BaseModel):
     def decode(cls, token: str) -> Self:
         payload = jwt.decode(
             token,
-            app_settings.secrets.jwt_secret_key.get_secret_value(),
+            app_secrets.jwt_secret_key.get_secret_value(),
             algorithms=["HS256"],
         )
 

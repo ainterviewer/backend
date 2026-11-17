@@ -1,54 +1,7 @@
 {
   "$defs": {
-    "AppSecrets": {
-      "properties": {
-        "jwt_secret_key": {
-          "format": "password",
-          "title": "Jwt Secret Key",
-          "type": "string",
-          "writeOnly": true
-        },
-        "session_secret_key": {
-          "format": "password",
-          "title": "Session Secret Key",
-          "type": "string",
-          "writeOnly": true
-        },
-        "db_username": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Db Username"
-        },
-        "db_password": {
-          "anyOf": [
-            {
-              "format": "password",
-              "type": "string",
-              "writeOnly": true
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Db Password"
-        }
-      },
-      "required": [
-        "jwt_secret_key",
-        "session_secret_key"
-      ],
-      "title": "AppSecrets",
-      "type": "object"
-    },
     "AppSettings": {
+      "additionalProperties": false,
       "properties": {
         "api_host": {
           "default": "127.0.0.1",
@@ -165,6 +118,7 @@
       "type": "object"
     },
     "AssistanceSettings": {
+      "additionalProperties": false,
       "description": "The dashboard's interview-guide assistant.",
       "properties": {
         "model": {
@@ -177,6 +131,7 @@
       "type": "object"
     },
     "DatabaseSettings": {
+      "additionalProperties": false,
       "properties": {
         "db": {
           "$ref": "#/$defs/DatabaseType",
@@ -220,6 +175,7 @@
       "type": "string"
     },
     "DemoLimits": {
+      "additionalProperties": false,
       "description": "Synthetic-interview budgets for `Scope.DEMO` accounts, counted per user.\n\nEvery synthetic interview is a full interview against the shared inference\nserver, so a demo account gets a small budget of them.\n\nThese are the defaults. The three counts can be overridden per user (the\n`user.demo_*_limit` columns, NULL meaning \"use the default\"), set by an\nadmin or snapshotted from the invitation the user registered with; see\n`UserRepository.get_demo_limits`. `active_run_max_age` is an operational\nsafeguard rather than a budget, so it stays global.",
       "properties": {
         "max_concurrent_synthetic_interviews": {
@@ -245,26 +201,21 @@
       "type": "object"
     },
     "EmailAccount": {
+      "additionalProperties": false,
       "properties": {
         "email": {
           "title": "Email",
           "type": "string"
-        },
-        "password": {
-          "format": "password",
-          "title": "Password",
-          "type": "string",
-          "writeOnly": true
         }
       },
       "required": [
-        "email",
-        "password"
+        "email"
       ],
       "title": "EmailAccount",
       "type": "object"
     },
     "EmailSettings": {
+      "additionalProperties": false,
       "properties": {
         "smtp_server": {
           "title": "Smtp Server",
@@ -296,6 +247,7 @@
       "type": "object"
     },
     "EmbeddingSettings": {
+      "additionalProperties": false,
       "description": "Text-embedding-inference server used to vectorise interview text.\n\nDisabled by default: with `enabled = false` nothing is embedded and no\nembedder is handed to the interview loop, so a missing or unreachable\nserver changes nothing about how interviews run.",
       "properties": {
         "enabled": {
@@ -380,6 +332,7 @@
       "type": "object"
     },
     "ServiceSettings": {
+      "additionalProperties": false,
       "description": "Different extra services required to run the app",
       "properties": {
         "email": {
@@ -441,6 +394,7 @@
       "type": "object"
     },
     "SpeechSettings": {
+      "additionalProperties": false,
       "properties": {
         "stt_model": {
           "anyOf": [
@@ -559,6 +513,7 @@
       "type": "object"
     },
     "TranslationSettings": {
+      "additionalProperties": false,
       "description": "Machine translation of a project's guide, consent and welcome.",
       "properties": {
         "model": {
@@ -571,6 +526,7 @@
       "type": "object"
     },
     "LLMSettings": {
+      "additionalProperties": false,
       "properties": {
         "llm_host": {
           "default": "0.0.0.0",
@@ -650,6 +606,7 @@
       "type": "object"
     },
     "MediaStorageSettings": {
+      "additionalProperties": false,
       "description": "Central configuration for all media storage.",
       "properties": {
         "base_path": {
@@ -660,47 +617,6 @@
         }
       },
       "title": "MediaStorageSettings",
-      "type": "object"
-    },
-    "Secrets": {
-      "properties": {
-        "openai_api_key": {
-          "default": "",
-          "format": "password",
-          "title": "Openai Api Key",
-          "type": "string",
-          "writeOnly": true
-        },
-        "google_ai_api_key": {
-          "default": "",
-          "format": "password",
-          "title": "Google Ai Api Key",
-          "type": "string",
-          "writeOnly": true
-        },
-        "openrouter_api_key": {
-          "default": "",
-          "format": "password",
-          "title": "Openrouter Api Key",
-          "type": "string",
-          "writeOnly": true
-        },
-        "vllm_api_key": {
-          "default": "",
-          "format": "password",
-          "title": "Vllm Api Key",
-          "type": "string",
-          "writeOnly": true
-        },
-        "alex_api_key": {
-          "default": "",
-          "format": "password",
-          "title": "Alex Api Key",
-          "type": "string",
-          "writeOnly": true
-        }
-      },
-      "title": "Secrets",
       "type": "object"
     }
   },
@@ -905,16 +821,6 @@
     },
     "services": {
       "$ref": "#/$defs/ServiceSettings"
-    },
-    "secrets": {
-      "allOf": [
-        {
-          "$ref": "#/$defs/AppSecrets"
-        },
-        {
-          "$ref": "#/$defs/Secrets"
-        }
-      ]
     },
     "tzinfo": {
       "default": "Europe/Copenhagen",

@@ -22,7 +22,7 @@ def build(monkeypatch):
         openai_api_key=SecretStr("openai-key"),
         openrouter_api_key=SecretStr("openrouter-key"),
     )
-    monkeypatch.setattr(agent, "lib_settings", SimpleNamespace(secrets=secrets))
+    monkeypatch.setattr(agent, "api_keys", secrets)
 
     def _build(model: str):
         monkeypatch.setattr(agent, "ASSISTANCE_MODEL", model)

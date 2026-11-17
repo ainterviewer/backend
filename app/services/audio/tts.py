@@ -10,7 +10,7 @@ from collections.abc import AsyncIterator
 import aiohttp
 from uvicorn.config import logger
 
-from ainterviewer.settings import settings as lib_settings
+from ainterviewer.settings import api_keys
 from ainterviewer.types import LanguageCode
 
 from ...settings import app_settings
@@ -58,8 +58,7 @@ async def synthesize(text: str, language: LanguageCode) -> AsyncIterator[bytes]:
         upstream = await session.post(
             f"{endpoint}/v1/audio/speech",
             headers={
-                "Authorization": "Bearer "
-                + lib_settings.secrets.openai_api_key.get_secret_value(),
+                "Authorization": "Bearer " + api_keys.openai_api_key.get_secret_value(),
             },
             json={
                 "model": speech_settings.tts_model,
