@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from ainterviewer.agents.config import AgentConfigs
 from ainterviewer.config import InterviewConfig
+from ainterviewer.exceptions import LanguageNotSupportedError
 from ainterviewer.interview_guides import (
     InterviewGuide,
     LocalizedConsent,
@@ -150,6 +151,43 @@ def _without_language[
     for _, text in stripped.texts():
         text.pop(language, None)
     return stripped
+
+
+def _language_name(language: str) -> str:
+    try:
+        return get_language_dict(language)["name"]
+    except LanguageNotSupportedError:
+        return language
+
+
+def _require_offered_languages(
+    content: ProjectContentTable,
+    localized: LocalizedInterviewGuide
+    | LocalizedConsent
+    | LocalizedWelcome
+    | ParticipantEmails
+    | None,
+) -> None:
+    """Refuse text in a language the project does not offer.
+
+    A save carries every language at once, so nothing else stops an editor
+    opened on a language the project lacks (a hand-edited URL) from adding
+    it by the back door: the text would sit in no language list, never be
+    offered to respondents and never be removed with a language."""
+    if localized is None:
+        return
+    written = {
+        language
+        for _, text in localized.texts()
+        for language, value in text.items()
+        if value
+    }
+    if foreign := sorted(written - set(content.languages)):
+        names = ", ".join(_language_name(lang) for lang in foreign)
+        raise ProjectLanguageError(
+            f"The project does not offer {names}. Add the language before "
+            "writing text in it."
+        )
 
 
 class ProjectRepository(BaseRepository):
@@ -1082,7 +1120,9 @@ class ProjectRepository(BaseRepository):
         guide: LocalizedInterviewGuide,
         revision: int | None = None,
     ):
-        self._content(project_id, revision, ContentPart.GUIDE).guide = guide
+        content = self._content(project_id, revision, ContentPart.GUIDE)
+        _require_offered_languages(content, guide)
+        content.guide = guide
         self.session.commit()
 
     def get_interview_config(
@@ -1196,7 +1236,9 @@ class ProjectRepository(BaseRepository):
         consent: LocalizedConsent | None,
         revision: int | None = None,
     ):
-        self._content(project_id, revision, ContentPart.CONSENT).consent = consent
+        content = self._content(project_id, revision, ContentPart.CONSENT)
+        _require_offered_languages(content, consent)
+        content.consent = consent
         self.session.commit()
 
     def get_welcome(self, project_id: UUID4) -> LocalizedWelcome | None:
@@ -1208,7 +1250,9 @@ class ProjectRepository(BaseRepository):
         welcome: LocalizedWelcome | None,
         revision: int | None = None,
     ):
-        self._content(project_id, revision, ContentPart.WELCOME).welcome = welcome
+        content = self._content(project_id, revision, ContentPart.WELCOME)
+        _require_offered_languages(content, welcome)
+        content.welcome = welcome
         self.session.commit()
 
     # ============ Participant Email Template Methods ============
@@ -1227,9 +1271,11 @@ class ProjectRepository(BaseRepository):
         revision: int | None,
     ):
         content = self._content(project_id, revision, ContentPart.EMAILS)
-        content.emails = content.emails.model_copy(
+        emails = content.emails.model_copy(
             update={"reminder" if reminder else "invite": email}
         )
+        _require_offered_languages(content, emails)
+        content.emails = emails
         self.session.commit()
 
     def _email_in(

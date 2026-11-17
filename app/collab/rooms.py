@@ -31,7 +31,7 @@ import gc
 import json
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from contextlib import AbstractContextManager
 from typing import Any
 from uuid import UUID
@@ -68,6 +68,16 @@ SERVER_ORIGIN = "server"
 _LANGUAGES_MOVED: Any = object()
 
 type DBFactory = Callable[[], AbstractContextManager[InterviewDataBase]]
+
+
+def _foreign_languages(value: Any, languages: Iterable[str]) -> set[str]:
+    """The languages `value` has text in that are not `languages`."""
+    texts = getattr(value, "texts", None)
+    if texts is None:
+        return set()
+    return {
+        language for _, text in texts() for language, written in text.items() if written
+    } - set(languages)
 
 
 class ReadOnlyChannel(Channel):
@@ -258,6 +268,12 @@ class ContentRoom:
             for _ in range(5):
                 data = part.read(self.doc)
                 value, errors = part.validate(data, self.default_language)
+                if self.languages and _foreign_languages(value, self.languages):
+                    # Typed into a language the project does not offer (an
+                    # editor opened on one by hand): dropped from the doc,
+                    # which tells every editor, before anything is saved.
+                    part.apply(self.doc, data, self.languages, SERVER_ORIGIN)
+                    continue
                 state = self.doc.get_update()
 
                 def write(value=value, errors=errors, state=state):

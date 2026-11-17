@@ -507,3 +507,21 @@ async def test_text_typed_in_a_language_as_it_is_removed_is_not_saved(server):
         assert "DA" not in flat_roots(room.doc)[1]["title"]
     finally:
         await room.stop()
+
+
+async def test_text_typed_in_a_language_not_offered_is_not_saved(server):
+    _url, _tokens, db, project_id = server
+    room = await rooms.content_rooms._open(project_id, LIVE_PARTS[ContentPart.CONSENT])
+    try:
+        _meta, content = flat_roots(room.doc)
+        content["title"]["EN"].insert(0, "Consent")
+        # An editor opened on a language the project lacks, by its URL.
+        content["title"]["FR"] = Text("Consentement")
+
+        await room.save()
+
+        consent = column(db, project_id).consent
+        assert consent is not None and consent.title == {"EN": "Consent"}
+        assert "FR" not in flat_roots(room.doc)[1]["title"]
+    finally:
+        await room.stop()

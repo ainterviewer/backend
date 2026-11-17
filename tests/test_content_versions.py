@@ -202,6 +202,9 @@ def test_emails_count_towards_a_complete_language(db):
 )
 def test_the_bump_follows_whether_interviews_stay_comparable(db, edit, expected):
     database, project_id, _ = db
+    # Offered before the snapshot, so the translation is the only change.
+    _content(database, project_id).languages = ["EN", "DA"]
+    database.session.commit()
     before = _content(database, project_id)
     snapshot = database.versions.snapshot(project_id, ContentVersionKind.MANUAL)
 

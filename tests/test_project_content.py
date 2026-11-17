@@ -161,8 +161,10 @@ async def test_a_clone_gets_its_own_copy_of_the_content(db):
     assert {language["code"] for language in languages} == {"EN", "DA"}
 
 
-def test_analysis_reads_the_default_language(db):
+@pytest.mark.anyio
+async def test_analysis_reads_the_default_language(db):
     database, project_id = db
+    await _add(database, project_id, "DA")
     _two_languages(database, project_id)
 
     rendered = render_default_guide(database.session, project_id)
@@ -273,6 +275,27 @@ def test_an_email_in_a_language_not_offered_is_not_found(db):
     database, project_id = db
     with pytest.raises(NoResultFound):
         database.projects.get_participant_email_template(project_id, "DA")
+
+
+def test_text_in_a_language_not_offered_is_refused(db):
+    database, project_id = db
+    projects = database.projects
+    guide = projects.get_guide(project_id)
+    guide.introduction["DA"] = "Hej"
+
+    with pytest.raises(ProjectLanguageError, match="Danish"):
+        projects.update_guide(project_id, guide)
+    with pytest.raises(ProjectLanguageError):
+        projects.update_consent(
+            project_id, LocalizedConsent(title={"EN": "Consent", "DA": "Samtykke"})
+        )
+    with pytest.raises(ProjectLanguageError):
+        projects.set_participant_email_template(project_id, "DA", "Hej", None)
+
+    # An empty text is no text: an editor sends one for every language.
+    guide.introduction["DA"] = ""
+    projects.update_guide(project_id, guide)
+    assert projects._content(project_id).consent is None
 
 
 @pytest.mark.anyio
