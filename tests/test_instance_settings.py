@@ -124,3 +124,33 @@ def test_migrated_registration_tokens_only_warn(bare_env, tmp_path):
 
     with pytest.warns(ConfigWarning, match="special_registration_tokens"):
         Settings()
+
+
+def test_unrelated_dotenv_lines_are_not_services(bare_env, tmp_path):
+    # pydantic-settings hands a model with extra="forbid" every .env line that
+    # is not one of its fields, which turned every secret into an error.
+    (tmp_path / ".env").write_text(
+        "OPENAI_API_KEY=sk-x\nGITHUB_TOKEN=ghp-x\nAPP_SECRET__SMTP_PASSWORD=x\n"
+        "APP_SERVICE__SPEECH__TTS_VOICE=cedar\n"
+    )
+
+    assert Settings().services.speech.tts_voice == "cedar"
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("APP__PUBLIC_ULR", "leaked-app-value"),
+        ("APP_SERVICE__EMAIL__SENDER__PASSWORD", "leaked-smtp-password"),
+    ],
+)
+def test_settings_errors_do_not_print_values(bare_env, tmp_path, name, value):
+    # The environment carries the secrets, so an error must not echo it.
+    _email_env(bare_env)
+    (tmp_path / ".env").write_text(f"{name}={value}\nGHCR_TOKEN=leaked-token\n")
+
+    with pytest.raises(ValidationError) as error:
+        Settings()
+
+    assert value not in str(error.value)
+    assert "leaked-token" not in str(error.value)

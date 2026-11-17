@@ -172,7 +172,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.9,<3" },
     { name = "pydantic-ai-slim", specifier = ">=2.68.0,<3" },
     { name = "pydantic-extra-types", specifier = ">=2.10.4" },
-    { name = "pydantic-settings", specifier = ">=2.7.1" },
+    { name = "pydantic-settings", specifier = ">=2.16.2" },
     { name = "python-docx", specifier = ">=1.2.0" },
     { name = "python-jose", extras = ["cryptography"], specifier = ">=3.5.0" },
     { name = "qrcode", extras = ["pil"], specifier = ">=8.2" },
