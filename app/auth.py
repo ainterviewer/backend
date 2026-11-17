@@ -1,12 +1,11 @@
 import hashlib
-import logging
 import secrets
 from datetime import UTC, datetime
 from typing import Literal, Self
 from uuid import UUID
 
+import bcrypt
 from jose import jwt
-from passlib.context import CryptContext
 from pydantic import UUID4, BaseModel, PrivateAttr
 
 from ainterviewer.types import Interviewer, InterviewRole, TimeDelta
@@ -15,10 +14,15 @@ from ainterviewer.utils import now
 from .settings import app_secrets, app_settings
 from .types import Scope
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+#: bcrypt reads only the first 72 bytes of a password. passlib truncated
+#: silently, so every stored hash was made from at most this much, and
+#: bcrypt >= 5 refuses longer input outright: truncating here keeps long
+#: passwords hashing and verifying as they always have.
+_BCRYPT_MAX_BYTES = 72
 
-# NOTE: Supress warning raised from bcrypt
-logging.getLogger("passlib").setLevel(logging.ERROR)
+
+def _password_bytes(password: str) -> bytes:
+    return password.encode()[:_BCRYPT_MAX_BYTES]
 
 
 class _Token(BaseModel):
@@ -87,11 +91,15 @@ class AuthToken(_Token):
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(_password_bytes(plain_password), hashed_password.encode())
+    except ValueError:
+        # Not a bcrypt hash: no password matches it.
+        return False
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(_password_bytes(password), bcrypt.gensalt()).decode()
 
 
 def generate_refresh_token() -> str:
