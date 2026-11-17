@@ -28,7 +28,7 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session, aliased, joinedload
 
 from ainterviewer.interfaces import EmbeddingChunk
-from ainterviewer.interview_guides import Image
+from ainterviewer.interview_guides import Image, SurveyItem
 from ainterviewer.lpm.types import CustomToken
 from ainterviewer.types import EmbeddingKind, InterviewStatus, MessageRole, MessageType
 
@@ -1784,16 +1784,21 @@ class EmbeddingRepository(BaseRepository):
             # An interviewer turn's survey item is what makes the answer after
             # it a click rather than a sentence, and it is the question row that
             # carries it.
-            pending_item: str | None = None
+            pending_item: SurveyItem | None = None
             for row in group:
                 respondent = MessageRole(row.role) == MessageRole.USER
-                item = row.survey_item.type if row.survey_item else None
+                item = row.survey_item
                 text = row.content.strip()
+                if respondent and pending_item is not None:
+                    # A structured answer (a grid, a list, a ranking) is stored
+                    # encoded; a reader wants it described.
+                    text = pending_item.describe_answer(text).strip()
                 # Against the text as it is rendered, because that is what the
                 # offsets index into: the turn is stripped here, so marking the
                 # raw column would be off by whatever whitespace it began with.
                 side = "answer" if respondent else "question"
                 marks = match_spans(text, node, side, scope)
+                carried = (item or pending_item) if respondent else None
                 rendered.append(
                     EmbeddingTurn(
                         id=row.id,
@@ -1803,7 +1808,7 @@ class EmbeddingRepository(BaseRepository):
                         text=text,
                         matches=marks,
                         excluded=excluded_spans(text, node, marks, side),
-                        survey_label=(item or pending_item) if respondent else None,
+                        survey_label=carried.type if carried else None,
                         # Only a MESSAGE chunk singles a turn out; for a QA pair
                         # the whole group is the chunk.
                         match=(
