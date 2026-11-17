@@ -183,7 +183,7 @@ requires-dist = [
     { name = "sqliteai-vector", specifier = ">=0.9.52" },
     { name = "typer", specifier = ">=0.20.0" },
     { name = "ua-parser", extras = ["regex"], marker = "extra == 'analysis'", specifier = ">=1.0.1" },
-    { name = "umap-learn", specifier = ">=0.5.12" },
+    { name = "umap-learn", specifier = ">=0.6.0" },
     { name = "user-agents", marker = "extra == 'analysis'", specifier = ">=2.2.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.3" },
     { name = "weasyprint", specifier = ">=70.0" },

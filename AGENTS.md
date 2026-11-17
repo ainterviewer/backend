@@ -416,8 +416,10 @@ either way:
 `n_neighbors` and `min_dist` are UMAP's own knobs and are ignored under PCA.
 `min_dist` defaults to 0.0 rather than UMAP's 0.1: HDBSCAN separates on density,
 and slack between points blurs exactly the gaps it needs. The UMAP seed is fixed
-(`UMAP_RANDOM_STATE`) so the same corpus gives the same picture twice, which
-costs single-threading -- comparability is worth more here than the seconds.
+(`UMAP_RANDOM_STATE`) so the same corpus gives the same picture twice. The fit
+uses UMAP's current pipeline (`compatibility_layout=False`, Adam layout), which
+stays reproducible under a seed while running in parallel; the 0.5.x pipeline
+forced a single thread.
 
 The route runs `cluster_vectors` through `run_in_threadpool`. A seconds-long
 UMAP fit inside an `async def` would stall every other request in flight.

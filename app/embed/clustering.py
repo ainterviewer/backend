@@ -35,8 +35,8 @@ such quantity, and clustering in two dimensions can split one topic into
 several -- UMAP will happily manufacture separation between neighbourhoods that
 are not really apart. Read the purities and the representatives before
 believing a split. `random_state` is fixed so two runs of the same corpus give
-the same picture; that forces UMAP single-threaded, which is the deliberate
-trade of speed for an analyst being able to compare two runs at all.
+the same picture, which UMAP's Adam layout keeps while still running in
+parallel.
 
 **Some of what an embedding encodes is scaffolding, not content**, and left
 alone it dominates. Two cases, both observed on the real corpus:
@@ -74,7 +74,6 @@ is seconds, which keeps it usable but not instant.
 
 import logging
 import math
-import warnings
 from collections import Counter
 from collections.abc import Hashable, Sequence
 from dataclasses import dataclass, field
@@ -99,9 +98,9 @@ DEFAULT_N_NEIGHBORS = 15
 #: HDBSCAN is looking for density, and slack between points blurs exactly the
 #: gaps it separates on.
 DEFAULT_MIN_DIST = 0.0
-#: Fixed so the same corpus produces the same picture twice. UMAP falls back to
-#: a single thread when seeded; comparability is worth more here than the
-#: seconds.
+#: Fixed so the same corpus produces the same picture twice. The Adam layout
+#: (`compatibility_layout=False`) stays reproducible under a seed without
+#: falling back to a single thread, as the 0.5.x pipeline did.
 UMAP_RANDOM_STATE = 42
 
 #: HDBSCAN's label for a point it will not assign.
@@ -265,18 +264,6 @@ def _project(
     # UMAP clustering should not pay for at startup.
     from umap import UMAP
 
-    # `random_state` is deliberate (see UMAP_RANDOM_STATE), and UMAP warns on
-    # every fit that it therefore single-threads. Filtered once, by message, so
-    # nothing else UMAP has to say is lost -- a module-level filter rather than
-    # a `catch_warnings` block because this runs in a threadpool, where
-    # mutating the global filter state per call would race other threads.
-    warnings.filterwarnings(
-        "ignore",
-        message="n_jobs value .* overridden to 1 by setting random_state",
-        category=UserWarning,
-        module="umap",
-    )
-
     # UMAP needs at least two neighbours, and cannot ask for more than there
     # are other points to ask about.
     neighbors = max(2, min(n_neighbors, n_samples - 1))
@@ -290,6 +277,9 @@ def _project(
         # map of normalised vectors the two orderings barely differ anyway.
         metric="euclidean",
         random_state=UMAP_RANDOM_STATE,
+        # The current pipeline (recursive initialisation, Adam layout), not the
+        # 0.5.x one UMAP still defaults to with a FutureWarning.
+        compatibility_layout=False,
     ).fit_transform(reduced)
 
     return np.asarray(embedding, dtype=np.float64), None
