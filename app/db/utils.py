@@ -10,7 +10,6 @@ from pydantic import UUID4
 from sqlalchemy.exc import IntegrityError
 from xlsxwriter import Workbook
 
-from ainterviewer.interview_guides import LikertGridItem
 from ainterviewer.types import MessageRole
 
 from ..schemas.interviews import MessagePublic
@@ -63,14 +62,14 @@ def _report_reason(report: dict) -> str:
     return f"safety:{(report.get('safety') or {}).get('decision', 'unknown')}"
 
 
-def _grid_answers(messages: Sequence[MessagePublic]) -> dict[UUID4, str]:
-    """The answers to Likert grids among `messages`, by message id, as
-    "row: option" lines.
+def _described_answers(messages: Sequence[MessagePublic]) -> dict[UUID4, str]:
+    """The survey answers among `messages` that are stored as an encoding,
+    by message id, described as text (`SurveyItem.describe_answer`).
 
-    A grid's answer is stored as JSON keyed by row id, which means nothing in
-    a spreadsheet: the rows are named only in the question's survey item, on
-    another row of the table. An answer is the participant's next message
-    after the question, in the same interview.
+    A Likert grid's answer, say, is stored as JSON keyed by row id, which
+    means nothing in a spreadsheet: the rows are named only in the question's
+    survey item, on another row of the table. An answer is the participant's
+    next message after the question, in the same interview.
     """
     by_interview: defaultdict[UUID4, list[MessagePublic]] = defaultdict(list)
     for message in messages:
@@ -83,8 +82,12 @@ def _grid_answers(messages: Sequence[MessagePublic]) -> dict[UUID4, str]:
             if message.role == MessageRole.SYSTEM or message.skipped_by_condition:
                 continue
             if message.role == MessageRole.USER:
-                if isinstance(pending, LikertGridItem):
-                    described[message.id] = pending.describe_answer(message.content)
+                if (
+                    pending is not None
+                    and (text := pending.describe_answer(message.content))
+                    != message.content
+                ):
+                    described[message.id] = text
                 pending = None
             else:
                 pending = message.survey_item
@@ -98,8 +101,9 @@ def messages_to_dataframe(
 ) -> pl.DataFrame:
     """Normalize interview messages into a flat DataFrame for export.
 
-    A Likert grid's answer is written as "row: option" lines, as in the
-    readable transcripts, rather than as the JSON it is stored as.
+    A survey answer stored as an encoding is written as described text, as in
+    the readable transcripts: a Likert grid's as "row: option" lines rather
+    than the JSON it is stored as.
 
     Nested/optional fields (feedback, attachment, image, survey_item,
     codings, reports) are coerced to strings so the result can be written to
@@ -114,12 +118,12 @@ def messages_to_dataframe(
     rows = []
     param_names = [param.name for param in external_params or []]
     param_values = external_param_values or {}
-    grid_answers = _grid_answers(messages)
+    described_answers = _described_answers(messages)
 
     for message in messages:
         d = json.loads(message.model_dump_json())
 
-        if (described := grid_answers.get(message.id)) is not None:
+        if (described := described_answers.get(message.id)) is not None:
             d["content"] = described
 
         if param_names:

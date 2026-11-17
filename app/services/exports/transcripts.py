@@ -268,8 +268,9 @@ def build_view(interview: InterviewExport, tz: ZoneInfo) -> TranscriptView:
 
         is_participant = message.role == MessageRole.USER
         content = _clean(message.content.strip())
-        if is_participant and isinstance(pending_survey, LikertGridItem):
-            # Stored as JSON keyed by row id; a reader wants the ratings.
+        if is_participant and pending_survey is not None:
+            # A structured answer is stored encoded (a grid's as JSON keyed by
+            # row id); a reader wants it described.
             content = _clean(pending_survey.describe_answer(content))
         # Guide markup is the interviewer's; a participant's `<b>` is text.
         spans = markup.parse(content, markup=not is_participant)
