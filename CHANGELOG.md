@@ -4,6 +4,35 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.28] - 2026-11-17
+
+### Breaking Changes
+
+- (settings) Rename APP_SERVICE__EMAIL__SENDER__PASSWORD to
+APP_SECRET__SMTP_PASSWORD and drop APP_SERVICE__EMAIL__RECIPIENT__PASSWORD.
+A config.toml holding a secret or a table key nothing reads now fails
+startup. Bumps ainterviewer to v0.7.14, the release that adds ConfigSettings;
+neither change works without the other.
+
+### Features
+
+- (simulations) Compare interviewer models
+- (publish) Keep respondents' answers off test-only models
+- (tests) Let anyone with a shared link try a project's draft
+
+### Bug Fixes
+
+- (content) Refuse text in a language the project does not offer
+- (settings) Stop .env lines landing in [services], and print no values
+
+### Internal
+
+- (deps) Bump ainterviewer to v0.7.13
+- Work on each branch in its own worktree
+- (settings) Keep secrets out of config.toml [**breaking**]
+- (deps) Bump ainterviewer to v0.7.15
+- (docker) Keep the dev dependency group out of the image
+
 ## [0.10.27] - 2026-11-17
 
 ### Features
