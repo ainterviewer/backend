@@ -2,7 +2,7 @@ import io
 import logging
 from base64 import b64decode
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
@@ -652,7 +652,10 @@ async def create_interview_agents(
 # Labelled stand-ins for the interview-time context the instruction prompt
 # expects. They let us render the template at config time so the user can see
 # how their edited slots land, without needing a live interview.
-_PREVIEW_PLACEHOLDERS = {
+# Typed loosely: spread into `generate_probing_prompt`, whose other
+# parameters (the probe budget, the earlier probes) are not strings, a
+# `dict[str, str]` reads as passing a string to each of them.
+_PREVIEW_PLACEHOLDERS: dict[str, Any] = {
     "interview_framing": "«interview framing — filled in during the interview»",
     "section_description": "«section description — filled in during the interview»",
     "question_description": "«question description — filled in during the interview»",
