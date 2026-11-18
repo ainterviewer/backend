@@ -431,7 +431,7 @@ async def test_opening_an_empty_consent_configures_none(server):
     assert column(db, project_id).consent is None
 
 
-async def test_a_welcome_without_a_valid_email_is_not_saved(server):
+async def test_a_welcome_without_an_email_is_not_saved(server):
     url, tokens, db, project_id = server
 
     async with editor(part_url(url, "welcome"), tokens["editor"]) as a:
@@ -445,16 +445,55 @@ async def test_a_welcome_without_a_valid_email_is_not_saved(server):
         with db() as database:
             errors = database.versions.status(project_id).doc_errors
         assert [e.message for e in errors[ContentPart.WELCOME]] == [
-            "Enter a valid contact email address."
+            "Enter a contact email address."
         ]
 
         _meta, content = flat_roots(a)
+        content["email"] = json.dumps("not an email")
+        await until(
+            lambda: (
+                welcome_errors(db, project_id)
+                == ["Enter a valid contact email address."]
+            )
+        )
+        assert column(db, project_id).welcome is None
+
         content["email"] = json.dumps("team@example.com")
         await until(lambda: column(db, project_id).welcome is not None)
 
     welcome = column(db, project_id).welcome
     assert welcome is not None and welcome.title == {"EN": "Welcome"}
     assert welcome.email == "team@example.com"
+
+
+async def test_a_welcome_without_the_contact_box_needs_no_email(server):
+    url, tokens, db, project_id = server
+
+    async with editor(part_url(url, "welcome"), tokens["editor"]) as a:
+        _meta, content = flat_roots(a)
+        content["with_id"] = json.dumps(False)
+        flat_text(a, "title").insert(0, "Welcome")
+        await until(lambda: column(db, project_id).welcome is not None)
+
+    welcome = column(db, project_id).welcome
+    assert welcome is not None and welcome.email is None and not welcome.with_id
+
+
+async def test_a_hidden_contact_box_keeps_its_email_out_of_the_welcome(server):
+    url, tokens, db, project_id = server
+
+    async with editor(part_url(url, "welcome"), tokens["editor"]) as a:
+        _meta, content = flat_roots(a)
+        content["with_id"] = json.dumps(False)
+        content["email"] = json.dumps("not an email")
+        flat_text(a, "title").insert(0, "Welcome")
+        await until(lambda: column(db, project_id).welcome is not None)
+        assert welcome_errors(db, project_id) == []
+        # The doc still has it, for when the box is shown again.
+        assert json.loads(content["email"]) == "not an email"
+
+    welcome = column(db, project_id).welcome
+    assert welcome is not None and welcome.email is None
 
 
 async def test_a_consent_write_the_doc_did_not_make_reaches_its_editors(server):
@@ -491,6 +530,11 @@ def welcome_doc(db, project_id) -> ContentDocTable | None:
         if row is not None:
             database.session.expunge(row)
         return row
+
+
+def welcome_errors(db, project_id) -> list[str]:
+    row = welcome_doc(db, project_id)
+    return [e.message for e in (row.errors or [])] if row is not None else []
 
 
 async def test_a_room_does_not_close_on_an_editor_still_joining():

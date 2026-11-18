@@ -17,6 +17,7 @@ from pycrdt import Doc
 from pydantic import BaseModel, ValidationError
 
 from ainterviewer.interview_guides import validation_errors
+from ainterviewer.interview_guides.extra import EMAIL_REQUIRED
 from ainterviewer.interview_guides.localized import (
     LocalizedConsent,
     LocalizedInterviewGuide,
@@ -114,6 +115,11 @@ def _validate_consent(data: Json, _language: str) -> Validated:
 
 
 def _validate_welcome(data: Json, _language: str) -> Validated:
+    # Only the contact box shows the email: while it is hidden, what the doc
+    # holds there is kept for when it is shown again, but neither saved nor
+    # checked.
+    if data.get("with_id") is False:
+        data = {**data, "email": None}
     if (
         not _has_text(data)
         and not data.get("email")
@@ -124,11 +130,20 @@ def _validate_welcome(data: Json, _language: str) -> Validated:
         return LocalizedWelcome.model_validate(data), []
     except ValidationError as error:
         # Editors see these. The email is the one field the page can leave
-        # invalid; say so in its terms rather than pydantic's.
+        # invalid -- not an email, or none while the contact box shows; say
+        # so in its terms rather than pydantic's.
         if any(e["loc"] and e["loc"][0] == "email" for e in error.errors()):
             return None, [
                 ContentError(
                     message="Enter a valid contact email address.", field="email"
+                )
+            ]
+        if any(EMAIL_REQUIRED in e["msg"] for e in error.errors()):
+            return None, [
+                ContentError(
+                    message="Enter a contact email address.",
+                    fix="Or stop showing the contact box.",
+                    field="email",
                 )
             ]
         return None, _messages(error)
