@@ -372,6 +372,41 @@ class ContentRooms:
     def get(self, project_id: UUID, part: ContentPart) -> ContentRoom | None:
         return self._rooms.get((project_id, part))
 
+    async def editing(
+        self, project_id: UUID, part: ContentPart
+    ) -> tuple[dict[str, Any], list[ContentError] | None]:
+        """What editors see of a live part, as data, and why it is not valid,
+        if it is not -- for a page to open on, so it shows what the doc will
+        sync to rather than the column, which holds the last *valid* doc.
+
+        An open room's doc, checked as it is now rather than as it was last
+        saved; else the stored doc, if still in step with the column; else
+        the column, which a doc it has moved past becomes when its room next
+        opens (the column wins that merge). Read without opening a room.
+        """
+        doc_part = LIVE_PARTS[part]
+        if (room := self.get(project_id, part)) is not None:
+            data = doc_part.read(room.doc)
+            _value, errors = doc_part.validate(data, room.default_language)
+            return data, errors or None
+
+        def load():
+            with self._db() as db:
+                column = db.content_docs.column(project_id, part)
+                row = db.content_docs.get(project_id, part)
+                if row is None or row.revision != column.revision:
+                    return column, None, None
+                return column, row.state, row.errors
+
+        column, state, errors = await asyncio.to_thread(load)
+        if state is None:
+            return doc_part.dump(column.value), None
+        doc = Doc()
+        doc.apply_update(state)
+        # Languages may have come or gone since it was stored, as on opening.
+        doc_part.apply(doc, doc_part.read(doc), column.languages, SERVER_ORIGIN)
+        return doc_part.read(doc), errors
+
     async def _open(self, project_id: UUID, part: DocPart) -> ContentRoom:
         def load():
             with self._db() as db:

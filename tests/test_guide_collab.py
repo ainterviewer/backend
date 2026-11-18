@@ -18,6 +18,7 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from uuid import uuid4
 
+import httpx
 import pytest
 import uvicorn
 from pycrdt import Awareness, Doc, Provider, Text, create_awareness_message
@@ -266,6 +267,81 @@ async def test_a_doc_that_is_not_a_guide_never_overwrites_it(server):
     assert column(db, project_id).guide.introduction.get("EN") == "Kept"
     with db() as database:
         assert database.versions.status(project_id).doc_errors[ContentPart.GUIDE]
+
+
+async def get_doc(url: str, token: str, project_id, part: str) -> httpx.Response:
+    """`GET .../content/{part}/doc`: what editors see of a part."""
+    http = url.replace("ws://", "http://").split("/ws/")[0]
+    async with httpx.AsyncClient(cookies={"access_token": token}) as client:
+        return await client.get(f"{http}/api/projects/{project_id}/content/{part}/doc")
+
+
+async def doc_of(url: str, token: str, project_id, part: str = "guide") -> dict:
+    response = await get_doc(url, token, project_id, part)
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+async def test_editors_open_on_the_doc_not_the_last_valid_guide(server):
+    url, tokens, db, project_id = server
+
+    async with editor(url, tokens["editor"]) as a:
+        introduction(a).insert(0, "Kept")
+        await until(
+            lambda: column(db, project_id).guide.introduction.get("EN") == "Kept"
+        )
+        _meta, top, *_ = roots(a)
+        top["ai_generated_sections"] = json.dumps("not a number")
+        introduction(a).insert(len(b"Kept"), " and typed")
+        await until(
+            lambda: bool((guide_doc(db, project_id) or ContentDocTable()).errors)
+        )
+        # The room is open: its doc.
+        open_doc = await doc_of(url, tokens["viewer"], project_id)
+        assert open_doc["data"]["introduction"] == {"EN": "Kept and typed"}
+
+    await until(lambda: rooms.content_rooms.get(project_id, ContentPart.GUIDE) is None)
+    assert column(db, project_id).guide.introduction.get("EN") == "Kept"
+    # Closed: the stored doc, with why it is invalid.
+    stored = await doc_of(url, tokens["viewer"], project_id)
+    assert stored["data"]["introduction"] == {"EN": "Kept and typed"}
+    assert stored["errors"]
+
+    # A write to the column the doc did not make wins when the room opens.
+    with db() as database:
+        guide = database.projects.get_guide(project_id)
+        guide.introduction["EN"] = "Restored"
+        database.projects.update_guide(project_id, guide)
+        database.session.commit()
+    restored = await doc_of(url, tokens["viewer"], project_id)
+    assert restored["data"]["introduction"] == {"EN": "Restored"}
+    assert restored["errors"] == []
+
+
+async def test_an_open_doc_is_served_with_its_errors_as_it_is_now(server, monkeypatch):
+    url, tokens, _db, project_id = server
+    # No save until long after the test: the errors must come from the doc.
+    monkeypatch.setattr(rooms, "SAVE_DELAY", 60)
+
+    async with editor(url, tokens["editor"]) as a:
+        _meta, top, *_ = roots(a)
+        top["ai_generated_sections"] = json.dumps("not a number")
+        room = rooms.content_rooms.get(project_id, ContentPart.GUIDE)
+        assert room is not None
+        await until(lambda: "not a number" in json.dumps(room.part.read(room.doc)))
+        assert room.errors is None
+
+        served = await doc_of(url, tokens["viewer"], project_id)
+        assert served["errors"]
+
+
+async def test_consent_and_welcome_docs_are_served_too(server):
+    url, tokens, _db, project_id = server
+
+    for part in ("consent", "welcome"):
+        assert (await doc_of(url, tokens["viewer"], project_id, part))["errors"] == []
+    response = await get_doc(url, tokens["viewer"], project_id, "agents")
+    assert response.status_code == 422
 
 
 async def test_a_write_the_doc_did_not_make_reaches_its_editors(server):

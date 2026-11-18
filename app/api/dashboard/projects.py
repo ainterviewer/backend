@@ -79,7 +79,9 @@ from ...dependencies import (
 from ...errors import AppError
 from ...schemas.common import PageParams
 from ...schemas.content import (
+    ContentDocPublic,
     InterviewGuideGenerationRequest,
+    LivePart,
     ProbingPromptPreview,
     ProjectContentPublic,
     QuestionGenerationRequest,
@@ -416,6 +418,19 @@ async def get_localized_guide(
     `ETag` is the guide's revision, to send back as `If-Match`."""
     set_etag(response, db.projects.get_revision(project_id, ContentPart.GUIDE))
     return db.projects.get_guide(project_id)
+
+
+@router.get("/projects/{project_id}/content/{part}/doc")
+async def get_content_doc(
+    project_id: UUID4,
+    part: LivePart,
+    jwt: DemoToken,
+    _: ProjectViewer,
+) -> ContentDocPublic:
+    """What editors see of a co-edited part, valid or not: for its editor to
+    open on. `GET /guide` and the like serve the last valid one."""
+    data, errors = await content_rooms.editing(project_id, part)
+    return ContentDocPublic(data=data, errors=errors or [])
 
 
 @router.put("/projects/{project_id}/guide", responses=STALE_REVISION)

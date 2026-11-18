@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any, Literal
 
 from pydantic import UUID4, Field
 
@@ -20,6 +21,17 @@ from ainterviewer.types import LanguageCode
 from ..db.versioning import BumpName
 from ..types import ContentError, ContentPart, ContentVersionKind, ParticipantEmails
 from .common import PromptRequest, Schema
+
+#: The parts editors co-edit live (`app/collab/parts.py`).
+type LivePart = Literal[ContentPart.GUIDE, ContentPart.CONSENT, ContentPart.WELCOME]
+
+
+class ContentDocPublic(Schema):
+    """What editors see of a live part (`ContentRooms.editing`): the doc's
+    data, which is the part's JSON, valid or not, and why it is not valid."""
+
+    data: dict[str, Any]
+    errors: list[ContentError] = Field(default_factory=list)
 
 
 class ProjectLocalizationPublic(Schema):
