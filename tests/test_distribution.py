@@ -286,14 +286,18 @@ def test_published_projects_are_moved_off_test_only_models(db, speech_allowed):
     database.session.commit()
     database.session.expire_all()
 
-    assert len(changes) == 2
-    for table in ("projectcontent", "projectcontentversion"):
-        (models,) = _agent_models(database, table)
-        assert models["probing"] == LOCAL
-        # Synthetic tests only: left as configured.
-        assert models["answering"] == TEST_ONLY_MODEL
+    assert len(changes) == 1
+    (published,) = _agent_models(database, "projectcontentversion")
+    assert published["probing"] == LOCAL
+    # Synthetic tests only: left as configured.
+    assert published["answering"] == TEST_ONLY_MODEL
     database.versions.check_distributable(project_id)
-    assert database.versions.status(project_id).test_only == {}
+
+    # The draft keeps its models, so tests stay on the hosted one; publishing
+    # it switches them (`switch_models_to`).
+    (draft,) = _agent_models(database, "projectcontent")
+    assert draft["probing"] == TEST_ONLY_MODEL
+    assert database.versions.status(project_id).test_only != {}
 
 
 def test_an_unpublished_project_is_left_alone(db, speech_allowed):
@@ -318,7 +322,7 @@ def test_audio_is_reported_and_switched_off_only_when_asked(db, speech_allowed):
         mp.setattr("app.db.cli.speech_is_test_only", lambda: True)
 
         reported = distributed_model_changes(database.session, LOCAL)
-        assert len(reported) == 2
+        assert len(reported) == 1
         assert all("still closed" in line for line in reported)
         database.session.expire_all()
         assert projects.get_interview_config(project_id, "published").with_audio
@@ -329,7 +333,7 @@ def test_audio_is_reported_and_switched_off_only_when_asked(db, speech_allowed):
 
     assert all("True -> False" in line for line in changed)
     assert not projects.get_interview_config(project_id, "published").with_audio
-    assert not projects.get_interview_config(project_id).with_audio
+    assert projects.get_interview_config(project_id).with_audio
 
 
 # ==================== Switching models when publishing ====================

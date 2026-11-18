@@ -217,36 +217,36 @@ def distributed_model_changes(
     """Open every published project to respondents again where a model is
     what closes it (app/distribution.py): point each agent that runs on
     respondents' answers and uses a test-only model at `to`, in the published
-    version and in the draft, and describe each change. Writes in `session`;
-    the caller commits or rolls back.
+    version, and describe each change. Writes in `session`; the caller commits
+    or rolls back.
 
     The published version is rewritten in place, as `invalid_model_changes`
     does, so interviews already running on it move too; older versions are
     history and left alone, so restoring one brings its models back and
-    publishing it is refused. The draft follows, so it stays what was
-    published and publishing it again is not refused.
+    publishing it is refused.
+
+    The draft is left alone. Test interviews run on it, and drafts are
+    expected to sit on hosted models while the local one has little capacity;
+    publishing switches them deliberately (`switch_models_to`). Rewriting the
+    drafts too, as this once did, moved every project's tests onto the local
+    model.
 
     Speech cannot be moved to another model: a published version with
-    `with_audio` on while speech is test only is reported, and switched off,
-    in it and in the draft, with `disable_audio`.
+    `with_audio` on while speech is test only is reported, and switched off
+    with `disable_audio`.
     """
     llm = lib_settings.llm
     changes: list[str] = []
     rows = session.execute(
         text(
-            "SELECT pc.project_id, pc.id, pc.agent_configs, pv.id, pv.agent_configs "
+            "SELECT pv.id, pv.agent_configs, pv.config "
             "FROM projectcontent pc "
             "JOIN projectcontentversion pv ON pv.id = pc.published_version_id"
         )
     ).all()
-    for project_id, draft_id, draft_raw, version_id, version_raw in rows:
-        for table, row_id, raw in (
-            ("projectcontentversion", version_id, version_raw),
-            ("projectcontent", draft_id, draft_raw),
-        ):
-            data = _as_dict(raw)
-            if not isinstance(data, dict):
-                continue
+    for version_id, agents_raw, config_raw in rows:
+        data = _as_dict(agents_raw)
+        if isinstance(data, dict):
             mutated = False
             for name, sub in data.items():
                 if not isinstance(sub, dict) or "model" not in sub:
@@ -255,56 +255,40 @@ def distributed_model_changes(
                     continue
                 if llm.is_test_only(sub["model"]):
                     changes.append(
-                        f"{table} {row_id} agent_configs.{name}.model: "
-                        f"{sub['model']!r} -> {to!r}"
+                        f"projectcontentversion {version_id} "
+                        f"agent_configs.{name}.model: {sub['model']!r} -> {to!r}"
                     )
                     sub["model"] = to
                     mutated = True
             if mutated:
-                # As in `invalid_model_changes`: an editor that loaded the
-                # old model gets a conflict rather than saving it back.
-                bump = (
-                    ", revision = revision + 1, agents_revision = agents_revision + 1"
-                    if table == "projectcontent"
-                    else ""
-                )
                 session.execute(
-                    text(f"UPDATE {table} SET agent_configs = :v{bump} WHERE id = :id"),
-                    {"v": json.dumps(data), "id": row_id},
+                    text(
+                        "UPDATE projectcontentversion SET agent_configs = :v "
+                        "WHERE id = :id"
+                    ),
+                    {"v": json.dumps(data), "id": version_id},
                 )
 
         if not speech_is_test_only():
             continue
-        # Audio is in the interview config, versioned like the agents: the
-        # published version's is what respondents get, and the draft follows.
-        for table, row_id in (
-            ("projectcontentversion", version_id),
-            ("projectcontent", draft_id),
-        ):
-            config = _as_dict(
-                session.execute(
-                    text(f"SELECT config FROM {table} WHERE id = :id"), {"id": row_id}
-                ).scalar_one_or_none()
+        config = _as_dict(config_raw)
+        if not isinstance(config, dict) or not config.get("with_audio"):
+            continue
+        if not disable_audio:
+            changes.append(
+                f"projectcontentversion {version_id} config.with_audio: speech is "
+                "test only; still closed to respondents (--disable-audio to switch "
+                "it off)"
             )
-            if not isinstance(config, dict) or not config.get("with_audio"):
-                continue
-            if not disable_audio:
-                changes.append(
-                    f"{table} {row_id} config.with_audio: speech is test only; "
-                    "still closed to respondents (--disable-audio to switch it off)"
-                )
-                continue
-            config["with_audio"] = False
-            bump = (
-                ", revision = revision + 1, settings_revision = settings_revision + 1"
-                if table == "projectcontent"
-                else ""
-            )
-            session.execute(
-                text(f"UPDATE {table} SET config = :v{bump} WHERE id = :id"),
-                {"v": json.dumps(config), "id": row_id},
-            )
-            changes.append(f"{table} {row_id} config.with_audio: True -> False")
+            continue
+        config["with_audio"] = False
+        session.execute(
+            text("UPDATE projectcontentversion SET config = :v WHERE id = :id"),
+            {"v": json.dumps(config), "id": version_id},
+        )
+        changes.append(
+            f"projectcontentversion {version_id} config.with_audio: True -> False"
+        )
 
     return changes
 
@@ -325,8 +309,8 @@ def fix_distributed_models(
     ),
     dry_run: bool = False,
 ):
-    """Move published projects off test-only models, so distributed interviews
-    can start on them again.
+    """Move published versions off test-only models, so distributed interviews
+    can start on them again. Drafts keep their models.
 
     See `distributed_model_changes` for what is rewritten and what is not.
     """

@@ -968,7 +968,9 @@ when included), plus speech while `with_audio` is on.
   carries `speech_test_only`, so the dashboard can label them.
 - `uv run python -m app.db.cli fix-distributed-models --to <model>
   [--disable-audio] [--dry-run]` moves published projects off test-only
-  models: the published version in place and the draft with it.
+  models: the published version in place. Drafts keep theirs, so tests stay
+  on the hosted model; the command once rewrote drafts too, which moved every
+  project's tests onto the local model and its capacity limits.
 - Publishing can switch them in the same request (`switch_models_to` on
   `POST .../versions`): the draft's test-only agents move to that model, which
   counts towards the bump, then the draft is published. Drafts are expected to
