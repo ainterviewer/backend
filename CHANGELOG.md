@@ -4,6 +4,17 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.31] - 2026-11-18
+
+### Features
+
+- (welcome) Let a welcome without the contact box have no email
+
+### Bug Fixes
+
+- (guide) Refuse to save a guide with a question that has no text
+- (content) Serve the setup editors the doc being edited
+
 ## [0.10.30] - 2026-11-18
 
 ### Internal
