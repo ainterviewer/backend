@@ -16,6 +16,17 @@ router = APIRouter(
 )
 
 
+def _error_detail(response: httpx.Response) -> str:
+    """The upstream error's `detail`, or a bounded slice of its body."""
+    try:
+        detail = response.json().get("detail")
+    except (ValueError, AttributeError):
+        detail = None
+    if detail is not None:
+        return str(detail)
+    return response.text[:500] or "(empty body)"
+
+
 async def proxy_to_ec2_manager(request: Request, full_path: str):
     """
     Proxy all /api/aws/ec2/* requests to the EC2 manager proxy server.
@@ -46,6 +57,15 @@ async def proxy_to_ec2_manager(request: Request, full_path: str):
                 headers=headers,
                 content=body,
             )
+
+            if response.status_code >= 400:
+                # Passed through untouched, so without this the access log
+                # shows only the status -- a 503 for "AWS has no capacity"
+                # reads the same as any other.
+                logger.warning(
+                    f"EC2 manager answered {response.status_code} to "
+                    f"{request.method} {full_path}: {_error_detail(response)}"
+                )
 
             # Forward the response
             response_headers = {
