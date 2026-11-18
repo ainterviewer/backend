@@ -87,7 +87,7 @@ embed-backfill *ARGS:
     uv run python -m app.embed.cli backfill {{ ARGS }}
 
 [group("Release & Publish")]
-bump TYPE: && publish
+bump TYPE: confirm-clean && publish
     #!/usr/bin/env bash
     set -euo pipefail
     uv run prek -a
@@ -143,3 +143,14 @@ publish-docker:
       "${TAGS[@]}" \
       --push \
       .
+
+# Prompt before releasing over uncommitted (or untracked) changes.
+[private]
+confirm-clean:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "$(git status --porcelain)" ]; then
+        git status --short
+        read -rp "There are uncommitted changes. Continue? [y/N] " answer
+        [[ "$answer" =~ ^[Yy]$ ]] || { echo "Aborted." >&2; exit 1; }
+    fi
