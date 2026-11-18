@@ -248,7 +248,9 @@ def test_versions_number_on_from_the_last_publish(db):
     _edit_guide(
         database,
         project_id,
-        lambda g: g.question_sections[0].questions.append(LocalizedQuestion()),
+        lambda g: g.question_sections[0].questions.append(
+            LocalizedQuestion(main_question={"EN": "Added"})
+        ),
     )
     assert database.versions.publish(project_id, user_id, None).semver == "1.1.0"
 

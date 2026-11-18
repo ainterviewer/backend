@@ -435,6 +435,15 @@ class VersionRepository(BaseRepository):
                 "publish them as they were before.",
                 {},
             )
+        # Saves refuse an empty question, but a guide no one has saved since
+        # can still hold one: a new project's starts with one, for its editor
+        # to discover the question settings on.
+        if empty := content.guide.empty_question_errors():
+            raise PublishError(
+                " ".join(e.message for e in empty)
+                + " Write the questions, or delete them, before publishing.",
+                {},
+            )
         if missing := missing_text(content):
             names = ", ".join(get_language_dict(lang)["name"] for lang in missing)
             raise PublishError(

@@ -35,6 +35,7 @@ from app.db.repositories.errors import NotPublishedError, ProjectLanguageError
 from app.db.repositories.project import render_default_guide
 from app.db.tables import Base, ProjectContentTable, ProjectFolderTable, UserTable
 from app.types import ContentPart
+from tests.helpers import ask_first_question
 
 
 @pytest.fixture
@@ -223,8 +224,46 @@ async def test_saving_a_condition_on_a_later_question_is_rejected(db):
 
 
 @pytest.mark.anyio
+async def test_saving_a_question_with_no_text_is_rejected(db):
+    database, project_id = db
+    guide = LocalizedInterviewGuide.from_rendered(
+        {
+            "EN": InterviewGuide(
+                question_sections=[
+                    QuestionSection(
+                        description="",
+                        questions=[
+                            Question(main_question="Asked"),
+                            Question(main_question=""),
+                        ],
+                    )
+                ]
+            )
+        },
+        structure="EN",
+    )
+
+    with pytest.raises(HTTPException) as error:
+        await projects_api.update_guide(
+            project_id,
+            guide,
+            database,
+            None,  # ty: ignore[invalid-argument-type]
+            None,  # ty: ignore[invalid-argument-type]
+            database.projects.get_revision(project_id, ContentPart.GUIDE),
+            Response(),
+        )
+
+    assert error.value.status_code == 400
+    assert error.value.detail == (
+        "Question 1.2 has no text. Write the question, or delete it."
+    )
+
+
+@pytest.mark.anyio
 async def test_emails_are_text_per_language(db):
     database, project_id = db
+    ask_first_question(database, project_id)  # It is published below.
     await _add(database, project_id, "DA")
     projects = database.projects
 

@@ -27,6 +27,7 @@ from app.db.tables import (
 )
 from app.db.triggers import register_trigger_functions
 from app.types import TestRunStatus
+from tests.helpers import ask_first_question
 
 OLD = "an-old-model"
 
@@ -50,6 +51,7 @@ def db():
         project_id = database.projects.create_project(
             folder_id=folder.id, title="p", owner_id=user.id, default_language="EN"
         )
+        ask_first_question(database, project_id)
         # Published before the model goes, as publishing refuses a model
         # that is not distributable; then gone from both, as from config.
         database.versions.publish(project_id, user.id, None)

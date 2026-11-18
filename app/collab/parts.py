@@ -63,8 +63,11 @@ def _validate_guide(data: Json, language: str) -> Validated:
         guide = LocalizedInterviewGuide.model_validate(data)
     except ValidationError as error:
         return None, [ContentError.of(e) for e in validation_errors(error, data)]
-    if order_errors := guide.render(language).condition_order_errors():
-        return None, [ContentError.of(e) for e in order_errors]
+    if save_errors := [
+        *guide.empty_question_errors(),
+        *guide.render(language).condition_order_errors(),
+    ]:
+        return None, [ContentError.of(e) for e in save_errors]
     _trim_options(guide)
     return guide, []
 

@@ -44,6 +44,7 @@ from app.db.triggers import register_trigger_functions
 from app.dependencies import get_db
 from app.main import app
 from app.types import CollaboratorRole, ContentPart, Scope
+from tests.helpers import ask_first_question
 
 pytestmark = pytest.mark.anyio
 
@@ -84,6 +85,8 @@ def server(tmp_path, monkeypatch):
             owner_id=users["editor"].id,
             default_language="EN",
         )
+        # Else every edit would leave the guide invalid, and none would save.
+        ask_first_question(InterviewDataBase(session), project_id)
         tokens = {
             name: AuthToken(user_id=user.id, scope=Scope.USER).encode()
             for name, user in users.items()

@@ -28,6 +28,7 @@ from app.db.tables import Base, ProjectFolderTable, UserTable
 from app.db.triggers import register_trigger_functions
 from app.distribution import SPEECH, uses_of_test_only
 from tests.conftest import TEST_ONLY_MODEL
+from tests.helpers import ask_first_question
 
 LOCAL = "openai/gpt-oss-120b"
 
@@ -61,6 +62,7 @@ def db():
         project_id = database.projects.create_project(
             folder_id=folder.id, title="p", owner_id=user.id, default_language="EN"
         )
+        ask_first_question(database, project_id)
         yield database, project_id, user.id
 
 

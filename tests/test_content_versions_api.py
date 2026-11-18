@@ -28,6 +28,7 @@ from app.db.triggers import register_trigger_functions
 from app.dependencies import get_db
 from app.main import app
 from app.types import CollaboratorRole, Scope
+from tests.helpers import ask_first_question
 
 
 @pytest.fixture
@@ -56,9 +57,11 @@ def setup():
             )
         )
         session.commit()
-        project_id = InterviewDataBase(session).projects.create_project(
+        database = InterviewDataBase(session)
+        project_id = database.projects.create_project(
             folder_id=folder.id, title="p", owner_id=user.id, default_language="EN"
         )
+        ask_first_question(database, project_id)
         user_id = user.id
 
     def _db():
@@ -169,6 +172,26 @@ def test_respondents_get_nothing_until_the_project_is_published(setup):
     assert published.status_code == 200
     assert published.json()["semver"] == "1.0.0"
     assert client.get(languages).status_code == 200
+
+
+def test_a_guide_with_an_empty_question_is_not_published(setup):
+    # A new project's guide starts with one, and holds it until a save.
+    client, project_id, cookies, engine = setup
+    with Session(engine) as session:
+        projects = InterviewDataBase(session).projects
+        guide = projects.get_guide(project_id)
+        guide.question_sections[0].questions[0].main_question["EN"] = " "
+        projects.update_guide(project_id, guide)
+        session.commit()
+
+    refused = _publish(client, project_id, cookies)
+
+    assert refused.status_code == 409
+    assert refused.json()["code"] == "cannot_publish"
+    assert refused.json()["detail"] == (
+        "Question 1.1 has no text. Write the questions, or delete them, "
+        "before publishing."
+    )
 
 
 def test_distributed_interviews_run_the_published_version(setup):

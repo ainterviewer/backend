@@ -432,15 +432,18 @@ async def update_guide(
     revision; the new revision comes back as `ETag`."""
     # Before writing the images, so a refused save leaves no files behind.
     db.versions.check_revision(project_id, revision, ContentPart.GUIDE)
-    # Not a validator on the guide: interview copies shuffled before the
-    # constraint existed must still load. Checking it here is what keeps
+    # Not validators on the guide: guides and interview copies saved before
+    # these checks existed must still load. The condition order is what keeps
     # `shuffle`'s fallback to the authored order valid. The structure is the
     # same in every language, so one rendering answers for all of them.
     rendered = guide.render(db.projects.get_default_language(project_id))
-    if order_errors := rendered.condition_order_errors():
+    if save_errors := [
+        *guide.empty_question_errors(),
+        *rendered.condition_order_errors(),
+    ]:
         raise HTTPException(
             status_code=400,
-            detail="\n".join(f"{e.message} {e.fix}" for e in order_errors),
+            detail="\n".join(f"{e.message} {e.fix}" for e in save_errors),
         )
 
     images = [

@@ -36,6 +36,7 @@ from app.dependencies import get_db, register_trigger_functions
 from app.main import app
 from app.schemas.projects import ExperimentCreate, ExperimentProjectCreate
 from app.types import ExperimentAllocation, ProjectStatus
+from tests.helpers import ask_first_question
 
 
 @pytest.fixture
@@ -72,6 +73,7 @@ def setup(engine):
                 default_language="EN",
             )
             if publish:
+                ask_first_question(database, project_id)
                 database.versions.publish(project_id, user.id, None)
             return project_id
 
