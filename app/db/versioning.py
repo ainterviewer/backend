@@ -141,7 +141,11 @@ def _survey_bump(old: LocalizedQuestion, new: LocalizedQuestion) -> Bump:
 
 def _question_bump(old: LocalizedQuestion, new: LocalizedQuestion) -> Bump:
     bump = _survey_bump(old, new)
-    if _structure(old.conditions) != _structure(new.conditions):
+    # By id: a question's conditions are all checked whatever their order, so
+    # reordering them changes nothing about who is asked what.
+    if {c.id: _structure(c) for c in old.conditions} != {
+        c.id: _structure(c) for c in new.conditions
+    }:
         bump = max(bump, Bump.MAJOR)
     settings = {"survey_item", "conditions"}
     if _structure(old, exclude=settings) != _structure(new, exclude=settings):

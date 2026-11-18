@@ -23,8 +23,8 @@ from ainterviewer.interview_guides import (
 )
 from ainterviewer.interview_guides.conditions import (
     Condition,
+    ConditionBlock,
     ConditionEvaluation,
-    Conditions,
     QuestionContext,
 )
 from ainterviewer.interview_guides.types import ConditionAction
@@ -179,17 +179,19 @@ async def test_saving_a_condition_on_a_later_question_is_rejected(db):
     later = Question(main_question="Later", survey_item=RadioItem(options=["Yes"]))
     gated = Question(
         main_question="Gated",
-        conditions=Conditions(
-            action=ConditionAction.SKIP_QUESTION,
-            conditions=[
-                Condition(
-                    question_context=QuestionContext(
-                        question_index=(0, 1), question_id=later.id
-                    ),
-                    evaluation=[ConditionEvaluation(trigger_value="Yes")],
-                )
-            ],
-        ),
+        conditions=[
+            Condition(
+                action=ConditionAction.SKIP_QUESTION,
+                blocks=[
+                    ConditionBlock(
+                        question_context=QuestionContext(
+                            question_index=(0, 1), question_id=later.id
+                        ),
+                        evaluation=[ConditionEvaluation(trigger_value="Yes")],
+                    )
+                ],
+            )
+        ],
     )
     guide = LocalizedInterviewGuide.from_rendered(
         {

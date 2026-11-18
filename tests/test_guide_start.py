@@ -12,8 +12,8 @@ import pytest
 
 from ainterviewer.interview_guides.conditions import (
     Condition,
+    ConditionBlock,
     ConditionEvaluation,
-    Conditions,
     QuestionContext,
 )
 from ainterviewer.interview_guides.interview_guide import InterviewGuide
@@ -24,11 +24,11 @@ from ainterviewer.interview_guides.types import ConditionAction
 from app.services.guide_start import MISSING_ANSWER, StartPointError, start_guide_at
 
 
-def _condition(question: Question) -> Conditions:
-    return Conditions(
+def _condition(question: Question) -> Condition:
+    return Condition(
         action=ConditionAction.SKIP_QUESTION,
-        conditions=[
-            Condition(
+        blocks=[
+            ConditionBlock(
                 question_context=QuestionContext(
                     question_index=(0, 0), question_id=question.id
                 ),
@@ -44,9 +44,9 @@ def _guide() -> InterviewGuide:
     b = [Question(main_question=f"b{n}") for n in range(3)]
 
     # Reads a question in the first section.
-    b[1].conditions = _condition(a[0])
+    b[1].conditions = [_condition(a[0])]
     # Reads a question earlier in its own section.
-    b[2].conditions = _condition(b[0])
+    b[2].conditions = [_condition(b[0])]
     b[2].references = [Reference(question_index=(0, 0), question_id=a[1].id)]
     b[2].main_question = "You said {} earlier?"
 
@@ -85,16 +85,16 @@ def test_starting_at_a_question_drops_the_ones_before_it_in_its_section():
     assert len(guide.question_sections) == 2
 
 
-def test_a_rule_reading_a_cut_question_is_dropped():
+def test_a_condition_reading_a_cut_question_is_dropped():
     guide = _guide()
 
     start_guide_at(guide, section_id=guide.question_sections[1].id)
 
     _, b1, b2 = guide.question_sections[0].questions
     # b1 read a0, which was cut; b2 reads b0, which was kept.
-    assert b1.conditions is None
-    assert b2.conditions is not None
-    assert b2.conditions.conditions[0].question_context.question_index == (0, 0)
+    assert b1.conditions == []
+    assert len(b2.conditions) == 1
+    assert b2.conditions[0].blocks[0].question_context.question_index == (0, 0)
 
 
 def test_a_reference_to_a_cut_question_is_spelled_out():

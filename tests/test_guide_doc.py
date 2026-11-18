@@ -19,8 +19,8 @@ from ainterviewer.interview_guides import (
 )
 from ainterviewer.interview_guides.conditions import (
     Condition,
+    ConditionBlock,
     ConditionEvaluation,
-    Conditions,
     QuestionContext,
 )
 from ainterviewer.interview_guides.localized import LocalizedInterviewGuide
@@ -40,7 +40,7 @@ from app.collab.guide_doc import (
     roots,
 )
 
-_ids = {k: uuid4() for k in ("radio", "gated", "slider", "s1", "s2")}
+_ids = {k: uuid4() for k in ("radio", "gated", "slider", "s1", "s2", "condition")}
 
 
 def _rendered(language: str, never: str) -> InterviewGuide:
@@ -59,17 +59,19 @@ def _rendered(language: str, never: str) -> InterviewGuide:
             description=f"{language} a cat",
             alt=f"{language} cat",
         ),
-        conditions=Conditions(
-            action=ConditionAction.SKIP_QUESTION,
-            conditions=[
-                Condition(
-                    question_context=QuestionContext(
-                        question_index=(0, 0), question_id=radio.id
-                    ),
-                    evaluation=[ConditionEvaluation(trigger_value=never)],
-                )
-            ],
-        ),
+        conditions=[
+            Condition(
+                action=ConditionAction.SKIP_QUESTION,
+                blocks=[
+                    ConditionBlock(
+                        question_context=QuestionContext(
+                            question_index=(0, 0), question_id=radio.id
+                        ),
+                        evaluation=[ConditionEvaluation(trigger_value=never)],
+                    )
+                ],
+            )
+        ],
     )
     slider = Question(
         main_question=f"{language} rate 😀 it",

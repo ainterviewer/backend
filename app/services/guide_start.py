@@ -7,12 +7,12 @@ the start point on, and runs from its beginning like any other.
 
 What is cut was never asked, so nothing can read its answers:
 
-- A rule (a question's `Conditions`) reading a cut question is dropped whole.
-  Its answer would have been unknown, and an unknown term leaves a rule
-  undecided -- so it would not have fired -- except in a chain like
-  `cut OR other`, where `other` alone could decide it. Dropping the rule is
-  the simple, predictable reading: a test from the middle never skips or ends
-  on an answer it did not collect.
+- A condition with a block reading a cut question is dropped whole, while the
+  question's other conditions stay. Its answer would have been unknown, and an
+  unknown block leaves a condition undecided -- so it would not have fired --
+  except in a chain like `cut OR other`, where `other` alone could decide it.
+  Dropping the condition is the simple, predictable reading: a test from the
+  middle never skips or ends on an answer it did not collect.
 - A reference to a cut question has no answer to quote, and `ask_question`
   refuses to ask a question whose referenced answer is missing. The question
   keeps its text with the placeholder spelled out instead.
@@ -80,11 +80,14 @@ def start_guide_at(
     }
     for section in guide.question_sections:
         for question in section.questions:
-            if question.conditions and any(
-                condition.question_context.question_id not in kept
-                for condition in question.conditions.conditions
-            ):
-                question.conditions = None
+            question.conditions = [
+                condition
+                for condition in question.conditions
+                if all(
+                    block.question_context.question_id in kept
+                    for block in condition.blocks
+                )
+            ]
 
             if question.references and any(
                 reference.question_id not in kept for reference in question.references

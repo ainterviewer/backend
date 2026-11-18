@@ -13,6 +13,7 @@ which inserts the answer at `current_message_id + 1`.
 """
 
 import datetime
+import json
 import statistics
 from collections import Counter, defaultdict
 from typing import Annotated, NamedTuple
@@ -20,10 +21,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import UUID4
-from sqlalchemy import and_, distinct, func, or_, select
+from sqlalchemy import distinct, func, or_, select
 
 from ainterviewer.interview_guides import SurveyItem
-from ainterviewer.interview_guides.conditions import Conditions
+from ainterviewer.interview_guides.conditions import Condition
 from ainterviewer.interview_guides.survey_items import (
     CheckboxItem,
     DateItem,
@@ -52,6 +53,7 @@ from ....dependencies import (
 from ....schemas.monitoring import (
     AnswerSample,
     CategoryCount,
+    ConditionFirings,
     DistributionBucket,
     DistributionKind,
     GridRowDistribution,
@@ -133,7 +135,7 @@ class _Answer(NamedTuple):
 
 
 class _Firings(NamedTuple):
-    """How often one question's rule was evaluated, and how often it fired."""
+    """How often one condition was evaluated, and how often it fired."""
 
     evaluated: int
     fired: int
@@ -551,9 +553,9 @@ def _build_distribution(
     main_question: int,
     question: str,
     item: SurveyItem | None,
-    conditions: Conditions | None,
+    conditions: list[Condition],
     collected: _Collected,
-    firings: _Firings,
+    firings: dict[UUID, _Firings],
 ) -> ItemDistribution:
     answers = collected.answers
     kind = DistributionKind.TEXT
@@ -647,8 +649,7 @@ def _build_distribution(
         n_answered=len(answers),
         n_skipped=collected.n_skipped,
         n_not_asked_by_condition=collected.n_not_asked_by_condition,
-        n_condition_evaluated=firings.evaluated,
-        n_condition_fired=firings.fired,
+        condition_firings=_condition_counts(conditions, firings),
         counts=counts,
         buckets=buckets,
         stats=stats,
@@ -660,123 +661,46 @@ def _build_distribution(
     )
 
 
-def _checked_after_answer(conditions: Conditions | None, key: QuestionKey) -> bool:
-    """Whether a rule reads the answer to the question carrying it.
-
-    Such a rule cannot be evaluated until that question has been answered, so
-    the interview checks it *after* asking rather than before -- see
-    `Interview.should_check_condition_after_question`. It therefore decides not
-    whether the question was put, but how much further the interview goes from
-    it, and it is the one kind of rule whose firings the card has no other way
-    to show.
-    """
-    if conditions is None:
-        return False
-    return any(
-        tuple(condition.question_context.question_index) == key
-        for condition in conditions.conditions
-    )
+def _condition_counts(
+    conditions: list[Condition], firings: dict[UUID, _Firings]
+) -> list[ConditionFirings]:
+    """The counts for each of a question's conditions, in the guide's order."""
+    return [
+        ConditionFirings(
+            condition_id=condition.id,
+            n_evaluated=firings.get(condition.id, _Firings(0, 0)).evaluated,
+            n_fired=firings.get(condition.id, _Firings(0, 0)).fired,
+        )
+        for condition in conditions
+    ]
 
 
-def _carrier_key(context: str | None) -> QuestionKey | None:
-    """The question a recorded evaluation hangs off, or `None` if unrecorded."""
-    if not context:
-        return None
-    section, _, question = context.partition(":")
-    try:
-        return (int(section), int(question))
-    except ValueError:
-        return None
+def _condition_firings(session, project_id: UUID4, interviews) -> dict[UUID, _Firings]:
+    """How often each condition was evaluated and met, across the cohort, by
+    condition id.
 
-
-def _unattributable(
-    order: list[QuestionKey], authored_conditions: dict[QuestionKey, Conditions | None]
-) -> set[QuestionKey]:
-    """Questions whose un-carried evaluations cannot be told from the next one's.
-
-    A rule checked *before* its question is asked is written against whatever
-    message came last, which is the previous question's. So an evaluation
-    landing on question K's messages belongs either to K's own after-the-answer
-    rule or to the pre-check of the question that follows K -- and when that
-    successor's rule happens to read K, the two are identical in every column.
-    Rather than guess, K is left without a count.
-
-    Only evaluations that predate the carrier being recorded need this; see
-    `_carrier_key`.
-    """
-    ambiguous: set[QuestionKey] = set()
-
-    for index, key in enumerate(order[:-1]):
-        following = order[index + 1]
-        rule = authored_conditions.get(following)
-        if rule is None or not rule.conditions:
-            continue
-        # A successor whose own rule is checked after its answer writes against
-        # its own messages, not against K's.
-        if _checked_after_answer(rule, following):
-            continue
-        ambiguous.add(key)
-
-    return ambiguous
-
-
-def _condition_firings(
-    session,
-    project_id: UUID4,
-    interviews,
-    order: list[QuestionKey],
-    authored_conditions: dict[QuestionKey, Conditions | None],
-) -> dict[QuestionKey, _Firings]:
-    """How often each question's rule was evaluated and met, across the cohort.
-
-    Read off the task the interview writes for every evaluation, which records
-    the verdict but -- before the carrier was added -- not which question the
-    rule belonged to. Those older rows are attributed through the message the
-    evaluation was written against, and only where that attribution is not
-    ambiguous.
+    Read off the task the interview writes for every evaluation: its content
+    is the condition evaluated, id included, and its response the verdict.
     """
     rows = session.execute(
-        select(
-            TaskTable.context,
-            TaskTable.response,
-            MessageTable.section,
-            MessageTable.main_question,
-        )
+        select(TaskTable.content, TaskTable.response)
         .join(interviews, interviews.c.id == TaskTable.interview_id)
-        # Outer: an evaluation written against a timed message or the
-        # introduction has no question indices, and one carrying its own
-        # carrier does not need them.
-        .outerjoin(
-            MessageTable,
-            and_(
-                MessageTable.interview_id == TaskTable.interview_id,
-                MessageTable.message_id == TaskTable.message_id,
-            ),
-        )
         .where(
             TaskTable.project_id == project_id,
             TaskTable.task == CONDITION_TASK,
         )
     ).all()
 
-    ambiguous = _unattributable(order, authored_conditions)
-    tally: dict[QuestionKey, list[int]] = defaultdict(lambda: [0, 0])
+    tally: dict[UUID, list[int]] = defaultdict(lambda: [0, 0])
 
     for row in rows:
-        key = _carrier_key(row.context)
+        try:
+            condition_id = UUID(json.loads(row.content)["id"])
+        except (TypeError, ValueError, KeyError):
+            # An evaluation the migration could not tie to a condition.
+            continue
 
-        if key is None:
-            if row.section is None or row.main_question is None:
-                continue
-            key = (row.section, row.main_question)
-            # Without a carrier, only a rule the interview checks after its own
-            # answer is known to have been written against its own question.
-            if key in ambiguous or not _checked_after_answer(
-                authored_conditions.get(key), key
-            ):
-                continue
-
-        counts = tally[key]
+        counts = tally[condition_id]
         counts[0] += 1
         if row.response == CONDITION_FIRED:
             counts[1] += 1
@@ -950,7 +874,7 @@ def get_project_item_distributions(
 
     sections: list[GuideSection] = []
     authored: dict[
-        QuestionKey, tuple[str, SurveyItem | None, bool, Conditions | None]
+        QuestionKey, tuple[str, SurveyItem | None, bool, list[Condition]]
     ] = {}
 
     if default_guide is not None:
@@ -971,16 +895,7 @@ def get_project_item_distributions(
                     question.conditions,
                 )
 
-    # Keyed apart from `authored` so the firing counts can be worked out before
-    # the items are built, and in the guide's own order -- which is what tells
-    # an un-carried evaluation on one question from the next question's
-    # pre-check.
-    authored_conditions: dict[QuestionKey, Conditions | None] = {
-        key: entry[3] for key, entry in authored.items()
-    }
-    firings_by_key = _condition_firings(
-        session, project_id, interviews, list(authored), authored_conditions
-    )
+    firings = _condition_firings(session, project_id, interviews)
 
     # Union, not replacement: the guide above is the current editable draft,
     # while these interviews ran against per-interview snapshots taken when
@@ -994,12 +909,11 @@ def get_project_item_distributions(
     items: list[ItemDistribution] = []
     for section_idx, question_idx in ordered_keys:
         bucket = collected.get((section_idx, question_idx), _Collected())
-        firings = firings_by_key.get((section_idx, question_idx), _Firings(0, 0))
         question, item, answerable, conditions = authored.get(
             (section_idx, question_idx),
             # A question the draft no longer has: its conditions went with it,
             # so the card states no rule rather than an outdated one.
-            (bucket.observed_question or "", bucket.observed_item, True, None),
+            (bucket.observed_question or "", bucket.observed_item, True, []),
         )
         if not answerable:
             items.append(
@@ -1014,8 +928,7 @@ def get_project_item_distributions(
                     n_answered=0,
                     n_skipped=0,
                     n_not_asked_by_condition=bucket.n_not_asked_by_condition,
-                    n_condition_evaluated=firings.evaluated,
-                    n_condition_fired=firings.fired,
+                    condition_firings=_condition_counts(conditions, firings),
                     counts=[],
                     buckets=[],
                     stats=None,

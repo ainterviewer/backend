@@ -9,7 +9,7 @@ from uuid import UUID
 from pydantic import Field
 
 from ainterviewer.interview_guides import SurveyItem
-from ainterviewer.interview_guides.conditions import Conditions
+from ainterviewer.interview_guides.conditions import Condition
 from ainterviewer.types import InterviewStatus, LanguageCode
 
 from ..types import InterviewType
@@ -299,6 +299,15 @@ class RankingOptionDistribution(Schema):
     mean_rank: float | None
 
 
+class ConditionFirings(Schema):
+    """How often one condition on a question was evaluated, and how often it
+    was met and its action taken."""
+
+    condition_id: UUID
+    n_evaluated: int
+    n_fired: int
+
+
 class ItemDistribution(Schema):
     """The distribution of answers to one authored question."""
 
@@ -313,11 +322,11 @@ class ItemDistribution(Schema):
     # question. Taken from the guide, so it carries the authored options even
     # when nobody picked some of them.
     item: SurveyItem | None
-    # What had to hold for this question to be asked at all, straight from the
-    # guide. Each condition names the question it reads by index, so the page
-    # can both state the rule on this card and, reading the whole set, mark the
-    # cards that gate others. `None` for an unconditional question.
-    conditions: Conditions | None = None
+    # The question's conditions, straight from the guide. Each block names the
+    # question it reads by index, so the page can both state the conditions on
+    # this card and, reading the whole set, mark the cards that gate others.
+    # Empty for an unconditional question.
+    conditions: list[Condition] = []
 
     # Answer rate. `n_asked - n_answered - n_skipped` is the number of
     # respondents who saw the question and dropped out on it.
@@ -331,15 +340,12 @@ class ItemDistribution(Schema):
     # one everybody abandons.
     n_not_asked_by_condition: int = 0
 
-    # How often this question's own rule was evaluated, and how often it was
-    # met and the action fired. Both zero for a question with no conditions --
-    # and also where the firings cannot be attributed to a question with
-    # certainty, which is the case for interviews that ran before the
-    # evaluation recorded which question carried the rule. Absent rather than
-    # approximate: this sits next to the rule on the card, and a number that
-    # may belong to a neighbouring question is worse than none.
-    n_condition_evaluated: int = 0
-    n_condition_fired: int = 0
+    # How often each of `conditions` was evaluated and fired, in the same
+    # order. Zero where an evaluation could not be tied to a condition, which
+    # is the case for some interviews that ran before the evaluation recorded
+    # which question carried it: absent rather than approximate, since a
+    # number that may belong to a neighbouring question is worse than none.
+    condition_firings: list[ConditionFirings] = []
 
     counts: list[CategoryCount]
     buckets: list[DistributionBucket]
