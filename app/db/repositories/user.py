@@ -32,6 +32,10 @@ from ..tables import AccessRequestTable, InvitationTable, UserActivityTable, Use
 from .base import BaseRepository
 from .errors import EmailTakenError, InvitationAliasTakenError, InvitationClaimedError
 
+# How long an invitation sent on approving an access request stays valid. The
+# admin page pre-fills the same span for new invitations.
+INVITATION_LIFETIME = timedelta(weeks=4)
+
 
 class UserRepository(BaseRepository):
     """Repository for User, AccessRequest, and Invitation operations."""
@@ -337,6 +341,7 @@ class UserRepository(BaseRepository):
             # created but the email has not been send to the user.
             invite = self.create_invitation(
                 access_request.email,
+                expires_at=now() + INVITATION_LIFETIME,
                 access_request_id=access_request.id,
                 user_scope=scope,
             )
@@ -384,8 +389,6 @@ class UserRepository(BaseRepository):
         user_demo_daily_limit: int | None = None,
         user_demo_lifetime_limit: int | None = None,
     ) -> InvitationPublic:
-        if expires_at is None:
-            expires_at = now() + timedelta(days=1)
         if email:
             email = normalize_email(email)
 
