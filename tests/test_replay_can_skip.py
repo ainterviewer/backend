@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from ainterviewer.interfaces import OutgoingMessage
-from ainterviewer.interview_guides import InterviewGuide
+from ainterviewer.interview_guides import InterviewGuide, TimedMessage
 from ainterviewer.types import MessageRole
 from app.api.websockets.interviews.replay import replay_history
 from app.db.repositories.interview import InterviewRepository
@@ -88,3 +88,46 @@ def test_unskippable_question_is_replayed_unskippable(interviews):
 
 def test_skippable_question_is_replayed_skippable(interviews):
     assert replay_waiting_on(interviews, 0).can_skip is True
+
+
+# -- Timed messages shown in a modal --------------------------------------------
+
+
+def _stored(interviews: InterviewRepository, *rows: tuple[str, dict]):
+    for message_id, (content, fields) in enumerate(rows):
+        interviews.insert_message(
+            message_id=message_id,
+            content=content,
+            role=MessageRole.ASSISTANT,
+            interview_id=INTERVIEW,
+            project_id=PROJECT,
+            **fields,
+        )
+    return interviews.get_messages(INTERVIEW, PROJECT)
+
+
+def test_a_timed_message_shown_in_a_modal_is_not_replayed_into_the_chat(interviews):
+    modal = TimedMessage(message="Halfway", time=10, as_modal=True)
+    plain = TimedMessage(message="Almost done", time=20)
+    guide = GUIDE.model_copy(update={"timed_messages": [modal, plain]})
+    rows = _stored(
+        interviews,
+        ("Halfway", {"timed_message_id": modal.id}),
+        ("Almost done", {"timed_message_id": plain.id}),
+        ("Skippable?", {"section": 0, "main_question": 0}),
+    )
+
+    replayed, _ = replay_history(rows, PROJECT, guide)
+
+    assert [message.content for message in replayed] == ["Almost done", "Skippable?"]
+
+
+def test_one_waited_on_goes_out_live_as_a_modal(interviews):
+    modal = TimedMessage(message="Halfway", time=10, as_modal=True)
+    guide = GUIDE.model_copy(update={"timed_messages": [modal]})
+    rows = _stored(interviews, ("Halfway", {"timed_message_id": modal.id}))
+
+    (last,), _ = replay_history(rows, PROJECT, guide)
+
+    assert isinstance(last, OutgoingMessage)
+    assert last.as_modal

@@ -34,6 +34,20 @@ def _can_skip(message: MessagePublic, interview_guide: InterviewGuide | None) ->
         return True
 
 
+def _as_modal(message: MessagePublic, interview_guide: InterviewGuide | None) -> bool:
+    """Whether `message` is a timed message the guide shows in a modal.
+
+    Not stored on the message, so read off the interview's own guide by the
+    timed message's id.
+    """
+    if interview_guide is None or message.timed_message_id is None:
+        return False
+    return any(
+        timed.id == message.timed_message_id and timed.as_modal
+        for timed in interview_guide.timed_messages or []
+    )
+
+
 def replay_history(
     interview_history: list[MessagePublic],
     project_id: UUID4,
@@ -61,9 +75,12 @@ def replay_history(
 
         # An override answer was given in the intervention's modal, never in
         # the chat.
+        # A timed message shown in a modal never joined the chat, and the
+        # respondent closed it already.
         if (
             message.skipped_by_condition
             or message.message_type == MessageType.SECURITY_OVERRIDE
+            or _as_modal(message, interview_guide)
         ):
             continue
 
@@ -116,6 +133,7 @@ def replay_history(
                 image=last_message.image,
                 survey_item=last_message.survey_item,
                 security_intervention=last_message.security_intervention,
+                as_modal=_as_modal(last_message, interview_guide),
             )
             messages.append(data)
 

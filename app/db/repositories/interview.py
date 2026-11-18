@@ -4,6 +4,7 @@ import logging
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal
+from uuid import UUID
 
 from pydantic import UUID4
 from sqlalchemy import (
@@ -996,7 +997,7 @@ class InterviewRepository(BaseRepository):
         sub_question: int | None = None,
         is_introduction: bool = False,
         outro: bool = False,
-        timed: bool = False,
+        timed_message_id: UUID | None = None,
         skipped_by_condition: bool = False,
         security_intervention: SecurityIntervention | None = None,
     ) -> int:
@@ -1018,7 +1019,7 @@ class InterviewRepository(BaseRepository):
             survey_item=survey_item,
             is_introduction=is_introduction,
             outro=outro,
-            timed=timed,
+            timed_message_id=timed_message_id,
             skipped_by_condition=skipped_by_condition,
             security_intervention=security_intervention,
         )

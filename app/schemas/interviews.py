@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal
+from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import UUID4, AfterValidator, Field, field_validator, model_validator
@@ -108,7 +109,7 @@ class MessageBase(Schema):
     sub_question: int | None = None
     is_introduction: bool = False
     outro: bool = False
-    timed: bool = False
+    timed_message_id: UUID | None = None
     can_answer: bool = True
     include_in_history: bool = True
     attachment: Path | None = None

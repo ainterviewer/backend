@@ -1279,7 +1279,9 @@ class MessageTable(Base):
     sub_question: Mapped[int | None] = mapped_column()
     is_introduction: Mapped[bool] = mapped_column(default=False)
     outro: Mapped[bool] = mapped_column(default=False)
-    timed: Mapped[bool] = mapped_column(default=False)
+    # The guide's `TimedMessage.id` on a timed message, NULL on any other:
+    # what a resumed interview reads to not send it again.
+    timed_message_id: Mapped[uuid.UUID | None] = mapped_column(default=None)
     can_answer: Mapped[bool] = mapped_column(default=True)
     include_in_history: Mapped[bool] = mapped_column(default=True)
     attachment: Mapped[str | None] = mapped_column()  # Path stored as string

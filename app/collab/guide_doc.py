@@ -568,8 +568,8 @@ def _merge(base: Any, theirs: Any, ours: Any, key: str | None = None) -> Any:
 
 
 def _merge_aligned(base: list[Any], theirs: list[Any], ours: list[Any]) -> list[Any]:
-    """Lists whose entries have no ids (probes, alternative wordings, timed
-    messages), merged entry by entry. Each side's entries are paired with
+    """Lists merged by content rather than id (probes, alternative wordings,
+    timed messages), entry by entry. Each side's entries are paired with
     the base's by content, as `align` pairs them for the doc: an entry both
     kept is merged, one either side removed (and the other left alone) is
     gone, and what either side added is kept where it was added. The order

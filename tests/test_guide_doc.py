@@ -261,7 +261,7 @@ def test_a_timed_message_added_keeps_the_others():
     changed = guide.model_copy(deep=True)
     messages = changed.timed_messages
     assert messages is not None
-    sooner = messages[0].model_copy(deep=True)
+    sooner = messages[0].model_copy(deep=True, update={"id": uuid4()})
     sooner.message = {"EN": "EN soon", "DA": "DA snart"}
     sooner.time = 30
     messages.insert(0, sooner)
