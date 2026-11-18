@@ -4,6 +4,26 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.29] - 2026-11-18
+
+### Features
+
+- (admin) Let invitations without an expiry never expire
+- (conditions) Let a question carry several conditions
+- (interviews) Send each timed message once, and as a modal when asked
+
+### Bug Fixes
+
+- (db) Leave drafts alone in fix-distributed-models
+
+### Preview
+
+- [explore] Lay out UMAP clusters with the current optimizer
+
+### Internal
+
+- (deps) Hash passwords with bcrypt directly, dropping passlib
+
 ## [0.10.28] - 2026-11-17
 
 ### Breaking Changes
