@@ -11,7 +11,7 @@ from fastapi.security import APIKeyCookie
 from jose import JWTError
 from pydantic import UUID4, ValidationError
 from sqlalchemy import create_engine
-from sqlalchemy.exc import NoResultFound, SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, NoResultFound, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ainterviewer.types import LanguageCode
@@ -22,6 +22,7 @@ from .db.crud import InterviewDataBase
 from .db.pragmas import register_pragmas
 from .db.regexp import register_regexp
 from .db.triggers import register_trigger_functions
+from .db.utils import is_foreign_key_violation
 from .db.vectors import register_vector_extension
 from .errors import AppError
 from .settings import app_settings
@@ -141,6 +142,20 @@ def _record_activity(
         _activity_recorded[auth_token.user_id] = timestamp
     try:
         db.users.record_activity(auth_token.user_id, timestamp)
+    except IntegrityError as error:
+        db.session.rollback()
+        # A database reset or account deletion can leave a still-valid JWT in
+        # a browser. It is no longer an authenticated session once its user
+        # row is gone; do not turn that ordinary state into a server error.
+        if is_foreign_key_violation(error):
+            with _activity_lock:
+                if _activity_recorded.get(auth_token.user_id) == timestamp:
+                    if last is None:
+                        del _activity_recorded[auth_token.user_id]
+                    else:
+                        _activity_recorded[auth_token.user_id] = last
+            raise AuthError(status_code=401, detail="Session is no longer valid")
+        logger.exception("Could not record activity for %s", auth_token.user_id)
     except SQLAlchemyError:
         db.session.rollback()
         logger.exception("Could not record activity for %s", auth_token.user_id)
