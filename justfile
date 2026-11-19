@@ -14,10 +14,13 @@ dev:
 setup-db:
     uv run python -m app.db.cli setup-db
 
+# A running `just dev` keeps pooled connections to the deleted database files;
+# touching a watched file makes its --reload restart it onto the new one.
 [doc("Replace the local database with realistic, image-free development fixtures.")]
 [group("Database")]
 seed-dev:
     uv run python -m app.db.cli seed-dev --yes
+    touch app/main.py
 
 [doc("Fetches the latest daily backup db from the remote AWS server.
 Pass \"migrate\" to run `alembic upgrade head` on the fetched database.
