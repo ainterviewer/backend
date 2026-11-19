@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
+from uuid import UUID
 
 from pycrdt import Doc
 from pydantic import BaseModel, ValidationError
@@ -59,18 +60,90 @@ def _messages(error: ValidationError) -> list[ContentError]:
 
 
 def _validate_guide(data: Json, language: str) -> Validated:
-    """Held to what the PUT holds a guide to, conditions included."""
+    """Held to what the PUT holds a guide to, conditions included -- except
+    that questions with no text yet are left out rather than refused, so a
+    guide can be laid out first and its questions written one at a time,
+    each tried as it is. They still hold back publishing, as `skipped`
+    errors. What reads one of them (a condition, a reference) cannot do
+    without it, and is refused."""
     try:
         guide = LocalizedInterviewGuide.model_validate(data)
     except ValidationError as error:
         return None, [ContentError.of(e) for e in validation_errors(error, data)]
-    if save_errors := [
-        *guide.empty_question_errors(),
-        *guide.render(language).condition_order_errors(),
-    ]:
-        return None, [ContentError.of(e) for e in save_errors]
+    empty = guide.empty_question_errors()
+    skipped = {error.question_id for error in empty}
+    errors = [
+        *(ContentError.of(e) for e in guide.render(language).condition_order_errors()),
+        *_reads_skipped(guide, skipped),
+    ]
+    if errors:
+        return None, [*errors, *(ContentError.of(e, skipped=True) for e in empty)]
     _trim_options(guide)
-    return guide, []
+    if skipped:
+        guide = _without_questions(guide, skipped)
+    return guide, [ContentError.of(e, skipped=True) for e in empty]
+
+
+def _reads_skipped(
+    guide: LocalizedInterviewGuide, skipped: set[UUID | None]
+) -> list[ContentError]:
+    """Conditions and references of the questions kept that read one left
+    out: without it, they would read nothing."""
+    numbers = {
+        question.id: f"{n_section + 1}.{n_question + 1}"
+        for n_section, section in enumerate(guide.question_sections)
+        for n_question, question in enumerate(section.questions)
+    }
+    errors = []
+    for section in guide.question_sections:
+        for question in section.questions:
+            if question.id in skipped:
+                continue
+            reads = [
+                (
+                    "conditions",
+                    "has a condition on",
+                    "change the condition",
+                    block.question_context.question_id,
+                )
+                for condition in question.conditions
+                for block in condition.blocks
+            ] + [
+                (
+                    "references",
+                    "refers to the answer to",
+                    "remove the reference",
+                    reference.question_id,
+                )
+                for reference in question.references or []
+            ]
+            seen = set()
+            for field, does, undo, read in reads:
+                if read not in skipped or (field, read) in seen:
+                    continue
+                seen.add((field, read))
+                errors.append(
+                    ContentError(
+                        message=f"Question {numbers[question.id]} {does} question "
+                        f"{numbers[read]}, which has no text yet.",
+                        fix=f"Write question {numbers[read]}, or {undo}.",
+                        question_id=question.id,
+                        field=field,
+                    )
+                )
+    return errors
+
+
+def _without_questions(
+    guide: LocalizedInterviewGuide, question_ids: set[UUID | None]
+) -> LocalizedInterviewGuide:
+    """`guide` without the questions `question_ids`, validated again so that
+    what reads a question by position follows the ones moved up."""
+    data = guide.model_dump(mode="json")
+    ids = {str(question_id) for question_id in question_ids}
+    for section in data["question_sections"]:
+        section["questions"] = [q for q in section["questions"] if q["id"] not in ids]
+    return LocalizedInterviewGuide.model_validate(data)
 
 
 def _trim_options(guide: LocalizedInterviewGuide) -> None:
@@ -129,24 +202,35 @@ def _validate_welcome(data: Json, _language: str) -> Validated:
     try:
         return LocalizedWelcome.model_validate(data), []
     except ValidationError as error:
-        # Editors see these. The email is the one field the page can leave
-        # invalid -- not an email, or none while the contact box shows; say
-        # so in its terms rather than pydantic's.
-        if any(e["loc"] and e["loc"][0] == "email" for e in error.errors()):
-            return None, [
-                ContentError(
-                    message="Enter a valid contact email address.", field="email"
-                )
-            ]
-        if any(EMAIL_REQUIRED in e["msg"] for e in error.errors()):
-            return None, [
-                ContentError(
-                    message="Enter a contact email address.",
-                    fix="Or stop showing the contact box.",
-                    field="email",
-                )
-            ]
-        return None, _messages(error)
+        if (email_error := _email_error(error)) is None:
+            return None, _messages(error)
+    # The email is the one field the page can leave invalid. Saved without
+    # the contact box, which shows nothing without it -- the interview ID is
+    # of no use to a respondent with no one to send it to -- so tests run on
+    # the rest of the page; publishing waits on it (`skipped`).
+    try:
+        hidden = LocalizedWelcome.model_validate(
+            {**data, "email": None, "with_id": False}
+        )
+    except ValidationError:
+        return None, [email_error]
+    return hidden, [email_error.model_copy(update={"skipped": True})]
+
+
+def _email_error(error: ValidationError) -> ContentError | None:
+    """The welcome's email problem, in the page's terms rather than
+    pydantic's: not an email, or none while the contact box shows."""
+    if any(e["loc"] and e["loc"][0] == "email" for e in error.errors()):
+        return ContentError(
+            message="Enter a valid contact email address.", field="email"
+        )
+    if any(EMAIL_REQUIRED in e["msg"] for e in error.errors()):
+        return ContentError(
+            message="Enter a contact email address.",
+            fix="Or stop showing the contact box.",
+            field="email",
+        )
+    return None
 
 
 def _flat(part: ContentPart, validate: Callable[[Json, str], Validated]) -> DocPart:

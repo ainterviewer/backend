@@ -30,7 +30,7 @@ from websockets.exceptions import ConnectionClosed
 from app.auth import AuthToken
 from app.collab import rooms
 from app.collab.flat_doc import roots as flat_roots
-from app.collab.guide_doc import doc_id, roots
+from app.collab.guide_doc import apply_guide_data, doc_id, read_guide_data, roots
 from app.collab.parts import LIVE_PARTS
 from app.db.crud import InterviewDataBase
 from app.db.tables import (
@@ -269,6 +269,33 @@ async def test_a_doc_that_is_not_a_guide_never_overwrites_it(server):
         assert database.versions.status(project_id).doc_errors[ContentPart.GUIDE]
 
 
+async def test_a_question_with_no_text_is_saved_without_it(server):
+    # So the guide can be laid out first, and tried as its questions are
+    # written one at a time; only publishing waits on them.
+    url, tokens, db, project_id = server
+
+    async with editor(url, tokens["editor"]) as a:
+        await until(lambda: bool(read_guide_data(a)["question_sections"]))
+        data = read_guide_data(a)
+        written = data["question_sections"][0]["questions"][0]["id"]
+        data["question_sections"][0]["questions"].append(
+            {"id": str(uuid4()), "main_question": {"EN": ""}}
+        )
+        data["introduction"] = {"EN": "Saved"}
+        apply_guide_data(a, data, ("EN",))
+        await until(
+            lambda: column(db, project_id).guide.introduction.get("EN") == "Saved"
+        )
+
+    guide = column(db, project_id).guide
+    assert [str(q.id) for q in guide.question_sections[0].questions] == [written]
+    with db() as database:
+        errors = database.versions.status(project_id).doc_errors[ContentPart.GUIDE]
+    assert [(e.message, e.skipped) for e in errors] == [
+        ("Question 1.2 has no text.", True)
+    ]
+
+
 async def get_doc(url: str, token: str, project_id, part: str) -> httpx.Response:
     """`GET .../content/{part}/doc`: what editors see of a part."""
     http = url.replace("ws://", "http://").split("/ws/")[0]
@@ -431,22 +458,22 @@ async def test_opening_an_empty_consent_configures_none(server):
     assert column(db, project_id).consent is None
 
 
-async def test_a_welcome_without_an_email_is_not_saved(server):
+async def test_a_welcome_without_an_email_is_saved_without_the_contact_box(server):
+    # Tests run on the rest of the page meanwhile; only publishing waits.
     url, tokens, db, project_id = server
+
+    def welcome_errors_skipped():
+        with db() as database:
+            errors = database.versions.status(project_id).doc_errors
+        return [(e.message, e.skipped) for e in errors.get(ContentPart.WELCOME, [])]
 
     async with editor(part_url(url, "welcome"), tokens["editor"]) as a:
         flat_text(a, "title").insert(0, "Welcome")
-        await until(
-            lambda: bool(
-                (row := welcome_doc(db, project_id)) is not None and row.errors
-            )
-        )
-        assert column(db, project_id).welcome is None
-        with db() as database:
-            errors = database.versions.status(project_id).doc_errors
-        assert [e.message for e in errors[ContentPart.WELCOME]] == [
-            "Enter a contact email address."
-        ]
+        await until(lambda: column(db, project_id).welcome is not None)
+        welcome = column(db, project_id).welcome
+        assert welcome is not None and welcome.title == {"EN": "Welcome"}
+        assert not welcome.with_id and welcome.email is None
+        assert welcome_errors_skipped() == [("Enter a contact email address.", True)]
 
         _meta, content = flat_roots(a)
         content["email"] = json.dumps("not an email")
@@ -456,14 +483,18 @@ async def test_a_welcome_without_an_email_is_not_saved(server):
                 == ["Enter a valid contact email address."]
             )
         )
-        assert column(db, project_id).welcome is None
+        welcome = column(db, project_id).welcome
+        assert welcome is not None and not welcome.with_id
 
         content["email"] = json.dumps("team@example.com")
-        await until(lambda: column(db, project_id).welcome is not None)
+        await until(
+            lambda: (w := column(db, project_id).welcome) is not None and w.with_id
+        )
 
     welcome = column(db, project_id).welcome
     assert welcome is not None and welcome.title == {"EN": "Welcome"}
     assert welcome.email == "team@example.com"
+    assert welcome_errors_skipped() == []
 
 
 async def test_a_welcome_without_the_contact_box_needs_no_email(server):

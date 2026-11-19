@@ -50,7 +50,7 @@ from sqlalchemy.orm import Session, object_session
 
 from ..db.crud import InterviewDataBase
 from ..db.tables import ProjectContentTable
-from ..types import ContentError, ContentPart, ContentVersionKind
+from ..types import ContentError, ContentPart, ContentVersionKind, blocking
 from .guide_doc import doc_id, merge_guide_data
 from .parts import LIVE_PARTS, DocPart
 
@@ -313,7 +313,7 @@ class ContentRoom:
                     if revision != self.synced_revision:
                         self._unsnapshotted = True
                     self.synced_revision = revision
-                    if not errors:
+                    if not blocking(errors):
                         self.base = part.dump(value)
                     self.errors = errors or None
                     self._announce()

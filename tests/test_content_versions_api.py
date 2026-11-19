@@ -27,7 +27,7 @@ from app.db.tables import (
 from app.db.triggers import register_trigger_functions
 from app.dependencies import get_db
 from app.main import app
-from app.types import CollaboratorRole, Scope
+from app.types import CollaboratorRole, ContentError, ContentPart, Scope
 from tests.helpers import ask_first_question
 
 
@@ -191,6 +191,52 @@ def test_a_guide_with_an_empty_question_is_not_published(setup):
     assert refused.json()["detail"] == (
         "Question 1.1 has no text. Write the questions, or delete them, "
         "before publishing."
+    )
+
+
+def test_a_guide_saved_without_its_unwritten_questions_is_not_published(setup):
+    # The doc saved the draft without them: only publishing waits on them.
+    client, project_id, cookies, engine = setup
+    with Session(engine) as session:
+        database = InterviewDataBase(session)
+        database.content_docs.save(
+            project_id,
+            ContentPart.GUIDE,
+            b"",
+            database.content_docs.column(project_id, ContentPart.GUIDE).revision,
+            database.projects.get_guide(project_id),
+            [ContentError(message="Question 1.2 has no text.", skipped=True)],
+        )
+        session.commit()
+
+    refused = _publish(client, project_id, cookies)
+
+    assert refused.status_code == 409
+    assert refused.json()["detail"] == (
+        "Question 1.2 has no text. Write the question, or delete it, before publishing."
+    )
+
+
+def test_a_welcome_saved_without_its_contact_box_is_not_published(setup):
+    client, project_id, cookies, engine = setup
+    with Session(engine) as session:
+        database = InterviewDataBase(session)
+        database.content_docs.save(
+            project_id,
+            ContentPart.WELCOME,
+            b"",
+            database.content_docs.column(project_id, ContentPart.WELCOME).revision,
+            None,
+            [ContentError(message="Enter a contact email address.", skipped=True)],
+        )
+        session.commit()
+
+    refused = _publish(client, project_id, cookies)
+
+    assert refused.status_code == 409
+    assert refused.json()["detail"] == (
+        "Enter a contact email address on the welcome page, or stop showing the "
+        "contact box, before publishing."
     )
 
 

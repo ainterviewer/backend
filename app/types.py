@@ -268,11 +268,27 @@ RedirectUrl = Annotated[
 class ContentError(GuideError):
     """Why what editors wrote in a co-edited part (guide, consent, welcome)
     is not valid. Guide errors say where they are (`GuideError`); the other
-    parts' leave that empty."""
+    parts' leave that empty.
+
+    Most errors keep the part from being saved at all: the draft holds it as
+    it was before them. A `skipped` one does not -- the draft is saved
+    without what it is in (a question with no text yet), so tests run on
+    everything else. Publishing waits on every error, skipped ones too."""
+
+    skipped: bool = Field(
+        False,
+        description="The draft is saved without what this error is in, so "
+        "it only holds back publishing.",
+    )
 
     @classmethod
-    def of(cls, error: GuideError) -> ContentError:
-        return cls.model_validate(error.model_dump())
+    def of(cls, error: GuideError, *, skipped: bool = False) -> ContentError:
+        return cls.model_validate({**error.model_dump(), "skipped": skipped})
+
+
+def blocking(errors: list[ContentError] | None) -> list[ContentError]:
+    """The errors that keep a part from being saved (not `skipped`)."""
+    return [error for error in errors or [] if not error.skipped]
 
 
 class CompletionRedirects(BaseModel):

@@ -9,7 +9,7 @@ from typing import Any, NamedTuple
 from pydantic import UUID4, BaseModel
 from sqlalchemy import select
 
-from ...types import ContentError, ContentPart
+from ...types import ContentError, ContentPart, blocking
 from ..tables import ContentDocTable, ProjectContentTable
 from .base import BaseRepository
 
@@ -86,7 +86,8 @@ class ContentDocRepository(BaseRepository):
         value: BaseModel | None,
         errors: list[ContentError] | None,
     ) -> int | None:
-        """Store the doc's state and, unless it has `errors`, its `value`.
+        """Store the doc's state and, unless it has `blocking` errors, its
+        `value`.
 
         `synced_revision` is the part's revision the doc last agreed with. If
         the column has moved on since (something wrote it outside the doc),
@@ -97,7 +98,7 @@ class ContentDocRepository(BaseRepository):
         content = self._content(project_id)
         if getattr(content, f"{part.value}_revision") != synced_revision:
             return None
-        if not errors and _dump(value) != _dump(getattr(content, part.value)):
+        if not blocking(errors) and _dump(value) != _dump(getattr(content, part.value)):
             setattr(content, part.value, value)
             self.session.flush()
 

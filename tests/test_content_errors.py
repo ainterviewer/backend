@@ -15,4 +15,11 @@ def test_a_guide_error_keeps_where_it_is():
         "fix": "f",
         "question_id": str(question_id),
         "field": "conditions",
+        "skipped": False,
     }
+
+
+def test_an_error_can_be_marked_skipped():
+    error = ContentError.of(GuideError(message="m"), skipped=True)
+
+    assert error.skipped

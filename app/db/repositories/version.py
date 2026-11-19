@@ -30,7 +30,7 @@ from ...schemas.content import (
     ContentVersionPublic,
     ContentVersionSummaryPublic,
 )
-from ...types import ContentError, ContentPart, ContentVersionKind
+from ...types import ContentError, ContentPart, ContentVersionKind, blocking
 from ..tables import (
     ContentColumns,
     InterviewTable,
@@ -53,6 +53,29 @@ _PAGE_NAMES = {
     ContentPart.CONSENT: "consent",
     ContentPart.WELCOME: "welcome page",
 }
+
+
+def _write_first(errors: dict[ContentPart, list[ContentError]]) -> str:
+    """Why publishing waits on what the draft is saved without: the welcome
+    page's contact box, missing a valid email; questions with no text."""
+    sentences = []
+    if welcome := errors.get(ContentPart.WELCOME):
+        # "Enter a contact email address."
+        sentences.append(
+            f"{welcome[0].message.removesuffix('.')} on the welcome page, or stop "
+            "showing the contact box, before publishing."
+        )
+    if guide := errors.get(ContentPart.GUIDE):
+        them = (
+            "the question, or delete it"
+            if len(guide) == 1
+            else ("the questions, or delete them")
+        )
+        sentences.append(
+            " ".join(e.message for e in guide) + f" Write {them}, before publishing."
+        )
+    return " ".join(sentences)
+
 
 #: Automatic versions kept per project by `prune`, newest first. Ones an
 #: interview runs on, and the published one, are kept beyond it.
@@ -429,12 +452,17 @@ class VersionRepository(BaseRepository):
                 content.agent_configs = switched
                 self.session.flush()
         if errors := self._doc_errors(project_id):
-            pages = " and ".join(_PAGE_NAMES.get(part, part.value) for part in errors)
-            raise PublishError(
-                f"Fix the problems in the {pages} before publishing: it would "
-                "publish them as they were before.",
-                {},
-            )
+            if refused := [part for part, errs in errors.items() if blocking(errs)]:
+                pages = " and ".join(
+                    _PAGE_NAMES.get(part, part.value) for part in refused
+                )
+                raise PublishError(
+                    f"Fix the problems in the {pages} before publishing: it would "
+                    "publish them as they were before.",
+                    {},
+                )
+            # Only what the draft is saved without (`skipped`).
+            raise PublishError(_write_first(errors), {})
         # Saves refuse an empty question, but a guide no one has saved since
         # can still hold one: a new project's starts with one, for its editor
         # to discover the question settings on.
