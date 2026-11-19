@@ -1145,6 +1145,17 @@ git -C ../lib worktree add -b refactor/env-only-secrets \
   (`../../../backend/.venv/bin/python -m pytest`). Tests need neither config
   file (`tests/conftest.py` seeds what they need); to run the app, copy them
   from `config.example.toml` and `.env.example`.
+- **Running the app needs a database of its own.** The SQLite file is
+  `storage/db.sqlite`, relative to where the app starts (`db_path`), and
+  `storage/` is untracked, so a worktree's app fails at startup with
+  `unable to open database file`. Give it a copy of the main checkout's:
+  `mkdir -p storage && sqlite3 ../../../backend/storage/db.sqlite
+  ".backup storage/db.sqlite"`. Use `.backup`, not `cp`: the dev database
+  runs in WAL mode, and a plain copy of a live one can miss what is still in
+  `db.sqlite-wal`. A copy, not a symlink: a change's migrations, and
+  whatever is clicked through while trying it, then stay out of the main
+  checkout's data. Only the database is needed; uploaded files and exports
+  elsewhere in `storage/` can be left behind.
 - **Testing against unreleased lib changes** without touching the pin or a
   venv: put the lib worktree first on the path,
   `PYTHONPATH=../lib/src ../../../backend/.venv/bin/python -m pytest`, and
