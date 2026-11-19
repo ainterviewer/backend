@@ -17,6 +17,7 @@ from ..platform_release import Highlight, PlatformManifest
 from ..schemas.users import UserCreate
 from ..settings import app_settings
 from .repositories.errors import EmailTakenError
+from .seed import reset_and_seed
 
 cli = Typer()
 
@@ -77,6 +78,16 @@ def setup_db(
         except EmailTakenError:
             typer.echo(f"User {user['email']} already exists, skipping.")
     typer.echo(f"Created {n} user{'s' if n != 1 else ''}.")
+
+
+@cli.command()
+def seed_dev(
+    yes: bool = typer.Option(
+        False, "--yes", help="Replace the database without prompting"
+    ),
+):
+    """Replace the local SQLite database with realistic development fixtures."""
+    reset_and_seed(yes=yes)
 
 
 @cli.command()

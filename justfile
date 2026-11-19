@@ -14,6 +14,11 @@ dev:
 setup-db:
     uv run python -m app.db.cli setup-db
 
+[doc("Replace the local database with realistic, image-free development fixtures.")]
+[group("Database")]
+seed-dev:
+    uv run python -m app.db.cli seed-dev --yes
+
 [doc("Fetches the latest daily backup db from the remote AWS server.
 Pass \"migrate\" to run `alembic upgrade head` on the fetched database.
 ENV picks which environment's backups to pull from.")]
