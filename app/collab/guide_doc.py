@@ -16,7 +16,7 @@ The shape keeps concurrent edits apart wherever they can be:
   values, so an edit to its text is never lost to a concurrent move -- a
   `Y.Array` would need delete-and-insert, and two concurrent moves would
   duplicate the item.
-- Probes, alternative wordings and timed messages are `Y.Array`s of maps,
+- Probes and timed messages are `Y.Array`s of maps,
   matched by content when a write changes them (`align`): inserted and
   removed, never moved.
 - Everything else -- flags, settings, conditions, references -- is a plain
@@ -60,7 +60,7 @@ SECTION_ID = "section_id"
 _GUIDE_TEXTS = ("framing", "introduction", "outro", "alt_outro")
 _SECTION_TEXTS = ("description",)
 _QUESTION_TEXTS = ("main_question", "description")
-_QUESTION_TEXT_LISTS = ("probes", "alternative_main_questions")
+_QUESTION_TEXT_LISTS = ("probes",)
 _SURVEY_TEXTS = ("min_label", "max_label")
 #: A survey item's lists of things with ids: a choice's options, a grid's rows.
 _SURVEY_KEYED = ("options", "rows")
@@ -568,12 +568,12 @@ def _merge(base: Any, theirs: Any, ours: Any, key: str | None = None) -> Any:
 
 
 def _merge_aligned(base: list[Any], theirs: list[Any], ours: list[Any]) -> list[Any]:
-    """Lists merged by content rather than id (probes, alternative wordings,
-    timed messages), entry by entry. Each side's entries are paired with
-    the base's by content, as `align` pairs them for the doc: an entry both
-    kept is merged, one either side removed (and the other left alone) is
-    gone, and what either side added is kept where it was added. The order
-    is `theirs`', with `ours`' additions after the entry they followed."""
+    """Lists merged by content rather than id (probes, timed messages), entry
+    by entry. Each side's entries are paired with the base's by content, as
+    `align` pairs them for the doc: an entry both kept is merged, one either
+    side removed (and the other left alone) is gone, and what either side added
+    is kept where it was added. The order is `theirs`', with `ours`' additions
+    after the entry they followed."""
     canonical = [_canonical(entry) for entry in base]
     to_base_theirs = align(canonical, [_canonical(entry) for entry in theirs])
     to_base_ours = align(canonical, [_canonical(entry) for entry in ours])
