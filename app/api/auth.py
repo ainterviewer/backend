@@ -20,7 +20,7 @@ from ..auth import (
     verify_password,
 )
 from ..db.repositories.errors import EmailTakenError
-from ..dependencies import DBSession, DemoToken
+from ..dependencies import AuthError, DBSession, DemoToken
 from ..errors import AppError
 from ..schemas.common import ActionResponse
 from ..schemas.users import (
@@ -320,16 +320,27 @@ async def verify_login_code(
     return _issue_session(db, response, user, body.extended)
 
 
+def _session_user(db: DBSession, user_id) -> UserRecord:
+    """The signed-in user's row, or a 401 when it no longer exists.
+
+    `_record_activity` only notices a deleted user when it writes, and its
+    in-process debounce skips the write for most requests -- so after a
+    database reset or an account deletion a still-valid JWT reaches here.
+    """
+    try:
+        return db.users.get_user_private(user_id=user_id)
+    except sqlalchemy.exc.NoResultFound:
+        raise AuthError(status_code=401, detail="Session is no longer valid")
+
+
 @router.get("/me")
 async def me(db: DBSession, jwt: DemoToken) -> UserPublic:
-    current_user = db.users.get_user_private(user_id=jwt.user_id)
-
-    return UserPublic.model_validate(current_user)
+    return UserPublic.model_validate(_session_user(db, jwt.user_id))
 
 
 def _verify_current_password(db: DBSession, user_id, password: str) -> UserRecord:
     """Re-authenticate the user for sensitive account operations."""
-    user = db.users.get_user_private(user_id=user_id)
+    user = _session_user(db, user_id)
     if not verify_password(password, user.password):
         raise HTTPException(status_code=403, detail="Invalid password")
     return user

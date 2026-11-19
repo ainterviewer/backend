@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from ainterviewer.settings import settings as lib_settings
+from ainterviewer.utils import now
 from app import dependencies
 from app.auth import AuthToken
 from app.db.crud import InterviewDataBase
@@ -99,15 +100,15 @@ def test_a_scope_checked_request_records_the_day_once(setup):
         assert user.last_active == row.last_seen
 
 
-def test_activity_of_a_deleted_user_does_not_fail_the_request(setup):
+def test_activity_of_a_deleted_user_ends_the_session(setup):
     client, _, _, _ = setup
     ghost_id = uuid4()
     ghost = AuthToken(user_id=ghost_id, scope=Scope.ADMIN).encode()
-    # The foreign key refuses the row; the request still goes through.
+    # The foreign key refuses the row: the session is no longer valid.
     response = client.get("/api/admin/stats", cookies={"access_token": ghost})
-    assert response.status_code == 200
+    assert response.status_code == 401
     # And the failed write gives its debounce slot back, so the next request
-    # tries again instead of waiting the window out.
+    # checks again instead of waiting the window out.
     assert ghost_id not in dependencies._activity_recorded
 
 
@@ -120,8 +121,15 @@ def test_a_role_checked_request_records_the_day(setup):
 
 
 def test_stats_are_admin_only(setup):
-    client, _, _, _ = setup
-    user = AuthToken(user_id=uuid4(), scope=Scope.USER).encode()
+    client, _, _, engine = setup
+    with Session(engine) as session:
+        member = UserTable(
+            email="u@example.com", password="x", first_name="Ulf", scope=Scope.USER
+        )
+        session.add(member)
+        session.commit()
+        member_id = member.id
+    user = AuthToken(user_id=member_id, scope=Scope.USER).encode()
     response = client.get("/api/admin/stats", cookies={"access_token": user})
     assert response.status_code == 403
 
@@ -227,3 +235,17 @@ def test_interviews_and_projects_are_counted_per_day():
     assert today.interviews.manual_test == 0
     assert today.projects == 2
     assert yesterday.projects == 0
+
+
+def test_me_of_a_deleted_user_is_401_inside_the_debounce(setup):
+    client, _, _, _ = setup
+    ghost_id = uuid4()
+    ghost = AuthToken(user_id=ghost_id, scope=Scope.ADMIN).encode()
+    # A database reset outside the process leaves the debounce slot claimed,
+    # so no write happens to trip the foreign key.
+    dependencies._activity_recorded[ghost_id] = now()
+    try:
+        response = client.get("/api/me", cookies={"access_token": ghost})
+    finally:
+        dependencies._activity_recorded.pop(ghost_id, None)
+    assert response.status_code == 401
