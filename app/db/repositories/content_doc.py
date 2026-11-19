@@ -101,13 +101,17 @@ class ContentDocRepository(BaseRepository):
         if not blocking(errors) and _dump(value) != _dump(getattr(content, part.value)):
             setattr(content, part.value, value)
             self.session.flush()
+        # Read before a new row is pending: the flush above bumped the
+        # revision in SQL, which expires it, and reloading it autoflushes --
+        # a pending row with no revision yet would fail NOT NULL.
+        revision = getattr(content, f"{part.value}_revision")
 
         row = self.get(project_id, part)
         if row is None:
             row = ContentDocTable(project_id=project_id, part=part)
             self.session.add(row)
         row.state = state
-        row.revision = getattr(content, f"{part.value}_revision")
+        row.revision = revision
         row.errors = errors
         self.session.flush()
         return row.revision

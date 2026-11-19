@@ -679,3 +679,23 @@ async def test_text_typed_in_a_language_not_offered_is_not_saved(server):
         assert "FR" not in flat_roots(room.doc)[1]["title"]
     finally:
         await room.stop()
+
+
+def test_a_first_save_that_changes_the_column_stores_its_revision(server):
+    # The value write bumps the revision in SQL, expiring it; reading it back
+    # must not autoflush the new, still revision-less doc row.
+    _url, _tokens, db, project_id = server
+    with db() as database:
+        content = database.content_docs.column(project_id, ContentPart.GUIDE)
+        assert database.content_docs.get(project_id, ContentPart.GUIDE) is None
+        guide = content.value.model_copy(
+            update={"introduction": {**content.value.introduction, "EN": "Changed"}}
+        )
+        revision = database.content_docs.save(
+            project_id, ContentPart.GUIDE, b"", content.revision, guide, None
+        )
+        database.session.commit()
+
+    assert revision == content.revision + 1
+    stored = guide_doc(db, project_id)
+    assert stored is not None and stored.revision == revision
