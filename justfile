@@ -121,6 +121,61 @@ publish:
     git tag -a "v${VERSION}" -m "v${VERSION}"
     git push --follow-tags
 
+# uv fetches the tag from GitHub, so "latest" is read from there, not ../lib:
+# a tag that only exists locally cannot be pinned. Pinning also switches off the
+# editable ../lib source, so the editable line is never what gets committed.
+[doc("Pin ainterviewer to a lib release tag (default: newest on GitHub), lock, sync and commit.")]
+[group("Library")]
+pin-lib VERSION="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    REPO="https://github.com/ainterviewer/lib.git"
+    VERSION="{{ VERSION }}"
+    if [ -z "$VERSION" ]; then
+      VERSION="$(git ls-remote --tags --refs --sort=-v:refname "$REPO" 'v*' \
+        | sed 's|.*refs/tags/||' | grep -v rc | head -1)"
+    fi
+    case "$VERSION" in v*) ;; *) VERSION="v$VERSION" ;; esac
+    git ls-remote --exit-code --tags "$REPO" "refs/tags/$VERSION" >/dev/null \
+      || { echo "no tag $VERSION on $REPO (pushed?)" >&2; exit 1; }
+
+    # Make the tag line the active source; comment out the path and rev lines.
+    sed -i -E \
+      -e 's|^(# )?ainterviewer = \{ git = "([^"]+)", tag = "[^"]+" \}|ainterviewer = { git = "\2", tag = "'"$VERSION"'" }|' \
+      -e 's|^ainterviewer = \{ path|# &|' \
+      -e 's|^ainterviewer = \{ git = "[^"]+", rev|# &|' \
+      pyproject.toml
+
+    # `git commit --only` takes the whole file, so refuse to sweep other edits in.
+    if git diff -U0 pyproject.toml | grep -E '^[+-][^+-]' | grep -vq 'ainterviewer = {'; then
+      echo "pyproject.toml has changes besides the ainterviewer source; commit or stash them first" >&2
+      exit 1
+    fi
+
+    uv lock
+    uv sync
+    if git diff --quiet pyproject.toml uv.lock; then
+      echo "Already pinned to $VERSION"
+      exit 0
+    fi
+    git commit --only pyproject.toml uv.lock -m "build(deps): bump ainterviewer to $VERSION"
+
+# Leaves pyproject.toml and uv.lock modified: never commit them in this state,
+# `just pin-lib` switches back. The sync is what makes ../lib edits visible; a
+# venv last synced against the tag imports a site-packages copy instead.
+[doc("Use the editable ../lib checkout as the ainterviewer source and sync the venv.")]
+[group("Library")]
+lib-local:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ -d ../lib/src/ainterviewer ] || { echo "no lib checkout at ../lib" >&2; exit 1; }
+    sed -i -E \
+      -e 's|^ainterviewer = \{ git|# &|' \
+      -e 's|^# ?(ainterviewer = \{ path = "\.\./lib")|\1|' \
+      pyproject.toml
+    uv sync
+    uv run --no-sync python -c "import ainterviewer; print('ainterviewer from', ainterviewer.__file__)"
+
 # Manually build & push the Docker image to ghcr.io (fallback for when CI is down).
 # Reads GHCR_TOKEN, GITHUB_TOKEN and GITHUB_USERNAME from .env (auto-loaded).
 [group("Release & Publish")]
