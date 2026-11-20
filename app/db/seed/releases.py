@@ -12,9 +12,9 @@ def create(session: Session) -> None:
     # These are fictional development releases. Include every curation state
     # and audience so both the public and preview feeds have useful fixtures.
     releases: list[tuple[str, datetime, list[Highlight] | None]] = [
-        ("2026.10.1", datetime(2026, 10, 1, 12, tzinfo=UTC), None),
+        ("2026.10-01", datetime(2026, 10, 1, 12, tzinfo=UTC), None),
         (
-            "2026.10.2",
+            "2026.10-02",
             datetime(2026, 10, 5, 12, tzinfo=UTC),
             [
                 Highlight(
@@ -29,9 +29,9 @@ def create(session: Session) -> None:
                 ),
             ],
         ),
-        ("2026.10.3", datetime(2026, 10, 9, 12, tzinfo=UTC), []),
+        ("2026.10-03", datetime(2026, 10, 9, 12, tzinfo=UTC), []),
         (
-            "2026.10.4",
+            "2026.10-04",
             datetime(2026, 10, 13, 12, tzinfo=UTC),
             [
                 Highlight(
@@ -43,7 +43,7 @@ def create(session: Session) -> None:
             ],
         ),
         (
-            "2026.10.5",
+            "2026.10-05",
             datetime(2026, 10, 17, 12, tzinfo=UTC),
             [
                 Highlight(

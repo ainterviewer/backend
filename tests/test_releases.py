@@ -42,9 +42,9 @@ def db():
     Base.metadata.create_all(engine)
     with Session(engine) as session:
         db = InterviewDataBase(session)
-        db.set_platform_release(manifest("2026.10.1", None))
-        db.set_platform_release(manifest("2026.10.2", [GENERAL, PREVIEW]))
-        db.set_platform_release(manifest("2026.10.3", [PREVIEW]))
+        db.set_platform_release(manifest("2026.10-01", None))
+        db.set_platform_release(manifest("2026.10-02", [GENERAL, PREVIEW]))
+        db.set_platform_release(manifest("2026.10-03", [PREVIEW]))
         yield db
 
 
@@ -63,13 +63,13 @@ def served(db: InterviewDataBase, token: AuthToken | None) -> dict[str, list[str
 
 def test_preview_users_see_every_highlight(db):
     assert served(db, token(preview_features=True)) == {
-        "2026.10.3": [PREVIEW.title],
-        "2026.10.2": [GENERAL.title, PREVIEW.title],
+        "2026.10-03": [PREVIEW.title],
+        "2026.10-02": [GENERAL.title, PREVIEW.title],
     }
 
 
 def test_other_users_see_preview_only_releases_as_empty(db):
-    expected = {"2026.10.3": [], "2026.10.2": [GENERAL.title]}
+    expected = {"2026.10-03": [], "2026.10-02": [GENERAL.title]}
     assert served(db, token(preview_features=False)) == expected
     assert served(db, None) == expected
 
