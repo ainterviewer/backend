@@ -285,6 +285,7 @@ async def create_interview(
         )
 
     via_share_link = False
+    redirects_on_completion = False
     if new_interview.interview_type == InterviewType.DISTRIBUTED:
         if project.owner.scope == Scope.DEMO:
             raise AuthError(
@@ -298,8 +299,9 @@ async def create_interview(
                 status_code=400,
                 detail="A shared test link only starts manual tests",
             )
-        verify_test_share(db, project_id, new_interview.share_token)
+        share = verify_test_share(db, project_id, new_interview.share_token)
         via_share_link = True
+        redirects_on_completion = share.redirect
     else:
         if not (token := request.cookies.get("access_token")):
             raise AuthError(
@@ -433,6 +435,7 @@ async def create_interview(
         content_version_id=project_localization.content_version_id,
         start_question_id=start_question_id,
         via_share_link=via_share_link,
+        redirects_on_completion=redirects_on_completion,
     )
     if assignment is not None:
         db.tests.record_assignment_interview(

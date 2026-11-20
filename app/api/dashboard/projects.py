@@ -98,6 +98,7 @@ from ...schemas.interviews import (
     InterviewSelection,
     MessagePublic,
     TestShareLinkResponse,
+    TestShareRequest,
 )
 from ...schemas.projects import (
     ArchiveRequest,
@@ -1254,9 +1255,14 @@ async def create_test_share_link(
     db: DBSession,
     jwt: UserToken,
     _: ProjectEditor,
+    body: TestShareRequest | None = None,
 ) -> TestShareLinkResponse:
     """A link that lets anyone try the project's draft as a manual test,
     without an account: for piloting the guide before publishing it.
+
+    With `redirect`, its interviews end on the project's completion
+    redirects, as distributed ones do, so a panel's return links can be
+    piloted too.
 
     Not for demo accounts, nor on a project a demo account owns: those may
     not distribute, and a link anyone can open would be distributing.
@@ -1264,14 +1270,16 @@ async def create_test_share_link(
     if db.projects.is_project_owner_demo_user(project_id):
         raise demo_restricted()
     nonce = db.projects.ensure_test_share_nonce(project_id)
-    token, expires_at = create_test_share_token(project_id, nonce)
+    redirect = body is not None and body.redirect
+    token, expires_at = create_test_share_token(project_id, nonce, redirect)
 
     # A credential to unreleased work: record who minted it.
     logger.info(
-        "test share link issued: project=%s user=%s expires=%s",
+        "test share link issued: project=%s user=%s expires=%s redirect=%s",
         project_id,
         jwt.user_id,
         expires_at,
+        redirect,
     )
 
     query = urlencode(

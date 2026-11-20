@@ -444,6 +444,7 @@ class InterviewRepository(BaseRepository):
                 InterviewTable.n_messages.label("n_messages"),
                 InterviewTable.start_question_id,
                 InterviewTable.via_share_link,
+                InterviewTable.redirects_on_completion,
                 test_name,
                 pid_column,
                 n_reports,
@@ -916,12 +917,14 @@ class InterviewRepository(BaseRepository):
     ) -> RedirectFrame | None:
         """Where the respondent of a completed interview is sent, filled in
         from the interview's external param values, or None when nowhere:
-        a test interview, an ending the project does not redirect (the
-        security check's always), or an interview not completed.
+        a test interview (unless started from a shared test link that
+        redirects), an ending the project does not redirect (the security
+        check's always), or an interview not completed.
         """
         row = self.session.execute(
             select(
                 InterviewTable.type,
+                InterviewTable.redirects_on_completion,
                 InterviewTable.status,
                 InterviewTable.end_reason,
                 InterviewTable.external_params,
@@ -935,9 +938,9 @@ class InterviewRepository(BaseRepository):
         ).one_or_none()
         if row is None:
             return None
-        type_, status, end_reason, values, redirects = row
+        type_, redirects_on_completion, status, end_reason, values, redirects = row
         if (
-            type_ != InterviewType.DISTRIBUTED
+            (type_ != InterviewType.DISTRIBUTED and not redirects_on_completion)
             or status != InterviewStatus.COMPLETED
             or redirects is None
             or (template := redirects.url_for(end_reason)) is None

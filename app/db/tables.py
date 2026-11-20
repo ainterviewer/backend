@@ -1142,6 +1142,13 @@ class InterviewTable(Base):
     via_share_link: Mapped[bool] = mapped_column(
         default=False, server_default=sa.false()
     )
+    #: A test interview that redirects when it ends, as a distributed one
+    #: does (`completion_redirect`): one started from a shared test link
+    #: minted with `redirect`. Stored because the redirect is sent again on
+    #: reconnect, long after the link was seen.
+    redirects_on_completion: Mapped[bool] = mapped_column(
+        default=False, server_default=sa.false()
+    )
 
     # Relationships
     project: Mapped["ProjectTable"] = relationship(back_populates="interviews")

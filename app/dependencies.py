@@ -356,8 +356,12 @@ FolderAdmin = Annotated[
 ]
 
 
-def verify_test_share(db: InterviewDataBase, project_id: UUID4, share: str) -> None:
-    """Refuse a shared test link that does not let its holder try this
+def verify_test_share(
+    db: InterviewDataBase, project_id: UUID4, share: str
+) -> TestShareToken:
+    """The link's token, once it lets its holder try this project's draft.
+
+    Refuse a shared test link that does not let its holder try this
     project's draft: malformed, expired, for another project, revoked, or of
     a project owned by a demo account -- which may not distribute, and a
     link anyone can open would be distributing.
@@ -384,6 +388,7 @@ def verify_test_share(db: InterviewDataBase, project_id: UUID4, share: str) -> N
         raise invalid
     if db.projects.is_project_owner_demo_user(project_id):
         raise invalid
+    return token
 
 
 def _respondent_content(

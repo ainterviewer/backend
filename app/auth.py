@@ -74,6 +74,11 @@ class TestShareToken(_Token):
     kind: Literal["test_share"]
     project_id: UUID4
     nonce: str
+    #: Interviews started from the link send their respondent on through the
+    #: project's completion redirects, as distributed ones do: for piloting a
+    #: panel's return links. A claim so whoever holds the link cannot turn it
+    #: on; links minted before it existed decode as off.
+    redirect: bool = False
 
     _timedelta: TimeDelta = app_settings.app.test_share_link_expiration
 
@@ -160,10 +165,12 @@ def create_auth_token(
     return token.encode()
 
 
-def create_test_share_token(project_id: UUID4, nonce: str) -> tuple[str, datetime]:
+def create_test_share_token(
+    project_id: UUID4, nonce: str, redirect: bool = False
+) -> tuple[str, datetime]:
     """A shared test link's token, and when it expires."""
     token = TestShareToken(
-        kind="test_share", project_id=project_id, nonce=nonce
+        kind="test_share", project_id=project_id, nonce=nonce, redirect=redirect
     ).encode()
     expires_at = datetime.fromtimestamp(jwt.get_unverified_claims(token)["exp"], UTC)
     return token, expires_at

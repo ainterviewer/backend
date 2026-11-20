@@ -88,8 +88,12 @@ def setup():
     app.dependency_overrides.clear()
 
 
-def _mint(client, project_id, cookies) -> str:
-    response = client.post(f"/api/projects/{project_id}/test_share", cookies=cookies)
+def _mint(client, project_id, cookies, **body) -> str:
+    response = client.post(
+        f"/api/projects/{project_id}/test_share",
+        cookies=cookies,
+        **({"json": body} if body else {}),
+    )
     assert response.status_code == 200, response.text
     url = urlparse(response.json()["url"])
     assert url.path == "/interview"
@@ -147,6 +151,30 @@ def test_a_shared_link_runs_the_draft_without_an_account(setup):
     )
     (row,) = listed.json()["items"]
     assert row["via_share_link"] is True
+
+
+def test_a_link_redirects_only_when_minted_to(setup):
+    client, engine, project_id, _, _, editor, _ = setup
+    plain = _mint(client, project_id, editor)
+    redirecting = _mint(client, project_id, editor, redirect=True)
+
+    assert _start(client, project_id, plain).status_code == 200
+    assert _start(client, project_id, redirecting).status_code == 200
+
+    with Session(engine) as session:
+        interviews = session.execute(
+            select(InterviewTable).order_by(InterviewTable.created_at)
+        ).scalars()
+        assert [i.redirects_on_completion for i in interviews] == [False, True]
+
+    listed = client.get(
+        f"/api/projects/{project_id}/interviews",
+        params={"interview_types": ["manual_test"]},
+        cookies=editor,
+    )
+    rows = listed.json()["items"]
+    assert sorted(row["redirects_on_completion"] for row in rows) == [False, True]
+    assert all(row["type"] == "manual_test" for row in rows)
 
 
 def test_a_collaborators_own_test_is_not_marked_shared(setup):

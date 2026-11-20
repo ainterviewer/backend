@@ -84,6 +84,9 @@ class InterviewSummaryPublic(Schema):
     start_question_id: UUID4 | None = None
     #: Started from a shared test link rather than by a collaborator.
     via_share_link: bool = False
+    #: Sends its respondent on through the project's completion redirects,
+    #: though a test: started from a shared test link minted with `redirect`.
+    redirects_on_completion: bool = False
     # The participant this interview belongs to, joined in from the
     # participant record. NULL for interviews that were never distributed to
     # one, and for interviews whose participant has since been deleted.
@@ -313,6 +316,16 @@ class InterviewResumeLinkResponse(Schema):
 
     url: str
     expires_at: datetime
+
+
+class TestShareRequest(Schema):
+    """What a new shared test link does."""
+
+    #: Interviews started from the link redirect when they end, through the
+    #: project's completion redirects, as distributed interviews do. They
+    #: remain manual tests. The redirects are the live ones, so a pilot
+    #: through a panel completes real submissions there.
+    redirect: bool = False
 
 
 class TestShareLinkResponse(Schema):

@@ -108,6 +108,7 @@ def db():
             type=InterviewType.DISTRIBUTED,
             project=project,
             external_params=None,
+            redirects_on_completion=False,
         ):
             row = InterviewTable(
                 project=project,
@@ -116,6 +117,7 @@ def db():
                 status=status,
                 end_reason=end_reason,
                 external_params=external_params,
+                redirects_on_completion=redirects_on_completion,
             )
             session.add(row)
             session.commit()
@@ -154,6 +156,8 @@ def test_a_screened_out_interview_goes_to_the_screened_url(db):
         {"end_reason": None},
         {"status": InterviewStatus.INACTIVE, "end_reason": None},
         {"type": InterviewType.MANUAL_TEST},
+        # A test not from a redirecting share link, however it ends.
+        {"type": InterviewType.MANUAL_TEST, "end_reason": InterviewEndReason.CONDITION},
         {"type": InterviewType.SYNTHETIC_TEST},
     ],
 )
@@ -161,6 +165,47 @@ def test_no_redirect(db, kwargs):
     database, interview, _ = db
 
     assert database.interviews.completion_redirect(*interview(**kwargs)) is None
+
+
+def test_a_test_from_a_redirecting_share_link_redirects(db):
+    database, interview, _ = db
+    frame = database.interviews.completion_redirect(
+        *interview(
+            type=InterviewType.MANUAL_TEST,
+            redirects_on_completion=True,
+            external_params={"rid": "R2"},
+        )
+    )
+
+    assert frame is not None
+    assert frame.url == "https://panel.example/z/Complete?id=R2"
+
+
+def test_a_screened_out_test_from_a_redirecting_link_goes_to_the_screened_url(db):
+    database, interview, _ = db
+    frame = database.interviews.completion_redirect(
+        *interview(
+            type=InterviewType.MANUAL_TEST,
+            redirects_on_completion=True,
+            end_reason=InterviewEndReason.CONDITION,
+        )
+    )
+
+    assert frame is not None
+    assert frame.url == SCREENED
+
+
+def test_a_redirecting_test_still_skips_the_security_ending(db):
+    database, interview, _ = db
+    frame = database.interviews.completion_redirect(
+        *interview(
+            type=InterviewType.MANUAL_TEST,
+            redirects_on_completion=True,
+            end_reason=InterviewEndReason.SECURITY,
+        )
+    )
+
+    assert frame is None
 
 
 def test_no_redirect_for_a_project_without_one(db):

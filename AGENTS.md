@@ -780,7 +780,9 @@ not.
   on the draft reads (`RespondentContent`) and as `share_token` in
   `create_interview`, for manual tests only, through `verify_test_share`
   (`app/dependencies.py`; one code, `test_share_invalid`, for every refusal).
-  Interviews it starts are `manual_test` with `via_share_link` set.
+  Interviews it starts are `manual_test` with `via_share_link` set. A link
+  minted with `redirect` (`TestShareRequest`) makes them follow the
+  project's completion redirects too (see "Completion redirects").
 - **Render through `get_project_localization(..., source=...)`** (`"draft"`,
   `"published"` or a version id), never a second renderer.
   `InterviewTable.content_version_id` records what an interview ran; the
@@ -992,7 +994,11 @@ return links. It is keyed by `InterviewTable.end_reason`, which the library
 records with `COMPLETED` (`InterviewEndReason`): `finished` goes to
 `complete`, `condition` (a guide `END_INTERVIEW`, declined consent included)
 to `screened`, and `security` nowhere, deliberately, until what each security
-decision means for a panel is documented. Test interviews never redirect.
+decision means for a panel is documented. Test interviews never redirect,
+except those started from a shared test link minted with `redirect`
+(`TestShareToken.redirect`, stored as `InterviewTable.redirects_on_completion`
+because the redirect is resent on reconnect): for piloting a panel's return
+links. They stay `manual_test`, and their link params are not validated.
 
 - It lives on the project, not in `ContentColumns`, like `external_params`:
   distribution plumbing, so a fixed URL needs no republish and reaches
