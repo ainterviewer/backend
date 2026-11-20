@@ -4,6 +4,12 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.38] - 2026-11-20
+
+### Features
+
+- (tests) Let shared test links follow completion redirects
+
 ## [0.10.37] - 2026-11-20
 
 ### Features
