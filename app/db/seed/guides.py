@@ -313,6 +313,62 @@ def control_flow() -> LocalizedInterviewGuide:
             )
         ],
     )
+    school_tools = Question(
+        main_question="What would make it easier to try a new tool at school?",
+        conditions=[
+            Condition(
+                blocks=[
+                    ConditionBlock(
+                        question_context=context((0, 2), age),
+                        evaluation=[
+                            ConditionEvaluation(
+                                trigger_value=18, comparison_operator=">="
+                            )
+                        ],
+                    )
+                ],
+                action=ConditionAction.SKIP_QUESTION,
+            )
+        ],
+    )
+    work_tools = Question(
+        main_question="What would make it easier to try a new tool at work?",
+        conditions=[
+            Condition(
+                blocks=[
+                    ConditionBlock(
+                        question_context=context((0, 2), age),
+                        evaluation=[
+                            ConditionEvaluation(
+                                trigger_value=18, comparison_operator="<"
+                            )
+                        ],
+                    )
+                ],
+                action=ConditionAction.SKIP_QUESTION,
+            )
+        ],
+    )
+    research_tools = Question(
+        main_question="Which tools do you use for research or coursework?",
+        conditions=[
+            Condition(
+                blocks=[
+                    ConditionBlock(
+                        question_context=context((0, 1), role),
+                        evaluation=[
+                            ConditionEvaluation(
+                                trigger_value="Student", combine_next="OR"
+                            ),
+                            ConditionEvaluation(trigger_value="Researcher"),
+                        ],
+                        negated=True,
+                    )
+                ],
+                action=ConditionAction.SKIP_QUESTION,
+            )
+        ],
+    )
     advanced = Question(
         main_question="What would make an advanced workflow worthwhile?",
         conditions=[
@@ -367,7 +423,13 @@ def control_flow() -> LocalizedInterviewGuide:
             ),
             QuestionSection(
                 description="Conditional individual questions.",
-                questions=[professional, sensitive],
+                questions=[
+                    professional,
+                    sensitive,
+                    school_tools,
+                    work_tools,
+                    research_tools,
+                ],
             ),
             QuestionSection(
                 description="Section-level and compound conditions.",
