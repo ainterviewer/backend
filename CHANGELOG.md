@@ -4,6 +4,14 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.36] - 2026-11-20
+
+### Internal
+
+- (seed) Add sample platform release history
+- (deps) Bump ainterviewer to v0.8.6
+- (just) Add pin-lib and lib-local recipes
+
 ## [0.10.35] - 2026-11-20
 
 ## [0.10.34] - 2026-11-20
