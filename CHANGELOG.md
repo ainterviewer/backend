@@ -4,6 +4,25 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.34] - 2026-11-20
+
+### Features
+
+- (dev) Add resettable development seed database
+- (dev) Seed completed interview transcripts
+
+### Bug Fixes
+
+- (auth) Reject sessions after account deletion
+- (auth) Answer /me with 401 when the session's user is gone
+
+### Internal
+
+- (dev) Reload the dev server after seeding
+- (seed) Add mutually exclusive and negated question conditions
+- (seed) Use stable resource UUIDs by default
+- (deps) Bump ainterviewer to v0.8.5
+
 ## [0.10.33] - 2026-11-19
 
 ### Bug Fixes
