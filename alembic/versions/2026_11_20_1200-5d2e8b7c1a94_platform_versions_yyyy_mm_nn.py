@@ -31,12 +31,20 @@ depends_on: str | Sequence[str] | None = None
 #   inside its stored manifest.
 # - `interview.platform_version`, the release each interview ran on.
 #
-# A version in neither format (a hand-inserted dev row, say) is left alone, as
-# is one already converted, so the upgrade can run over a database the new
-# platform scripts have already inserted a release into.
+# A version already converted is left alone, so the upgrade can run over a
+# database the new platform scripts have already inserted a release into.
+#
+# PlatformManifest now validates platform_version as YYYY.MM-NN, on every read
+# of a stored manifest too, so one release left in another format (a
+# hand-inserted dev row, say) would fail the whole release feed. The upgrade
+# refuses to finish while one remains, naming it, rather than leave that for
+# the feed to find. Interviews only store the version as text, so an unknown
+# one there is left alone.
 
 OLD = re.compile(r"^(\d{4})\.(\d{2})\.(\d+)$")
 NEW = re.compile(r"^(\d{4})\.(\d{2})-(\d+)$")
+# What PlatformManifest accepts, copied so the revision doesn't change with it.
+VALID = re.compile(r"^\d{4}\.\d{2}-\d{2,}$")
 
 
 def to_new(version: str) -> str | None:
@@ -98,8 +106,31 @@ def rewrite(convert: Callable[[str], str | None]) -> None:
             connection.execute(update_interviews, {"old": version, "new": renamed})
 
 
+def check_releases() -> None:
+    rows = op.get_bind().execute(
+        sa.text(
+            "SELECT platform_release_version, platform_manifest FROM platform_release"
+        ).columns(
+            sa.column("platform_release_version", sa.String),
+            sa.column("platform_manifest", sa.JSON),
+        )
+    )
+    invalid = sorted(
+        version
+        for version, manifest in rows
+        if not VALID.match(version)
+        or not VALID.match(str(manifest.get("platform_version")))
+    )
+    if invalid:
+        raise RuntimeError(
+            "platform_release versions that are not YYYY.MM-NN, which"
+            f" PlatformManifest would refuse to read: {invalid}"
+        )
+
+
 def upgrade() -> None:
     rewrite(to_new)
+    check_releases()
 
 
 def downgrade() -> None:

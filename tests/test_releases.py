@@ -8,6 +8,7 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -76,3 +77,11 @@ def test_other_users_see_preview_only_releases_as_empty(db):
 
 def test_highlights_curated_before_audience_existed_default_to_all():
     assert Highlight.model_validate({"kind": "new", "title": "x"}).audience == "all"
+
+
+@pytest.mark.parametrize("version", ["2026.11.13", "2026.11-1", "latest"])
+def test_a_manifest_needs_a_yyyy_mm_nn_version(version):
+    """An insert from platform scripts that predate YYYY.MM-NN fails the deploy
+    step, rather than storing a release the rename migration never saw."""
+    with pytest.raises(ValidationError, match="platform_version"):
+        manifest(version, None)
