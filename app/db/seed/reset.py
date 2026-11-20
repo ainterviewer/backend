@@ -16,6 +16,7 @@ from .accounts import DEV_EMAIL, DEV_PASSWORD
 from .accounts import create as create_accounts
 from .ids import stable_ids
 from .projects import create as create_projects
+from .releases import create as create_releases
 
 
 def reset_and_seed(*, yes: bool, random_uuids: bool = False) -> None:
@@ -33,11 +34,13 @@ def reset_and_seed(*, yes: bool, random_uuids: bool = False) -> None:
         db = InterviewDataBase(session)
         db.create_db_and_tables()
         with nullcontext() if random_uuids else stable_ids(session):
+            create_releases(session)
             create_projects(db, session, create_accounts(db, session))
     if not inspect(engine).has_table("project"):
         raise RuntimeError(
             "Development database setup did not create the project table"
         )
     typer.echo(
-        f"Seeded {db_file} with 5 projects. Sign in as {DEV_EMAIL} / {DEV_PASSWORD}."
+        f"Seeded {db_file} with 5 projects and 5 platform releases. "
+        f"Sign in as {DEV_EMAIL} / {DEV_PASSWORD}."
     )
