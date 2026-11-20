@@ -85,9 +85,14 @@ def seed_dev(
     yes: bool = typer.Option(
         False, "--yes", help="Replace the database without prompting"
     ),
+    random_uuids: bool = typer.Option(
+        False,
+        "--random-uuids",
+        help="Generate random resource UUIDs instead of stable defaults",
+    ),
 ):
     """Replace the local SQLite database with realistic development fixtures."""
-    reset_and_seed(yes=yes)
+    reset_and_seed(yes=yes, random_uuids=random_uuids)
 
 
 @cli.command()

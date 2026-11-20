@@ -1,5 +1,6 @@
 """Reset the configured SQLite database and install development fixtures."""
 
+from contextlib import nullcontext
 from pathlib import Path
 
 import typer
@@ -13,10 +14,11 @@ from app.settings import app_settings
 
 from .accounts import DEV_EMAIL, DEV_PASSWORD
 from .accounts import create as create_accounts
+from .ids import stable_ids
 from .projects import create as create_projects
 
 
-def reset_and_seed(*, yes: bool) -> None:
+def reset_and_seed(*, yes: bool, random_uuids: bool = False) -> None:
     """Replace the configured local SQLite database with development fixtures."""
     if app_settings.database.db is not DatabaseType.SQLITE:
         raise typer.BadParameter("seed-dev only supports a SQLite development database")
@@ -30,7 +32,8 @@ def reset_and_seed(*, yes: bool) -> None:
     with Session(engine) as session:
         db = InterviewDataBase(session)
         db.create_db_and_tables()
-        create_projects(db, session, create_accounts(db, session))
+        with nullcontext() if random_uuids else stable_ids(session):
+            create_projects(db, session, create_accounts(db, session))
     if not inspect(engine).has_table("project"):
         raise RuntimeError(
             "Development database setup did not create the project table"

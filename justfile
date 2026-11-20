@@ -18,8 +18,8 @@ setup-db:
 # touching a watched file makes its --reload restart it onto the new one.
 [doc("Replace the local database with realistic, image-free development fixtures.")]
 [group("Database")]
-seed-dev:
-    uv run python -m app.db.cli seed-dev --yes
+seed-dev *ARGS:
+    uv run python -m app.db.cli seed-dev --yes {{ ARGS }}
     touch app/main.py
 
 [doc("Fetches the latest daily backup db from the remote AWS server.
