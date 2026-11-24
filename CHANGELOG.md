@@ -4,6 +4,12 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.40] - 2026-11-24
+
+### Internal
+
+- (deps) Bump ainterviewer to v0.8.8
+
 ## [0.10.39] - 2026-11-24
 
 ### Internal
