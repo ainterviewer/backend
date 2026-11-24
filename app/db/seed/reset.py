@@ -41,6 +41,6 @@ def reset_and_seed(*, yes: bool, random_uuids: bool = False) -> None:
             "Development database setup did not create the project table"
         )
     typer.echo(
-        f"Seeded {db_file} with 5 projects and 5 platform releases. "
+        f"Seeded {db_file} with 6 projects and 5 platform releases. "
         f"Sign in as {DEV_EMAIL} / {DEV_PASSWORD}."
     )

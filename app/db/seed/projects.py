@@ -60,7 +60,7 @@ def create(
         accounts.demo_folder_id, "Survey control catalogue", owner
     )
     community = db.projects.create_project(
-        accounts.research_folder_id, "Bilingual neighbourhood study", owner
+        accounts.research_folder_id, "Multilingual neighbourhood study", owner
     )
     panel = db.projects.create_project(
         accounts.research_folder_id, "Participant panel onboarding", owner
@@ -78,14 +78,20 @@ def create(
     ids = (discovery, survey, community, panel, control)
     _publish_when_possible(db, session, ids, owner)
     _add_interview_responses(db, session, discovery, community)
-    return SeedProjects(ids)
+    # Everything below was added later. It runs last so that the rows above
+    # keep the stable ids they had before it (see `ids.py`).
+    _add_community_arabic_swahili_responses(db, session, community)
+    health = _create_health(db, session, accounts)
+    _publish_when_possible(db, session, (health,), owner)
+    _add_health_responses(db, session, health)
+    return SeedProjects((*ids, health))
 
 
 def _configure_community(
     db: InterviewDataBase, session: Session, project_id: UUID
 ) -> None:
     content = db.projects._content(project_id)
-    content.languages = ["EN", "DA"]
+    content.languages = ["EN", "DA", "AR", "SW"]
     session.commit()
     db.projects.update_guide(project_id, guides.multilingual())
     content = db.projects._content(project_id)
@@ -96,6 +102,11 @@ def _configure_community(
             ),
             "DA": Consent(
                 title="Dit samtykke", text="Bekræft venligst, at du vil deltage."
+            ),
+            "AR": Consent(title="موافقتك", text="يُرجى تأكيد موافقتك على المشاركة."),
+            "SW": Consent(
+                title="Idhini yako",
+                text="Tafadhali thibitisha kwamba unakubali kushiriki.",
             ),
         }
     )
@@ -111,16 +122,30 @@ def _configure_community(
                 text="Dit lokale perspektiv er vigtigt.",
                 email="research@example.com",
             ),
+            "AR": Welcome(
+                title="أهلًا وسهلًا",
+                text="وجهة نظرك المحلية مهمة.",
+                email="research@example.com",
+            ),
+            "SW": Welcome(
+                title="Karibu",
+                text="Mtazamo wako kuhusu eneo lako ni muhimu.",
+                email="research@example.com",
+            ),
         },
         structure="EN",
     )
     content.emails.invite.subject = {
         "EN": "Invitation to participate",
         "DA": "Invitation til at deltage",
+        "AR": "دعوة للمشاركة",
+        "SW": "Mwaliko wa kushiriki",
     }
     content.emails.invite.template = {
         "EN": "Hello,\n\nPlease share your perspective in our interview.",
         "DA": "Hej,\n\nDel gerne dit perspektiv i vores interview.",
+        "AR": "مرحبًا،\n\nنرجو أن تشاركنا وجهة نظرك في مقابلتنا.",
+        "SW": "Habari,\n\nTafadhali shiriki mtazamo wako katika mahojiano yetu.",
     }
     session.commit()
 
@@ -168,6 +193,104 @@ def _configure_panel(db: InterviewDataBase, session: Session, project_id: UUID) 
             complete="https://example.test/complete?cohort={{ cohort }}",
             screened="https://example.test/screened",
         ),
+    )
+
+
+def _create_health(
+    db: InterviewDataBase, session: Session, accounts: SeedAccounts
+) -> UUID:
+    """English by default, with Arabic (right to left) and Swahili."""
+    project_id = db.projects.create_project(
+        accounts.research_folder_id, "Community health access study", accounts.owner_id
+    )
+    content = db.projects._content(project_id)
+    content.languages = ["EN", "AR", "SW"]
+    session.commit()
+    db.projects.update_guide(project_id, guides.community_health())
+    content = db.projects._content(project_id)
+    content.consent = LocalizedConsent.from_rendered(
+        {
+            "EN": Consent(
+                title="Your consent",
+                text=(
+                    "Your answers are kept confidential. Please confirm that you "
+                    "agree to take part."
+                ),
+            ),
+            "AR": Consent(
+                title="موافقتك",
+                text="ستبقى إجاباتك سرية. يُرجى تأكيد موافقتك على المشاركة.",
+            ),
+            "SW": Consent(
+                title="Idhini yako",
+                text=(
+                    "Majibu yako yatabaki kuwa siri. Tafadhali thibitisha kwamba "
+                    "unakubali kushiriki."
+                ),
+            ),
+        }
+    )
+    content.welcome = LocalizedWelcome.from_rendered(
+        {
+            "EN": Welcome(
+                title="Welcome",
+                text="Your experience helps us improve local health services.",
+                email="health@example.com",
+            ),
+            "AR": Welcome(
+                title="أهلًا وسهلًا",
+                text="تساعدنا تجربتك على تحسين الخدمات الصحية المحلية.",
+                email="health@example.com",
+            ),
+            "SW": Welcome(
+                title="Karibu",
+                text="Uzoefu wako unatusaidia kuboresha huduma za afya za eneo lako.",
+                email="health@example.com",
+            ),
+        },
+        structure="EN",
+    )
+    content.emails.invite.subject = {
+        "EN": "Invitation: community health interview",
+        "AR": "دعوة: مقابلة حول الصحة المجتمعية",
+        "SW": "Mwaliko: mahojiano kuhusu afya ya jamii",
+    }
+    content.emails.invite.template = {
+        "EN": "Hello,\n\nPlease tell us about your experience of local health care.",
+        "AR": "مرحبًا،\n\nنرجو أن تخبرنا عن تجربتك مع الرعاية الصحية المحلية.",
+        "SW": (
+            "Habari,\n\nTafadhali tueleze kuhusu uzoefu wako wa huduma za afya "
+            "katika eneo lako."
+        ),
+    }
+    session.commit()
+    _add_named_participants(
+        db,
+        project_id,
+        {
+            "Grace Thompson": "EN",
+            "Mariam Saleh": "AR",
+            "Yousef Nasser": "AR",
+            "Baraka Otieno": "SW",
+            "Neema Wanjiru": "SW",
+        },
+    )
+    return project_id
+
+
+def _add_named_participants(
+    db: InterviewDataBase, project_id: UUID, people: dict[str, LanguageCode]
+) -> None:
+    db.participants.add_participants(
+        project_id,
+        [
+            ParticipantCreate(
+                name=name,
+                email=f"{name.lower().replace(' ', '.')}@example.com",
+                lang=lang,
+            )
+            for name, lang in people.items()
+        ],
     )
 
 
@@ -316,6 +439,133 @@ def _add_interview_responses(
                     "Last summer we shared the tomatoes with families on our street.",
                 ),
                 ("Safe",),
+            ),
+        ),
+    )
+
+
+def _add_community_arabic_swahili_responses(
+    db: InterviewDataBase, session: Session, community: UUID
+) -> None:
+    _add_named_participants(db, community, {"Layla Haddad": "AR", "Amani Mwangi": "SW"})
+    _add_responses_for_project(
+        db,
+        session,
+        community,
+        "AR",
+        (
+            (
+                (
+                    "أحبّ السوق الأسبوعي، حيث يلتقي الجيران ويتبادلون الأخبار.",
+                    "عندما مرضت والدتي، أحضر لنا الجيران الطعام لأسبوع كامل.",
+                ),
+                ("آمن",),
+            ),
+        ),
+    )
+    _add_responses_for_project(
+        db,
+        session,
+        community,
+        "SW",
+        (
+            (
+                (
+                    "Napenda jinsi majirani wanavyosaidiana wakati wa shida.",
+                    (
+                        "Mvua kubwa ilipoharibu paa letu, majirani walikuja "
+                        "kutusaidia kulirekebisha."
+                    ),
+                ),
+                ("Wastani",),
+            ),
+        ),
+    )
+
+
+def _add_health_responses(
+    db: InterviewDataBase, session: Session, health: UUID
+) -> None:
+    """Answers per question: the main answer and its probe, the clinic
+    distance, satisfaction, and the one change."""
+    _add_responses_for_project(
+        db,
+        session,
+        health,
+        "EN",
+        (
+            (
+                (
+                    (
+                        "I went to the pharmacy first, then waited two days for a "
+                        "clinic appointment."
+                    ),
+                    "The pharmacist explained what to do while I waited, which helped.",
+                ),
+                ("30–60 minutes",),
+                ("Neutral",),
+                ("Evening opening hours, so people who work days can be seen.",),
+            ),
+        ),
+    )
+    _add_responses_for_project(
+        db,
+        session,
+        health,
+        "AR",
+        (
+            (  # Mariam Saleh
+                (
+                    "ذهبت إلى المركز الصحي في الحي، وانتظرت أكثر من ثلاث ساعات.",
+                    "كانت الممرضة لطيفة، لكن قلة الأطباء جعلت الانتظار طويلًا.",
+                ),
+                ("من 30 إلى 60 دقيقة",),
+                ("غير راضٍ",),
+                ("توظيف المزيد من الأطباء في المراكز الصحية القريبة.",),
+            ),
+            (  # Yousef Nasser
+                (
+                    "اتصلت بطبيب العائلة، وحصلت على موعد في اليوم نفسه.",
+                    "الموعد السريع سهّل الأمر، لكن كلفة الدواء كانت مرتفعة.",
+                ),
+                ("أقل من 30 دقيقة",),
+                ("راضٍ",),
+                ("تخفيض أسعار الأدوية لكبار السن.",),
+            ),
+        ),
+    )
+    _add_responses_for_project(
+        db,
+        session,
+        health,
+        "SW",
+        (
+            (  # Baraka Otieno
+                (
+                    (
+                        "Nilisafiri hadi hospitali ya wilaya kwa basi kwa sababu "
+                        "zahanati yetu haikuwa na dawa."
+                    ),
+                    "Gharama ya usafiri na foleni ndefu vilifanya iwe vigumu.",
+                ),
+                ("Zaidi ya saa moja",),
+                ("Sijaridhika",),
+                ("Zahanati iliyo karibu iwe na dawa za kutosha wakati wote.",),
+            ),
+            (  # Neema Wanjiru
+                (
+                    (
+                        "Nilienda kwenye zahanati ya kijiji, na nikahudumiwa siku "
+                        "hiyo hiyo."
+                    ),
+                    (
+                        "Mhudumu wa afya wa jamii alinieleza mahali pa kwenda, jambo "
+                        "lililorahisisha."
+                    ),
+                ),
+                ("Dakika 30 hadi 60",),
+                ("Nimeridhika",),
+                ("Kliniki zifunguliwe pia wikendi kwa ajili ya watu wanaofanya kazi.",),
             ),
         ),
     )

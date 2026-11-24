@@ -1,5 +1,7 @@
 """Interview-guide fixtures, grouped by the feature they demonstrate."""
 
+from dataclasses import dataclass
+
 from ainterviewer.interview_guides import (
     CheckboxItem,
     Condition,
@@ -183,7 +185,7 @@ def survey_controls() -> LocalizedInterviewGuide:
 
 def multilingual() -> LocalizedInterviewGuide:
     english = InterviewGuide(
-        framing="A bilingual community feedback study.",
+        framing="A multilingual community feedback study.",
         introduction="Welcome — we would like to hear about your neighbourhood.",
         outro="Thank you for your contribution.",
         question_sections=[
@@ -210,27 +212,234 @@ def multilingual() -> LocalizedInterviewGuide:
             )
         ],
     )
-    danish = english.model_copy(deep=True)
-    danish.framing = "En tosproget undersøgelse af lokalsamfundet."
-    danish.introduction, danish.outro = (
-        "Velkommen — vi vil gerne høre om dit nabolag.",
-        "Tak for dit bidrag.",
+    translations = {
+        "DA": _GuideText(
+            framing="En flersproget undersøgelse af lokalsamfundet.",
+            introduction="Velkommen — vi vil gerne høre om dit nabolag.",
+            outro="Tak for dit bidrag.",
+            sections=["Hverdagsliv i nabolaget."],
+            questions=[
+                (
+                    "Hvad sætter du mest pris på ved dit nabolag?",
+                    ["Kan du give et eksempel?"],
+                ),
+                ("Hvor tryg føler du dig efter mørkets frembrud?", []),
+            ],
+            options=[None, ["Meget utryg", "Utryg", "Neutral", "Tryg", "Meget tryg"]],
+        ),
+        "AR": _GuideText(
+            framing="دراسة متعددة اللغات لآراء المجتمع المحلي.",
+            introduction="مرحبًا — نودّ أن نسمع عن حيّك.",
+            outro="شكرًا لمساهمتك.",
+            sections=["الحياة اليومية في الحي."],
+            questions=[
+                ("ما أكثر ما تقدّره في حيّك؟", ["هل يمكنك أن تعطي مثالًا؟"]),
+                ("ما مدى شعورك بالأمان بعد حلول الظلام؟", []),
+            ],
+            options=[None, ["غير آمن إطلاقًا", "غير آمن", "محايد", "آمن", "آمن جدًا"]],
+        ),
+        "SW": _GuideText(
+            framing="Utafiti wa lugha nyingi kuhusu maoni ya jamii.",
+            introduction="Karibu — tungependa kusikia kuhusu mtaa wako.",
+            outro="Asante kwa mchango wako.",
+            sections=["Maisha ya kila siku mtaani."],
+            questions=[
+                (
+                    "Ni nini unachothamini zaidi kuhusu mtaa wako?",
+                    ["Unaweza kutoa mfano?"],
+                ),
+                ("Unajisikia salama kiasi gani baada ya giza kuingia?", []),
+            ],
+            options=[
+                None,
+                ["Si salama kabisa", "Si salama", "Wastani", "Salama", "Salama sana"],
+            ],
+        ),
+    }
+    return _localize(english, translations)
+
+
+def community_health() -> LocalizedInterviewGuide:
+    """English, Arabic and Swahili: a right-to-left language beside two others."""
+    english = InterviewGuide(
+        framing="A short interview about access to health care in the community.",
+        introduction=(
+            "Welcome, and thank you for joining. We would like to learn how you "
+            "get health care."
+        ),
+        outro="Thank you for sharing your experience.",
+        question_sections=[
+            QuestionSection(
+                description="Getting care.",
+                questions=[
+                    Question(
+                        main_question=(
+                            "When you last needed medical care, how did you get it?"
+                        ),
+                        probes=["What made that easier or harder?"],
+                        max_probes_n=1,
+                    ),
+                    Question(
+                        main_question=(
+                            "How far is the nearest health clinic from your home?"
+                        ),
+                        survey_item=RadioItem(
+                            options=[
+                                "Under 30 minutes",
+                                "30–60 minutes",
+                                "Over an hour",
+                            ]
+                        ),
+                    ),
+                ],
+            ),
+            QuestionSection(
+                description="Experiences and priorities.",
+                questions=[
+                    Question(
+                        main_question=(
+                            "How satisfied are you with the health services in "
+                            "your area?"
+                        ),
+                        survey_item=LikertItem(
+                            options=[
+                                "Very dissatisfied",
+                                "Dissatisfied",
+                                "Neutral",
+                                "Satisfied",
+                                "Very satisfied",
+                            ]
+                        ),
+                    ),
+                    Question(
+                        main_question=(
+                            "What one change would most improve health care in "
+                            "your community?"
+                        ),
+                    ),
+                ],
+            ),
+        ],
     )
-    section = danish.question_sections[0]
-    section.description = "Hverdagsliv i nabolaget."
-    section.questions[0].main_question, section.questions[0].probes = (
-        "Hvad sætter du mest pris på ved dit nabolag?",
-        ["Kan du give et eksempel?"],
-    )
-    section.questions[
-        1
-    ].main_question = "Hvor tryg føler du dig efter mørkets frembrud?"
-    section.questions[1].survey_item = LikertItem(
-        options=["Meget utryg", "Utryg", "Neutral", "Tryg", "Meget tryg"]
-    )
-    return LocalizedInterviewGuide.from_rendered(
-        {"EN": english, "DA": danish}, structure="EN"
-    )
+    translations = {
+        "AR": _GuideText(
+            framing="مقابلة قصيرة حول الوصول إلى الرعاية الصحية في المجتمع.",
+            introduction=(
+                "مرحبًا، وشكرًا لانضمامك. نودّ أن نعرف كيف تحصل على الرعاية الصحية."
+            ),
+            outro="شكرًا لمشاركتك تجربتك.",
+            sections=["الحصول على الرعاية.", "التجارب والأولويات."],
+            questions=[
+                (
+                    "في آخر مرة احتجت فيها إلى رعاية طبية، كيف حصلت عليها؟",
+                    ["ما الذي جعل ذلك أسهل أو أصعب؟"],
+                ),
+                ("كم تبعد أقرب عيادة صحية عن منزلك؟", []),
+                ("ما مدى رضاك عن الخدمات الصحية في منطقتك؟", []),
+                ("ما أهم تغيير يمكن أن يحسّن الرعاية الصحية في مجتمعك؟", []),
+            ],
+            options=[
+                None,
+                ["أقل من 30 دقيقة", "من 30 إلى 60 دقيقة", "أكثر من ساعة"],
+                ["غير راضٍ إطلاقًا", "غير راضٍ", "محايد", "راضٍ", "راضٍ جدًا"],
+                None,
+            ],
+        ),
+        "SW": _GuideText(
+            framing=(
+                "Mahojiano mafupi kuhusu upatikanaji wa huduma za afya katika jamii."
+            ),
+            introduction=(
+                "Karibu, na asante kwa kujiunga nasi. Tungependa kujua jinsi "
+                "unavyopata huduma za afya."
+            ),
+            outro="Asante kwa kushiriki uzoefu wako.",
+            sections=["Kupata huduma.", "Uzoefu na vipaumbele."],
+            questions=[
+                (
+                    "Mara ya mwisho ulipohitaji huduma ya matibabu, uliipataje?",
+                    ["Ni nini kilichofanya iwe rahisi au vigumu zaidi?"],
+                ),
+                (
+                    (
+                        "Kliniki ya afya iliyo karibu zaidi iko umbali gani kutoka "
+                        "nyumbani kwako?"
+                    ),
+                    [],
+                ),
+                ("Umeridhika kiasi gani na huduma za afya katika eneo lako?", []),
+                (
+                    (
+                        "Ni mabadiliko gani yangeboresha zaidi huduma za afya katika "
+                        "jamii yako?"
+                    ),
+                    [],
+                ),
+            ],
+            options=[
+                None,
+                ["Chini ya dakika 30", "Dakika 30 hadi 60", "Zaidi ya saa moja"],
+                [
+                    "Sijaridhika kabisa",
+                    "Sijaridhika",
+                    "Wastani",
+                    "Nimeridhika",
+                    "Nimeridhika sana",
+                ],
+                None,
+            ],
+        ),
+    }
+    return _localize(english, translations)
+
+
+@dataclass(frozen=True)
+class _GuideText:
+    """One language's wording of a guide whose structure is the English one.
+
+    `questions` and `options` run over every question in order, across
+    sections; `options` is None for a question without a choice item."""
+
+    framing: str
+    introduction: str
+    outro: str
+    sections: list[str]
+    questions: list[tuple[str, list[str]]]
+    options: list[list[str] | None]
+
+
+def _localize(
+    english: InterviewGuide, translations: dict[str, _GuideText]
+) -> LocalizedInterviewGuide:
+    """Render `english` in each language by copying it, so every language
+    shares its structure (and its question and option ids)."""
+    rendered = {"EN": english}
+    for language, text in translations.items():
+        guide = english.model_copy(deep=True)
+        guide.framing, guide.introduction, guide.outro = (
+            text.framing,
+            text.introduction,
+            text.outro,
+        )
+        questions = [
+            q for section in guide.question_sections for q in section.questions
+        ]
+        for section, description in zip(
+            guide.question_sections, text.sections, strict=True
+        ):
+            section.description = description
+        for question, (main, probes), options in zip(
+            questions, text.questions, text.options, strict=True
+        ):
+            question.main_question = main
+            if question.probes:
+                question.probes = probes
+            if options is not None:
+                item = question.survey_item
+                assert isinstance(item, (RadioItem, LikertItem)), main
+                question.survey_item = item.model_copy(update={"options": options})
+        rendered[language] = guide
+    return LocalizedInterviewGuide.from_rendered(rendered, structure="EN")
 
 
 def control_flow() -> LocalizedInterviewGuide:

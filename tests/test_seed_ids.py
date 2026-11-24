@@ -44,9 +44,9 @@ def _seed(*, random_uuids=False):
 def test_seed_resource_ids_are_stable():
     first = _seed()
     assert first == _seed()
-    assert len(first["project"]) == 5
+    assert len(first["project"]) == 6
     assert first["interview"]
-    assert first["project"] == {seed_uuid("project", n) for n in range(1, 6)}
+    assert first["project"] == {seed_uuid("project", n) for n in range(1, 7)}
     assert all(id.version == 4 for ids in first.values() for id in ids)
 
 
