@@ -1,6 +1,8 @@
 """Project, participant, test and experiment fixtures."""
 
+import shutil
 from dataclasses import dataclass
+from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import select
@@ -33,6 +35,7 @@ from app.db.tables import ParticipantTable, ProjectParticipantTable
 from app.schemas.participants import ParticipantCreate
 from app.schemas.projects import ExperimentCreate, ExperimentProjectCreate
 from app.schemas.testing import TestRunCreate, TestSetupCreate
+from app.services import project_storage
 from app.types import (
     CompletionRedirects,
     ExperimentAllocation,
@@ -42,6 +45,8 @@ from app.types import (
 
 from . import guides
 from .accounts import SeedAccounts
+
+IMAGES = Path(__file__).with_name("images")
 
 
 @dataclass(frozen=True)
@@ -84,7 +89,10 @@ def create(
     health = _create_health(db, session, accounts)
     _publish_when_possible(db, session, (health,), owner)
     _add_health_responses(db, session, health)
-    return SeedProjects((*ids, health))
+    concept = _create_concept_test(db, session, accounts)
+    _publish_when_possible(db, session, (concept,), owner)
+    _add_concept_test_responses(db, session, concept)
+    return SeedProjects((*ids, health, concept))
 
 
 def _configure_community(
@@ -275,6 +283,26 @@ def _create_health(
             "Neema Wanjiru": "SW",
         },
     )
+    return project_id
+
+
+def _create_concept_test(
+    db: InterviewDataBase, session: Session, accounts: SeedAccounts
+) -> UUID:
+    """A guide that shows respondents images, with the files in place."""
+    project_id = db.projects.create_project(
+        accounts.research_folder_id, "Recycling label concept test", accounts.owner_id
+    )
+    guide = guides.concept_test()
+    images = project_storage.image_path(project_id)
+    for section in guide.question_sections:
+        for question in section.questions:
+            if question.image is not None:
+                shutil.copyfile(
+                    IMAGES / question.image.name, images / question.image.name
+                )
+    db.projects.update_guide(project_id, guide)
+    _add_named_participants(db, project_id, {"Henrik Dahl": "EN", "Priya Raman": "EN"})
     return project_id
 
 
@@ -571,6 +599,56 @@ def _add_health_responses(
     )
 
 
+def _add_concept_test_responses(
+    db: InterviewDataBase, session: Session, concept: UUID
+) -> None:
+    """Answers per question: the first label and its probe, its clarity, the
+    second label and its probe, its clarity, the preference, and the change
+    with its probe."""
+    _add_responses_for_project(
+        db,
+        session,
+        concept,
+        "EN",
+        (
+            (  # Henrik Dahl
+                (
+                    "Clean and friendly. I'd recognise it from across the yard.",
+                    "Bottles, cans and cartons — but I'd guess at yoghurt pots.",
+                ),
+                ("Neither clear nor unclear",),
+                (
+                    "Busier, but it answers the questions I actually have.",
+                    "I didn't know lids should go back on. I always take them off.",
+                ),
+                ("Very clear",),
+                ("The second",),
+                (
+                    "Add the little drawings from the first one next to each line.",
+                    "Pictures are faster when you're carrying a full bag.",
+                ),
+            ),
+            (  # Priya Raman
+                (
+                    "It looks modern, like something from a council website.",
+                    "Plastic bottles and tins. Maybe plastic bags too?",
+                ),
+                ("Unclear",),
+                (
+                    "Very wordy. My kids won't read that before throwing things in.",
+                    "That batteries need saying at all.",
+                ),
+                ("Clear",),
+                ("The first",),
+                (
+                    "Show what doesn't belong as well, with a cross through it.",
+                    "Half the mess in our bin is people guessing wrong.",
+                ),
+            ),
+        ),
+    )
+
+
 def _add_responses_for_project(
     db: InterviewDataBase,
     session: Session,
@@ -652,6 +730,7 @@ def _write_transcript(
         prompts = [prompt, *(question.probes or [])]
         for probe, (prompt, answer) in enumerate(zip(prompts, answers, strict=True)):
             survey = question.survey_item if probe == 0 else None
+            image = question.image if probe == 0 else None
             if isinstance(
                 survey, (RadioItem, LikertItem)
             ) and not survey.validate_answer(answer):
@@ -666,6 +745,7 @@ def _write_transcript(
                 prompt,
                 MessageRole.ASSISTANT,
                 survey_item=survey,
+                image=image,
                 can_answer=question.can_answer,
                 include_in_history=not question.exclude_from_history,
                 **fields,

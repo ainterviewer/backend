@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" width="800" height="520" font-family="Helvetica, Arial, sans-serif">
+  <title>Recycling label, concept B: written lists</title>
+  <rect width="800" height="520" rx="28" fill="#f4f6f3"/>
+  <rect x="24" y="24" width="752" height="472" rx="20" fill="#ffffff" stroke="#d5dbd3" stroke-width="2"/>
+  <text x="64" y="104" font-size="54" font-weight="700" fill="#1f3b2b">Plastic &amp; metal</text>
+  <rect x="64" y="128" width="120" height="8" rx="4" fill="#2f7d4f"/>
+  <text x="64" y="196" font-size="28" font-weight="700" fill="#2f7d4f">Yes, please</text>
+  <g font-size="26" fill="#1f3b2b">
+    <text x="64" y="244">• Bottles and tubs, rinsed</text>
+    <text x="64" y="288">• Drink and food cans</text>
+    <text x="64" y="332">• Milk and juice cartons</text>
+    <text x="64" y="376">• Lids, screwed back on</text>
+  </g>
+  <line x1="470" y1="170" x2="470" y2="440" stroke="#d5dbd3" stroke-width="2"/>
+  <text x="510" y="196" font-size="28" font-weight="700" fill="#a63d32">No, thanks</text>
+  <g font-size="26" fill="#1f3b2b">
+    <text x="510" y="244">• Plastic bags</text>
+    <text x="510" y="288">• Batteries</text>
+    <text x="510" y="332">• Food leftovers</text>
+  </g>
+  <text x="64" y="456" font-size="20" fill="#5b6b60">Not sure? Leave it out — residual waste is fine.</text>
+</svg>

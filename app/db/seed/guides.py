@@ -11,6 +11,7 @@ from ainterviewer.interview_guides import (
     DateItem,
     DatetimeItem,
     GridRow,
+    Image,
     InterviewGuide,
     LikertGridItem,
     LikertItem,
@@ -392,6 +393,102 @@ def community_health() -> LocalizedInterviewGuide:
         ),
     }
     return _localize(english, translations)
+
+
+def concept_test() -> LocalizedInterviewGuide:
+    """Two guide images, each shown with the main question that asks about
+    it. The files are in `seed/images/`, copied into the project's image
+    directory under these names (`projects._create_concept_test`)."""
+    clarity = [
+        "Very unclear",
+        "Unclear",
+        "Neither clear nor unclear",
+        "Clear",
+        "Very clear",
+    ]
+    label_a = Question(
+        main_question="What is your first impression of this label?",
+        image=Image(
+            name="recycling-label-a.svg",
+            primer="Here is the first label we are considering for the bins.",
+            description=(
+                "Concept A, led by pictograms: a green band with the recycling "
+                "symbol, line drawings of a bottle, a can and a carton, and the "
+                "words 'Plastic & metal' in small grey type underneath. It lists "
+                "nothing that does not belong in the bin."
+            ),
+            alt=(
+                "A bin label with a green header, drawings of a bottle, a can and "
+                "a carton, and the caption 'Plastic & metal'."
+            ),
+        ),
+        probes=["Looking at it, what would you put in this bin?"],
+        max_probes_n=1,
+    )
+    label_b = Question(
+        main_question="And what is your first impression of this one?",
+        image=Image(
+            name="recycling-label-b.svg",
+            primer="Here is the second label.",
+            description=(
+                "Concept B, led by text: the heading 'Plastic & metal', a 'Yes, "
+                "please' list (rinsed bottles and tubs, cans, cartons, lids "
+                "screwed on), a 'No, thanks' list (plastic bags, batteries, food "
+                "leftovers) and the note 'Not sure? Leave it out'. No pictures."
+            ),
+            alt=(
+                "A bin label headed 'Plastic & metal' with a list of what goes in "
+                "and a list of what does not."
+            ),
+        ),
+        probes=["Is there anything on it you would not have expected?"],
+        max_probes_n=1,
+    )
+    guide = InterviewGuide(
+        framing=(
+            "A concept test of two labels for household recycling bins, run for "
+            "a municipal waste service."
+        ),
+        introduction=(
+            "Thanks for taking part. We will show you two designs for the label "
+            "on your recycling bin and ask what you make of each."
+        ),
+        outro="Thank you — your answers will shape the label on your bin.",
+        question_sections=[
+            QuestionSection(
+                description="Each label on its own.",
+                questions=[
+                    label_a,
+                    Question(
+                        main_question="How clear is it what goes in this bin?",
+                        survey_item=LikertItem(options=clarity),
+                    ),
+                    label_b,
+                    Question(
+                        main_question="How clear is it what goes in this bin?",
+                        survey_item=LikertItem(options=clarity),
+                    ),
+                ],
+            ),
+            QuestionSection(
+                description="Comparing the two.",
+                questions=[
+                    Question(
+                        main_question="Which label would you rather have on your bin?",
+                        survey_item=RadioItem(
+                            options=["The first", "The second", "No preference"]
+                        ),
+                    ),
+                    Question(
+                        main_question="What would you change about the one you chose?",
+                        probes=["Why that?"],
+                        max_probes_n=1,
+                    ),
+                ],
+            ),
+        ],
+    )
+    return LocalizedInterviewGuide.from_rendered({"EN": guide}, structure="EN")
 
 
 @dataclass(frozen=True)

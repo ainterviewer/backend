@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" width="800" height="520" font-family="Helvetica, Arial, sans-serif">
+  <title>Recycling label, concept A: pictograms</title>
+  <rect width="800" height="520" rx="28" fill="#f4f6f3"/>
+  <rect x="24" y="24" width="752" height="472" rx="20" fill="#ffffff" stroke="#d5dbd3" stroke-width="2"/>
+  <rect x="24" y="24" width="752" height="96" rx="20" fill="#2f7d4f"/>
+  <rect x="24" y="84" width="752" height="36" fill="#2f7d4f"/>
+  <text x="400" y="88" text-anchor="middle" font-size="44" font-weight="700" fill="#ffffff">♻</text>
+  <!-- Bottle -->
+  <g transform="translate(120 170)" fill="none" stroke="#1f3b2b" stroke-width="10" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M45 0h30v30l20 30v150a15 15 0 0 1-15 15H40a15 15 0 0 1-15-15V60l20-30z"/>
+    <path d="M30 110h60"/>
+  </g>
+  <!-- Can -->
+  <g transform="translate(340 190)" fill="none" stroke="#1f3b2b" stroke-width="10" stroke-linejoin="round">
+    <ellipse cx="60" cy="15" rx="55" ry="15"/>
+    <path d="M5 15v170c0 8 25 15 55 15s55-7 55-15V15"/>
+    <path d="M5 60h110M5 150h110"/>
+  </g>
+  <!-- Carton -->
+  <g transform="translate(560 175)" fill="none" stroke="#1f3b2b" stroke-width="10" stroke-linejoin="round">
+    <path d="M15 50L45 0h50l30 50v170H15z"/>
+    <path d="M15 50h110M70 0v50"/>
+  </g>
+  <text x="400" y="460" text-anchor="middle" font-size="26" fill="#5b6b60">Plastic &amp; metal</text>
+</svg>
