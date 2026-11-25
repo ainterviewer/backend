@@ -16,6 +16,10 @@ import from ``DATABASE__DB_PATH``, which defaults to the gitignored
 lifespan, say) wrote to the developer's database locally and failed in CI,
 which has no ``storage/``. Point it at a fresh directory instead, and assign it
 rather than ``setdefault`` it -- no test should ever reach a real database.
+Media storage (``STORAGE__BASE_PATH``, default ``storage/``) likewise: a test
+that uploads a file wrote it into the developer's ``storage/``. Monkeypatching
+``settings.storage.project_storage.base_path`` does not help, since every
+access builds a new ``ProjectStorage``; patch ``settings.storage.base_path``.
 
 The model lists are assigned too: which models a project may publish with is
 read from the gitignored ``config.toml``, whose absence (CI) would make every
@@ -36,6 +40,7 @@ os.environ.setdefault("APP_SECRET__SESSION_SECRET_KEY", "test-session-secret")
 os.environ.setdefault("OPENAI_API_KEY", "test-openai-key")
 os.environ.setdefault("OPENROUTER_API_KEY", "test-openrouter-key")
 os.environ["DATABASE__DB_PATH"] = tempfile.mkdtemp(prefix="ainterviewer-test-")
+os.environ["STORAGE__BASE_PATH"] = tempfile.mkdtemp(prefix="ainterviewer-test-storage-")
 os.environ["LLM__DEFAULT_MODEL"] = "openrouter:openai/gpt-oss-120b"
 os.environ["LLM__MODELS"] = json.dumps(
     ["openrouter:openai/gpt-oss-120b", "openai/gpt-oss-120b"]
