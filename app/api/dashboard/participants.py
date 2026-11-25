@@ -59,7 +59,7 @@ from ...services.email.participant_template import (
 from ...settings import app_settings
 from ...types import ContentPart
 from ..errors import STALE_REVISION
-from ..files import file_response
+from ..files import checked_language, content_disposition, file_response, safe_filename
 
 SECTION_SEPARATOR = "\n<hr/>\n"
 SUBJECT_SEPARATOR = " / "
@@ -301,7 +301,7 @@ async def export_email_bundle(
         content=buf.getvalue(),
         media_type="application/zip",
         headers={
-            "Content-Disposition": _content_disposition(filename),
+            "Content-Disposition": content_disposition(filename),
             "X-Filename": quote(filename),
         },
     )
@@ -469,66 +469,27 @@ async def set_participant_email_template(
     )
 
 
-def _checked_language(language: LanguageCode) -> LanguageCode:
-    """Reject language codes that aren't real, before they become a path.
-
-    ``LanguageCode`` only constrains the string to two characters, which ".."
-    satisfies, so every use of a language as a directory name has to check it
-    against the known codes first.
-    """
-    if language not in LANGUAGE_CODES:
-        raise HTTPException(status_code=400, detail=f"Unknown language '{language}'.")
-    return language
-
-
 def _attachments_dir(project_id: UUID4, language: LanguageCode) -> Path:
     base = lib_settings.storage.project_storage.email_attachments_path(project_id)
-    path = base / _checked_language(language)
+    path = base / checked_language(language)
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def _reminder_attachments_dir(project_id: UUID4, language: LanguageCode) -> Path:
     base = lib_settings.storage.project_storage.email_attachments_path(project_id)
-    path = base / REMINDER_ATTACHMENT_SUBDIR / _checked_language(language)
+    path = base / REMINDER_ATTACHMENT_SUBDIR / checked_language(language)
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
-def _content_disposition(filename: str) -> str:
-    """Build a Content-Disposition value that survives non-ASCII filenames.
-
-    Header values are latin-1, so the raw name is sent RFC 5987 style and the
-    quoted fallback is stripped to ASCII.
-    """
-    ascii_name = filename.encode("ascii", "replace").decode("ascii").replace('"', "_")
-    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
-
-
-def _safe_filename(filename: str | None) -> str:
-    if not filename:
-        raise HTTPException(status_code=400, detail="Filename is required.")
-    name = Path(filename).name
-    if (
-        not name
-        or name in {".", ".."}
-        or name != filename.replace("\\", "/").split("/")[-1]
-    ):
-        raise HTTPException(status_code=400, detail="Invalid filename.")
-    if len(name) > 255:
-        raise HTTPException(status_code=400, detail="Filename is too long.")
-    if "\x00" in name:
-        raise HTTPException(status_code=400, detail="Invalid filename.")
-    return name
-
-
 def _safe_upload_filename(filename: str | None) -> str:
-    """``_safe_filename`` plus the upload-only file-type restriction.
+    """``safe_filename`` plus the upload-only file-type restriction.
 
     Deletes deliberately skip the type check so attachments uploaded before
     the allowlist existed can still be removed.
     """
-    name = _safe_filename(filename)
+    name = safe_filename(filename)
     if Path(name).suffix.lower() not in ALLOWED_ATTACHMENT_EXTENSIONS:
         allowed = ", ".join(sorted(ALLOWED_ATTACHMENT_EXTENSIONS))
         raise HTTPException(
@@ -563,14 +524,14 @@ def _attachment_download(directory: Path, filename: str) -> FileResponse:
     from our own origin, and files from before the type allowlist can be
     anything.
     """
-    target = directory / _safe_filename(filename)
+    target = directory / safe_filename(filename)
     if not target.is_file():
         raise HTTPException(status_code=404, detail="Attachment not found.")
     return FileResponse(
         target,
         media_type="application/octet-stream",
         headers={
-            "Content-Disposition": _content_disposition(target.name),
+            "Content-Disposition": content_disposition(target.name),
             "X-Content-Type-Options": "nosniff",
         },
     )
@@ -658,7 +619,7 @@ async def delete_participant_email_attachment(
     jwt: UserToken,
     _: ProjectEditor,
 ) -> list[ParticipantEmailAttachmentPublic]:
-    name = _safe_filename(filename)
+    name = safe_filename(filename)
     directory = _attachments_dir(project_id, language)
     target = directory / name
     if not target.exists() or not target.is_file():
@@ -942,7 +903,7 @@ async def delete_participant_reminder_email_attachment(
     jwt: UserToken,
     _: ProjectEditor,
 ) -> list[ParticipantEmailAttachmentPublic]:
-    name = _safe_filename(filename)
+    name = safe_filename(filename)
     directory = _reminder_attachments_dir(project_id, language)
     target = directory / name
     if not target.exists() or not target.is_file():
