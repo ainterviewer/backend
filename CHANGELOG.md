@@ -4,6 +4,19 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.42] - 2026-11-25
+
+### Features
+
+- (projects) Copy a project from one of its versions
+
+### Internal
+
+- (deps) Bump ainterviewer to v0.8.11
+- (images) Serve guide images by name
+- (db) Remove the guide images stored in messages
+- (seed) Add a concept-test project whose guide shows images
+
 ## [0.10.41] - 2026-11-25
 
 ### Features
