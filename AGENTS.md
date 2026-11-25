@@ -250,10 +250,14 @@ recordings and uploaded images), `storage/experiments/<id>/`.
 - **The library owns the roots, the backend the directories in them.** The
   library's `ProjectStorage` / `InterviewStorage` / `ExperimentStorage` say
   where each root is and define only what the library reads itself
-  (`image_path`, for guide images). Every directory only the backend uses is
-  a function in `app/services/project_storage.py` or `experiment_storage.py`,
-  imported as the module (`project_storage.qr_code_path(project_id)`), so
-  adding one needs no library release.
+  (`ProjectStorage.image_path`, for guide images, which the interview loop
+  sends to respondents). Every directory only the backend uses is a function
+  in `app/services/project_storage.py`, `interview_storage.py` or
+  `experiment_storage.py`, imported as the module
+  (`project_storage.qr_code_path(project_id)`), so adding one needs no
+  library release. The library never resolves an interview's files: it
+  passes a recording's name from `IOProtocol` to `PersistenceProtocol`, and
+  the backend makes, serves and deletes it.
 - **A delete removes its rows' files.** Nothing cascades to the disk, so a
   route gathers the ids of what the delete takes with it *before* the rows go,
   and removes their directories once the delete has committed --

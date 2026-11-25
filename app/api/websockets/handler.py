@@ -41,7 +41,7 @@ class WebsocketMessageHandler(IOProtocol):
                 raise ValueError()
 
             # image_path = (
-            #     lib_settings.storage.interview_storage.image_path(self.interview_id)
+            #     interview_storage.image_path(self.interview_id)
             #     / data.filename
             # )
 

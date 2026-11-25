@@ -5,10 +5,10 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.exc import NoResultFound
 from uvicorn.config import logger
 
-from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode, MessageRole
 
 from ....dependencies import DBSession
+from ....services import interview_storage
 from ....services.audio import (
     AudioServiceError,
     LocalWavSink,
@@ -54,9 +54,7 @@ async def transcription_websocket_endpoint(websocket: WebSocket, db: DBSession):
     if interview_token is None:
         return
 
-    audio_dir = lib_settings.storage.interview_storage.audio_path(
-        interview_token.interview_id
-    )
+    audio_dir = interview_storage.audio_path(interview_token.interview_id)
     recording_filename = f"recording-{int(time.time())}.wav"
     sink = LocalWavSink(audio_dir / recording_filename)
 

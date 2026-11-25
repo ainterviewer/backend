@@ -19,7 +19,6 @@ from pydantic import UUID4, ValidationError
 from sqlalchemy.exc import NoResultFound
 from uvicorn.config import logger
 
-from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import InterviewStatus, LanguageCode, MessageRole, TestType
 
 from ..auth import AuthToken, InterviewToken, create_interview_token, hash_token
@@ -50,6 +49,7 @@ from ..schemas.projects import (
     ValidateExternalParamsRequest,
 )
 from ..schemas.reports import MessageReportCreate, MessageReportPublic
+from ..services import interview_storage
 from ..services.audio import SpeechNotConfigured, SpeechUnavailable, synthesize
 from ..services.guide_start import StartPointError, start_guide_at
 from ..settings import app_settings
@@ -608,9 +608,7 @@ async def upload_interview_image(
     # The client's name supplies the extension and nothing else.
     filename = generate_random_filename() + safe_suffix(file.filename)
 
-    filepath = (
-        lib_settings.storage.interview_storage.image_path(interview_id) / filename
-    )
+    filepath = interview_storage.image_path(interview_id) / filename
 
     async with aiofiles.open(filepath, "wb") as f:
         while chunk := await file.read(CHUNK_SIZE):
@@ -636,9 +634,7 @@ async def upload_audio(
     # The client's name supplies the extension and nothing else.
     filename = generate_random_filename() + safe_suffix(file.filename)
 
-    filepath = (
-        lib_settings.storage.interview_storage.audio_path(interview_id) / filename
-    )
+    filepath = interview_storage.audio_path(interview_id) / filename
 
     async with aiofiles.open(filepath, "wb") as f:
         while chunk := await file.read(CHUNK_SIZE):

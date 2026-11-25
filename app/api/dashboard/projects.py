@@ -1371,7 +1371,7 @@ async def get_interview_audio(
     _refuse_distributed_to_demo(db, jwt, project_id, [interview_id])
 
     audio_path = (
-        lib_settings.storage.interview_storage.audio_path(interview_id)
+        interview_storage.audio_path(interview_id)
         / Path(filename).name  # strips any path components
     )
     if not audio_path.is_file():
