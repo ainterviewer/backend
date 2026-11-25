@@ -140,7 +140,6 @@ def _guide_with_image(client, project_id, name):
     guide["question_sections"][0]["questions"][0]["image"] = {
         "type": "image",
         "name": name,
-        "data": "data:image/png;base64,iVBORw0KGgo=",
     }
     return guide, loaded.headers["ETag"]
 
@@ -159,18 +158,26 @@ def test_a_guide_image_name_with_a_path_is_refused(setup, name):
     assert not any(tmp_path.rglob("evil.png"))
 
 
-def test_a_guide_image_with_a_bare_name_is_saved(setup):
+def test_a_guide_image_with_a_bare_name_is_saved_by_name(setup):
+    """The guide names the image; its file was uploaded on its own
+    (`upload_image`), so bytes a client still sends are dropped."""
     client, project_id, tmp_path = setup
     guide, etag = _guide_with_image(client, project_id, "photo.png")
+    guide["question_sections"][0]["questions"][0]["image"]["data"] = (
+        "data:image/png;base64,iVBORw0KGgo="
+    )
 
     response = client.put(
         f"/api/projects/{project_id}/guide", json=guide, headers={"If-Match": etag}
     )
 
     assert response.status_code == 200, response.text
-    assert (
-        tmp_path / "storage" / "projects" / str(project_id) / "images" / "photo.png"
-    ).exists()
+    image = client.get(f"/api/projects/{project_id}/guide").json()["question_sections"][
+        0
+    ]["questions"][0]["image"]
+    assert image["name"] == "photo.png"
+    assert "data" not in image
+    assert not any(tmp_path.rglob("photo.png"))
 
 
 def test_the_live_guide_refuses_an_image_name_with_a_path(setup):

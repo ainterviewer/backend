@@ -161,6 +161,17 @@ class InterviewRepository(BaseRepository):
 
         return InterviewPublic.model_validate(interview)
 
+    def get_interview_guide(
+        self, project_id: UUID4, interview_id: UUID4
+    ) -> InterviewGuide | None:
+        """The interview's own rendered guide, without loading the rest of
+        it. Raises NoResultFound."""
+        statement = select(InterviewTable.interview_guide).where(
+            InterviewTable.project_id == project_id,
+            InterviewTable.id == interview_id,
+        )
+        return self.session.execute(statement).scalar_one()
+
     def update_interview_guide(
         self,
         project_id: UUID4,

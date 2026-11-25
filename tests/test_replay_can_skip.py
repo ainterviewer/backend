@@ -74,9 +74,7 @@ def replay_waiting_on(
         interview_id=INTERVIEW,
         project_id=PROJECT,
     )
-    replayed, _ = replay_history(
-        interviews.get_messages(INTERVIEW, PROJECT), PROJECT, GUIDE
-    )
+    replayed, _ = replay_history(interviews.get_messages(INTERVIEW, PROJECT), GUIDE)
     last = replayed[-1]
     assert isinstance(last, OutgoingMessage)
     return last
@@ -117,7 +115,7 @@ def test_a_timed_message_shown_in_a_modal_is_not_replayed_into_the_chat(intervie
         ("Skippable?", {"section": 0, "main_question": 0}),
     )
 
-    replayed, _ = replay_history(rows, PROJECT, guide)
+    replayed, _ = replay_history(rows, guide)
 
     assert [message.content for message in replayed] == ["Almost done", "Skippable?"]
 
@@ -127,7 +125,7 @@ def test_one_waited_on_goes_out_live_as_a_modal(interviews):
     guide = GUIDE.model_copy(update={"timed_messages": [modal]})
     rows = _stored(interviews, ("Halfway", {"timed_message_id": modal.id}))
 
-    (last,), _ = replay_history(rows, PROJECT, guide)
+    (last,), _ = replay_history(rows, guide)
 
     assert isinstance(last, OutgoingMessage)
     assert last.as_modal

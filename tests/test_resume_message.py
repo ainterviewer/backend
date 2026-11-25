@@ -59,7 +59,7 @@ def resumed(interviews, *rows: tuple[MessageRole, str, dict], guide=GUIDE):
             project_id=PROJECT,
             **fields,
         )
-    return resume_message(interviews.get_messages(INTERVIEW, PROJECT), PROJECT, guide)
+    return resume_message(interviews.get_messages(INTERVIEW, PROJECT), guide)
 
 
 def test_the_question_waiting_on_an_answer_is_resent(interviews):

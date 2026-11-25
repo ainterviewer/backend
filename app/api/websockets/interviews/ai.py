@@ -273,15 +273,12 @@ async def _run_interview(
             # The client kept its chat, so it is not replayed, but it is told
             # whose turn it is: resend the message the interview waits on.
             if continue_from_history and (
-                resumed := resume_message(
-                    interview_history, project_id, interview.interview_guide
-                )
+                resumed := resume_message(interview_history, interview.interview_guide)
             ):
                 await websocket.send_json(resumed.model_dump())
         else:
             messages, continue_from_history = replay_history(
                 interview_history=interview_history,
-                project_id=project_id,
                 interview_guide=interview.interview_guide,
             )
 

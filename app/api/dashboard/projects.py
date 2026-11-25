@@ -1,6 +1,5 @@
 import io
 import logging
-from base64 import b64decode
 from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlencode
@@ -453,7 +452,6 @@ async def update_guide(
 ) -> LocalizedInterviewGuide:
     """Save the guide. A 412 if the guide changed since `If-Match`'s
     revision; the new revision comes back as `ETag`."""
-    # Before writing the images, so a refused save leaves no files behind.
     db.versions.check_revision(project_id, revision, ContentPart.GUIDE)
     # Not validators on the guide: guides and interview copies saved before
     # these checks existed must still load. The condition order is what keeps
@@ -469,25 +467,6 @@ async def update_guide(
             status_code=400,
             detail="\n".join(f"{e.message} {e.fix}" for e in save_errors),
         )
-
-    images = [
-        question.image
-        for section in guide.question_sections
-        for question in section.questions
-        if question.image
-    ]
-
-    for image in images:
-        if isinstance(image.data, str) and (image.data.startswith("data:image/")):
-            data = b64decode(image.data.split(",")[-1])
-
-            # `image_name_errors` above refused any name that is not bare.
-            filepath = lib_settings.storage.project_storage.image_path(
-                project_id
-            ) / safe_filename(image.name)
-
-            async with aiofiles.open(filepath, "wb") as f:
-                await f.write(data)
 
     db.projects.update_guide(project_id, guide, revision)
     set_etag(response, db.projects.get_revision(project_id, ContentPart.GUIDE))
@@ -643,9 +622,7 @@ async def upload_image(
     `image.name`; the guide never carries the image itself."""
     filename = ensure_filename(file.filename)
 
-    filepath: Path = (
-        lib_settings.storage.project_storage.image_path(project_id) / filename
-    )
+    filepath = project_storage.image_path(project_id) / filename
 
     async with aiofiles.open(filepath, "wb") as f:
         contents = await file.read()

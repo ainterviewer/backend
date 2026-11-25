@@ -103,7 +103,7 @@ def test_marker_is_replayed_in_history(interviews):
     insert(interviews, 0, MessageRole.ASSISTANT, INTERVENTION)
     insert(interviews, 1, MessageRole.ASSISTANT)
 
-    replayed, _ = replay_history(interviews.get_messages(INTERVIEW, PROJECT), PROJECT)
+    replayed, _ = replay_history(interviews.get_messages(INTERVIEW, PROJECT))
 
     intervention, question = replayed
     assert isinstance(intervention, OutgoingHistoryMessage)
@@ -117,7 +117,7 @@ def test_marker_is_replayed_on_last_message(interviews):
     insert(interviews, 0, MessageRole.USER)
     insert(interviews, 1, MessageRole.ASSISTANT, INTERVENTION)
 
-    replayed, _ = replay_history(interviews.get_messages(INTERVIEW, PROJECT), PROJECT)
+    replayed, _ = replay_history(interviews.get_messages(INTERVIEW, PROJECT))
 
     assert isinstance(replayed[-1], OutgoingMessage)
     assert replayed[-1].security_intervention == INTERVENTION
@@ -139,7 +139,7 @@ def test_override_answer_is_not_replayed(interviews):
     insert_override(interviews, 1)
     insert(interviews, 2, MessageRole.ASSISTANT)
 
-    replayed, _ = replay_history(interviews.get_messages(INTERVIEW, PROJECT), PROJECT)
+    replayed, _ = replay_history(interviews.get_messages(INTERVIEW, PROJECT))
 
     assert message_ids(replayed) == [0, 2]
 
@@ -148,6 +148,6 @@ def test_override_answer_is_not_replayed_last(interviews):
     insert(interviews, 0, MessageRole.ASSISTANT, INTERVENTION)
     insert_override(interviews, 1)
 
-    replayed, _ = replay_history(interviews.get_messages(INTERVIEW, PROJECT), PROJECT)
+    replayed, _ = replay_history(interviews.get_messages(INTERVIEW, PROJECT))
 
     assert message_ids(replayed) == [0]

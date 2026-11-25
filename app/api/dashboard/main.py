@@ -6,6 +6,7 @@ from . import (
     consent_attachments,
     experiments,
     folders,
+    guide_images,
     participants,
     projects,
     reports,
@@ -18,6 +19,7 @@ router = APIRouter()
 router.include_router(analysis.router)
 router.include_router(assistance.router)
 router.include_router(consent_attachments.router)
+router.include_router(guide_images.router)
 router.include_router(experiments.router)
 router.include_router(folders.router)
 router.include_router(participants.router)

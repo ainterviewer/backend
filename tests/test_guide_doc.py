@@ -55,7 +55,6 @@ def _rendered(language: str, never: str) -> InterviewGuide:
         id=_ids["gated"],
         image=Image(
             name="cat.png",
-            data=None,
             description=f"{language} a cat",
             alt=f"{language} cat",
         ),

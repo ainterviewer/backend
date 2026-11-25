@@ -280,15 +280,11 @@ def test_a_resumed_interview_replays_the_grid_with_its_answer():
 
     # The client draws the answered grid from the item and the stored answer,
     # so both go out as they are, mid-history and as the last message.
-    replayed, _ = replay_history(
-        [grid, message(1, MessageRole.USER, answer), probe], project_id
-    )
+    replayed, _ = replay_history([grid, message(1, MessageRole.USER, answer), probe])
     assert isinstance(question := replayed[0], OutgoingHistoryMessage)
     assert question.survey_item == item
     assert replayed[1].content == answer
-    replayed, _ = replay_history(
-        [grid, message(1, MessageRole.USER, answer)], project_id
-    )
+    replayed, _ = replay_history([grid, message(1, MessageRole.USER, answer)])
     assert isinstance(question := replayed[0], OutgoingHistoryMessage)
     assert question.survey_item == item
     assert replayed[-1].content == answer

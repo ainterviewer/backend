@@ -1,7 +1,5 @@
 """Replaying a stored interview to a respondent who reconnects."""
 
-from pydantic import UUID4
-
 from ainterviewer.interfaces import (
     OutgoingData,
     OutgoingHistoryMessage,
@@ -50,7 +48,6 @@ def _as_modal(message: MessagePublic, interview_guide: InterviewGuide | None) ->
 
 def replay_history(
     interview_history: list[MessagePublic],
-    project_id: UUID4,
     interview_guide: InterviewGuide | None = None,
 ) -> tuple[list[OutgoingHistoryMessage | OutgoingData | OutgoingMessage], bool]:
     """Replays the messages from the history through the websocket. Returns
@@ -83,9 +80,6 @@ def replay_history(
             or _as_modal(message, interview_guide)
         ):
             continue
-
-        if message.image:
-            message.image.encode(project_id)  # ty:ignore[missing-union-attribute]
 
         data = OutgoingHistoryMessage(
             content=message.content,
@@ -120,20 +114,16 @@ def replay_history(
         elif last_message.content in CustomToken:
             pass
         else:
-            messages.append(_live(last_message, project_id, interview_guide))
+            messages.append(_live(last_message, interview_guide))
 
     return messages, continue_from_history
 
 
 def _live(
     message: MessagePublic,
-    project_id: UUID4,
     interview_guide: InterviewGuide | None,
 ) -> OutgoingMessage:
     """`message` as it went out when it was first sent."""
-    if message.image:
-        message.image.encode(project_id)  # ty:ignore[missing-union-attribute]
-
     return OutgoingMessage(
         content=message.content,
         role=message.role,
@@ -150,7 +140,6 @@ def _live(
 
 def resume_message(
     interview_history: list[MessagePublic],
-    project_id: UUID4,
     interview_guide: InterviewGuide | None = None,
 ) -> OutgoingMessage | None:
     """What a client that reconnects with the chat still on screen is sent:
@@ -187,4 +176,4 @@ def resume_message(
             and last.main_question is not None
         )
 
-    return _live(last, project_id, interview_guide) if waiting else None
+    return _live(last, interview_guide) if waiting else None

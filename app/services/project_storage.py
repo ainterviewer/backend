@@ -2,9 +2,8 @@
 helpers that copy and remove it.
 
 Project media lives under ``storage/projects/<project_id>/``, the library's
-``ProjectStorage.base_path``. The library defines the root and the media it
-reads itself (``image_path``, for guide images); every directory only the
-backend uses is defined here, so adding one needs no library release.
+``ProjectStorage.base_path``. The library defines only the root; every
+directory in it is defined here, so adding one needs no library release.
 
 None of it is covered by the database cascades, so anything that duplicates
 or removes a project has to deal with the directory tree separately.
@@ -31,6 +30,12 @@ def _project_dir(project_id: UUID4, name: str, *, create: bool) -> Path:
     if create:
         path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def image_path(project_id: UUID4) -> Path:
+    """The guide's images, under the names the editor uploaded them with.
+    Created if missing. Served by name (`app/api/dashboard/guide_images.py`)."""
+    return _project_dir(project_id, "images", create=True)
 
 
 def email_attachments_path(project_id: UUID4) -> Path:
