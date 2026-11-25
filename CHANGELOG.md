@@ -4,6 +4,30 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.41] - 2026-11-25
+
+### Features
+
+- (consent) Attach PDFs to the consent
+
+### Bug Fixes
+
+- (uploads) Keep client file names from leaving their directory
+- (storage) Delete interviews' recordings and images with them
+- (interview) Tell a reconnecting respondent whose turn it is
+
+### Internal
+
+- (seed) Add Arabic and Swahili interview guides
+- (seed) Add forks and nested conditions to the control-flow guide
+- (seed) Let the control-flow role question take "Other"
+- (api) Share the upload filename helpers in app/api/files.py
+- Keep tests out of the developer's media storage
+- (storage) Define the backend's media paths in the backend
+- (storage) Define the interview media paths in the backend
+- (deps) Bump ainterviewer to v0.8.9
+- (deps) Bump ainterviewer to v0.8.10
+
 ## [0.10.40] - 2026-11-24
 
 ### Internal
