@@ -15,7 +15,6 @@ from pydantic import UUID4
 from sqlalchemy.exc import NoResultFound
 
 from ainterviewer.constants import LANGUAGE_CODES
-from ainterviewer.settings import settings as lib_settings
 from ainterviewer.types import LanguageCode
 from ainterviewer.utils import now
 
@@ -47,6 +46,7 @@ from ...schemas.participants import (
     SendParticipantEmailRequest,
     SendParticipantEmailResponse,
 )
+from ...services import project_storage
 from ...services.email.mail import send_email
 from ...services.email.participant_template import (
     TemplateSyntaxError,
@@ -258,9 +258,7 @@ async def export_email_bundle(
             if template:
                 zf.writestr(f"templates/{lang}.reminder.html", template)
 
-        attachments_base = lib_settings.storage.project_storage.email_attachments_path(
-            project_id
-        )
+        attachments_base = project_storage.email_attachments_path(project_id)
         if attachments_base.exists():
             for lang_dir in sorted(attachments_base.iterdir()):
                 if not lang_dir.is_dir() or lang_dir.name == REMINDER_ATTACHMENT_SUBDIR:
@@ -470,14 +468,14 @@ async def set_participant_email_template(
 
 
 def _attachments_dir(project_id: UUID4, language: LanguageCode) -> Path:
-    base = lib_settings.storage.project_storage.email_attachments_path(project_id)
+    base = project_storage.email_attachments_path(project_id)
     path = base / checked_language(language)
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def _reminder_attachments_dir(project_id: UUID4, language: LanguageCode) -> Path:
-    base = lib_settings.storage.project_storage.email_attachments_path(project_id)
+    base = project_storage.email_attachments_path(project_id)
     path = base / REMINDER_ATTACHMENT_SUBDIR / checked_language(language)
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -635,7 +633,7 @@ def _read_attachments(
 ) -> list[tuple[str, bytes]]:
     """Load attachment files for the given languages, deduped by filename."""
     seen: dict[str, bytes] = {}
-    base = lib_settings.storage.project_storage.email_attachments_path(project_id)
+    base = project_storage.email_attachments_path(project_id)
     if reminder:
         base = base / REMINDER_ATTACHMENT_SUBDIR
     for lang in languages:

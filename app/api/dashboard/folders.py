@@ -3,8 +3,6 @@ import logging
 from fastapi import APIRouter, BackgroundTasks, Request
 from pydantic import UUID4
 
-from ainterviewer.settings import settings as lib_settings
-
 from ...auth import AuthToken
 from ...db.repositories.errors import AlreadyCollaboratorError
 from ...dependencies import (
@@ -30,6 +28,7 @@ from ...schemas.projects import (
     ProjectCreateResponse,
 )
 from ...schemas.users import UserPublic
+from ...services import project_storage
 from ...services.email.mail import email_templates, send_email
 from ...settings import app_settings
 from ...types import CollaboratorRole, Scope
@@ -333,9 +332,7 @@ async def create_project(
         default_language=project_request.default_language,
     )
 
-    file_path = (
-        lib_settings.storage.project_storage.qr_code_path(project_id) / "interview.png"
-    )
+    file_path = project_storage.qr_code_path(project_id) / "interview.png"
     interview_url = str(request.base_url) + f"interview?id={project_id}"
 
     background_tasks.add_task(generate_qr_img, str(interview_url), file_path=file_path)

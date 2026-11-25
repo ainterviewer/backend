@@ -5,11 +5,10 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import UUID4
 from sqlalchemy.exc import NoResultFound
 
-from ainterviewer.settings import settings as lib_settings
-
 from ...auth import AuthToken
 from ...dependencies import DBSession, UserToken
 from ...schemas.projects import ExperimentCreate, ExperimentPublic, ExperimentUpdate
+from ...services import experiment_storage
 from ...types import CollaboratorRole, Scope
 from ...utils import generate_qr_img
 from ..files import file_response
@@ -132,10 +131,7 @@ async def generate_experiment_qr(
     except NoResultFound:
         raise HTTPException(404, "Experiment not found")
 
-    file_path = (
-        lib_settings.storage.experiment_storage.qr_code_path(experiment_id)
-        / "distribute.png"
-    )
+    file_path = experiment_storage.qr_code_path(experiment_id) / "distribute.png"
 
     if not file_path.exists():
         redirect_url = str(request.base_url) + f"interview/redirect?id={experiment_id}"

@@ -111,12 +111,12 @@ from ...schemas.projects import (
     ProjectStatusChangeRequest,
     ProjectTitleUpdateRequest,
 )
+from ...services import project_storage
 from ...services.exports.transcripts import (
     MEDIA_TYPES,
     InterviewExport,
     export_interviews,
 )
-from ...services.project_storage import copy_email_attachments, delete_project_storage
 from ...settings import app_settings
 from ...types import (
     CollaboratorRole,
@@ -146,7 +146,7 @@ async def delete_project(
 ):
     await session_manager.end([project_id])
     db.projects.delete_project(project_id)
-    delete_project_storage(project_id)
+    project_storage.delete_project_storage(project_id)
 
 
 @router.post("/projects/{project_id}/clone")
@@ -163,10 +163,10 @@ async def clone_project(
     # whose templates reference files that were never copied is worse than a
     # failed clone, so undo the database side if the copy fails.
     try:
-        copy_email_attachments(project_id, new_project.id)
+        project_storage.copy_email_attachments(project_id, new_project.id)
     except OSError as exc:
         db.projects.delete_project(new_project.id)
-        delete_project_storage(new_project.id)
+        project_storage.delete_project_storage(new_project.id)
         raise HTTPException(
             status_code=500,
             detail="Failed to copy the project's email attachments.",
@@ -950,7 +950,7 @@ async def upload_welcome_video(
         raise HTTPException(status_code=400, detail="The video has no file name")
 
     async with aiofiles.open(
-        lib_settings.storage.project_storage.video_path(project_id) / video.filename,
+        project_storage.video_path(project_id) / video.filename,
         "wb",
     ) as f:
         await f.write(await video.read())
@@ -1436,9 +1436,7 @@ async def generate_project_qr(
         img_data = generate_qr_img(f"{request.base_url}interview?{query}")
         return StreamingResponse(io.BytesIO(img_data), media_type="image/png")
 
-    file_path = (
-        lib_settings.storage.project_storage.qr_code_path(project_id) / "interview.png"
-    )
+    file_path = project_storage.qr_code_path(project_id) / "interview.png"
 
     if not file_path.exists():
         interview_url = str(request.base_url) + f"interview?id={project_id}"
