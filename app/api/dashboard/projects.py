@@ -112,12 +112,13 @@ from ...schemas.projects import (
     ProjectStatusChangeRequest,
     ProjectTitleUpdateRequest,
 )
-from ...services import project_storage
+from ...services import interview_storage, project_storage
 from ...services.exports.transcripts import (
     MEDIA_TYPES,
     InterviewExport,
     export_interviews,
 )
+from ...services.storage_cleanup import StorageToDelete
 from ...settings import app_settings
 from ...types import (
     CollaboratorRole,
@@ -145,9 +146,10 @@ async def delete_project(
     jwt: DemoToken,
     _: ProjectAdmin,
 ):
+    files = StorageToDelete.of_projects(db, [project_id])
     await session_manager.end([project_id])
     db.projects.delete_project(project_id)
-    project_storage.delete_project_storage(project_id)
+    files.remove()
 
 
 @router.post("/projects/{project_id}/clone")
@@ -167,7 +169,7 @@ async def clone_project(
         project_storage.copy_email_attachments(project_id, new_project.id)
     except OSError as exc:
         db.projects.delete_project(new_project.id)
-        project_storage.delete_project_storage(new_project.id)
+        project_storage.delete_project_storage([new_project.id])
         raise HTTPException(
             status_code=500,
             detail="Failed to copy the project's email attachments.",
@@ -1105,7 +1107,10 @@ async def delete_interviews(
     interview_ids = _selected_interview_ids(db, project_id, delete_request)
     _refuse_distributed_to_demo(db, jwt, project_id, interview_ids)
     await session_manager.end([project_id], interview_ids)
-    db.interviews.delete_interviews(project_id, interview_ids)
+    # The ids actually deleted: those not of this project were ignored, and
+    # their files are not this request's to remove.
+    deleted = db.interviews.delete_interviews(project_id, interview_ids)
+    interview_storage.delete_interview_storage(deleted)
 
 
 # ============ Interview resume links ============

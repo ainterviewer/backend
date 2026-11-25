@@ -390,5 +390,40 @@ def export_messages(
     typer.echo(f"Exported {len(messages)} message(s) to {output}.")
 
 
+@cli.command()
+def sweep_storage(dry_run: bool = False):
+    """Remove media whose project, interview or experiment was deleted.
+
+    Deletes remove their files since `StorageToDelete`; this catches what
+    earlier deletes left behind, and anything a failed removal did. That
+    includes respondents' voice recordings, so run it once after deploying.
+    Safe to re-run, and to run while the app serves requests.
+    """
+    from ..services.storage_cleanup import orphaned_storage
+
+    prefix = "[DRY-RUN] " if dry_run else ""
+    with Session(engine) as session:
+        orphans = orphaned_storage(session)
+    for kind, ids in (
+        ("project", orphans.project_ids),
+        ("interview", orphans.interview_ids),
+        ("experiment", orphans.experiment_ids),
+    ):
+        for entity_id in ids:
+            typer.echo(f"{prefix}{kind} {entity_id}")
+    total = (
+        len(orphans.project_ids)
+        + len(orphans.interview_ids)
+        + len(orphans.experiment_ids)
+    )
+    if dry_run:
+        typer.echo(
+            f"[DRY-RUN] Would remove {total} director{'y' if total == 1 else 'ies'}."
+        )
+    else:
+        orphans.remove()
+        typer.echo(f"Removed {total} director{'y' if total == 1 else 'ies'}.")
+
+
 if __name__ == "__main__":
     cli()

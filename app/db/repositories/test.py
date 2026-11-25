@@ -482,9 +482,14 @@ class TestRepository(BaseRepository):
 
         return self._to_experiment_public(experiment)
 
+    def get_owned_experiment_ids(self, user_id: UUID4) -> list[uuid.UUID]:
+        """The experiments a user delete takes with it."""
+        statement = select(ExperimentTable.id).where(ExperimentTable.user_id == user_id)
+        return list(self.session.execute(statement).scalars())
+
     def delete_experiment(
         self, experiment_id: UUID4, user_id: UUID4, clear_experiment_only: bool = False
-    ) -> None:
+    ) -> bool:
         """Delete an experiment owned by `user_id`, unlinking its projects and
         interviews.
 
@@ -496,6 +501,8 @@ class TestRepository(BaseRepository):
         `clear_experiment_only` lets the experiment's projects take respondents
         from their own links again, unless another experiment still uses them:
         left set, a project nothing can assign to refuses everyone.
+
+        Returns whether `user_id` had such an experiment.
         """
         owned = select(ExperimentTable.id).where(
             ExperimentTable.id == experiment_id,
@@ -533,13 +540,16 @@ class TestRepository(BaseRepository):
             .where(InterviewTable.experiment_id.in_(owned))
             .values(experiment_id=None)
         )
-        self.session.execute(
+        deleted = self.session.execute(
             delete(ExperimentTable).where(
                 ExperimentTable.id == experiment_id,
                 ExperimentTable.user_id == user_id,
             )
         )
         self.session.commit()
+        # Whether there was an experiment of theirs to delete, so its files
+        # are only removed when it was.
+        return bool(deleted.rowcount)  # ty: ignore[missing-attribute]
 
     def _arm_counts(self, experiment_id: UUID4) -> dict[uuid.UUID, tuple[int, int]]:
         """Per project: (assignments, completed interviews) in the experiment."""

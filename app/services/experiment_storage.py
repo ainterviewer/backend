@@ -6,11 +6,15 @@ directories in it are the backend's to define: the library reads none of
 them.
 """
 
+from collections.abc import Iterable
 from pathlib import Path
+from uuid import UUID
 
 from pydantic import UUID4
 
 from ainterviewer.settings import settings as lib_settings
+
+from .storage import remove_entity_dirs
 
 
 def qr_code_path(experiment_id: UUID4) -> Path:
@@ -19,3 +23,10 @@ def qr_code_path(experiment_id: UUID4) -> Path:
     path = path / "qr_codes"
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def delete_experiment_storage(experiment_ids: Iterable[UUID]) -> None:
+    """Remove the files of experiments whose rows were deleted."""
+    remove_entity_dirs(
+        lib_settings.storage.experiment_storage.base_path, experiment_ids, "experiment"
+    )

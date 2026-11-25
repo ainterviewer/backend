@@ -9,6 +9,7 @@ from ...schemas.users import (
     UserAdminPublic,
     UserAdminUpdate,
 )
+from ...services.storage_cleanup import StorageToDelete
 from ...settings import app_settings
 from ..dashboard.synthesize import get_demo_budget
 from ..websockets.manager import session_manager
@@ -23,8 +24,10 @@ async def get_users(db: DBSession, jwt: AdminToken) -> list[UserAdminPublic]:
 
 @router.delete("/users")
 async def delete_user(user_id: UUID4, db: DBSession, jwt: AdminToken):
-    await session_manager.end(db.projects.get_owned_project_ids(user_id))
-    return db.users.delete_user(id=user_id)
+    files = StorageToDelete.of_user(db, user_id)
+    await session_manager.end(files.project_ids)
+    db.users.delete_user(id=user_id)
+    files.remove()
 
 
 @router.patch("/users/{user_id}/note")

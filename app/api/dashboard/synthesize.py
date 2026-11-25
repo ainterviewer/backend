@@ -37,6 +37,7 @@ from ...schemas.testing import (
     UpdateFixedPersonasRequest,
 )
 from ...schemas.users import DemoBudget, DemoBudgetItem
+from ...services import interview_storage
 from ...synthesize.core import (
     draw_fixed_personas,
     run_synthesis_job_fixed_ai,
@@ -264,8 +265,10 @@ async def delete_test_setup(
     db: DBSession,
     jwt: ProjectEditor,
 ):
-    await session_manager.end([project_id], db.tests.get_setup_interview_ids(test_id))
+    interview_ids = db.tests.get_setup_interview_ids(test_id)
+    await session_manager.end([project_id], interview_ids)
     db.tests.delete_test_setup(test_id)
+    interview_storage.delete_interview_storage(interview_ids)
 
 
 @router.post("/projects/{project_id}/interviewee")

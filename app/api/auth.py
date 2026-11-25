@@ -44,6 +44,7 @@ from ..schemas.users import (
     VerifyLoginCodeRequest,
 )
 from ..services.email.mail import email_templates, send_email
+from ..services.storage_cleanup import StorageToDelete
 from ..settings import app_settings
 from ..types import ErrorCode, VerificationPurpose
 from ..utils import as_aware
@@ -490,8 +491,10 @@ async def delete_me(
 ) -> ActionResponse:
     _verify_current_password(db, jwt.user_id, body.password)
 
-    await session_manager.end(db.projects.get_owned_project_ids(jwt.user_id))
+    files = StorageToDelete.of_user(db, jwt.user_id)
+    await session_manager.end(files.project_ids)
     db.users.delete_user(jwt.user_id)
+    files.remove()
 
     _delete_auth_cookies(response)
     return ActionResponse(message="Account deleted")

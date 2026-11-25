@@ -10,15 +10,16 @@ None of it is covered by the database cascades, so anything that duplicates
 or removes a project has to deal with the directory tree separately.
 """
 
-import logging
 import shutil
+from collections.abc import Iterable
 from pathlib import Path
+from uuid import UUID
 
 from pydantic import UUID4
 
 from ainterviewer.settings import settings as lib_settings
 
-logger = logging.getLogger(__name__)
+from .storage import remove_entity_dirs
 
 
 def _project_dir(project_id: UUID4, name: str, *, create: bool) -> Path:
@@ -59,22 +60,9 @@ def copy_email_attachments(src_project_id: UUID4, dst_project_id: UUID4) -> None
     shutil.copytree(src, dst, dirs_exist_ok=True)
 
 
-def delete_project_storage(project_id: UUID4) -> None:
-    """Remove a project's media directory.
-
-    Best effort: the database row is the source of truth, so a failure here
-    leaves orphaned files behind rather than blocking the delete.
-    """
-    base_path = lib_settings.storage.project_storage.base_path
-    path = base_path / str(project_id)
-
-    if path.resolve().parent != base_path:
-        logger.error("Refusing to delete storage outside %s: %s", base_path, path)
-        return
-
-    try:
-        shutil.rmtree(path)
-    except FileNotFoundError:
-        pass
-    except OSError:
-        logger.exception("Failed to delete storage for project %s", project_id)
+def delete_project_storage(project_ids: Iterable[UUID]) -> None:
+    """Remove the files of projects whose rows were deleted. Their
+    interviews' files are separate: see `StorageToDelete`."""
+    remove_entity_dirs(
+        lib_settings.storage.project_storage.base_path, project_ids, "project"
+    )

@@ -1,7 +1,7 @@
 import datetime
 import json
 import logging
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Literal
 from uuid import UUID
@@ -179,15 +179,34 @@ class InterviewRepository(BaseRepository):
         self.session.execute(statement)
         self.session.commit()
 
+    def get_project_interview_ids(self, project_ids: Iterable[UUID4]) -> list[UUID]:
+        """Every interview of `project_ids`: what deleting them takes with
+        it, for removing the interviews' files once the rows are gone."""
+        statement = select(InterviewTable.id).where(
+            InterviewTable.project_id.in_(list(project_ids))
+        )
+        return list(self.session.execute(statement).scalars())
+
     def delete_interviews(
         self,
         project_id: UUID4,
         interview_ids: list[UUID4],
-    ):
+    ) -> list[UUID]:
+        """Delete those of `interview_ids` that are `project_id`'s, and
+        return their ids: ids of other projects' interviews are ignored, so
+        what was deleted is not simply what was asked for."""
         statement = select(ProjectTable).where(
             ProjectTable.id == project_id,
         )
         self.session.execute(statement).scalar_one()
+        deleted = list(
+            self.session.execute(
+                select(InterviewTable.id).where(
+                    InterviewTable.project_id == project_id,
+                    InterviewTable.id.in_(interview_ids),
+                )
+            ).scalars()
+        )
 
         # Children first, then the interviews, in a single transaction. Every
         # child table here declares ON DELETE CASCADE, but the cascade only
@@ -219,6 +238,7 @@ class InterviewRepository(BaseRepository):
             )
         )
         self.session.commit()
+        return deleted
 
     @staticmethod
     def _n_reports_column():

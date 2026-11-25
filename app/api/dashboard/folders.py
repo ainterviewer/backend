@@ -30,6 +30,7 @@ from ...schemas.projects import (
 from ...schemas.users import UserPublic
 from ...services import project_storage
 from ...services.email.mail import email_templates, send_email
+from ...services.storage_cleanup import StorageToDelete
 from ...settings import app_settings
 from ...types import CollaboratorRole, Scope
 from ...utils import generate_qr_img
@@ -98,8 +99,11 @@ async def delete_folder(
     jwt: DemoToken,
     _: FolderAdmin,
 ):
-    await session_manager.end(db.projects.get_folder_project_ids(folder_id))
+    project_ids = db.projects.get_folder_project_ids(folder_id)
+    files = StorageToDelete.of_projects(db, project_ids)
+    await session_manager.end(project_ids)
     db.projects.delete_folder(folder_id)
+    files.remove()
 
 
 @router.patch("/folders/{folder_id}", description="Delete folder")

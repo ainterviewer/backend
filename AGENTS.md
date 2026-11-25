@@ -206,7 +206,8 @@ The backend is tightly coupled with the `ainterviewer` library (sibling package 
     interview, `insert_message` / `insert_task` raise `InterviewGoneError` and
     the websocket sends the restart frame. The session registry is
     per-process: with more than one worker, that backstop is all that ends
-    sessions on other workers (see `InterviewSessionManager`).
+    sessions on other workers (see `InterviewSessionManager`). It then
+    removes the deleted rows' files; see "Media storage" below.
   - Validate ids a client supplies (test run, participant, interview) against
     the project and answer 404; don't leave it to the foreign key, which turns
     a stale id into a 500. `is_foreign_key_violation` (`app/db/utils.py`) tells
@@ -238,6 +239,39 @@ The backend is tightly coupled with the `ainterviewer` library (sibling package 
 engine is created with a 20/40 pool, but `DatabaseSettings.connection_string`
 builds no URL for it (the branch is a `pass`), so `db = "postgresql"` fails at
 startup. Nothing reads a `DATABASE_URL` variable.
+
+### Media storage
+
+Files live under `storage/` (`[storage] base_path`), in a directory per
+project, interview and experiment named by its id:
+`storage/projects/<id>/`, `storage/interviews/<id>/` (respondents' voice
+recordings and uploaded images), `storage/experiments/<id>/`.
+
+- **The library owns the roots, the backend the directories in them.** The
+  library's `ProjectStorage` / `InterviewStorage` / `ExperimentStorage` say
+  where each root is and define only what the library reads itself
+  (`image_path`, for guide images). Every directory only the backend uses is
+  a function in `app/services/project_storage.py` or `experiment_storage.py`,
+  imported as the module (`project_storage.qr_code_path(project_id)`), so
+  adding one needs no library release.
+- **A delete removes its rows' files.** Nothing cascades to the disk, so a
+  route gathers the ids of what the delete takes with it *before* the rows go,
+  and removes their directories once the delete has committed --
+  `StorageToDelete` (`app/services/storage_cleanup.py`) for projects, folders
+  and accounts, `interview_storage.delete_interview_storage` with the ids the
+  repository says it deleted for interviews (not the ids the client sent).
+  Any new route that deletes a project, interview or experiment must do the
+  same: interview files are respondents' data. Removal is best effort, and
+  `uv run python -m app.db.cli sweep-storage [--dry-run]` removes whatever
+  has no row left, safe to run while the app serves requests.
+- **A client's file name never becomes a path as is.** Store an upload under
+  `safe_filename(...)` or a generated name plus `safe_suffix(...)`
+  (`app/api/files.py`); FastAPI passes an upload's name through with any
+  "../" in it. A guide image's `name` is refused on save unless bare
+  (`image_name_errors`, `app/collab/parts.py`).
+- Tests get a temporary `storage/` (`STORAGE__BASE_PATH`, `tests/conftest.py`).
+  To point one at its own, patch `settings.storage.base_path`: the per-entity
+  storages are built anew on every access, so patching theirs does nothing.
 
 ### Embeddings
 
