@@ -498,7 +498,9 @@ def control_flow() -> LocalizedInterviewGuide:
     ]
     role = Question(
         main_question="Which description fits you best?",
-        survey_item=RadioItem(options=["Student", "Researcher", "Practitioner"]),
+        survey_item=RadioItem(
+            options=["Student", "Researcher", "Practitioner"], with_other=True
+        ),
     )
     age = Question(
         main_question="How old are you?", survey_item=NumberItem(min=0, max=120, step=1)
@@ -642,6 +644,22 @@ def control_flow() -> LocalizedInterviewGuide:
         ],
     )
 
+    # One of these two, unless the role was typed into "Other", which skips
+    # neither.
+    academic_topic = Question(
+        main_question="What do you study or research?",
+        conditions=[_when(skip_question, _reads(role, _is("Practitioner")))],
+    )
+    work_sector = Question(
+        main_question="Which sector does your organisation work in?",
+        conditions=[
+            _when(
+                skip_question,
+                _reads(role, _is("Student", combine_next="OR"), _is("Researcher")),
+            )
+        ],
+    )
+
     # Section 4: forks inside a section the respondent may skip, so even a
     # required source may go unanswered.
     gate = Question(
@@ -745,7 +763,15 @@ def control_flow() -> LocalizedInterviewGuide:
             ),
             QuestionSection(
                 description="Section-level and compound conditions.",
-                questions=[advanced, decisions, budget, first_change, young_student],
+                questions=[
+                    advanced,
+                    decisions,
+                    budget,
+                    first_change,
+                    young_student,
+                    academic_topic,
+                    work_sector,
+                ],
             ),
             QuestionSection(
                 description="Optional alternatives.",
