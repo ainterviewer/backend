@@ -31,6 +31,7 @@ from ...schemas.content import (
     ContentVersionSummaryPublic,
 )
 from ..errors import CANNOT_PUBLISH, STALE_REVISION
+from .consent_attachments import prune_consent_attachments
 
 router = APIRouter(tags=["versions"])
 
@@ -126,13 +127,17 @@ async def save_content_version(
     await content_rooms.flush(project_id)
     db.versions.check_revision(project_id, revision)
     if request.publish:
-        return db.versions.publish(
+        published = db.versions.publish(
             project_id,
             jwt.user_id,
             request.label,
             None if request.bump is None else Bump.named(request.bump),
             switch_models_to=request.switch_models_to,
         )
+        # A language the draft dropped stops being offered now, so its consent
+        # PDFs can go.
+        prune_consent_attachments(db, project_id)
+        return published
     return db.versions.save_version(project_id, jwt.user_id, request.label)
 
 
@@ -157,6 +162,7 @@ async def restore_content_version(
         db.versions.restore(project_id, version_id, jwt.user_id)
     except NoResultFound as exc:
         raise HTTPException(status_code=404, detail="No such version") from exc
+    prune_consent_attachments(db, project_id)
     status = db.versions.status(project_id)
     set_etag(response, status.revision)
     return status

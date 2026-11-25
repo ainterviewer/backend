@@ -132,6 +132,7 @@ from ...utils import as_aware, ensure_filename, generate_qr_img
 from ..errors import STALE_REVISION
 from ..files import file_response, safe_filename
 from ..websockets.manager import session_manager
+from .consent_attachments import prune_consent_attachments
 
 logger = logging.getLogger(__name__)
 
@@ -162,17 +163,17 @@ async def clone_project(
 ) -> ProjectPublic:
     new_project = db.projects.clone_project(project_id, owner_id=jwt.user_id)
 
-    # The email attachments live on disk, outside the cloned rows. A clone
-    # whose templates reference files that were never copied is worse than a
-    # failed clone, so undo the database side if the copy fails.
+    # The email and consent attachments live on disk, outside the cloned
+    # rows. A clone whose templates reference files that were never copied is
+    # worse than a failed clone, so undo the database side if the copy fails.
     try:
-        project_storage.copy_email_attachments(project_id, new_project.id)
+        project_storage.copy_project_attachments(project_id, new_project.id)
     except OSError as exc:
         db.projects.delete_project(new_project.id)
         project_storage.delete_project_storage([new_project.id])
         raise HTTPException(
             status_code=500,
-            detail="Failed to copy the project's email attachments.",
+            detail="Failed to copy the project's attachments.",
         ) from exc
 
     return new_project
@@ -235,6 +236,9 @@ async def remove_project_language(
         raise HTTPException(
             status_code=404, detail="The project has no localization for that language."
         ) from exc
+    # Its consent PDFs go once the published version does not offer it
+    # either: until the next publish, its respondents still get them.
+    prune_consent_attachments(db, project_id)
 
     return available_languages
 

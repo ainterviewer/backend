@@ -10,6 +10,7 @@ None of it is covered by the database cascades, so anything that duplicates
 or removes a project has to deal with the directory tree separately.
 """
 
+import logging
 import shutil
 from collections.abc import Iterable
 from pathlib import Path
@@ -17,9 +18,12 @@ from uuid import UUID
 
 from pydantic import UUID4
 
+from ainterviewer.constants import LANGUAGE_CODES
 from ainterviewer.settings import settings as lib_settings
 
 from .storage import remove_entity_dirs
+
+logger = logging.getLogger(__name__)
 
 
 def _project_dir(project_id: UUID4, name: str, *, create: bool) -> Path:
@@ -46,18 +50,57 @@ def qr_code_path(project_id: UUID4) -> Path:
     return _project_dir(project_id, "qr_codes", create=True)
 
 
-def copy_email_attachments(src_project_id: UUID4, dst_project_id: UUID4) -> None:
-    """Copy a project's participant email attachments onto another project.
+def consent_attachments_path(project_id: UUID4) -> Path:
+    """Where a project's consent PDFs live, a directory per language.
+
+    Like the email attachments, outside the versioned content: an upload
+    reaches respondents of the published version straight away. Not created
+    here: a project with no PDFs has no directory, and the respondent routes
+    read it without leaving one behind.
+    """
+    return _project_dir(project_id, "consent_attachments", create=False)
+
+
+def copy_project_attachments(src_project_id: UUID4, dst_project_id: UUID4) -> None:
+    """Copy a project's email and consent attachments onto another project.
 
     Copies the whole ``email_attachments`` tree, which covers both the
-    per-language directories and the ``_reminders/<language>`` ones.
+    per-language directories and the ``_reminders/<language>`` ones, and the
+    consent PDFs' per-language directories.
     """
     src = email_attachments_path(src_project_id)
-    if not any(src.iterdir()):
-        return
+    if any(src.iterdir()):
+        dst = email_attachments_path(dst_project_id)
+        shutil.copytree(src, dst, dirs_exist_ok=True)
 
-    dst = email_attachments_path(dst_project_id)
-    shutil.copytree(src, dst, dirs_exist_ok=True)
+    src = consent_attachments_path(src_project_id)
+    if src.is_dir():
+        shutil.copytree(
+            src, consent_attachments_path(dst_project_id), dirs_exist_ok=True
+        )
+
+
+def prune_consent_attachments(project_id: UUID4, keep: Iterable[str]) -> None:
+    """Remove the consent PDFs of every language not in `keep`.
+
+    Best effort, like `delete_project_storage`. Only directories named by a
+    language code are touched; `keep` decides which of them stay.
+    """
+    base = consent_attachments_path(project_id)
+    if not base.is_dir():
+        return
+    kept = set(keep)
+    for entry in base.iterdir():
+        if not entry.is_dir() or entry.name in kept or entry.name not in LANGUAGE_CODES:
+            continue
+        try:
+            shutil.rmtree(entry)
+        except OSError:
+            logger.exception(
+                "Failed to delete %s consent attachments for project %s",
+                entry.name,
+                project_id,
+            )
 
 
 def delete_project_storage(project_ids: Iterable[UUID]) -> None:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import UUID4, Field
+from pydantic import UUID4, Field, computed_field
 
 from ainterviewer.agents.config import AgentConfigs
 from ainterviewer.config import InterviewConfig
@@ -182,3 +182,22 @@ class ContentVersionCreate(Schema):
     #: only to this one (one of `[llm] models`), in the draft as well. The
     #: switch is part of what is published, so it counts towards the bump.
     switch_models_to: str | None = None
+
+
+class ConsentAttachmentPublic(Schema):
+    """A PDF shown with the consent, as a link (`app/api/dashboard/consent_attachments.py`).
+
+    Stored on disk per language, outside the versioned content, so it has no
+    fields beyond what the file itself says.
+    """
+
+    filename: str
+    size: int
+
+    @computed_field
+    @property
+    def label(self) -> str:
+        """The link's text: the file name without its extension."""
+        return (
+            self.filename.rsplit(".", 1)[0] if "." in self.filename else self.filename
+        )
