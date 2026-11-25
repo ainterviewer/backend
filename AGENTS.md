@@ -860,6 +860,15 @@ not.
   `KEEP_AUTOMATIC_VERSIONS` are pruned, except those an interview references.
 - **Restore** copies a version, languages and all, into the draft after keeping
   the draft it replaces as a `restore` version. It publishes nothing.
+- **Copying a project** (`POST /projects/{id}/clone`) copies the draft, or
+  the version named by `version_id`, into a new unpublished project whose
+  history is one `manual` version labelled with where it came from ("Copied
+  from p, v2.1.0"). None of the source's versions go with it: a version says
+  which interviews are comparable, and the copy has none, so carried-over
+  numbers and "published" markers would describe data it does not hold.
+  `project.cloned_from_project_id` / `cloned_from_version_id` link back and
+  go NULL when what they name is deleted or pruned; the label survives that.
+  Moving a study with its history would be a transfer, not a copy.
 
 **Revisions stop concurrent editors overwriting each other.** Each part
 of the content (`ContentPart`: guide, consent, welcome, agents, emails,

@@ -111,6 +111,11 @@ class ProjectBase(Schema):
     external_params: list[ExternalParam] | None = None
     redirects: CompletionRedirects | None = None
     owner_id: UUID4
+    #: The project this one was copied from, while it exists.
+    cloned_from_project_id: UUID4 | None = None
+    #: The source's version the copy started from; None when it started from
+    #: the source's draft, or that version is gone.
+    cloned_from_version_id: UUID4 | None = None
 
 
 class ProjectLanguage(LanguageDict):
@@ -224,6 +229,12 @@ class ArchiveRequest(Schema):
 
 class MoveProjectRequest(Schema):
     folder_id: UUID4
+
+
+class ProjectCloneRequest(Schema):
+    #: A version of the source project to copy the content from, instead of
+    #: its draft. The copy's history starts afresh either way.
+    version_id: UUID4 | None = None
 
 
 class ProjectCreate(Schema):

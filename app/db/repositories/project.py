@@ -46,6 +46,7 @@ from ...types import (
     CollaboratorRole,
     CompletionRedirects,
     ContentPart,
+    ContentVersionKind,
     ExternalParam,
     InterviewType,
     ParticipantEmail,
@@ -64,6 +65,7 @@ from ..tables import (
     TestSetupTable,
     UserTable,
 )
+from ..versioning import format_semver
 from .base import BaseRepository
 from .errors import (
     AlreadyCollaboratorError,
@@ -77,6 +79,7 @@ from .errors import (
     RoleAboveOwnError,
 )
 from .permissions import can_moderate_project
+from .version import VersionRepository, copy_content
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +192,19 @@ def _require_offered_languages(
             f"The project does not offer {names}. Add the language before "
             "writing text in it."
         )
+
+
+def _copied_from_label(
+    title: str, source: ProjectContentTable | ProjectContentVersionTable
+) -> str:
+    """What a copy's first version is called: where its content came from,
+    readable after the source and its versions are gone."""
+    if isinstance(source, ProjectContentTable):
+        return f"Copied from {title}"
+    if source.major is not None:
+        semver = (source.major, source.minor or 0, source.patch or 0)
+        return f"Copied from {title}, v{format_semver(semver)}"
+    return f"Copied from {title}, version {source.version_no}"
 
 
 class ProjectRepository(BaseRepository):
@@ -575,11 +591,23 @@ class ProjectRepository(BaseRepository):
         self,
         project_id: UUID4,
         owner_id: UUID4,
+        version_id: UUID4 | None = None,
     ) -> ProjectPublic:
         """
-        Copies a project with all its configurations (localizations, guides, agent configs, prompts)
-        but not interviews, messages, or test runs.
+        Copies a project with its content and test setups, but not its
+        interviews, test runs or version history.
+
+        The content is the draft's, or that of `version_id`, one of the
+        project's versions (NoResultFound otherwise). The copy starts
+        unpublished, with one `manual` version holding what it was copied
+        from: a version describes interviews the project ran, and the copy
+        has run none. `cloned_from_*` record where it came from.
         """
+        versions = VersionRepository(self.session)
+        # Checked before anything is written: the title loop below rolls back.
+        if version_id is not None:
+            versions._version(project_id, version_id)
+
         # 1. Load the original project
         orig_project = self.session.execute(
             select(ProjectTable).where(ProjectTable.id == project_id)
@@ -603,6 +631,8 @@ class ProjectRepository(BaseRepository):
                 title=clone_title,
                 status=original_status,
                 owner_id=owner_id,
+                cloned_from_project_id=project_id,
+                cloned_from_version_id=version_id,
             )
 
             self.session.add(new_project)
@@ -622,22 +652,22 @@ class ProjectRepository(BaseRepository):
 
         assert new_project is not None
 
-        # 3. Copy the content, languages and all
-        content = self._content(project_id)
-        self.session.add(
-            ProjectContentTable(
-                project_id=new_project.id,
-                languages=list(content.languages),
-                default_language=content.default_language,
-                languages_in_progress=list(content.languages_in_progress),
-                guide=content.guide,
-                consent=content.consent,
-                welcome=content.welcome,
-                emails=content.emails,
-                prompt_overrides=dict(content.prompt_overrides),
-                agent_configs=content.agent_configs,
-                config=content.config,
-            )
+        # 3. Copy the content, languages and all, and keep it as the copy's
+        # first version
+        source = (
+            self._content(project_id)
+            if version_id is None
+            else versions._version(project_id, version_id)
+        )
+        content = ProjectContentTable(project_id=new_project.id)
+        copy_content(source, content)
+        self.session.add(content)
+        self.session.flush()
+        versions.snapshot(
+            new_project.id,
+            ContentVersionKind.MANUAL,
+            label=_copied_from_label(base_title, source),
+            user_id=owner_id,
         )
 
         # 4. Copy all test setups (configurations only, not their runs/interviews)
@@ -799,6 +829,14 @@ class ProjectRepository(BaseRepository):
             ProjectTable.id == project_id,
         )
         project = self.session.execute(statement).scalar_one()
+        # The foreign keys set these NULL; done here too so copies keep no
+        # dangling provenance with enforcement switched off.
+        self.session.execute(
+            update(ProjectTable)
+            .where(ProjectTable.cloned_from_project_id == project_id)
+            .values(cloned_from_project_id=None, cloned_from_version_id=None)
+            .execution_options(synchronize_session=False)
+        )
         self.session.delete(project)
         self.session.commit()
 

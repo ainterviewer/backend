@@ -13,7 +13,7 @@ from typing import Any
 
 from pydantic import UUID4, BaseModel
 from pydantic_core import to_jsonable_python
-from sqlalchemy import delete, exists, func, select
+from sqlalchemy import delete, exists, func, select, update
 
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.utils import get_language_dict
@@ -36,6 +36,7 @@ from ..tables import (
     InterviewTable,
     ProjectContentTable,
     ProjectContentVersionTable,
+    ProjectTable,
 )
 from ..versioning import FIRST_VERSION, Bump, SemVer, bumped, classify, format_semver
 from .base import BaseRepository
@@ -566,6 +567,21 @@ class VersionRepository(BaseRepository):
             return 0
         referenced = exists().where(
             InterviewTable.content_version_id == ProjectContentVersionTable.id
+        )
+        # The foreign key sets a copy's provenance NULL; done here too so it
+        # cannot dangle with enforcement switched off. A copy keeps its own
+        # record of the version in its first version's label.
+        self.session.execute(
+            update(ProjectTable)
+            .where(ProjectTable.cloned_from_version_id.in_(candidates))
+            .where(
+                ~exists().where(
+                    InterviewTable.content_version_id
+                    == ProjectTable.cloned_from_version_id
+                )
+            )
+            .values(cloned_from_version_id=None)
+            .execution_options(synchronize_session=False)
         )
         result = self.session.execute(
             delete(ProjectContentVersionTable)

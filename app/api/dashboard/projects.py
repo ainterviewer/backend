@@ -105,6 +105,7 @@ from ...schemas.projects import (
     ExperimentOnlyRequest,
     ExternalParamsReplace,
     MoveProjectRequest,
+    ProjectCloneRequest,
     ProjectLanguage,
     ProjectPermissionsPublic,
     ProjectPublic,
@@ -159,8 +160,21 @@ async def clone_project(
     db: DBSession,
     jwt: DemoToken,
     _: ProjectEditor,
+    body: ProjectCloneRequest | None = None,
 ) -> ProjectPublic:
-    new_project = db.projects.clone_project(project_id, owner_id=jwt.user_id)
+    """Copy the project's content and test setups into a new, unpublished
+    project. From the draft, or from `version_id`, one of its versions. The
+    copy's history starts afresh: none of the source's versions go with it."""
+    version_id = None if body is None else body.version_id
+    if version_id is None:
+        # The draft as editors see it: an open guide room saves first.
+        await content_rooms.flush(project_id)
+    try:
+        new_project = db.projects.clone_project(
+            project_id, owner_id=jwt.user_id, version_id=version_id
+        )
+    except NoResultFound as exc:
+        raise HTTPException(status_code=404, detail="No such version") from exc
 
     # The email and consent attachments live on disk, outside the cloned
     # rows. A clone whose templates reference files that were never copied is

@@ -35,6 +35,7 @@ from app.db.tables import (
     ProjectContentTable,
     ProjectContentVersionTable,
     ProjectFolderTable,
+    ProjectTable,
     UserTable,
 )
 from app.db.versioning import Bump, classify
@@ -597,3 +598,115 @@ async def test_emails_go_out_only_in_offered_languages(db):
     sent = projects.get_participant_email_templates_ordered(project_id)
 
     assert [language for language, _, _ in sent] == ["EN"]
+
+
+# ---- copying a project -------------------------------------------------------
+
+
+def _versions_of(database, project_id) -> list[ProjectContentVersionTable]:
+    return list(
+        database.session.execute(
+            select(ProjectContentVersionTable).where(
+                ProjectContentVersionTable.project_id == project_id
+            )
+        ).scalars()
+    )
+
+
+def test_a_copy_starts_its_own_history_from_the_draft(db):
+    database, project_id, user_id = db
+    database.versions.publish(project_id, user_id, "Launch")
+    database.versions.save_version(project_id, user_id, "Saved")
+    _edit_guide(database, project_id, lambda g: g.introduction.update(EN="Draft"))
+
+    copy = database.projects.clone_project(project_id, user_id)
+
+    assert database.projects.get_guide(copy.id).introduction == {"EN": "Draft"}
+    (first,) = _versions_of(database, copy.id)
+    assert (first.kind, first.label, first.created_by_id, first.major) == (
+        ContentVersionKind.MANUAL,
+        "Copied from p",
+        user_id,
+        None,
+    )
+    status = database.versions.status(copy.id)
+    assert status.published is None
+    assert status.next_semver == "1.0.0"
+    assert (copy.cloned_from_project_id, copy.cloned_from_version_id) == (
+        project_id,
+        None,
+    )
+    assert len(_versions_of(database, project_id)) == 2
+
+
+def test_a_copy_can_start_from_a_version(db):
+    database, project_id, user_id = db
+    launch = database.versions.publish(project_id, user_id, "Launch")
+    _edit_guide(database, project_id, lambda g: g.introduction.update(EN="Draft"))
+    saved = database.versions.save_version(project_id, user_id, None)
+
+    from_launch = database.projects.clone_project(project_id, user_id, launch.id)
+    from_saved = database.projects.clone_project(project_id, user_id, saved.id)
+
+    assert database.projects.get_guide(from_launch.id).introduction == {"EN": "Hello"}
+    assert from_launch.cloned_from_version_id == launch.id
+    assert [v.label for v in _versions_of(database, from_launch.id)] == [
+        "Copied from p, v1.0.0"
+    ]
+    assert [v.label for v in _versions_of(database, from_saved.id)] == [
+        f"Copied from p, version {saved.version_no}"
+    ]
+    # The source's draft is left alone.
+    assert database.projects.get_guide(project_id).introduction == {"EN": "Draft"}
+
+
+def test_a_copy_cannot_start_from_another_projects_version(db):
+    database, project_id, user_id = db
+    other = database.projects.clone_project(project_id, user_id)
+    (foreign,) = _versions_of(database, other.id)
+
+    with pytest.raises(NoResultFound):
+        database.projects.clone_project(project_id, user_id, foreign.id)
+    titles = database.session.execute(select(ProjectTable.title)).scalars()
+    assert sorted(titles) == ["p", "p (Copy)"]
+
+
+@pytest.mark.parametrize("enforced", [True, False])
+def test_a_copy_forgets_a_deleted_source_but_keeps_its_label(db, enforced):
+    database, project_id, user_id = db
+    launch = database.versions.publish(project_id, user_id, None)
+    copy = database.projects.clone_project(project_id, user_id, launch.id)
+    if not enforced:
+        database.session.connection().exec_driver_sql("PRAGMA foreign_keys=OFF")
+
+    database.projects.delete_project(project_id)
+
+    kept = database.projects.get_project(copy.id)
+    assert (kept.cloned_from_project_id, kept.cloned_from_version_id) == (None, None)
+    assert [v.label for v in _versions_of(database, copy.id)] == [
+        "Copied from p, v1.0.0"
+    ]
+
+
+@pytest.mark.parametrize("enforced", [True, False])
+def test_pruning_the_version_a_copy_came_from_forgets_it(db, enforced):
+    database, project_id, user_id = db
+    _edit_guide(database, project_id, lambda g: g.introduction.update(EN="v0"))
+    tested = database.versions.snapshot(project_id, ContentVersionKind.TEST)
+    database.session.commit()
+    copy = database.projects.clone_project(project_id, user_id, tested.id)
+    _edit_guide(database, project_id, lambda g: g.introduction.update(EN="v1"))
+    database.versions.snapshot(project_id, ContentVersionKind.TEST)
+    # A pragma inside an open transaction is ignored.
+    database.session.commit()
+    if not enforced:
+        database.session.connection().exec_driver_sql("PRAGMA foreign_keys=OFF")
+
+    assert database.versions.prune(project_id, keep=1) == 1
+    database.session.commit()
+
+    kept = database.projects.get_project(copy.id)
+    assert (kept.cloned_from_project_id, kept.cloned_from_version_id) == (
+        project_id,
+        None,
+    )

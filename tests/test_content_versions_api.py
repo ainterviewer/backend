@@ -399,3 +399,23 @@ def test_the_draft_is_served_in_a_versions_shape_to_compare_against(setup):
     # The content fields line up, so the two can be compared field by field.
     content = set(draft.json()) - {"revision"}
     assert content <= set(published)
+
+
+def test_a_project_is_copied_from_its_draft_or_one_of_its_versions(setup):
+    client, project_id, cookies, _ = setup
+    launch = _publish(client, project_id, cookies).json()
+    url = f"/api/projects/{project_id}/clone"
+
+    from_draft = client.post(url, cookies=cookies)
+    from_launch = client.post(url, json={"version_id": launch["id"]}, cookies=cookies)
+    unknown = client.post(url, json={"version_id": str(uuid4())}, cookies=cookies)
+
+    assert from_draft.status_code == 200
+    assert from_draft.json()["cloned_from_project_id"] == str(project_id)
+    assert from_draft.json()["cloned_from_version_id"] is None
+    assert from_launch.json()["cloned_from_version_id"] == launch["id"]
+    assert unknown.status_code == 404
+    history = client.get(
+        f"/api/projects/{from_launch.json()['id']}/versions", cookies=cookies
+    ).json()
+    assert [v["label"] for v in history["items"]] == ["Copied from p, v1.0.0"]

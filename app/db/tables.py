@@ -465,6 +465,26 @@ class ProjectTable(Base):
         ForeignKey("user.id", ondelete="CASCADE"),
         index=True,
     )
+    #: The project this one was copied from, and the version of its content
+    #: the copy started from (NULL when it started from that project's
+    #: draft). Provenance only: a copy carries none of the source's history,
+    #: since versions describe the interviews a project ran
+    #: (app/db/versioning.py). Each goes NULL when what it names is deleted;
+    #: the label on the copy's first version is the record that survives.
+    cloned_from_project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("project.id", ondelete="SET NULL"), index=True, default=None
+    )
+    cloned_from_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(
+            "projectcontentversion.id",
+            ondelete="SET NULL",
+            # project -> version -> project is a cycle, which table sorting
+            # has to be told about.
+            use_alter=True,
+        ),
+        index=True,
+        default=None,
+    )
 
     # Relationships
     owner: Mapped["UserTable"] = relationship(
