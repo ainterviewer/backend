@@ -1,6 +1,7 @@
 """Interview-guide fixtures, grouped by the feature they demonstrate."""
 
 from dataclasses import dataclass
+from typing import Literal
 
 from ainterviewer.interview_guides import (
     CheckboxItem,
@@ -442,12 +443,59 @@ def _localize(
     return LocalizedInterviewGuide.from_rendered(rendered, structure="EN")
 
 
+def _when(action: ConditionAction, *blocks: ConditionBlock) -> Condition:
+    return Condition(blocks=list(blocks), action=action)
+
+
+def _reads(
+    question: Question,
+    *evaluations: ConditionEvaluation,
+    part: Literal["main", "probes", "both"] = "main",
+    **block,
+) -> ConditionBlock:
+    """A block reading `question`. The guide derives `question_index` from the
+    id when it is validated, so the placeholder index here never matters."""
+    return ConditionBlock(
+        question_context=QuestionContext(
+            question_index=(0, 0), question_id=question.id, part=part
+        ),
+        evaluation=list(evaluations),
+        **block,
+    )
+
+
+def _is(
+    value: str | float,
+    operator: Literal["==", "<", "<=", ">", ">="] = "==",
+    **evaluation,
+) -> ConditionEvaluation:
+    return ConditionEvaluation(
+        trigger_value=value, comparison_operator=operator, **evaluation
+    )
+
+
 def control_flow() -> LocalizedInterviewGuide:
-    """Every condition action plus classifier, compound and negated rules."""
+    """Every condition action plus classifier, compound and negated rules, and
+    the shapes the flow view draws as alternatives: numeric, choice, ordinal,
+    checkbox and open-answer forks, exhaustive or not, and inside a section
+    that may be skipped."""
+    skip_question = ConditionAction.SKIP_QUESTION
+    satisfaction_scale = [
+        "Very dissatisfied",
+        "Dissatisfied",
+        "Neutral",
+        "Satisfied",
+        "Very satisfied",
+    ]
+
+    # Section 1: the answers everything else reads.
     consent = Question(
         main_question="Do you consent to continue with this practice interview?",
         survey_item=RadioItem(options=["Yes", "No"]),
     )
+    consent.conditions = [
+        _when(ConditionAction.END_INTERVIEW, _reads(consent, _is("No")))
+    ]
     role = Question(
         main_question="Which description fits you best?",
         survey_item=RadioItem(options=["Student", "Researcher", "Practitioner"]),
@@ -455,171 +503,223 @@ def control_flow() -> LocalizedInterviewGuide:
     age = Question(
         main_question="How old are you?", survey_item=NumberItem(min=0, max=120, step=1)
     )
+    age.conditions = [_when(ConditionAction.SKIP_PROBES, _reads(age, _is(18, "<")))]
     urgency = Question(
         main_question="Briefly describe the problem you want to solve today.",
         probes=["What makes it urgent?", "What would a good outcome be?"],
         max_probes_n=2,
     )
-    context = lambda index, question, part="main": QuestionContext(
-        question_index=index, question_id=question.id, part=part
+    tools = Question(
+        main_question="Which tools do you use weekly?",
+        survey_item=CheckboxItem(options=["Notes", "Spreadsheets", "Chat", "Video"]),
+        can_skip=False,
     )
-    consent.conditions = [
-        Condition(
-            blocks=[
-                ConditionBlock(
-                    question_context=context((0, 0), consent),
-                    evaluation=[ConditionEvaluation(trigger_value="No")],
-                )
-            ],
-            action=ConditionAction.END_INTERVIEW,
-        )
-    ]
-    age.conditions = [
-        Condition(
-            blocks=[
-                ConditionBlock(
-                    question_context=context((0, 2), age),
-                    evaluation=[
-                        ConditionEvaluation(trigger_value=18, comparison_operator="<")
-                    ],
-                )
-            ],
-            action=ConditionAction.SKIP_PROBES,
-        )
-    ]
+    team = Question(
+        main_question="Do you work in a team? Please answer yes or no.",
+    )
+
+    # Section 2: single conditions, and forks on a number and on a choice.
     professional = Question(
         main_question="Tell us about the research team you work with.",
-        conditions=[
-            Condition(
-                blocks=[
-                    ConditionBlock(
-                        question_context=context((0, 1), role),
-                        evaluation=[ConditionEvaluation(trigger_value="Student")],
-                    )
-                ],
-                action=ConditionAction.SKIP_QUESTION,
-            )
-        ],
+        conditions=[_when(skip_question, _reads(role, _is("Student")))],
     )
     sensitive = Question(
         main_question="What constraints make the problem difficult?",
         probes=["Which constraint matters most?"],
         max_probes_n=1,
         conditions=[
-            Condition(
-                blocks=[
-                    ConditionBlock(
-                        question_context=context((0, 3), urgency, "both"),
-                        trigger_type=ConditionTrigger.CLASSIFICATION,
-                        evaluation=[
-                            ConditionEvaluation(
-                                trigger_value="The respondent says the situation is urgent or unsafe."
-                            )
-                        ],
-                    )
-                ],
-                action=ConditionAction.SKIP_QUESTION,
+            _when(
+                skip_question,
+                _reads(
+                    urgency,
+                    _is("The respondent says the situation is urgent or unsafe."),
+                    part="both",
+                    trigger_type=ConditionTrigger.CLASSIFICATION,
+                ),
             )
         ],
     )
+    # Exactly one of these two, by age.
     school_tools = Question(
         main_question="What would make it easier to try a new tool at school?",
-        conditions=[
-            Condition(
-                blocks=[
-                    ConditionBlock(
-                        question_context=context((0, 2), age),
-                        evaluation=[
-                            ConditionEvaluation(
-                                trigger_value=18, comparison_operator=">="
-                            )
-                        ],
-                    )
-                ],
-                action=ConditionAction.SKIP_QUESTION,
-            )
-        ],
+        conditions=[_when(skip_question, _reads(age, _is(18, ">=")))],
     )
     work_tools = Question(
         main_question="What would make it easier to try a new tool at work?",
-        conditions=[
-            Condition(
-                blocks=[
-                    ConditionBlock(
-                        question_context=context((0, 2), age),
-                        evaluation=[
-                            ConditionEvaluation(
-                                trigger_value=18, comparison_operator="<"
-                            )
-                        ],
-                    )
-                ],
-                action=ConditionAction.SKIP_QUESTION,
-            )
-        ],
+        conditions=[_when(skip_question, _reads(age, _is(18, "<")))],
     )
     research_tools = Question(
         main_question="Which tools do you use for research or coursework?",
         conditions=[
-            Condition(
-                blocks=[
-                    ConditionBlock(
-                        question_context=context((0, 1), role),
-                        evaluation=[
-                            ConditionEvaluation(
-                                trigger_value="Student", combine_next="OR"
-                            ),
-                            ConditionEvaluation(trigger_value="Researcher"),
-                        ],
-                        negated=True,
-                    )
-                ],
-                action=ConditionAction.SKIP_QUESTION,
+            _when(
+                skip_question,
+                _reads(
+                    role,
+                    _is("Student", combine_next="OR"),
+                    _is("Researcher"),
+                    negated=True,
+                ),
             )
         ],
     )
+    # One question per role: the first two pair up as alternatives (a
+    # practitioner gets neither), and the third stands on its own.
+    student_course = Question(
+        main_question="Which course or programme are you enrolled in?",
+        conditions=[_when(skip_question, _reads(role, _is("Student"), negated=True))],
+    )
+    researcher_field = Question(
+        main_question="What is your field of research?",
+        conditions=[
+            _when(skip_question, _reads(role, _is("Researcher"), negated=True))
+        ],
+    )
+    practitioner_sector = Question(
+        main_question="Which sector do you work in?",
+        conditions=[
+            _when(skip_question, _reads(role, _is("Practitioner"), negated=True))
+        ],
+    )
+
+    # Section 3: section-level and compound conditions.
     advanced = Question(
         main_question="What would make an advanced workflow worthwhile?",
-        conditions=[
-            Condition(
-                blocks=[
-                    ConditionBlock(
-                        question_context=context((0, 2), age),
-                        evaluation=[
-                            ConditionEvaluation(
-                                trigger_value=18, comparison_operator="<"
-                            )
-                        ],
-                    )
-                ],
-                action=ConditionAction.SKIP_SECTION,
-            )
-        ],
+        conditions=[_when(ConditionAction.SKIP_SECTION, _reads(age, _is(18, "<")))],
     )
     decisions = Question(
         main_question="Who makes the final decision about adopting a tool?",
         conditions=[
-            Condition(
-                blocks=[
-                    ConditionBlock(
-                        question_context=context((0, 1), role),
-                        evaluation=[ConditionEvaluation(trigger_value="Researcher")],
-                        negated=True,
-                        combine_next="OR",
-                    ),
-                    ConditionBlock(
-                        question_context=context((0, 2), age),
-                        evaluation=[
-                            ConditionEvaluation(
-                                trigger_value=18, comparison_operator="<="
-                            )
-                        ],
-                    ),
-                ],
-                action=ConditionAction.SKIP_QUESTION,
+            _when(
+                skip_question,
+                _reads(role, _is("Researcher"), negated=True, combine_next="OR"),
+                _reads(age, _is(18, "<=")),
             )
         ],
     )
+    # (Practitioner AND 30 or older) OR NOT (Notes OR Spreadsheets): blocks
+    # fold left to right, and the negated block groups its two checks.
+    budget = Question(
+        main_question="How is spending on new tools approved where you work?",
+        conditions=[
+            _when(
+                skip_question,
+                _reads(role, _is("Practitioner"), combine_next="AND"),
+                _reads(age, _is(30, ">="), combine_next="OR"),
+                _reads(
+                    tools,
+                    _is("Notes", combine_next="OR"),
+                    _is("Spreadsheets"),
+                    negated=True,
+                ),
+            )
+        ],
+    )
+    first_change = Question(
+        main_question="What would you change first about your workflow?",
+        probes=["Why that first?"],
+        max_probes_n=1,
+        conditions=[
+            _when(
+                ConditionAction.SKIP_PROBES,
+                _reads(
+                    urgency,
+                    _is("The respondent mentions cost or budget."),
+                    part="probes",
+                    trigger_type=ConditionTrigger.CLASSIFICATION,
+                ),
+            )
+        ],
+    )
+    young_student = Question(
+        main_question="Would you like to join a follow-up session?",
+        survey_item=RadioItem(options=["Yes", "No"]),
+        conditions=[
+            _when(
+                ConditionAction.END_INTERVIEW,
+                _reads(role, _is("Student"), combine_next="AND"),
+                _reads(age, _is(16, "<")),
+            )
+        ],
+    )
+
+    # Section 4: forks inside a section the respondent may skip, so even a
+    # required source may go unanswered.
+    gate = Question(
+        main_question="Do you have a few more minutes for optional questions?",
+        survey_item=RadioItem(options=["Yes", "No"]),
+        can_skip=False,
+    )
+    gate.conditions = [_when(ConditionAction.SKIP_SECTION, _reads(gate, _is("No")))]
+    satisfaction = Question(
+        main_question="How satisfied are you with your current tools?",
+        survey_item=LikertItem(options=satisfaction_scale),
+        can_skip=False,
+    )
+    # Exactly one of these two, by place on the Likert scale; the second also
+    # finishes early on its own answer.
+    frustrations = Question(
+        main_question="What frustrates you about your current tools?",
+        conditions=[
+            _when(
+                skip_question,
+                _reads(satisfaction, _is("Neutral", ">=", scale=satisfaction_scale)),
+            )
+        ],
+    )
+    highlights = Question(
+        main_question="What do you like most about your current tools?",
+        probes=["Can you give an example?"],
+        max_probes_n=1,
+    )
+    highlights.conditions = [
+        _when(
+            skip_question,
+            _reads(satisfaction, _is("Neutral", "<", scale=satisfaction_scale)),
+        ),
+        _when(skip_question, _reads(highlights, _is("Nothing"))),
+    ]
+    # Reads the first alternative above.
+    switching = Question(
+        main_question="What would make you switch tools?",
+        probes=["What would hold you back?"],
+        max_probes_n=1,
+        conditions=[
+            _when(
+                ConditionAction.SKIP_PROBES,
+                _reads(
+                    frustrations,
+                    _is("The respondent mentions price."),
+                    part="both",
+                    trigger_type=ConditionTrigger.CLASSIFICATION,
+                ),
+            )
+        ],
+    )
+    # Exactly one of these two, on an open answer.
+    team_roles = Question(
+        main_question="What role do you play in your team?",
+        conditions=[_when(skip_question, _reads(team, _is("yes"), negated=True))],
+    )
+    solo_work = Question(
+        main_question="How do you get feedback when working on your own?",
+        conditions=[_when(skip_question, _reads(team, _is("yes")))],
+    )
+    # At most one of these two: someone using chat and something else gets
+    # neither, which only "and nothing else" tells apart.
+    chat_only = Question(
+        main_question="What keeps you from using tools other than chat?",
+        conditions=[
+            _when(
+                skip_question,
+                _reads(tools, _is("Chat"), negated=True, exclusive=True),
+            )
+        ],
+    )
+    no_chat = Question(
+        main_question="Why don't you use chat tools?",
+        conditions=[_when(skip_question, _reads(tools, _is("Chat")))],
+    )
+
     guide = InterviewGuide(
         framing="A deliberately branch-heavy guide for testing interview control flow.",
         introduction="This is a condition-control-flow fixture. Try different answers to explore each path.",
@@ -628,7 +728,7 @@ def control_flow() -> LocalizedInterviewGuide:
         question_sections=[
             QuestionSection(
                 description="Eligibility and branch inputs.",
-                questions=[consent, role, age, urgency],
+                questions=[consent, role, age, urgency, tools, team],
             ),
             QuestionSection(
                 description="Conditional individual questions.",
@@ -638,11 +738,28 @@ def control_flow() -> LocalizedInterviewGuide:
                     school_tools,
                     work_tools,
                     research_tools,
+                    student_course,
+                    researcher_field,
+                    practitioner_sector,
                 ],
             ),
             QuestionSection(
                 description="Section-level and compound conditions.",
-                questions=[advanced, decisions],
+                questions=[advanced, decisions, budget, first_change, young_student],
+            ),
+            QuestionSection(
+                description="Optional alternatives.",
+                questions=[
+                    gate,
+                    satisfaction,
+                    frustrations,
+                    highlights,
+                    switching,
+                    team_roles,
+                    solo_work,
+                    chat_only,
+                    no_chat,
+                ],
             ),
         ],
     )
