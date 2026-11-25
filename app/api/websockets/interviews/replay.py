@@ -9,7 +9,7 @@ from ainterviewer.interfaces import (
 )
 from ainterviewer.interview_guides import InterviewGuide
 from ainterviewer.lpm.types import CustomToken
-from ainterviewer.types import MessageType
+from ainterviewer.types import MessageRole, MessageType
 
 from ....schemas.interviews import MessagePublic
 
@@ -120,21 +120,71 @@ def replay_history(
         elif last_message.content in CustomToken:
             pass
         else:
-            if last_message.image:
-                last_message.image.encode(project_id)  # ty:ignore[missing-union-attribute]
-
-            data = OutgoingMessage(
-                content=last_message.content,
-                role=last_message.role,
-                message_id=last_message.message_id,
-                can_answer=last_message.can_answer,
-                can_skip=_can_skip(last_message, interview_guide),
-                feedback=last_message.feedback,
-                image=last_message.image,
-                survey_item=last_message.survey_item,
-                security_intervention=last_message.security_intervention,
-                as_modal=_as_modal(last_message, interview_guide),
-            )
-            messages.append(data)
+            messages.append(_live(last_message, project_id, interview_guide))
 
     return messages, continue_from_history
+
+
+def _live(
+    message: MessagePublic,
+    project_id: UUID4,
+    interview_guide: InterviewGuide | None,
+) -> OutgoingMessage:
+    """`message` as it went out when it was first sent."""
+    if message.image:
+        message.image.encode(project_id)  # ty:ignore[missing-union-attribute]
+
+    return OutgoingMessage(
+        content=message.content,
+        role=message.role,
+        message_id=message.message_id,
+        can_answer=message.can_answer,
+        can_skip=_can_skip(message, interview_guide),
+        feedback=message.feedback,
+        image=message.image,
+        survey_item=message.survey_item,
+        security_intervention=message.security_intervention,
+        as_modal=_as_modal(message, interview_guide),
+    )
+
+
+def resume_message(
+    interview_history: list[MessagePublic],
+    project_id: UUID4,
+    interview_guide: InterviewGuide | None = None,
+) -> OutgoingMessage | None:
+    """What a client that reconnects with the chat still on screen is sent:
+    the message the interview is waiting on the respondent to answer, or
+    nothing when it is not waiting on them.
+
+    The history is not replayed to such a client, so this is how it learns
+    whose turn it is. A question it missed during the drop shows up; one it
+    already has tells it that its answer never arrived, and to take one
+    again. When the interview is not waiting, it goes on by itself and what
+    it sends next sets the turn."""
+    if not interview_history:
+        return None
+    last = interview_history[-1]
+
+    if (
+        last.role != MessageRole.ASSISTANT
+        or last.message_type == MessageType.SECURITY_OVERRIDE
+        or last.skipped_by_condition
+        or last.content in CustomToken
+        or _as_modal(last, interview_guide)
+    ):
+        return None
+
+    if last.security_intervention is not None:
+        # Waits only on one the respondent may override, and has not.
+        waiting = last.security_intervention.respondent_override
+    else:
+        # Outside the guide's structure (a timed message) or taking no
+        # answer, the interview moves on without the respondent.
+        waiting = (
+            last.can_answer
+            and last.section is not None
+            and last.main_question is not None
+        )
+
+    return _live(last, project_id, interview_guide) if waiting else None

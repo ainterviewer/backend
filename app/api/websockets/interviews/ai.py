@@ -44,7 +44,7 @@ from ....embed.queue import QueueEmbedder, chunk_queue
 from ..auth import authenticate_or_close
 from ..handler import WebsocketMessageHandler
 from ..manager import session_manager
-from .replay import replay_history
+from .replay import replay_history, resume_message
 
 #: Agents a test run's interviewer model leaves alone: the synthetic
 #: interviewee, whose model the run sets apart, and the image model.
@@ -270,6 +270,14 @@ async def _run_interview(
                 last_message.role == "assistant"
                 and last_message.content == CustomToken.end_of_interview
             )
+            # The client kept its chat, so it is not replayed, but it is told
+            # whose turn it is: resend the message the interview waits on.
+            if continue_from_history and (
+                resumed := resume_message(
+                    interview_history, project_id, interview.interview_guide
+                )
+            ):
+                await websocket.send_json(resumed.model_dump())
         else:
             messages, continue_from_history = replay_history(
                 interview_history=interview_history,
