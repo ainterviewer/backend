@@ -59,6 +59,7 @@ from ...auth import (
     generate_resume_token,
     hash_token,
 )
+from ...collab.parts import image_name_errors
 from ...collab.rooms import content_rooms
 from ...db.repositories.interview import SORTABLE_INTERVIEW_COLUMNS
 from ...db.repositories.project import ContentSource
@@ -128,7 +129,7 @@ from ...types import (
 )
 from ...utils import as_aware, ensure_filename, generate_qr_img
 from ..errors import STALE_REVISION
-from ..files import file_response
+from ..files import file_response, safe_filename
 from ..websockets.manager import session_manager
 
 logger = logging.getLogger(__name__)
@@ -455,6 +456,7 @@ async def update_guide(
     rendered = guide.render(db.projects.get_default_language(project_id))
     if save_errors := [
         *guide.empty_question_errors(),
+        *image_name_errors(guide),
         *rendered.condition_order_errors(),
     ]:
         raise HTTPException(
@@ -473,9 +475,10 @@ async def update_guide(
         if isinstance(image.data, str) and (image.data.startswith("data:image/")):
             data = b64decode(image.data.split(",")[-1])
 
-            filepath = (
-                lib_settings.storage.project_storage.image_path(project_id) / image.name
-            )
+            # `image_name_errors` above refused any name that is not bare.
+            filepath = lib_settings.storage.project_storage.image_path(
+                project_id
+            ) / safe_filename(image.name)
 
             async with aiofiles.open(filepath, "wb") as f:
                 await f.write(data)
@@ -937,6 +940,10 @@ async def update_welcome(
     return welcome
 
 
+#: What browsers play in the welcome screen's video element.
+WELCOME_VIDEO_EXTENSIONS = frozenset({".mp4", ".webm"})
+
+
 @router.post("/projects/{project_id}/welcome/video")
 async def upload_welcome_video(
     project_id: UUID4,
@@ -946,16 +953,20 @@ async def upload_welcome_video(
 ) -> str:
     """Store a welcome video, shared by every language. Returns the file name
     to save as the welcome's `video_file_name`."""
-    if not video.filename:
-        raise HTTPException(status_code=400, detail="The video has no file name")
+    # The client's name becomes the stored file's, so it must be a bare one:
+    # "../" in it would write outside the project's videos.
+    name = safe_filename(video.filename)
+    if Path(name).suffix.lower() not in WELCOME_VIDEO_EXTENSIONS:
+        allowed = ", ".join(sorted(WELCOME_VIDEO_EXTENSIONS))
+        raise HTTPException(
+            status_code=400, detail=f"'{name}' is not a video. Allowed: {allowed}."
+        )
 
-    async with aiofiles.open(
-        project_storage.video_path(project_id) / video.filename,
-        "wb",
-    ) as f:
-        await f.write(await video.read())
+    async with aiofiles.open(project_storage.video_path(project_id) / name, "wb") as f:
+        while chunk := await video.read(1024 * 1024):
+            await f.write(chunk)
 
-    return video.filename
+    return name
 
 
 def _filter_kwargs(filters: InterviewFilterParams) -> dict:

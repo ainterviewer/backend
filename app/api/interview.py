@@ -63,7 +63,7 @@ from ..types import (
     build_external_params_model,
 )
 from ..utils import generate_random_filename
-from .files import file_response
+from .files import file_response, safe_suffix
 
 CHUNK_SIZE = 1024 * 1024
 
@@ -605,10 +605,8 @@ async def upload_interview_image(
     # dependency above.
     _checked_interview(db, project_id, interview_id)
 
-    filename = generate_random_filename()
-
-    if file.filename:
-        filename += "." + file.filename.split(".")[-1]
+    # The client's name supplies the extension and nothing else.
+    filename = generate_random_filename() + safe_suffix(file.filename)
 
     filepath = (
         lib_settings.storage.interview_storage.image_path(interview_id) / filename
@@ -635,10 +633,8 @@ async def upload_audio(
     # dependency above.
     _checked_interview(db, project_id, interview_id)
 
-    filename = generate_random_filename()
-
-    if file.filename:
-        filename += "." + file.filename.split(".")[-1]
+    # The client's name supplies the extension and nothing else.
+    filename = generate_random_filename() + safe_suffix(file.filename)
 
     filepath = (
         lib_settings.storage.interview_storage.audio_path(interview_id) / filename

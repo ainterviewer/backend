@@ -11,13 +11,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import PureWindowsPath
 from typing import Any
 from uuid import UUID
 
 from pycrdt import Doc
 from pydantic import BaseModel, ValidationError
 
-from ainterviewer.interview_guides import validation_errors
+from ainterviewer.interview_guides import GuideError, validation_errors
 from ainterviewer.interview_guides.extra import EMAIL_REQUIRED
 from ainterviewer.interview_guides.localized import (
     LocalizedConsent,
@@ -73,6 +74,7 @@ def _validate_guide(data: Json, language: str) -> Validated:
     empty = guide.empty_question_errors()
     skipped = {error.question_id for error in empty}
     errors = [
+        *(ContentError.of(e) for e in image_name_errors(guide)),
         *(ContentError.of(e) for e in guide.render(language).condition_order_errors()),
         *_reads_skipped(guide, skipped),
     ]
@@ -82,6 +84,39 @@ def _validate_guide(data: Json, language: str) -> Validated:
     if skipped:
         guide = _without_questions(guide, skipped)
     return guide, [ContentError.of(e, skipped=True) for e in empty]
+
+
+def image_name_errors(guide: LocalizedInterviewGuide) -> list[GuideError]:
+    """Images named by anything but a bare file name.
+
+    An image's name is joined onto the project's image directory, to write
+    an uploaded one and to read it for respondents, so a name carrying a
+    path ("../../...") would reach files outside it. Names the upload route
+    hands out are always bare; anything else was written by hand. Checked
+    on save, like `empty_question_errors`, so guides stored before still
+    load.
+    """
+    return [
+        GuideError(
+            message=f"Question {n_section + 1}.{n_question + 1} names its image "
+            f"{question.image.name!r}, which is not a file name.",
+            fix="Upload the image again.",
+            question_id=question.id,
+            field="image",
+        )
+        for n_section, section in enumerate(guide.question_sections)
+        for n_question, question in enumerate(section.questions)
+        if question.image is not None and not _is_bare_name(question.image.name)
+    ]
+
+
+def _is_bare_name(name: str) -> bool:
+    return (
+        name not in {"", ".", ".."}
+        and "\x00" not in name
+        # Windows paths split on both "/" and "\\".
+        and PureWindowsPath(name).name == name
+    )
 
 
 def _reads_skipped(

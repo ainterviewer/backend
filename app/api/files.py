@@ -11,7 +11,8 @@ The rest keep what a client sends from turning into a path it chose: a file
 name, or a language used as a directory name.
 """
 
-from pathlib import Path
+import re
+from pathlib import Path, PureWindowsPath
 from typing import Any
 from urllib.parse import quote
 
@@ -52,18 +53,34 @@ def content_disposition(filename: str, disposition: str = "attachment") -> str:
 
 
 def safe_filename(filename: str | None) -> str:
-    """A client-supplied file name, refused unless it is a bare name."""
+    """The bare name of a client-supplied file name: any path in it is
+    dropped, in either style (a Windows path splits on both "/" and "\\"),
+    so it names a file in the directory it is joined onto and nowhere else.
+    Refused when nothing usable is left."""
     if not filename:
         raise HTTPException(status_code=400, detail="Filename is required.")
-    name = Path(filename).name
-    if (
-        not name
-        or name in {".", ".."}
-        or name != filename.replace("\\", "/").split("/")[-1]
-    ):
+    name = PureWindowsPath(filename).name
+    if name in {"", ".", ".."}:
         raise HTTPException(status_code=400, detail="Invalid filename.")
     if len(name) > 255:
         raise HTTPException(status_code=400, detail="Filename is too long.")
     if "\x00" in name:
         raise HTTPException(status_code=400, detail="Invalid filename.")
     return name
+
+
+#: An extension worth keeping on a stored file whose name the server picks.
+_SAFE_SUFFIX = re.compile(r"\.[A-Za-z0-9]{1,10}")
+
+
+def safe_suffix(filename: str | None) -> str:
+    """The extension of a client-supplied file name, or "" when it has none
+    or it is anything but a short alphanumeric one.
+
+    For files stored under a name the server generates: the extension is all
+    that is kept of the client's name, so it must not carry a path either.
+    """
+    if not filename:
+        return ""
+    suffix = Path(filename.replace("\\", "/")).suffix
+    return suffix if _SAFE_SUFFIX.fullmatch(suffix) else ""

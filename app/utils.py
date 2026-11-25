@@ -6,7 +6,7 @@ import sys
 import uuid
 from collections.abc import Sequence
 from io import BytesIO
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 import fastapi.openapi.constants
@@ -198,11 +198,16 @@ def merge_config_schemas(models: list[type[BaseSettings]]) -> dict[str, Any]:
 
 
 def ensure_filename(filename: str | None, fallback_ext: str = ".bin") -> str:
+    """The bare name of a client-supplied file name, or a random one when
+    there is none.
+
+    Strips a path in either style: a Windows path splits on both "/" and
+    "\\", and a name kept with a "\\" in it is one the guide's image check
+    then refuses (`image_name_errors`).
     """
-    Return the original filename if present, otherwise generate a random one.
-    """
-    if filename and filename.strip():
-        return Path(filename).name  # strips any path components
+    name = PureWindowsPath(filename.strip()).name if filename else ""
+    if name not in {"", ".", ".."}:
+        return name
 
     random_name = secrets.token_hex(16)
     return f"{random_name}{fallback_ext}"
