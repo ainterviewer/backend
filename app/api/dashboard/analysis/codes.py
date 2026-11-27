@@ -22,7 +22,7 @@ from ....dependencies import (
     ProjectEditor,
     ProjectViewer,
     UserToken,
-    require_preview_features,
+    require_preview,
 )
 from ....schemas.analysis import (
     CodebookPublic,
@@ -34,6 +34,7 @@ from ....schemas.analysis import (
 )
 from ....schemas.common import OffsetParams
 from ....schemas.interviews import MessagePublic
+from ....types import PreviewFeature
 
 router = APIRouter()
 
@@ -42,7 +43,7 @@ router = APIRouter()
 # and editing codings stay open to both: the interview transcript page, which
 # is not a preview feature and which demo accounts use, codes messages through
 # them.
-_preview = [Depends(require_preview_features)]
+_codebook_preview = [Depends(require_preview(PreviewFeature.CODEBOOK))]
 
 
 def _require_modify_rights(
@@ -76,7 +77,7 @@ async def get_codebook(
     return db.analysis.get_codebook(project_id)
 
 
-@router.put("/projects/{project_id}/analysis/codebook", dependencies=_preview)
+@router.put("/projects/{project_id}/analysis/codebook", dependencies=_codebook_preview)
 async def save_codebook(
     project_id: UUID4,
     codebook: CodebookReplace,
@@ -87,7 +88,9 @@ async def save_codebook(
     return db.analysis.save_codebook(project_id, codebook)
 
 
-@router.get("/projects/{project_id}/analysis/codebook/counts", dependencies=_preview)
+@router.get(
+    "/projects/{project_id}/analysis/codebook/counts", dependencies=_codebook_preview
+)
 async def get_code_counts(
     project_id: UUID4,
     db: DBSession,
@@ -176,7 +179,7 @@ async def delete_message_coding(
     db.analysis.delete_message_coding(project_id, coding_id)
 
 
-@router.post("/analysis/{project_id}/messages/count", dependencies=_preview)
+@router.post("/analysis/{project_id}/messages/count", dependencies=_codebook_preview)
 async def get_filtered_messages_count(
     project_id: UUID4,
     filters: FilteredMessagesRequest,
@@ -194,7 +197,7 @@ async def get_filtered_messages_count(
     )
 
 
-@router.post("/analysis/{project_id}/messages", dependencies=_preview)
+@router.post("/analysis/{project_id}/messages", dependencies=_codebook_preview)
 async def get_filtered_messages(
     project_id: UUID4,
     filters: FilteredMessagesRequest,
@@ -218,7 +221,7 @@ async def get_filtered_messages(
 
 @router.post(
     "/analysis/{project_id}/interviews/{interview_id}/messages/{message_id}/context_before",
-    dependencies=_preview,
+    dependencies=_codebook_preview,
 )
 async def get_message_context_before(
     project_id: UUID4,
@@ -238,7 +241,7 @@ async def get_message_context_before(
 
 @router.post(
     "/analysis/{project_id}/interviews/{interview_id}/messages/{message_id}/context_after",
-    dependencies=_preview,
+    dependencies=_codebook_preview,
 )
 async def get_message_context_after(
     project_id: UUID4,

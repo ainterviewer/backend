@@ -26,7 +26,7 @@ from .db.utils import is_foreign_key_violation
 from .db.vectors import register_vector_extension
 from .errors import AppError
 from .settings import app_settings
-from .types import CollaboratorRole, ErrorCode, Scope
+from .types import CollaboratorRole, ErrorCode, PreviewFeature, Scope
 
 # from .websockets import WebSocketConnectionManager
 
@@ -265,26 +265,28 @@ class ResourceRoleChecker:
         return token
 
 
-def require_preview_features(
-    token: AuthToken = Depends(_decode_token),
-) -> AuthToken:
-    """Refuse callers whose token does not carry `preview_features`.
+def require_preview(feature: PreviewFeature):
+    """A dependency refusing callers whose token does not carry `feature`.
 
     Read from the token rather than the user row so the check costs no query;
     the claim is re-read from the database on every refresh. No admin bypass,
     matching the dashboard, which hides these features from admins too until
-    the flag is set on their own account.
+    they are given them on their own account.
     """
-    if not token.preview_features:
-        # Its own code so the frontend can tell a token minted before an admin
-        # enabled the flag -- which a refresh fixes -- from any other refusal,
-        # and refresh and retry once on it.
-        raise AppError(
-            "This feature is not enabled for your account.",
-            status=403,
-            code=ErrorCode.PREVIEW_FEATURES_REQUIRED,
-        )
-    return token
+
+    def check(token: AuthToken = Depends(_decode_token)) -> AuthToken:
+        if not token.has_preview(feature):
+            # Its own code so the frontend can tell a token minted before an
+            # admin gave the feature -- which a refresh fixes -- from any other
+            # refusal, and refresh and retry once on it.
+            raise AppError(
+                "This feature is not enabled for your account.",
+                status=403,
+                code=ErrorCode.PREVIEW_FEATURES_REQUIRED,
+            )
+        return token
+
+    return check
 
 
 DBSession = Annotated[InterviewDataBase, Depends(get_db)]
@@ -318,11 +320,6 @@ InterviewCredential = Annotated[InterviewToken, Depends(_require_interview_token
 AdminToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.ADMIN))]
 UserToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.USER))]
 DemoToken = Annotated[AuthToken, Depends(ScopeChecker(Scope.DEMO))]
-
-# Feature flags. Not to be confused with DemoToken: `Scope.DEMO` is a
-# restricted account tier, `with_preview_features` is early access to unfinished
-# features.
-PreviewFeatures = Annotated[AuthToken, Depends(require_preview_features)]
 
 # The caller's token when there is one; never refuses.
 OptionalToken = Annotated[AuthToken | None, Depends(_decode_optional_token)]

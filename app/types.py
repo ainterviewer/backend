@@ -9,7 +9,7 @@ from typing import Annotated, Any, Literal, NotRequired, TypedDict
 from urllib.parse import quote, urlsplit
 
 from fastapi import WebSocket
-from pydantic import AfterValidator, BaseModel, Field, model_validator
+from pydantic import AfterValidator, BaseModel, BeforeValidator, Field, model_validator
 
 from ainterviewer.interfaces import SecurityOverride
 from ainterviewer.interview_guides import GuideError, LocalizedText
@@ -32,6 +32,46 @@ _SCOPE_HIERARCHY: dict[Scope, set[Scope]] = {
     Scope.USER: {Scope.USER, Scope.DEMO},
     Scope.DEMO: {Scope.DEMO},
 }
+
+
+class PreviewFeature(StrEnum):
+    """An unfinished feature a user can be given early access to.
+
+    A value is also the feature's `Preview:` / `Graduates:` commit trailer
+    (see AGENTS.md), so one feature has one name across lib, backend and
+    frontend. Graduating a feature removes its member along with its gates;
+    the name may stay behind in user rows and tokens, which
+    `PreviewFeatureList` ignores, so that needs no migration.
+    """
+
+    #: Participant management and emailing them.
+    PARTICIPANTS = "participants"
+    #: The codebook, coding and explore tabs of analysis.
+    CODEBOOK = "codebook"
+    #: The analysis report.
+    REPORT = "report"
+    #: Respondents answering by voice (`InterviewConfig.with_audio`).
+    AUDIO = "audio"
+    #: Choosing the probing strategies (`InterviewConfig.probing_strategy`).
+    PROBING = "probing"
+    #: The safety check (the security agent) in the agents setup.
+    SAFETY = "safety"
+
+
+def _known_preview_features(value: Any) -> Any:
+    # A feature that graduated is no longer a member, but its name stays in
+    # whatever stored or signed it. Dropping it rather than refusing it keeps
+    # those rows readable and those tokens valid.
+    if not isinstance(value, list | tuple | set):
+        return value
+    known = {feature.value for feature in PreviewFeature}
+    return sorted({item for item in value if isinstance(item, str) and item in known})
+
+
+#: A user's preview features: known names only, deduplicated and sorted.
+PreviewFeatureList = Annotated[
+    list[PreviewFeature], BeforeValidator(_known_preview_features)
+]
 
 
 class CollaboratorRole(StrEnum):

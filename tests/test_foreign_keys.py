@@ -107,9 +107,9 @@ _ORPHAN_TASK = (
 _DUPLICATE_EMAIL = (
     "INSERT INTO user (id, email, password, first_name, email_verified, "
     "two_factor_enabled, created_at, last_active, last_login, scope, "
-    "research_consent, with_preview_features) SELECT 'u2', email, "
+    "research_consent, preview_features) SELECT 'u2', email, "
     "password, first_name, 0, 1, created_at, last_active, last_login, "
-    "scope, 0, 0 FROM user"
+    "scope, 0, '[]' FROM user"
 )
 
 

@@ -178,6 +178,10 @@ class InvitationTable(Base):
     user_demo_concurrent_limit: Mapped[int | None] = mapped_column(default=None)
     user_demo_daily_limit: Mapped[int | None] = mapped_column(default=None)
     user_demo_lifetime_limit: Mapped[int | None] = mapped_column(default=None)
+    # Preview features given to the user who registers with this invitation.
+    user_preview_features: Mapped[list[str]] = mapped_column(
+        JSON, default=list, server_default="[]"
+    )
 
     # SET NULL, not CASCADE: an invitation outlives the access request it came
     # from. Pruning the request list must never revoke a pending invite.
@@ -297,8 +301,10 @@ class UserTable(Base):
     admin_note_updated_at: Mapped[datetime.datetime | None] = mapped_column(
         default=None
     )
-    with_preview_features: Mapped[bool] = mapped_column(
-        default=False, server_default=sa.false()
+    #: `PreviewFeature` values. Plain strings, so a feature that graduated
+    #: stays readable here; `PreviewFeatureList` drops it on the way out.
+    preview_features: Mapped[list[str]] = mapped_column(
+        JSON, default=list, server_default="[]"
     )
     # Per-user overrides of the `Scope.DEMO` synthetic-interview budgets, NULL
     # meaning the configured default (`app.demo_limits`). Kept when the scope

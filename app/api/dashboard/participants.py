@@ -27,7 +27,7 @@ from ...dependencies import (
     ProjectEditor,
     ProjectViewer,
     UserToken,
-    require_preview_features,
+    require_preview,
     set_etag,
 )
 from ...schemas.common import PageParams
@@ -57,7 +57,7 @@ from ...services.email.participant_template import (
     validate_participant_email_template,
 )
 from ...settings import app_settings
-from ...types import ContentPart
+from ...types import ContentPart, PreviewFeature
 from ..errors import STALE_REVISION
 from ..files import checked_language, content_disposition, file_response, safe_filename
 
@@ -80,7 +80,8 @@ logger = logging.getLogger(__name__)
 # not: it is followed by participants, who hold no account, from emails already
 # sent, so it lives on a router of its own without the gate.
 router = APIRouter(
-    tags=["participants"], dependencies=[Depends(require_preview_features)]
+    tags=["participants"],
+    dependencies=[Depends(require_preview(PreviewFeature.PARTICIPANTS))],
 )
 public_router = APIRouter(tags=["participants"])
 

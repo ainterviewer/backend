@@ -6,7 +6,8 @@ from sqlalchemy.exc import NoResultFound
 
 from ..dependencies import DBSession, OptionalToken
 from ..openapi import build_openapi_schema
-from ..platform_release import PlatformManifest, PlatformRelease
+from ..platform_release import Highlight, PlatformManifest, PlatformRelease
+from ..types import PreviewFeature
 from . import auth, interview, me, misc
 from .admin import main as admin
 from .dashboard import main as dashboard
@@ -77,19 +78,27 @@ def releases(
     stay out of it. A release that has not been curated yet (`highlights` is
     None) is omitted rather than shown empty.
 
-    Highlights about preview features are served only to callers whose token
-    carries `preview_features`. A release announcing nothing else then reaches
-    everyone else as curated-but-empty, the same as a maintenance release.
+    A highlight naming a preview feature is served only to callers whose
+    token carries that feature. One naming a feature that has graduated since,
+    or `LEGACY_PREVIEW`, goes to callers with any. A release announcing nothing else then
+    reaches everyone else as curated-but-empty, the same as a maintenance
+    release.
     """
-    preview = token is not None and token.preview_features
+    features = set(token.preview_features) if token is not None else set()
+
+    def shown(highlight: Highlight) -> bool:
+        if highlight.feature is None:
+            return True
+        if highlight.feature in PreviewFeature:
+            return highlight.feature in features
+        return bool(features)
+
     return [
         PlatformRelease(
             platform_version=manifest.platform_version,
             released_at=manifest.build_time,
             highlights=[
-                highlight
-                for highlight in manifest.highlights
-                if preview or highlight.audience == "all"
+                highlight for highlight in manifest.highlights if shown(highlight)
             ],
         )
         for manifest in db.get_platform_releases(limit=limit)

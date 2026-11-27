@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.db.crud import InterviewDataBase
 from app.db.tables import CollaboratorTable, UserTable
 from app.schemas.users import UserCreate
-from app.types import CollaboratorRole, Scope
+from app.types import CollaboratorRole, PreviewFeature, Scope
 
 DEV_EMAIL = "dev@example.com"
 DEV_PASSWORD = "dev-password"
@@ -34,7 +34,7 @@ def create(db: InterviewDataBase, session: Session) -> SeedAccounts:
     )
     owner_row = session.get_one(UserTable, owner.id)
     owner_row.email_verified = True
-    owner_row.with_preview_features = True
+    owner_row.preview_features = list(PreviewFeature)
     owner_row.two_factor_enabled = False
     session.commit()
     collaborator = db.users.create_user(
@@ -46,6 +46,10 @@ def create(db: InterviewDataBase, session: Session) -> SeedAccounts:
             invite_token=None,
         )
     )
+    collaborator_row = session.get_one(UserTable, collaborator.id)
+    collaborator_row.email_verified = True
+    collaborator_row.two_factor_enabled = False
+    session.commit()
     research = db.projects.create_folder("Research studies", owner.id)
     demos = db.projects.create_folder("Guide feature demos", owner.id)
     session.add(

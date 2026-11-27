@@ -27,7 +27,7 @@ from ...schemas.users import (
 )
 from ...services.email.mail import email_templates, send_email
 from ...settings import DemoLimits, app_settings
-from ...types import AccessRequestStatus, Scope
+from ...types import AccessRequestStatus, PreviewFeature, Scope
 from ..tables import AccessRequestTable, InvitationTable, UserActivityTable, UserTable
 from .base import BaseRepository
 from .errors import EmailTakenError, InvitationAliasTakenError, InvitationClaimedError
@@ -388,6 +388,7 @@ class UserRepository(BaseRepository):
         user_demo_concurrent_limit: int | None = None,
         user_demo_daily_limit: int | None = None,
         user_demo_lifetime_limit: int | None = None,
+        user_preview_features: list[PreviewFeature] | None = None,
     ) -> InvitationPublic:
         if email:
             email = normalize_email(email)
@@ -404,6 +405,7 @@ class UserRepository(BaseRepository):
             user_demo_concurrent_limit=user_demo_concurrent_limit,
             user_demo_daily_limit=user_demo_daily_limit,
             user_demo_lifetime_limit=user_demo_lifetime_limit,
+            user_preview_features=list(user_preview_features or []),
         )
 
         self.session.add(invitation)

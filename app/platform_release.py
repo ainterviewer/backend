@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # YYYY.MM-NN, NN counting the environment's releases that month (2026.11-13).
 # Validated on read as well as insert, so the migration that renamed the old
@@ -44,6 +44,11 @@ class ReleaseNotes(BaseModel):
     frontend: list[ComponentChange] = Field(default_factory=list)
 
 
+#: The feature of a highlight curated as "preview" before highlights named
+#: their feature: shown to users with any preview feature.
+LEGACY_PREVIEW = "preview"
+
+
 class Highlight(BaseModel):
     """One user-facing change in a platform release.
 
@@ -55,10 +60,24 @@ class Highlight(BaseModel):
     kind: Literal["new", "improved", "fixed"]
     title: str
     body: str | None = None
-    # "preview" for a change to a preview feature: only users with preview
-    # features enabled are shown it. Defaulted so highlights curated before the
-    # field existed still validate.
-    audience: Literal["all", "preview"] = "all"
+    # The preview feature the change is about (a `PreviewFeature` value, the
+    # commit trailer's area): only users with that feature are shown it. None
+    # for a change everyone can see. A plain string, so a feature that has
+    # graduated since still validates.
+    feature: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_audience(cls, data: Any) -> Any:
+        # Highlights were once told apart by `audience: "all" | "preview"`
+        # alone. One that was "preview" and names no feature reads as
+        # `LEGACY_PREVIEW`, which no `PreviewFeature` is, so it still reaches
+        # only users with some preview feature rather than everyone.
+        if isinstance(data, dict) and "audience" in data:
+            data = dict(data)
+            if data.pop("audience") == "preview" and not data.get("feature"):
+                data["feature"] = LEGACY_PREVIEW
+        return data
 
 
 class PlatformManifest(BaseModel):

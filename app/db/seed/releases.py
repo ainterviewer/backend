@@ -10,7 +10,8 @@ from app.platform_release import GitHashes, Highlight, PlatformManifest
 
 def create(session: Session) -> None:
     # These are fictional development releases. Include every curation state
-    # and audience so both the public and preview feeds have useful fixtures.
+    # and preview feature so both the public and preview feeds have useful
+    # fixtures.
     releases: list[tuple[str, datetime, list[Highlight] | None]] = [
         ("2026.10-01", datetime(2026, 10, 1, 12, tzinfo=UTC), None),
         (
@@ -38,7 +39,7 @@ def create(session: Session) -> None:
                     kind="new",
                     title="Explore related interview answers",
                     body="Find similar answers across your project with semantic search.",
-                    audience="preview",
+                    feature="codebook",
                 ),
             ],
         ),
@@ -55,7 +56,7 @@ def create(session: Session) -> None:
                     kind="improved",
                     title="Explore answers by language",
                     body="Filter the exploration view to focus on selected interview languages.",
-                    audience="preview",
+                    feature="codebook",
                 ),
                 Highlight(kind="fixed", title="Project update times stay consistent"),
             ],

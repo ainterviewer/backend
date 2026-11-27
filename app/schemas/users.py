@@ -22,7 +22,7 @@ from ainterviewer.types import TimeDelta
 from ainterviewer.utils import now
 
 from ..settings import app_settings
-from ..types import AccessRequestStatus, Scope
+from ..types import AccessRequestStatus, PreviewFeatureList, Scope
 from .common import EmailLookup, NormalizedEmail, Schema
 
 
@@ -90,6 +90,8 @@ class InvitationBase(Schema):
     user_demo_concurrent_limit: NonNegativeInt | None = None
     user_demo_daily_limit: NonNegativeInt | None = None
     user_demo_lifetime_limit: NonNegativeInt | None = None
+    # Preview features given to the user who registers with this invitation.
+    user_preview_features: PreviewFeatureList = []
 
 
 class InvitationCreate(InvitationBase): ...
@@ -106,6 +108,7 @@ class InvitationUpdate(Schema):
     user_demo_concurrent_limit: NonNegativeInt | None | MISSING = MISSING
     user_demo_daily_limit: NonNegativeInt | None | MISSING = MISSING
     user_demo_lifetime_limit: NonNegativeInt | None | MISSING = MISSING
+    user_preview_features: PreviewFeatureList | MISSING = MISSING
 
 
 class InvitationPublic(InvitationBase):
@@ -177,12 +180,13 @@ class UserCreate(UserBase):
     demo_concurrent_limit: int | None = None
     demo_daily_limit: int | None = None
     demo_lifetime_limit: int | None = None
+    preview_features: PreviewFeatureList = []
 
 
 class UserRecord(UserBase):
     id: UUID4
     password: str
-    with_preview_features: bool
+    preview_features: PreviewFeatureList
     organization: str | None = None
     email_verified: bool = False
     two_factor_enabled: bool = True
@@ -193,7 +197,7 @@ class UserPublic(UserBase):
     id: UUID4
     invitation_title: str | None = None
     expires_at: datetime | None = None
-    with_preview_features: bool
+    preview_features: PreviewFeatureList
     organization: str | None = None
 
 
@@ -210,7 +214,7 @@ class UserAdminPublic(UserPublic):
 
 class UserAdminUpdate(Schema):
     scope: Scope | MISSING = MISSING
-    with_preview_features: bool | MISSING = MISSING
+    preview_features: PreviewFeatureList | MISSING = MISSING
     organization: str | None | MISSING = MISSING
     expires_at: datetime | None | MISSING = MISSING
     two_factor_enabled: bool | MISSING = MISSING

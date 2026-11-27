@@ -6,13 +6,13 @@ from uuid import UUID
 
 import bcrypt
 from jose import jwt
-from pydantic import UUID4, BaseModel, PrivateAttr
+from pydantic import UUID4, BaseModel, PrivateAttr, field_validator
 
 from ainterviewer.types import Interviewer, InterviewRole, TimeDelta
 from ainterviewer.utils import now
 
 from .settings import app_secrets, app_settings
-from .types import Scope
+from .types import PreviewFeature, PreviewFeatureList, Scope
 
 #: bcrypt reads only the first 72 bytes of a password. passlib truncated
 #: silently, so every stored hash was made from at most this much, and
@@ -86,13 +86,25 @@ class TestShareToken(_Token):
 class AuthToken(_Token):
     user_id: UUID4
     scope: Scope
-    # Mirrors UserTable.with_preview_features, read fresh from the database on
-    # every login and refresh, so an admin's change reaches the token within one
-    # access-token lifetime. Defaults to False so tokens issued before the claim
+    # Mirrors UserTable.preview_features, read fresh from the database on every
+    # login and refresh, so an admin's change reaches the token within one
+    # access-token lifetime. Defaults to none so tokens issued before the claim
     # existed decode as "off" until their next refresh.
-    preview_features: bool = False
+    preview_features: PreviewFeatureList = []
 
     _timedelta: TimeDelta = app_settings.app.jwt_auth_token_expiration
+
+    @field_validator("preview_features", mode="before")
+    @classmethod
+    def _from_flag(cls, value: object) -> object:
+        # The claim was one flag for every feature until the list replaced it.
+        # A token signed then reads as all of them or none until its refresh.
+        if isinstance(value, bool):
+            return list(PreviewFeature) if value else []
+        return value
+
+    def has_preview(self, feature: PreviewFeature) -> bool:
+        return feature in self.preview_features
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -154,7 +166,7 @@ def create_interview_token(
 def create_auth_token(
     user_id: UUID4,
     scope: Scope,
-    preview_features: bool,
+    preview_features: list[PreviewFeature],
 ) -> str:
     token = AuthToken(
         user_id=user_id,

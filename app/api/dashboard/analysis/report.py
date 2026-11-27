@@ -48,7 +48,7 @@ from ....dependencies import (
     DBSession,
     ProjectViewer,
     UserToken,
-    require_preview_features,
+    require_preview,
 )
 from ....schemas.monitoring import (
     AnswerSample,
@@ -64,14 +64,15 @@ from ....schemas.monitoring import (
     NumericStats,
     RankingOptionDistribution,
 )
+from ....types import PreviewFeature
 from .cohort import interview_cohort
 from .histogram import compute_histogram_buckets
 
-# The report page is a preview feature; see `require_preview_features`.
+# The report page is a preview feature; see `require_preview`.
 router = APIRouter(
     prefix="/report",
     tags=["report"],
-    dependencies=[Depends(require_preview_features)],
+    dependencies=[Depends(require_preview(PreviewFeature.REPORT))],
 )
 
 # The task row the interview writes for every condition it evaluates.

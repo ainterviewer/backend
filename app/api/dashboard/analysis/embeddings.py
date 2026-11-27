@@ -47,7 +47,7 @@ from ....dependencies import (
     ProjectEditor,
     ProjectViewer,
     ScopeChecker,
-    require_preview_features,
+    require_preview,
 )
 from ....embed.backfill import pending_chunks
 from ....embed.client import EmbeddingUnavailable, embedding_client
@@ -82,15 +82,15 @@ from ....schemas.embeddings import (
     SurveyFacetValue,
 )
 from ....settings import app_settings
-from ....types import GroupKind, Projection
+from ....types import GroupKind, PreviewFeature, Projection
 from ....types import Scope as TokenScope
 from ...errors import INVALID_KEYWORD_QUERY
 
-# The whole explore surface is a preview feature; see `require_preview_features`.
+# The whole explore surface is a preview feature; see `require_preview`.
 # Analysis is closed to demo accounts, so these need the user scope as well.
 router = APIRouter(
     dependencies=[
-        Depends(require_preview_features),
+        Depends(require_preview(PreviewFeature.CODEBOOK)),
         Depends(ScopeChecker(TokenScope.USER)),
     ]
 )
