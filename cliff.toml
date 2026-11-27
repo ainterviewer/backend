@@ -1,7 +1,7 @@
 # git-cliff configuration — https://git-cliff.org/docs/configuration
 #
 # Keep this file byte-identical across the ainterviewer repos. Section headings
-# and the `[area]` entry prefix are a contract: deploy/scripts/generate_manifest.py
+# and the `[area]` entry prefix are a contract: platform/scripts/generate_manifest.py
 # parses them out of the published GitHub Release bodies.
 
 [changelog]
@@ -83,7 +83,7 @@ commit_parsers = [
   { message = "(?s)^feat(\\(.*?\\))?!?:.*\\nGraduates:", group = "<!-- 2 -->Graduated" },
   { message = "(?s)^(feat|fix|perf)(\\(.*?\\))?!?:.*\\nPreview:", group = "<!-- 5 -->Preview" },
 
-  # User-visible. deploy/scripts/generate_manifest.py lifts these sections
+  # User-visible. platform/scripts/generate_manifest.py lifts these sections
   # (plus Breaking Changes) into the platform manifest.
   { message = "^feat", group = "<!-- 1 -->Features" },
   { message = "^fix", group = "<!-- 3 -->Bug Fixes" },
