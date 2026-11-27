@@ -78,8 +78,8 @@ seed-release ENV="prod" VERSION="":
     #!/usr/bin/env bash
     set -euo pipefail
     VERSION="{{ VERSION }}"
-    [ -n "$VERSION" ] || VERSION="$(python3 ../deploy/scripts/latest_version.py {{ ENV }})"
-    MANIFEST="../deploy/manifests/{{ ENV }}/${VERSION}.json"
+    [ -n "$VERSION" ] || VERSION="$(python3 ../platform/scripts/latest_version.py {{ ENV }})"
+    MANIFEST="../platform/manifests/{{ ENV }}/${VERSION}.json"
     uv run python -m app.db.cli add-release-manifest "$(cat "$MANIFEST")"
     echo "Seeded local dev database from $MANIFEST"
 
