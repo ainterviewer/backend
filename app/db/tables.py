@@ -1331,6 +1331,10 @@ class MessageTable(Base):
     security_intervention: Mapped[SecurityIntervention | None] = mapped_column(
         PydanticJSONB(SecurityIntervention), default=None
     )
+    # On a probe asked from one of the question's suggested probes, under
+    # reword or strict steering: that suggestion, NULL on any other message.
+    # What a resumed interview reads to not ask it again.
+    suggested_probe: Mapped[str | None] = mapped_column(default=None)
 
     # Relationships
     interview: Mapped["InterviewTable"] = relationship(back_populates="messages")

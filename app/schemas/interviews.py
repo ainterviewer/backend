@@ -123,6 +123,7 @@ class MessageBase(Schema):
     survey_item: SurveyItem | None = None
     skipped_by_condition: bool = False
     security_intervention: SecurityIntervention | None = None
+    suggested_probe: str | None = None
 
 
 class MessagePublic(MessageBase):

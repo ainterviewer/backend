@@ -1034,6 +1034,7 @@ class InterviewRepository(BaseRepository):
         timed_message_id: UUID | None = None,
         skipped_by_condition: bool = False,
         security_intervention: SecurityIntervention | None = None,
+        suggested_probe: str | None = None,
     ) -> int:
         message = MessageTable(
             content=content,
@@ -1056,6 +1057,7 @@ class InterviewRepository(BaseRepository):
             timed_message_id=timed_message_id,
             skipped_by_condition=skipped_by_condition,
             security_intervention=security_intervention,
+            suggested_probe=suggested_probe,
         )
         self.session.add(message)
         try:

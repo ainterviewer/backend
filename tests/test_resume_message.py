@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ainterviewer.interfaces import SecurityIntervention, SecurityOverride
 from ainterviewer.interview_guides import InterviewGuide, TimedMessage
+from ainterviewer.interview_guides.history import InterviewHistory
 from ainterviewer.interview_guides.types import ConditionAction
 from ainterviewer.lpm.types import CustomToken
 from ainterviewer.types import MessageRole, MessageType
@@ -149,3 +150,37 @@ def test_nothing_once_the_intervention_was_answered(interviews):
         )
         is None
     )
+
+
+def test_a_resumed_history_knows_which_suggestion_a_probe_was_asked_from(
+    interviews,
+):
+    # A reworded probe does not read as its suggestion: only the stored mark
+    # keeps the resumed interview from asking it again.
+    probe = {**QUESTION, "sub_question": 1}
+    rows = [
+        (MessageRole.ASSISTANT, "Why?", {**QUESTION, "sub_question": 0}),
+        (MessageRole.USER, "Because", {**QUESTION, "sub_question": 0}),
+        (
+            MessageRole.ASSISTANT,
+            "And when was that?",
+            {**probe, "suggested_probe": "When?"},
+        ),
+        (MessageRole.USER, "Not sure", probe),
+    ]
+    for message_id, (role, content, fields) in enumerate(rows):
+        interviews.insert_message(
+            message_id=message_id,
+            content=content,
+            role=role,
+            interview_id=INTERVIEW,
+            project_id=PROJECT,
+            **fields,
+        )
+
+    history = InterviewHistory()
+    history.process_history(interviews.get_messages(INTERVIEW, PROJECT), GUIDE)
+
+    (turn,) = history[0][0].probes
+    assert turn.question.message == "And when was that?"
+    assert turn.suggested_probe == "When?"
