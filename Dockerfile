@@ -4,7 +4,12 @@
 FROM python:3.12-slim AS base
 LABEL org.opencontainers.image.source="https://github.com/ainterviewer/backend"
 
+# UV_COMPILE_BYTECODE: ship .pyc files in the image. Without them every new
+# container compiled the dependency tree on its first imports, which added
+# ~10s+ to each start on the deploy host (16.2s cold vs 5.8s warm for the
+# heavy third-party imports alone).
 ENV UV_LINK_MODE=copy \
+  UV_COMPILE_BYTECODE=1 \
   UV_NO_MANAGED_PYTHON=1 \
   PATH="/app/.venv/bin:/root/.local/bin:$PATH"
 
