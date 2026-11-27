@@ -4,6 +4,18 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.45] - 2026-11-27
+
+### Performance
+
+- (boot) Set up, migrate and serve in one process
+
+### Internal
+
+- Point cliff.toml at the platform repo
+- Point the manifest recipe at the platform repo
+- (docker) Compile bytecode into the image
+
 ## [0.10.44] - 2026-11-27
 
 ### Features
