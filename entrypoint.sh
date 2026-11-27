@@ -1,5 +1,5 @@
 #!/bin/sh
 set -e
-python -m app.db.cli setup-db
-alembic upgrade head
-exec fastapi run app/main.py --port=8666
+# Sets up or migrates the database, then serves, in one Python process, so
+# the app's imports are paid for once (see app/boot.py).
+exec python -m app.boot

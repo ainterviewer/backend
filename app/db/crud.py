@@ -1,14 +1,13 @@
 import logging
 
 from alembic import command as alembic_command
-from alembic.config import Config as AlembicConfig
 from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
 from ainterviewer.interfaces import PersistenceProtocol
 from app.platform_release import Highlight, PlatformManifest
 
-from ..paths import APP_DIR
+from .migrations import alembic_config
 from .repositories import (
     AnalysisRepository,
     AssistanceRepository,
@@ -51,10 +50,6 @@ class InterviewDataBase(PersistenceProtocol):
 
     def __init__(self, session: Session):
         self.session: Session = session
-        self._alembic_config: AlembicConfig = AlembicConfig(
-            APP_DIR.parent / "alembic.ini"
-        )
-
         # Initialize all repositories with the shared session
         self.auth: AuthRepository = AuthRepository(session)
         self.verification: VerificationRepository = VerificationRepository(session)
@@ -82,7 +77,7 @@ class InterviewDataBase(PersistenceProtocol):
         # of them -- including this one.
         Base.metadata.create_all(self.session.connection())
         install_triggers(self.session.connection())
-        alembic_command.stamp(self._alembic_config, "head")
+        alembic_command.stamp(alembic_config(), "head")
 
     def drop_all_tables(self):
         """Drops all tables - useful for testing or complete reset"""
