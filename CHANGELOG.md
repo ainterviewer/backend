@@ -4,6 +4,17 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.44] - 2026-11-27
+
+### Features
+
+- (admin) Give preview features out one by one
+
+### Internal
+
+- (deps) Bump ainterviewer to v0.8.13
+- (db) Rename stored refusal tasks to contains_refusal
+
 ## [0.10.43] - 2026-11-26
 
 ### Internal
