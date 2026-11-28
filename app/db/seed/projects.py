@@ -92,7 +92,12 @@ def create(
     concept = _create_concept_test(db, session, accounts)
     _publish_when_possible(db, session, (concept,), owner)
     _add_concept_test_responses(db, session, concept)
-    return SeedProjects((*ids, health, concept))
+    # Left unpublished: demo accounts cannot publish.
+    demo = db.projects.create_project(
+        accounts.demo_user_folder_id, "Weekly planning habits", accounts.demo_user_id
+    )
+    db.projects.update_guide(demo, guides.demo_starter())
+    return SeedProjects((*ids, health, concept, demo))
 
 
 def _configure_community(

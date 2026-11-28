@@ -887,3 +887,46 @@ def control_flow() -> LocalizedInterviewGuide:
         ],
     )
     return LocalizedInterviewGuide.from_rendered({"EN": guide}, structure="EN")
+
+
+def demo_starter() -> LocalizedInterviewGuide:
+    """A short draft for the demo account to test and edit."""
+    return LocalizedInterviewGuide.from_rendered(
+        {
+            "EN": InterviewGuide(
+                framing="A short interview about how people plan their week.",
+                introduction="Thanks for trying this out. It takes about five minutes.",
+                outro="Thank you, that was all.",
+                question_sections=[
+                    QuestionSection(
+                        description="Planning habits.",
+                        questions=[
+                            Question(
+                                main_question="How do you usually plan your week?",
+                                probes=["What tools do you use, if any?"],
+                                max_probes_n=2,
+                            ),
+                            Question(
+                                main_question="How satisfied are you with how you plan?",
+                                survey_item=LikertItem(
+                                    options=[
+                                        "Very dissatisfied",
+                                        "Dissatisfied",
+                                        "Neutral",
+                                        "Satisfied",
+                                        "Very satisfied",
+                                    ]
+                                ),
+                            ),
+                            Question(
+                                main_question="What would make planning easier for you?",
+                                probes=["Can you give an example?"],
+                                max_probes_n=1,
+                            ),
+                        ],
+                    )
+                ],
+            )
+        },
+        structure="EN",
+    )

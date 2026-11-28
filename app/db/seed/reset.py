@@ -12,7 +12,7 @@ from app.db.crud import InterviewDataBase
 from app.dependencies import engine
 from app.settings import app_settings
 
-from .accounts import DEV_EMAIL, DEV_PASSWORD
+from .accounts import DEMO_EMAIL, DEMO_PASSWORD, DEV_EMAIL, DEV_PASSWORD
 from .accounts import create as create_accounts
 from .ids import stable_ids
 from .projects import create as create_projects
@@ -41,6 +41,7 @@ def reset_and_seed(*, yes: bool, random_uuids: bool = False) -> None:
             "Development database setup did not create the project table"
         )
     typer.echo(
-        f"Seeded {db_file} with 7 projects and 5 platform releases. "
-        f"Sign in as {DEV_EMAIL} / {DEV_PASSWORD}."
+        f"Seeded {db_file} with 8 projects and 5 platform releases. "
+        f"Sign in as {DEV_EMAIL} / {DEV_PASSWORD}, "
+        f"or as the demo account {DEMO_EMAIL} / {DEMO_PASSWORD}."
     )
