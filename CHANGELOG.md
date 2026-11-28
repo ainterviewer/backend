@@ -4,6 +4,18 @@ Generated from [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org). Releases older than the earliest entry below
 predate this changelog — see `git log` for their history.
 
+## [0.10.46] - 2026-11-28
+
+### Bug Fixes
+
+- (interviews) Remember which suggested probe a probe was asked from
+- (interview) Tell respondents at once when the model is starting
+
+### Internal
+
+- (seed) Add a demo account with a project of its own
+- (deps) Bump ainterviewer to v0.8.15
+
 ## [0.10.45] - 2026-11-27
 
 ### Performance
