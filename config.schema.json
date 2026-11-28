@@ -331,6 +331,19 @@
       "title": "EmbeddingSettings",
       "type": "object"
     },
+    "InferenceSettings": {
+      "additionalProperties": false,
+      "description": "The self-hosted model, behind the EC2 proxy (`[llm] vllm_base_url`,\nor the proxy at `llm_endpoint`).",
+      "properties": {
+        "warm_up": {
+          "default": true,
+          "title": "Warm Up",
+          "type": "boolean"
+        }
+      },
+      "title": "InferenceSettings",
+      "type": "object"
+    },
     "ServiceSettings": {
       "additionalProperties": false,
       "description": "Different extra services required to run the app",
@@ -387,6 +400,12 @@
           "$ref": "#/$defs/TranslationSettings",
           "default": {
             "model": "openrouter:z-ai/glm-5.3-flash"
+          }
+        },
+        "inference": {
+          "$ref": "#/$defs/InferenceSettings",
+          "default": {
+            "warm_up": true
           }
         }
       },
@@ -600,6 +619,35 @@
           "default": 4268,
           "title": "Seed",
           "type": "integer"
+        },
+        "vllm_max_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 4096,
+          "title": "Vllm Max Tokens"
+        },
+        "vllm_reasoning_effort": {
+          "anyOf": [
+            {
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "low",
+          "title": "Vllm Reasoning Effort"
         }
       },
       "title": "LLMSettings",
@@ -844,6 +892,8 @@
         ],
         "default_demo_model": "openrouter:openai/gpt-oss-120b",
         "seed": 4268,
+        "vllm_max_tokens": 4096,
+        "vllm_reasoning_effort": "low",
         "llm_endpoint": "http://0.0.0.0:8880"
       }
     },

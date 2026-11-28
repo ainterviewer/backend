@@ -7,7 +7,10 @@
 # improves unstable connections
 
 import asyncio
-from typing import Literal
+import time
+from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
+from typing import Any, Literal, Protocol
 
 from any_llm.exceptions import (
     AnyLLMError,
@@ -31,6 +34,7 @@ from sqlalchemy.exc import NoResultFound
 from uvicorn.config import logger
 
 from ainterviewer.agents.config import AgentConfigs
+from ainterviewer.exceptions import ModelUnavailable, UnavailableReason
 from ainterviewer.interfaces import OutgoingData
 from ainterviewer.interview import AInterviewer
 from ainterviewer.lpm.types import CustomToken
@@ -41,6 +45,8 @@ from ....db.repositories.project import ContentSource
 from ....dependencies import DBSession
 from ....embed.client import embedding_client
 from ....embed.queue import QueueEmbedder, chunk_queue
+from ....schemas.interviews import WaitingFrame
+from ....services import inference_warmup
 from ..auth import authenticate_or_close
 from ..handler import WebsocketMessageHandler
 from ..manager import session_manager
@@ -68,14 +74,11 @@ class RestartInterview(Exception):
     pass
 
 
-# What the respondent is told, and therefore whether the frontend retries. The
-# wire vocabulary is `OutgoingData.error`, so the two codes below carry the
-# whole distinction: wait and we will try again, or this interview is over.
-InterviewError = Literal["InstanceInitializing", "InferenceError"]
-
 # Passes on its own: the provider is busy, briefly unreachable, or still coming
 # up. ProviderError is any-llm's catch-all for 5xx, timeouts and connection
-# failures, which belong here for the same reason.
+# failures, which belong here for the same reason. A provider that said why it
+# cannot serve, and for how long, comes as `ModelUnavailable` instead (raised
+# by the library's `chat`), and is waited on for as long as it said.
 _TRANSIENT_ERRORS = (
     RateLimitError,
     GatewayTimeoutError,
@@ -97,30 +100,176 @@ _FATAL_ERRORS = (
     InvalidRequestError,
 )
 
+#: How long a respondent waits on a model the provider says is coming -- an
+#: instance booting, a pool at capacity -- before they are told the interview
+#: cannot continue. Over twice the self-hosted model's two-minute cold start.
+EXPLAINED_WAIT = 300.0
 
-def _classify(exc: Exception) -> InterviewError:
-    """Decide whether an interview failure is worth waiting out.
+#: The same for a failure nobody explained: a 5xx, a timeout, a dropped
+#: connection. It may well never pass, so it gets about what the frontend's
+#: reconnect cycle used to give it, and is tried again every
+#: `UNEXPLAINED_RETRY_AFTER` seconds.
+UNEXPLAINED_WAIT = 60.0
+UNEXPLAINED_RETRY_AFTER = 15
 
-    Relies on any-llm's unified exception types, which `app.settings` turns on
-    process-wide. Anything that is not an AnyLLMError at all came from our own
-    code rather than from a provider, and is treated as fatal: a bug does not
-    become less of one on the second attempt.
+
+@dataclass(frozen=True)
+class Wait:
+    """Try the turn again in `seconds`, while waiting has not passed `budget`."""
+
+    reason: Literal["starting", "busy"]
+    seconds: int
+    budget: float
+
+
+def wait_for(exc: Exception) -> Wait | None:
+    """How long the failure `exc` is worth waiting out, or None if it is not.
+
+    What the provider said decides, when it said anything: our proxy names a
+    starting instance, a full pool, and a pool with nothing to start, and only
+    the first two are worth waiting for. Without that, the type does: any-llm's
+    unified errors (turned on process-wide by `app.settings`). Anything that is
+    not one of theirs came from our own code, and a bug does not become less
+    of one on the second attempt.
     """
-    if "EC2 instance initializing" in str(exc):
-        return "InstanceInitializing"
+    if isinstance(exc, ModelUnavailable):
+        if exc.retry_after is None:
+            return None
+        reason = "starting" if exc.reason is UnavailableReason.STARTING else "busy"
+        return Wait(reason, max(exc.retry_after, 1), EXPLAINED_WAIT)
 
     if isinstance(exc, _FATAL_ERRORS):
-        return "InferenceError"
+        return None
 
     if isinstance(exc, _TRANSIENT_ERRORS):
-        return "InstanceInitializing"
+        return Wait("busy", UNEXPLAINED_RETRY_AFTER, UNEXPLAINED_WAIT)
 
-    return "InferenceError"
+    return None
 
 
-def _log_failure(exc: Exception, error: InterviewError, interview_id) -> None:
+class _StoredInterview(Protocol):
+    @property
+    def messages(self) -> Sequence[Any]: ...
+
+
+async def _pause(seconds: float) -> None:
+    await asyncio.sleep(seconds)
+
+
+def _now() -> float:
+    return time.monotonic()
+
+
+async def run_with_waits[I: _StoredInterview](
+    interview: I,
+    run: Callable[[I], Awaitable[None]],
+    reload: Callable[[], I],
+    send: Callable[[dict], Awaitable[Any]],
+    interview_id,
+) -> bool:
+    """`run` the interview from what is stored, and run it again from what is
+    stored then, for as long as its failures are worth waiting out.
+
+    The respondent hears of a wait at once, as a `WaitingFrame` with the
+    reason and the time to the next try, and keeps the socket: closing it to
+    have the browser reconnect would replay the chat and look like a lost
+    connection, which it is not. The turn that failed is run again from the
+    stored messages, as a reconnect would.
+
+    Waiting stops at the failure's budget, counted from the first failure
+    since the interview last got further -- a respondent who waited through
+    one cold start is not charged for it at the next. Then, or for a failure
+    not worth waiting for, the respondent is told the interview cannot go on
+    (`OutgoingData(error="InferenceError")`) and the socket closes cleanly.
+
+    True once a run went to the end, False once the respondent was told it
+    cannot. The respondent leaving and the interview being deleted are not
+    failures: `WebSocketDisconnect` and `InterviewGoneError` pass through.
+    """
+    waiting_since: float | None = None
+    stored = len(interview.messages)
+
+    while True:
+        try:
+            await run(interview)
+            return True
+        except (WebSocketDisconnect, InterviewGoneError):
+            raise
+        except Exception as e:
+            failure = e
+
+        if (wait := wait_for(failure)) is None:
+            await _report_failure(send, failure, interview_id)
+            return False
+
+        try:
+            interview = reload()
+        except Exception:
+            logger.exception("Interview %s could not be reloaded", interview_id)
+            await _report_failure(send, failure, interview_id)
+            return False
+
+        now = _now()
+        if waiting_since is None or len(interview.messages) > stored:
+            waiting_since = now
+        stored = len(interview.messages)
+        waited = now - waiting_since
+
+        if waited + wait.seconds > wait.budget:
+            logger.error(
+                "Interview %s gave up after waiting %ds for its model: %s",
+                interview_id,
+                waited,
+                failure,
+            )
+            await _report_failure(send, failure, interview_id)
+            return False
+
+        (logger.warning if waited == 0 else logger.info)(
+            "Interview %s waiting %ss for its model (%s, %ds so far): %s",
+            interview_id,
+            wait.seconds,
+            wait.reason,
+            waited,
+            failure,
+        )
+        try:
+            await send(
+                WaitingFrame(reason=wait.reason, retry_after=wait.seconds).model_dump(
+                    mode="json"
+                )
+            )
+        except Exception:
+            # Nobody left to wait for: the respondent closed the page.
+            logger.debug("Interview %s stopped waiting: websocket closed", interview_id)
+            return False
+        await _pause(wait.seconds)
+
+
+async def _report_failure(
+    send: Callable[[dict], Awaitable[Any]], exc: Exception, interview_id
+) -> None:
+    """Tell the respondent the interview cannot go on, and log why.
+
+    Every failure has to reach the client as a frame. An exception that
+    escapes the websocket closes it with nothing on it, which the frontend
+    cannot tell apart from a dropped connection: it reconnects, the stored
+    history replays, the same failure repeats, and the respondent sits in an
+    endless "reconnecting" with no error. The detail stays in the log, where
+    the person who can act on it will look.
+    """
+    _log_failure(exc, interview_id)
+    try:
+        await send(OutgoingData(error="InferenceError").model_dump())
+    except Exception:
+        logger.debug("Interview failure could not be reported: websocket closed")
+
+
+def _log_failure(exc: Exception, interview_id) -> None:
     """Say what happened in the detail the person fixing it will need."""
-    if isinstance(exc, ModelNotFoundError):
+    if isinstance(exc, ModelUnavailable):
+        logger.error("Interview %s cannot run: %s", interview_id, exc)
+    elif isinstance(exc, ModelNotFoundError):
         # Nearly always a project pointing at a model the provider has retired.
         logger.error(
             "Interview %s cannot run: the configured model was rejected by the provider (%s)",
@@ -138,13 +287,12 @@ def _log_failure(exc: Exception, error: InterviewError, interview_id) -> None:
         # Provider-side and already classified; the type and status say enough
         # without a traceback through library frames.
         logger.warning(
-            "Interview %s hit a %s from provider %s (status %s): %s -- reported as %s",
+            "Interview %s hit a %s from provider %s (status %s): %s",
             interview_id,
             type(exc).__name__,
             getattr(exc, "provider_name", "unknown"),
             getattr(exc, "status_code", None),
             exc,
-            error,
         )
     else:
         logger.exception("Unhandled error in interview %s", interview_id)
@@ -309,7 +457,12 @@ async def _run_interview(
     # interview loop emit no chunks at all.
     embedder = QueueEmbedder(chunk_queue) if embedding_client.live else None
 
-    try:
+    # Booting the self-hosted model now, if it is down, overlaps the boot
+    # with whatever the respondent reads before the first call: a test's
+    # welcome screen, the question in front of someone resuming.
+    inference_warmup.warm_up(agent_configs)
+
+    async def run(interview) -> None:
         async with AInterviewer(
             io=wmh,
             db=db,
@@ -324,8 +477,19 @@ async def _run_interview(
             referable_values=external_params,
             embedder=embedder,
         ) as interviewer:
-            await interviewer.interview(interview_history=interview_history)
-        await _send_redirect(websocket, db, project_id, interview_id)
+            await interviewer.interview(interview_history=interview.messages)
+
+    try:
+        if await run_with_waits(
+            interview,
+            run,
+            reload=lambda: db.interviews.get_interview(
+                project_id=project_id, interview_id=interview_id, full=True
+            ),
+            send=websocket.send_json,
+            interview_id=interview_id,
+        ):
+            await _send_redirect(websocket, db, project_id, interview_id)
     except WebSocketDisconnect:
         pass
     except InterviewGoneError:
@@ -342,18 +506,3 @@ async def _run_interview(
             )
         except Exception:
             logger.debug("Restart could not be sent: websocket closed")
-    except Exception as e:
-        # Every failure has to reach the client as a frame. An exception that
-        # escapes here closes the socket with nothing on it, which the frontend
-        # cannot tell apart from a dropped connection: it reconnects, the stored
-        # history replays, the same failure repeats, and the respondent sits in
-        # an endless "reconnecting" with no error. So classify, report, and let
-        # the socket close cleanly -- the detail stays in the log, where the
-        # person who can act on it will look.
-        error = _classify(e)
-        _log_failure(e, error, interview_id)
-
-        try:
-            await websocket.send_json(OutgoingData(error=error).model_dump())
-        except Exception:
-            logger.debug("Interview failure could not be reported: websocket closed")

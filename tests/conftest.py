@@ -33,6 +33,8 @@ import json
 import os
 import tempfile
 
+import pytest
+
 TEST_ONLY_MODEL = "openrouter:a-test-only-model"
 
 os.environ.setdefault("APP_SECRET__JWT_SECRET_KEY", "test-jwt-secret")
@@ -48,3 +50,16 @@ os.environ["LLM__MODELS"] = json.dumps(
 os.environ["LLM__TEST_ONLY_MODELS"] = json.dumps([TEST_ONLY_MODEL])
 os.environ["LLM__DEMO_MODELS"] = json.dumps(["openrouter:openai/gpt-oss-120b"])
 os.environ["LLM__DEFAULT_DEMO_MODEL"] = "openrouter:openai/gpt-oss-120b"
+
+
+@pytest.fixture(autouse=True)
+def no_inference_warm_up(monkeypatch):
+    """Starting an interview on the self-hosted model asks the EC2 proxy to
+    boot an instance (`app/services/inference_warmup.py`). In a test that is
+    a background task nobody awaits, against a proxy that is not there -- or
+    worse, a developer's, which would start a real one. Patched rather than
+    set through `APP_SERVICE__`, which loses to a `[services]` table in a
+    developer's config.toml. A test of the warm-up turns it back on."""
+    from app.settings import app_settings
+
+    monkeypatch.setattr(app_settings.services.inference, "warm_up", False)

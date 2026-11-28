@@ -372,6 +372,17 @@ class EmbeddingSettings(ConfigSection):
         return self.endpoint or lib_settings.llm.llm_endpoint
 
 
+class InferenceSettings(ConfigSection):
+    """The self-hosted model, behind the EC2 proxy (`[llm] vllm_base_url`,
+    or the proxy at `llm_endpoint`)."""
+
+    #: Ask the proxy to start an instance when a respondent opens an interview
+    #: that runs on the self-hosted model (`app/services/inference_warmup.py`),
+    #: so the boot happens while they read the consent. Off for a deployment
+    #: whose vLLM is not behind our proxy, which has nothing to start.
+    warm_up: bool = True
+
+
 class ServiceSettings(BaseSettings):
     """Different extra services required to run the app"""
 
@@ -380,6 +391,7 @@ class ServiceSettings(BaseSettings):
     embedding: EmbeddingSettings = EmbeddingSettings()
     assistance: AssistanceSettings = AssistanceSettings()
     translation: TranslationSettings = TranslationSettings()
+    inference: InferenceSettings = InferenceSettings()
 
     # `forbid` refuses unknown keys under [services], but pydantic-settings
     # then hands every .env line that is not one of these fields over as an

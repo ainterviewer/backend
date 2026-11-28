@@ -49,7 +49,7 @@ from ..schemas.projects import (
     ValidateExternalParamsRequest,
 )
 from ..schemas.reports import MessageReportCreate, MessageReportPublic
-from ..services import interview_storage
+from ..services import inference_warmup, interview_storage
 from ..services.audio import SpeechNotConfigured, SpeechUnavailable, synthesize
 from ..services.guide_start import StartPointError, start_guide_at
 from ..settings import app_settings
@@ -118,12 +118,19 @@ async def validate_interview_params(
 
     `create_interview` runs the same checks; this only moves the feedback
     earlier, it does not replace them.
+
+    Also starts the self-hosted model booting, when the published version
+    runs on it (`app/services/inference_warmup.py`).
     """
     project = db.projects.get_project(project_id)
     validate_external_params(
         project.external_params, params.external_params, project_id
     )
     db.versions.check_distributable(project_id)
+
+    # The first the backend hears of a respondent, before the consent screen:
+    # the earliest the self-hosted model can start booting for them.
+    inference_warmup.warm_up(db.versions.published_agent_configs(project_id))
 
 
 def set_interview_cookie(response: Response, interview_token: str) -> None:
@@ -351,6 +358,10 @@ async def create_interview(
 
     if not (interview_guide := project_localization.interview_guide):
         raise ValueError("Interview guide is not set")
+
+    # A test has no preflight to warm up from, and a link with no consent
+    # comes straight here.
+    inference_warmup.warm_up(project_localization.agent_configs)
 
     # Cut before shuffling: the start point means "from here on" in the order
     # the guide was written, not wherever a shuffle happened to put it.

@@ -1005,6 +1005,40 @@ else; a check a route makes itself is a 400.
 - `code` values are API: the frontend matches on them. Add one when a client
   needs it, rename none without the frontend.
 
+### When the model cannot answer
+
+The self-hosted model runs on EC2 instances the proxy stops when idle, and a
+cold one takes about two minutes to come up. What a respondent sees while it
+does is decided once, where it is known, and passed on rather than guessed:
+
+- **The proxy names it.** A refusal it makes itself answers
+  `{"detail", "code", "retry_after"}`: `capacity_starting` and
+  `capacity_busy` with `Retry-After`, `capacity_unavailable` (nothing can be
+  started) and `inference_disabled` without (`Refusal`, proxy repo).
+- **The library raises it.** `chat` turns a 503 or 429 into
+  `ModelUnavailable` with a `reason` and `retry_after`, at once: the vLLM
+  client runs with no SDK retries, which used to sit through `Retry-After`
+  twice per call. Every fallback in the interview loop re-raises it, so a
+  missing model is never papered over by asking a suggestion verbatim.
+- **The websocket waits** (`run_with_waits`,
+  `app/api/websockets/interviews/ai.py`). It sends a `WaitingFrame`
+  (`type: "waiting"`, `reason`, `retry_after`) the moment it hears, keeps the
+  socket, and runs the turn again from the stored messages after
+  `retry_after`. A model that is not coming, or a wait past
+  `EXPLAINED_WAIT` (five minutes; a minute, `UNEXPLAINED_WAIT`, for a failure
+  nobody explained), ends in `OutgoingData(error="InferenceError")` and the
+  "cannot continue" dialog. `InstanceInitializing` is no longer sent.
+- **HTTP routes** answer `ModelUnavailable` as a 503 `model_unavailable`
+  with `Retry-After` when it is worth trying again (`app/errors.py`).
+- **Warming up** (`app/services/inference_warmup.py`). The respondent page's
+  preflight (`validate_interview_params`), `create_interview` and the
+  websocket ask the proxy's `POST /v1/availability` in the background when
+  the interview runs on the self-hosted model, so the boot overlaps the
+  consent. At most once per 30 seconds per process; it is not a request
+  served, so it keeps no instance from being stopped as idle.
+  `[services.inference] warm_up = false` switches it off; tests do
+  (`tests/conftest.py`).
+
 ### Test-only models and speech
 
 **Respondents' answers only go where the deployment says they may.** `[llm]`

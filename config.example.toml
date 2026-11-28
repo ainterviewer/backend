@@ -54,5 +54,11 @@ base_path = "storage/"
 # [services.email.recipient]
 # email = "admin@example.org"
 
+# The self-hosted model behind the EC2 proxy. `warm_up` has the proxy start an
+# instance when a respondent opens an interview that runs on it; switch it off
+# for a vLLM that is not behind our proxy.
+# [services.inference]
+# warm_up = true
+
 # [services.embedding]
 # enabled = false

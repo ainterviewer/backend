@@ -355,6 +355,23 @@ class MessageFeedbackResponse(Schema):
     feedback: Feedback | None
 
 
+class WaitingFrame(Schema):
+    """Sent over the interview websocket when the interview's model cannot
+    answer yet -- an instance starting (`starting`), or a provider turning
+    requests away for now (`busy`) -- the moment the backend hears of it.
+
+    The backend runs the turn again after `retry_after` seconds on the same
+    socket, and sends another frame should it have to wait again; the
+    frontend keeps the socket, says why the reply is late, and takes the
+    notice down when the next message arrives. When waiting will not help,
+    or has gone on too long, `OutgoingData(error="InferenceError")` follows
+    instead. Not an HTTP model -- it has no place in the OpenAPI schema."""
+
+    type: Literal["waiting"] = "waiting"
+    reason: Literal["starting", "busy"]
+    retry_after: int
+
+
 class RedirectFrame(Schema):
     """Sent over the interview websocket after the end of a distributed
     interview whose project redirects that ending: the frontend leaves for

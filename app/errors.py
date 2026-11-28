@@ -17,6 +17,8 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.utils import is_body_allowed_for_status_code
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from ainterviewer.exceptions import ModelUnavailable, UnavailableReason
+
 from .types import ErrorCode
 
 
@@ -67,6 +69,30 @@ def add_error_handlers(app: FastAPI) -> None:
             {"detail": str(exc.detail), "code": None},
             status_code=exc.status_code,
             headers=exc.headers,
+        )
+
+    @app.exception_handler(ModelUnavailable)
+    async def _model_unavailable(_request: Request, exc: ModelUnavailable):
+        # Whatever route called a model that is not there -- a translation, a
+        # generated guide -- says so, rather than "something went wrong". The
+        # interview websocket waits these out itself; an HTTP request is the
+        # caller's to retry, when `Retry-After` says it is worth it.
+        detail = (
+            "The language model is starting up. Please try again in a minute."
+            if exc.reason is UnavailableReason.STARTING
+            else "The language model is not available right now. Please try again later."
+            if exc.retry_after is None
+            else "The language model is busy. Please try again shortly."
+        )
+        headers = (
+            {"Retry-After": str(exc.retry_after)}
+            if exc.retry_after is not None
+            else None
+        )
+        return JSONResponse(
+            {"detail": detail, "code": ErrorCode.MODEL_UNAVAILABLE},
+            status_code=503,
+            headers=headers,
         )
 
     @app.exception_handler(Exception)

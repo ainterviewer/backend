@@ -601,6 +601,10 @@ class ErrorCode(StrEnum):
     """
 
     INTERNAL = "internal"
+    # A model the request needed could not take it: starting up, at capacity,
+    # or not available at all. With `Retry-After` when it is worth trying
+    # again (`ModelUnavailable`, raised by the library's `chat`).
+    MODEL_UNAVAILABLE = "model_unavailable"
     # Content and publishing
     NOT_PUBLISHED = "not_published"
     CANNOT_PUBLISH = "cannot_publish"

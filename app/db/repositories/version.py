@@ -15,6 +15,7 @@ from pydantic import UUID4, BaseModel
 from pydantic_core import to_jsonable_python
 from sqlalchemy import delete, exists, func, select, update
 
+from ainterviewer.agents.config import AgentConfigs
 from ainterviewer.settings import settings as lib_settings
 from ainterviewer.utils import get_language_dict
 
@@ -209,6 +210,12 @@ class VersionRepository(BaseRepository):
             raise NotDistributableError(
                 "This study is not open to respondents right now."
             )
+
+    def published_agent_configs(self, project_id: UUID4) -> AgentConfigs | None:
+        """The agent configs distributed interviews run on: the published
+        version's, None while nothing is published."""
+        version = self._content(project_id).published_version
+        return version.agent_configs if version is not None else None
 
     def check_revision(
         self, project_id: UUID4, revision: int, part: ContentPart | None = None

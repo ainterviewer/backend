@@ -8,6 +8,7 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
+from ainterviewer.exceptions import ModelUnavailable, UnavailableReason
 from app.db.repositories.errors import ContentRevisionError, PublishError
 from app.errors import AppError, add_error_handlers
 from app.main import app as real_app
@@ -43,6 +44,14 @@ def client():
     @app.get("/validated")
     def validated(limit: int):
         return limit
+
+    @app.get("/model-starting")
+    def model_starting():
+        raise ModelUnavailable("m", UnavailableReason.STARTING, retry_after=90)
+
+    @app.get("/model-down")
+    def model_down():
+        raise ModelUnavailable("m", UnavailableReason.DOWN, retry_after=None)
 
     with TestClient(app, raise_server_exceptions=False) as client:
         yield client
@@ -95,6 +104,23 @@ def test_a_crash_is_json_not_plain_text(client):
     assert response.status_code == 500
     assert response.json()["code"] == "internal"
     assert "boom" not in response.text
+
+
+def test_a_model_starting_says_when_to_try_again(client):
+    response = client.get("/model-starting")
+
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "90"
+    assert response.json()["code"] == "model_unavailable"
+    assert "starting" in response.json()["detail"]
+
+
+def test_a_model_not_coming_gives_no_retry_after(client):
+    response = client.get("/model-down")
+
+    assert response.status_code == 503
+    assert "Retry-After" not in response.headers
+    assert response.json()["code"] == "model_unavailable"
 
 
 def test_validation_errors_keep_fastapis_list(client):
